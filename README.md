@@ -11,7 +11,15 @@ This is a first-pass feel test for a top-down ARPG/brawler combat model:
 - Tray card effects are sourced from baseline Diablo III skills.
 - Graphics are intentionally placeholder shapes.
 
-## Controls
+## Phone UI controls
+
+Top-left browser/game overlay buttons:
+
+- ☰: collapse or restore the HUD, tray, and touch controls. Collapsed mode leaves a tiny mini-HUD for HP, mana, and current cards.
+- ⛶: request fullscreen. Browser support varies; it works best from a direct tap and may still depend on Chrome/Vercel/phone rules.
+- − / +: toggle a slightly zoomed-out arena view.
+
+## Gameplay controls
 
 Backbone / gamepad:
 
