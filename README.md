@@ -20,15 +20,18 @@ Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode expe
 - The Aim button cycles Soft / Auto / Manual.
 - Soft mode avoids pure nearest-enemy snapping; Auto mode deliberately tests nearest-enemy targeting; Manual disables target assist.
 - Melee attacks get a small lunge/magnetism when an enemy is just outside comfortable range.
-- Right hamburger/Menu button pauses and opens the pause menu.
-- Hold left three-dots/View button for Boys Mode: player cannot take damage, and enemies stop near the player instead of attacking.
+- Right hamburger/Menu button pauses and opens the existing expanded HUD/menu rather than a separate pause overlay.
+- Pause freezes gameplay updates until the Menu button is pressed again.
+- Hold left three-dots/View for 3 seconds to toggle Boys Mode on or off.
+- Boys Mode persists after release: player cannot take damage, and enemies stop near the player instead of attacking.
+- Downed state now has an on-screen Respawn button instead of requiring browser refresh.
 - Keyboard fallback: T cycles aim mode; P or Escape toggles pause.
 
 ## Phone UI controls
 
 Top-left browser/game overlay buttons:
 
-- ☰: collapse or restore the HUD, tray, and touch controls. Collapsed mode leaves a tiny mini-HUD for HP, mana, and current cards.
+- ☰: collapse or restore the HUD, tray, and touch controls. Collapsed mode leaves a tiny mini-HUD for HP, mana, and current cards. If paused, tapping ☰ resumes.
 - ⛶: request fullscreen. Browser support varies; it works best from a direct tap and may still depend on Chrome/Vercel/phone rules.
 - − / +: toggle a slightly zoomed-out arena view.
 
@@ -44,8 +47,8 @@ Backbone / gamepad:
 - LB: cast left tray card
 - RB: cast right tray card
 - Circle / B button: shuffle/reload tray
-- Right hamburger/Menu: pause menu
-- Hold left three-dots/View: Boys Mode safety hold
+- Right hamburger/Menu: pause and open existing HUD/menu; press again to resume
+- Hold left three-dots/View for 3 seconds: toggle Boys Mode safety mode
 
 Keyboard fallback:
 
