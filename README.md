@@ -18,11 +18,13 @@ Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode expe
 - Soft aim assist is the default. Attacks use movement/facing direction, then nudge toward the best enemy in front.
 - Right stick aiming overrides assist while the stick is actively held.
 - The Aim button cycles Soft / Auto / Manual.
-- Soft mode avoids pure nearest-enemy snapping; Auto mode deliberately tests nearest-enemy targeting; Manual disables target assist.
+- Soft mode avoids pure nearest-enemy snapping.
+- Auto mode continuously points the player at the closest enemy within a nearby range, while still allowing right-stick override.
+- Manual disables target assist.
 - Melee attacks get a small lunge/magnetism when an enemy is just outside comfortable range.
 - Right hamburger/Menu button pauses and opens the existing expanded HUD/menu rather than a separate pause overlay.
 - Pause freezes gameplay updates until the Menu button is pressed again.
-- Hold left three-dots/View for 3 seconds to toggle Boys Mode on or off.
+- Hold left three-dots/View for 1 second to toggle Boys Mode on or off.
 - Boys Mode persists after release: player cannot take damage, and enemies stop near the player instead of attacking.
 - Downed state now has an on-screen Respawn button instead of requiring browser refresh.
 - Keyboard fallback: T cycles aim mode; P or Escape toggles pause.
@@ -48,7 +50,7 @@ Backbone / gamepad:
 - RB: cast right tray card
 - Circle / B button: shuffle/reload tray
 - Right hamburger/Menu: pause and open existing HUD/menu; press again to resume
-- Hold left three-dots/View for 3 seconds: toggle Boys Mode safety mode
+- Hold left three-dots/View for 1 second: toggle Boys Mode safety mode
 
 Keyboard fallback:
 
