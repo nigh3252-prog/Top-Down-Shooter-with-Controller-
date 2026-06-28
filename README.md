@@ -11,6 +11,17 @@ This is a first-pass feel test for a top-down ARPG/brawler combat model:
 - Tray card effects are sourced from baseline Diablo III skills.
 - Graphics are intentionally placeholder shapes.
 
+## Experimental branch note
+
+Branch `experiment/soft-aim-assist` adds an attack-aim experiment:
+
+- Soft aim assist is the default. Attacks use movement/facing direction, then nudge toward the best enemy in front.
+- Right stick aiming overrides assist while the stick is actively held.
+- The Aim button cycles Soft / Auto / Manual.
+- Soft mode avoids pure nearest-enemy snapping; Auto mode deliberately tests nearest-enemy targeting; Manual disables target assist.
+- Melee attacks get a small lunge/magnetism when an enemy is just outside comfortable range.
+- Keyboard fallback: T cycles aim mode.
+
 ## Phone UI controls
 
 Top-left browser/game overlay buttons:
@@ -40,6 +51,7 @@ Keyboard fallback:
 - Space: dodge
 - Q/E: cast left/right tray cards
 - R: shuffle/reload tray
+- T: cycle aim assist mode
 
 ## Source move notes
 
