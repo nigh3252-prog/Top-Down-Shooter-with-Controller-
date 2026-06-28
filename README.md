@@ -13,14 +13,16 @@ This is a first-pass feel test for a top-down ARPG/brawler combat model:
 
 ## Experimental branch note
 
-Branch `experiment/soft-aim-assist` adds an attack-aim experiment:
+Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode experiment:
 
 - Soft aim assist is the default. Attacks use movement/facing direction, then nudge toward the best enemy in front.
 - Right stick aiming overrides assist while the stick is actively held.
 - The Aim button cycles Soft / Auto / Manual.
 - Soft mode avoids pure nearest-enemy snapping; Auto mode deliberately tests nearest-enemy targeting; Manual disables target assist.
 - Melee attacks get a small lunge/magnetism when an enemy is just outside comfortable range.
-- Keyboard fallback: T cycles aim mode.
+- Right hamburger/Menu button pauses and opens the pause menu.
+- Hold left three-dots/View button for Boys Mode: player cannot take damage, and enemies stop near the player instead of attacking.
+- Keyboard fallback: T cycles aim mode; P or Escape toggles pause.
 
 ## Phone UI controls
 
@@ -42,6 +44,8 @@ Backbone / gamepad:
 - LB: cast left tray card
 - RB: cast right tray card
 - Circle / B button: shuffle/reload tray
+- Right hamburger/Menu: pause menu
+- Hold left three-dots/View: Boys Mode safety hold
 
 Keyboard fallback:
 
@@ -52,6 +56,7 @@ Keyboard fallback:
 - Q/E: cast left/right tray cards
 - R: shuffle/reload tray
 - T: cycle aim assist mode
+- P or Escape: pause menu
 
 ## Source move notes
 
