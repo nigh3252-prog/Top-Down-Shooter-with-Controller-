@@ -1,1 +1,53 @@
-<!doctype html><meta charset="utf-8"><title>probe</title><p>probe</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Stone Wanderer Lab + Red Toll Greatsword</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070d;color:#eef6ff;font-family:system-ui,Segoe UI,Arial,sans-serif}iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#05070d}.shell{position:fixed;z-index:30;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));width:min(420px,calc(100vw - 20px));border:1px solid rgba(255,218,143,.32);border-radius:18px;background:rgba(9,10,18,.84);box-shadow:0 18px 55px #0009;backdrop-filter:blur(10px);overflow:hidden}.shell.collapsed .body{display:none}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.10)}.head h1{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#ffd18d}.head button{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#eef6ff;border-radius:11px;padding:7px 9px;font-weight:900}.body{display:grid;gap:9px;padding:11px 12px 12px}.log{font-size:12px;line-height:1.35;color:#ffe6b8}.links a{color:#eef6ff;text-decoration:none;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.06);padding:6px 9px;font-size:12px;font-weight:800}@media(max-width:740px){.shell{left:8px;right:8px;width:auto}}
+</style>
+</head>
+<body>
+<iframe id="labFrame" title="Stone Wanderer Stance Chain Lab Core"></iframe>
+<section class="shell collapsed" id="shell"><div class="head"><h1>Red Toll Patch</h1><button id="collapseBtn">+</button></div><div class="body"><div class="log" id="log">Loading Stone Lab…</div><div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Raw core</a></div></div></section>
+<script>
+'use strict';
+const frame=document.getElementById('labFrame');
+const log=document.getElementById('log');
+const CORE_FILE='stone-wanderer-stance-chain-lab-core.html';
+const UI=`    <div class="section">Red Toll Sword Tuning</div>
+    <div class="hint">Use Greatsword. Global rotation fixes the base red-edge roll. Family offsets correct vertical, horizontal, and thrust attacks separately.</div>
+    <label class="row"><span>Global rot</span><input id="rtRotGlobal" type="range" min="-180" max="180" step="1" value="0" /><span class="readout" id="rtRotGlobalReadout">0°</span></label>
+    <label class="row"><span>Vertical rot</span><input id="rtRotVertical" type="range" min="-180" max="180" step="1" value="0" /><span class="readout" id="rtRotVerticalReadout">0°</span></label>
+    <label class="row"><span>Horizontal rot</span><input id="rtRotHorizontal" type="range" min="-180" max="180" step="1" value="0" /><span class="readout" id="rtRotHorizontalReadout">0°</span></label>
+    <label class="row"><span>Thrust rot</span><input id="rtRotStab" type="range" min="-180" max="180" step="1" value="0" /><span class="readout" id="rtRotStabReadout">0°</span></label>
+`;
+const INJECT=`
+const RT_KEYS={g:'redToll.rot.global.v2',v:'redToll.rot.vertical.v2',h:'redToll.rot.horizontal.v2',s:'redToll.rot.stab.v2'};
+let rtRotGlobal=Number(localStorage.getItem(RT_KEYS.g)||0),rtRotVertical=Number(localStorage.getItem(RT_KEYS.v)||0),rtRotHorizontal=Number(localStorage.getItem(RT_KEYS.h)||0),rtRotStab=Number(localStorage.getItem(RT_KEYS.s)||0),rtSword=null;
+function rtGroup(){return (combatState&&combatState.attack&&(combatState.attack.group||combatState.attackGroup))||combatState.attackGroup||combatState.last||'vertical';}
+function rtDegrees(){const g=rtGroup();return (rtRotGlobal||0)+(g==='horizontal'?(rtRotHorizontal||0):g==='stab'?(rtRotStab||0):(rtRotVertical||0));}
+function rtApply(){if(rtSword)rtSword.rotation.y=THREE.MathUtils.degToRad(rtDegrees());}
+function rtMat(c,r=.75,m=.06){return new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m,flatShading:true});}
+function rtWrapTexture(){const c=document.createElement('canvas');c.width=32;c.height=64;const x=c.getContext('2d');x.fillStyle='#b08a5e';x.fillRect(0,0,32,26);x.fillStyle='#2c2622';x.fillRect(0,26,32,6);x.fillStyle='#83291c';x.fillRect(0,32,32,26);x.fillStyle='#2c2622';x.fillRect(0,58,32,6);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1,7);t.colorSpace=THREE.SRGBColorSpace;return t;}
+function makeRedTollGreatsword(){const root=new THREE.Group(),L=6.4,W=.98,T=.17,N=26,pos=[],uv=[],idx=[],groups=[];const edge=t=>W*(1-t)+.015,th=t=>T*(1-t)+.01;const strips=[{a:t=>[edge(t),t*L,0],b:t=>[0,t*L,th(t)],va:0,vb:.5,mat:1},{a:t=>[0,t*L,th(t)],b:t=>[-edge(t),t*L,0],va:.5,vb:1,mat:0},{a:t=>[-edge(t),t*L,0],b:t=>[0,t*L,-th(t)],va:1,vb:.5,mat:0},{a:t=>[0,t*L,-th(t)],b:t=>[edge(t),t*L,0],va:.5,vb:0,mat:1}];for(const s of strips){const start=idx.length,base=pos.length/3;for(let r=0;r<=N;r++){const t=r/N;pos.push(...s.a(t));uv.push(t,s.va);pos.push(...s.b(t));uv.push(t,s.vb);}for(let r=0;r<N;r++){const i=base+r*2;idx.push(i,i+1,i+2,i+1,i+3,i+2);}groups.push({start,count:idx.length-start,mat:s.mat});}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);groups.forEach(q=>g.addGroup(q.start,q.count,q.mat));g.computeVertexNormals();const steel=rtMat(0x879081,.66,.18),red=rtMat(0x7c1810,.82,.06);const blade=new THREE.Mesh(g,[steel,red]);blade.position.y=.14;root.add(blade);const bronze=rtMat(0x8a6a3a,.42,.55),dark=rtMat(0x4e391c,.58,.35),guard=new THREE.Group();const disc=new THREE.Mesh(new THREE.CylinderGeometry(.95,.95,.10,40),bronze);disc.rotation.x=Math.PI/2;guard.add(disc);guard.add(new THREE.Mesh(new THREE.TorusGeometry(.95,.06,10,44),dark));for(let k=0;k<12;k++){const a=k/12*Math.PI*2,sp=new THREE.Mesh(new THREE.BoxGeometry(.055,.58,.16),dark);sp.position.set(Math.cos(a)*.55,Math.sin(a)*.55,0);sp.rotation.z=a+Math.PI/2;guard.add(sp);}guard.scale.set(.70,.70,1);root.add(guard);const handle=new THREE.Mesh(new THREE.CylinderGeometry(.085,.092,2.25,10),new THREE.MeshStandardMaterial({map:rtWrapTexture(),roughness:.85,metalness:.02}));handle.position.y=-1.375;root.add(handle);const pom=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),dark);pom.position.y=-2.58;root.add(pom);root.userData.bladeLength=L;root.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;}});return root;}
+function makeRedTollCombatGreatsword(bladeLen,baseY){const s=makeRedTollGreatsword(),scale=Math.max(.001,bladeLen/(s.userData.bladeLength||6.4));s.scale.setScalar(scale);s.position.set(0,baseY,0);rtSword=s;rtApply();return s;}
+const rtOriginalRebuildCombatWeaponMesh=rebuildCombatWeaponMesh;
+rebuildCombatWeaponMesh=function(){if(!weaponRoot||!combatState||combatState.weapon!=='greatsword')return rtOriginalRebuildCombatWeaponMesh();clearWeaponRoot();activeWeaponKind='blade';const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase);weaponRoot.add(makeRedTollCombatGreatsword(bladeLen,RIG.bladeBase));updateWeaponDynamicVisual(0,0);};
+function bindRedTollTuning(){const rows=[['rtRotGlobal','g','rtRotGlobalReadout'],['rtRotVertical','v','rtRotVerticalReadout'],['rtRotHorizontal','h','rtRotHorizontalReadout'],['rtRotStab','s','rtRotStabReadout']];const get=k=>k==='g'?rtRotGlobal:k==='v'?rtRotVertical:k==='h'?rtRotHorizontal:rtRotStab;const set=(k,v)=>{if(k==='g')rtRotGlobal=v;else if(k==='v')rtRotVertical=v;else if(k==='h')rtRotHorizontal=v;else rtRotStab=v;localStorage.setItem(RT_KEYS[k],String(v));rtApply();};rows.forEach(([id,k,outId])=>{const el=document.getElementById(id),out=document.getElementById(outId);if(!el||!out)return;el.value=String(get(k)||0);const up=()=>{const v=Number(el.value)||0;out.textContent=Math.round(v)+'°';set(k,v);};el.addEventListener('input',up);up();});}
+bindRedTollTuning();
+`;
+function patchCore(html){
+  const needle='    <label class="row short">\n      <span>Attack lock</span>';
+  html=html.replace(needle,UI+needle);
+  html=html.replace('function updateWeaponDynamicVisual(time=0,dt=0){',INJECT+'\nfunction updateWeaponDynamicVisual(time=0,dt=0){\n  rtApply();');
+  html=html.replace('Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.','Red Toll greatsword branch loaded. Choose Greatsword and use Red Toll Sword Tuning.');
+  return html;
+}
+async function load(){try{log.textContent='Loading core and injecting Red Toll tuning directly into this page…';const r=await fetch(CORE_FILE,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);frame.srcdoc=patchCore(await r.text());log.textContent='Patch loaded into this page. Open the main panel, choose Greatsword, and use Red Toll Sword Tuning.';}catch(e){log.textContent='Patch failed: '+(e&&e.message?e.message:e);frame.src=CORE_FILE;}}
+load();
+document.getElementById('collapseBtn').onclick=()=>{const s=document.getElementById('shell');s.classList.toggle('collapsed');document.getElementById('collapseBtn').textContent=s.classList.contains('collapsed')?'+':'−';};
+</script>
+</body>
+</html>
