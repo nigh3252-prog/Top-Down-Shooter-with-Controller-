@@ -19,9 +19,16 @@ const frame = document.getElementById('labFrame');
 const MODE_KEY = 'stoneWandererMoveTestMode.v1';
 const RATINGS_KEY = 'stoneWandererIndividualMoveRatings.v1';
 
+const attackKeys = {
+  vertical: ['vertical','vertical2','vertical3','vertical4','vertical5','vertical6','vertical7','vertical8','vertical9','vertical10','vertical11','vertical12','vertical13','vertical14','vertical15','vertical16'],
+  horizontal: ['horizontal','horizontal2','horizontal3','horizontal4','horizontal5','horizontal6'],
+  stab: ['stab','stab2','stab3','stab4','stab5','stab6']
+};
+
 const state = {
   mode: localStorage.getItem(MODE_KEY) || 'stance',
   ratings: {},
+  selected: { vertical:1, horizontal:1, stab:1 },
   lastMove: null,
   lastGroup: 'vertical',
   gpPrev: {},
@@ -59,15 +66,6 @@ function readWeapon(){
   return state.weapon;
 }
 
-function parseNext(group){
-  const d = doc();
-  const text = d?.getElementById(groupInfo[group].readout)?.textContent || '';
-  const m = text.match(/(\d+)\/(\d+)/);
-  return { index: m ? Number(m[1]) : null, total: m ? Number(m[2]) : null };
-}
-function wrapIndex(i,total){ return total ? ((i - 1 + total) % total) + 1 : i; }
-function moveId(group,index,label){ return `${group}:${index || label || '?'}`; }
-
 function parseCurrentAttack(){
   const d = doc();
   const meta = d?.getElementById('combatMeta')?.textContent || '';
@@ -80,6 +78,23 @@ function parseCurrentAttack(){
     idle: /Current:\s*idle/i.test(meta)
   };
 }
+
+function groupForAttackKey(key){
+  if (groupInfo[key]) return key;
+  return Object.keys(attackKeys).find(group => attackKeys[group].includes(key)) || null;
+}
+function indexForAttackKey(group,key){
+  const list = attackKeys[group] || [];
+  const idx = list.indexOf(key);
+  return idx >= 0 ? idx + 1 : 1;
+}
+function attackKeyFor(group,index){
+  const list = attackKeys[group] || attackKeys.vertical;
+  return list[wrapIndex(index, list.length) - 1];
+}
+function totalFor(group){ return (attackKeys[group] || []).length || 1; }
+function wrapIndex(i,total){ return total ? ((i - 1 + total) % total) + 1 : i; }
+function moveId(group,index){ return `${group}:${index || '?'}`; }
 
 function dispatchPress(el){
   if (!el) return false;
@@ -97,7 +112,7 @@ function clickInCore(selector){
 }
 
 function ratingGlyph(v){ return v === 'up' ? '👍' : (v === 'down' ? '👎' : '—'); }
-function ratingFor(group,index,label){ return state.ratings[moveId(group,index,label)]?.rating || ''; }
+function ratingFor(group,index){ return state.ratings[moveId(group,index)]?.rating || ''; }
 function countRatings(){
   const vals = Object.values(state.ratings);
   return { count: vals.length, up: vals.filter(r => r.rating === 'up').length, down: vals.filter(r => r.rating === 'down').length };
@@ -153,6 +168,25 @@ function setButtonHTML(button,main,small){
   button.innerHTML = small ? `${main}<br><small>${small}</small>` : main;
 }
 
+function setCoreFamilyButtonTargets(){
+  const d = doc();
+  if (!d) return;
+  for (const group of Object.keys(groupInfo)) {
+    const info = groupInfo[group];
+    const btn = d.getElementById(info.button);
+    const small = d.getElementById(info.readout);
+    if (!btn) continue;
+    if (state.mode === 'moves') {
+      const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
+      state.selected[group] = idx;
+      btn.dataset.attack = attackKeyFor(group, idx);
+      if (small) small.textContent = `selected ${idx}/${totalFor(group)}`;
+    } else {
+      btn.dataset.attack = group;
+    }
+  }
+}
+
 function syncInjectedUI(){
   const d = doc();
   if (!d) return;
@@ -163,6 +197,8 @@ function syncInjectedUI(){
   const sel = d.getElementById('moveTestModeSelect');
   if (sel && sel.value !== state.mode) sel.value = state.mode;
 
+  setCoreFamilyButtonTargets();
+
   d.querySelectorAll('[data-lab-action="attack"]').forEach(b => setButtonHTML(b, isMoves ? '□ Slice' : '□ Attack', isMoves ? 'vertical' : 'next chain hit'));
   d.querySelectorAll('[data-lab-action="nextStance"]').forEach(b => setButtonHTML(b, isMoves ? '△ Sweep' : '△ Authored', isMoves ? 'horizontal' : 'next stance'));
   d.querySelectorAll('[data-lab-action="randomStance"]').forEach(b => setButtonHTML(b, isMoves ? '○ Thrust' : '○ Random', isMoves ? 'thrust' : 'new chain'));
@@ -171,7 +207,7 @@ function syncInjectedUI(){
   if (meta) {
     if (isMoves) {
       const c = countRatings();
-      meta.innerHTML = `<strong>Individual Moves</strong><br>□ Slice / vertical · △ Sweep / horizontal · ○ Thrust. LB/RB rate the specific attack that just played.<br><span class="rating-badge">${c.up} 👍</span><span class="rating-badge">${c.down} 👎</span><span class="rating-badge">${c.count} rated</span>`;
+      meta.innerHTML = `<strong>Individual Moves</strong><br>□ Slice / vertical · △ Sweep / horizontal · ○ Thrust repeat the selected move. D-pad ↑/↓ changes the selected move.<br><span class="rating-badge">${c.up} 👍</span><span class="rating-badge">${c.down} 👎</span><span class="rating-badge">${c.count} rated</span>`;
     } else {
       meta.innerHTML = '<strong>Stance Cards</strong><br>□ Attack plays the next chain hit. △ cycles authored stances. ○ creates a random stance. LB/RB rate the current stance trial.';
     }
@@ -180,31 +216,37 @@ function syncInjectedUI(){
   updateMoveSequenceReadout();
 }
 
-function slotData(group,index,total,preferSavedLabel=false){
+function slotData(group,index,total){
   const info = groupInfo[group] || groupInfo.vertical;
   const row = state.ratings[moveId(group,index)];
-  const label = preferSavedLabel && row?.label ? row.label : `${info.label} ${index || '?'}${total ? '/' + total : ''}`;
+  const isLast = state.lastMove?.group === group && state.lastMove?.index === index;
+  const label = row?.label || (isLast ? state.lastMove.label : `${info.label} ${index || '?'}${total ? '/' + total : ''}`);
   return { label, glyph: ratingGlyph(row?.rating || '') };
 }
 
-function getSequencePreview(){
-  const group = state.lastMove?.group || state.lastGroup || 'vertical';
+function selectedRecord(group = state.lastGroup){
+  const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
   const info = groupInfo[group] || groupInfo.vertical;
-  const next = parseNext(group);
-  const total = state.lastMove?.total || next.total || 0;
-  const lastIndex = state.lastMove?.index || wrapIndex((next.index || 1) - 1, total);
-  const prevIndex = wrapIndex(lastIndex - 1, total);
-  const nextIndex = next.index || wrapIndex(lastIndex + 1, total);
-  const thenIndex = wrapIndex(nextIndex + 1, total);
-  const last = state.lastMove
-    ? { label: state.lastMove.label, glyph: ratingGlyph(ratingFor(group,lastIndex,state.lastMove.label)) }
-    : { label: 'play a move', glyph: '—' };
+  const row = state.ratings[moveId(group,idx)];
+  const isLast = state.lastMove?.group === group && state.lastMove?.index === idx;
+  const label = row?.label || (isLast ? state.lastMove.label : `${info.label} ${idx}/${totalFor(group)}`);
+  return { group, index:idx, total:totalFor(group), label, weapon:readWeapon() };
+}
+
+function getSequencePreview(){
+  const group = state.lastGroup || 'vertical';
+  const info = groupInfo[group] || groupInfo.vertical;
+  const total = totalFor(group);
+  const selectedIndex = wrapIndex(state.selected[group] || 1, total);
+  const prevIndex = wrapIndex(selectedIndex - 1, total);
+  const nextIndex = wrapIndex(selectedIndex + 1, total);
+  const thenIndex = wrapIndex(selectedIndex + 2, total);
   return {
     group, info, total,
-    prev: slotData(group, prevIndex, total, true),
-    last,
-    next: slotData(group, nextIndex, total, true),
-    then: slotData(group, thenIndex, total, true)
+    prev: slotData(group, prevIndex, total),
+    selected: slotData(group, selectedIndex, total),
+    next: slotData(group, nextIndex, total),
+    then: slotData(group, thenIndex, total)
   };
 }
 
@@ -224,7 +266,7 @@ function updateMoveSequenceReadout(){
   const p = getSequencePreview();
   panel.innerHTML = `<div class="move-review-title">${esc(p.info.pad)} ${esc(p.info.label)} / ${esc(p.info.family)} test</div>`
     + reviewRow('Previous', p.prev)
-    + reviewRow('Last', p.last)
+    + reviewRow('Selected', p.selected)
     + reviewRow('Next', p.next)
     + reviewRow('Then', p.then);
 }
@@ -239,13 +281,9 @@ function updateMoveRatingMeta(){
     return;
   }
   el.style.display = 'block';
-  if (!state.lastMove) {
-    el.textContent = 'Individual move rating: play Slice, Sweep, or Thrust, then use LB/RB. The top banner shows previous / last / next / then with ratings.';
-    return;
-  }
-  const last = state.lastMove;
-  const glyph = ratingGlyph(state.ratings[last.id]?.rating || '');
-  el.innerHTML = `Last move: <strong>${esc(last.label)}</strong> · ${esc(groupInfo[last.group].label)} ${last.index || '?'}${last.total ? '/' + last.total : ''} · ${esc(last.weapon)} <span class="rating-badge">${glyph}</span>`;
+  const rec = selectedRecord();
+  const glyph = ratingGlyph(state.ratings[moveId(rec.group,rec.index)]?.rating || '');
+  el.innerHTML = `Selected move: <strong>${esc(rec.label)}</strong> · ${esc(groupInfo[rec.group].label)} ${rec.index}/${rec.total} · ${esc(rec.weapon)} <span class="rating-badge">${glyph}</span>`;
 }
 
 function installModeControls(){
@@ -260,24 +298,42 @@ function installModeControls(){
   syncInjectedUI();
 }
 
-function capturePlayedMove(group,next){
+function selectMoveGroup(group){
+  if (!groupInfo[group]) return;
   state.lastGroup = group;
+  setCoreFamilyButtonTargets();
+  updateMoveRatingMeta();
+  updateMoveSequenceReadout();
+}
+function nudgeSelectedMove(delta){
+  if (state.mode !== 'moves') return false;
+  const group = state.lastGroup || 'vertical';
+  state.selected[group] = wrapIndex((state.selected[group] || 1) + delta, totalFor(group));
+  setCoreFamilyButtonTargets();
+  updateMoveRatingMeta();
+  updateMoveSequenceReadout();
+  return true;
+}
+
+function capturePlayedMove(group,index){
+  state.lastGroup = group;
+  state.selected[group] = wrapIndex(index || state.selected[group] || 1, totalFor(group));
   setTimeout(() => {
     const cur = parseCurrentAttack();
-    const info = groupInfo[group];
-    const idx = next.index || null;
-    const label = cur.label || `${info.label} ${idx || '?'}`;
-    const id = moveId(group, idx, label);
-    state.lastMove = { id, group, index:idx, total:next.total || null, label, weapon:readWeapon(), playedAt:new Date().toISOString() };
+    const rec = selectedRecord(group);
+    const label = cur.label || rec.label;
+    const id = moveId(group, rec.index);
+    state.lastMove = { id, group, index:rec.index, total:rec.total, label, weapon:readWeapon(), playedAt:new Date().toISOString() };
     updateMoveRatingMeta();
     updateMoveSequenceReadout();
   }, 90);
 }
 function playMoveFamily(group){
-  const next = parseNext(group);
-  state.lastGroup = group;
+  selectMoveGroup(group);
+  setCoreFamilyButtonTargets();
+  const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
   const ok = clickInCore('#' + groupInfo[group].button);
-  if (ok) capturePlayedMove(group,next);
+  if (ok) capturePlayedMove(group,idx);
   return ok;
 }
 
@@ -286,14 +342,12 @@ function rateMove(value){
     clickInCore(`[data-lab-action="${value === 'up' ? 'rateUp' : value === 'down' ? 'rateDown' : 'clearRating'}"]`);
     return;
   }
-  if (!state.lastMove) {
-    updateMoveRatingMeta();
-    return;
-  }
+  const rec = selectedRecord();
+  const id = moveId(rec.group, rec.index);
   if (value) {
-    state.ratings[state.lastMove.id] = { ...state.lastMove, rating:value, updatedAt:new Date().toISOString() };
+    state.ratings[id] = { id, group:rec.group, index:rec.index, total:rec.total, label:rec.label, weapon:rec.weapon, rating:value, updatedAt:new Date().toISOString(), playedAt:state.lastMove?.id === id ? state.lastMove.playedAt : '' };
   } else {
-    delete state.ratings[state.lastMove.id];
+    delete state.ratings[id];
   }
   saveRatings();
   syncInjectedUI();
@@ -314,12 +368,26 @@ function handleModeAction(action){
 }
 
 function onCorePointerDown(e){
-  const attackBtn = e.target.closest?.('[data-attack]');
-  if (attackBtn) {
-    const group = attackBtn.dataset.attack;
-    if (groupInfo[group]) capturePlayedMove(group, parseNext(group));
+  const pad = e.target.closest?.('.pad-btn[data-dir]');
+  if (pad && state.mode === 'moves' && (pad.dataset.dir === 'up' || pad.dataset.dir === 'down')) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    nudgeSelectedMove(pad.dataset.dir === 'up' ? -1 : 1);
     return;
   }
+
+  const attackBtn = e.target.closest?.('[data-attack]');
+  if (attackBtn) {
+    const key = attackBtn.dataset.attack;
+    const group = groupForAttackKey(key);
+    if (groupInfo[group]) {
+      state.selected[group] = groupInfo[key] ? state.selected[group] || 1 : indexForAttackKey(group,key);
+      capturePlayedMove(group, state.selected[group]);
+    }
+    return;
+  }
+
   const labBtn = e.target.closest?.('[data-lab-action]');
   if (!labBtn) return;
   const action = labBtn.dataset.labAction;
@@ -348,7 +416,7 @@ function proxyIframeGamepads(){
         return Array.from(pads).map(gp => {
           if (!gp) return null;
           const buttons = Array.from(gp.buttons || []).map((b,i) => {
-            const clear = [0,1,2,3,4,5].includes(i);
+            const clear = [0,1,2,3,4,5].includes(i) || (state.mode === 'moves' && [12,13].includes(i));
             return { pressed: clear ? false : !!b.pressed, touched: clear ? false : !!b.touched, value: clear ? 0 : Number(b.value) || 0 };
           });
           return { id:gp.id, index:gp.index, connected:gp.connected, mapping:gp.mapping, timestamp:gp.timestamp, axes:Array.from(gp.axes || []), buttons };
@@ -370,6 +438,8 @@ function pollGamepads(){
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const gp of pads) {
     if (!gp) continue;
+    if (gpPressed(gp,12)) nudgeSelectedMove(-1);
+    if (gpPressed(gp,13)) nudgeSelectedMove(1);
     if (gpPressed(gp,2)) handleModeAction('attack');
     if (gpPressed(gp,3)) handleModeAction('nextStance');
     if (gpPressed(gp,1)) handleModeAction('randomStance');
