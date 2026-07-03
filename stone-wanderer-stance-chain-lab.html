@@ -14,599 +14,86 @@ iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#05070d
 <iframe id="labFrame" src="stone-wanderer-stance-chain-lab-core.html" title="Stone Wanderer Move Test Core"></iframe>
 <script>
 'use strict';
-
-const frame = document.getElementById('labFrame');
-const MODE_KEY = 'stoneWandererMoveTestMode.v1';
-const RATINGS_KEY = 'stoneWandererIndividualMoveRatings.v1';
-
-const attackKeys = {
-  vertical: ['vertical','vertical2','vertical3','vertical4','vertical5','vertical6','vertical7','vertical8','vertical9','vertical10','vertical11','vertical12','vertical13','vertical14','vertical15','vertical16'],
-  horizontal: ['horizontal','horizontal2','horizontal3','horizontal4','horizontal5','horizontal6'],
-  stab: ['stab','stab2','stab3','stab4','stab5','stab6']
+const frame=document.getElementById('labFrame');
+const MODE_KEY='stoneWandererMoveTestMode.v1';
+const RATINGS_KEY='stoneWandererIndividualMoveRatings.v1';
+const attackKeys={
+  vertical:['vertical','vertical2','vertical3','vertical4','vertical5','vertical6','vertical7','vertical8','vertical9','vertical10','vertical11','vertical12','vertical13','vertical14','vertical15','vertical16'],
+  horizontal:['horizontal','horizontal2','horizontal3','horizontal4','horizontal5','horizontal6'],
+  stab:['stab','stab2','stab3','stab4','stab5','stab6']
 };
-
-const state = {
-  mode: localStorage.getItem(MODE_KEY) || 'stance',
-  ratings: {},
-  selected: { vertical:1, horizontal:1, stab:1 },
-  lastMove: null,
-  lastGroup: 'vertical',
-  gpPrev: {},
-  weapon: 'Longsword',
-  group: 'vertical',
-  lastDummy: '',
-  lastAttackToken: '',
-  surge: 0
+const groupInfo={
+  vertical:{label:'Slice',family:'Vertical',button:'attackV',readout:'varV',pad:'□'},
+  horizontal:{label:'Sweep',family:'Horizontal',button:'attackH',readout:'varH',pad:'△'},
+  stab:{label:'Thrust',family:'Thrust',button:'attackS',readout:'varS',pad:'○'}
 };
-
-const groupInfo = {
-  vertical: { label:'Slice', family:'Vertical', button:'attackV', readout:'varV', pad:'□' },
-  horizontal: { label:'Sweep', family:'Horizontal', button:'attackH', readout:'varH', pad:'△' },
-  stab: { label:'Thrust', family:'Thrust', button:'attackS', readout:'varS', pad:'○' }
-};
-
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-function doc(){ try { return frame.contentDocument; } catch(e) { return null; } }
-function win(){ try { return frame.contentWindow; } catch(e) { return null; } }
-function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
-
-function loadRatings(){
-  try { state.ratings = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}') || {}; }
-  catch(e) { state.ratings = {}; }
-}
-function saveRatings(){
-  try { localStorage.setItem(RATINGS_KEY, JSON.stringify(state.ratings)); }
-  catch(e) {}
-}
-
-function readWeapon(){
-  const d = doc();
-  const sel = d?.getElementById('combatWeaponSelect');
-  if (sel) state.weapon = sel.options?.[sel.selectedIndex]?.textContent?.replace(/\s*\(.+\)$/,'') || state.weapon;
-  return state.weapon;
-}
-
-function parseCurrentAttack(){
-  const d = doc();
-  const meta = d?.getElementById('combatMeta')?.textContent || '';
-  const m = meta.match(/Current:\s*([^(.]+?)(?:\s*—\s*([^(.]+?))?\s*\(([^)]+)\)/i);
-  return {
-    meta,
-    label: m ? (m[1] || '').trim() : '',
-    detail: m ? (m[2] || '').trim() : '',
-    group: m ? (m[3] || '').trim() : '',
-    idle: /Current:\s*idle/i.test(meta)
-  };
-}
-
-function groupForAttackKey(key){
-  if (groupInfo[key]) return key;
-  return Object.keys(attackKeys).find(group => attackKeys[group].includes(key)) || null;
-}
-function indexForAttackKey(group,key){
-  const list = attackKeys[group] || [];
-  const idx = list.indexOf(key);
-  return idx >= 0 ? idx + 1 : 1;
-}
-function attackKeyFor(group,index){
-  const list = attackKeys[group] || attackKeys.vertical;
-  return list[wrapIndex(index, list.length) - 1];
-}
-function totalFor(group){ return (attackKeys[group] || []).length || 1; }
-function wrapIndex(i,total){ return total ? ((i - 1 + total) % total) + 1 : i; }
-function moveId(group,index){ return `${group}:${index || '?'}`; }
-
-function dispatchPress(el){
-  if (!el) return false;
-  const w = win() || window;
-  try {
-    el.dispatchEvent(new w.PointerEvent('pointerdown', { bubbles:true, cancelable:true, pointerId:1, pointerType:'mouse', isPrimary:true }));
-  } catch(e) {
-    el.dispatchEvent(new MouseEvent('pointerdown', { bubbles:true, cancelable:true }));
-  }
-  return true;
-}
-function clickInCore(selector){
-  const d = doc();
-  return !!(d && dispatchPress(d.querySelector(selector)));
-}
-
-function ratingGlyph(v){ return v === 'up' ? '👍' : (v === 'down' ? '👎' : '—'); }
-function ratingFor(group,index){ return state.ratings[moveId(group,index)]?.rating || ''; }
-function countRatings(){
-  const vals = Object.values(state.ratings);
-  return { count: vals.length, up: vals.filter(r => r.rating === 'up').length, down: vals.filter(r => r.rating === 'down').length };
-}
-
-function installMoveReviewChrome(){
-  const d = doc();
-  if (!d) return;
-
-  if (!d.getElementById('moveReviewStyle')) {
-    const style = d.createElement('style');
-    style.id = 'moveReviewStyle';
-    style.textContent = `
-      #moveReviewPanel{display:none}
-      body.move-test-review #panel{width:min(760px, calc(100vw - 24px))}
-      body.move-test-review #panel header{align-items:flex-start;gap:12px;padding:12px 14px}
-      body.move-test-review #panel header > div:first-child{min-width:0;flex:1}
-      body.move-test-review #panel header > div:first-child > h1,
-      body.move-test-review #panel header > div:first-child > p{display:none!important}
-      body.move-test-review #panel header .header-actions{flex:0 0 auto;align-self:flex-start}
-      body.move-test-review #moveReviewPanel{display:grid;gap:5px;font-size:12px;line-height:1.22;color:var(--muted)}
-      body.move-test-review .move-review-title{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--text);font-weight:900;margin-bottom:2px}
-      body.move-test-review .move-review-row{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;gap:8px;align-items:baseline}
-      body.move-test-review .move-review-row span:first-child{color:rgba(238,246,255,.64);font-weight:850}
-      body.move-test-review .move-review-row strong{color:var(--text);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      body.move-test-review .move-review-rate{text-align:right;font-weight:900;color:var(--text)}
-      body.move-test-review #miniStatus{display:none!important}
-      @media(max-width:700px){
-        body.move-test-review #panel{left:max(8px, env(safe-area-inset-left));top:max(8px, env(safe-area-inset-top));width:calc(100vw - 16px)}
-        body.move-test-review #panel header{padding:10px 12px}
-        body.move-test-review .move-review-row{grid-template-columns:60px minmax(0,1fr) 24px;gap:6px;font-size:11px}
-        body.move-test-review .move-review-title{font-size:11px}
-      }
-    `;
-    d.head.appendChild(style);
-  }
-
-  const headerInfo = d.querySelector('#panel header > div:first-child');
-  if (headerInfo && !d.getElementById('moveReviewPanel')) {
-    const panel = d.createElement('div');
-    panel.id = 'moveReviewPanel';
-    headerInfo.appendChild(panel);
-  }
-}
-
-function setMode(mode){
-  state.mode = mode === 'moves' ? 'moves' : 'stance';
-  localStorage.setItem(MODE_KEY, state.mode);
-  syncInjectedUI();
-}
-function setButtonHTML(button,main,small){
-  if (!button) return;
-  button.innerHTML = small ? `${main}<br><small>${small}</small>` : main;
-}
-
-function setCoreFamilyButtonTargets(){
-  const d = doc();
-  if (!d) return;
-  for (const group of Object.keys(groupInfo)) {
-    const info = groupInfo[group];
-    const btn = d.getElementById(info.button);
-    const small = d.getElementById(info.readout);
-    if (!btn) continue;
-    if (state.mode === 'moves') {
-      const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
-      state.selected[group] = idx;
-      btn.dataset.attack = attackKeyFor(group, idx);
-      if (small) small.textContent = `selected ${idx}/${totalFor(group)}`;
-    } else {
-      btn.dataset.attack = group;
-    }
-  }
-}
-
-function syncInjectedUI(){
-  const d = doc();
-  if (!d) return;
-  installMoveReviewChrome();
-  const isMoves = state.mode === 'moves';
-  d.body.classList.toggle('move-test-review', isMoves);
-
-  const sel = d.getElementById('moveTestModeSelect');
-  if (sel && sel.value !== state.mode) sel.value = state.mode;
-
-  setCoreFamilyButtonTargets();
-
-  d.querySelectorAll('[data-lab-action="attack"]').forEach(b => setButtonHTML(b, isMoves ? '□ Slice' : '□ Attack', isMoves ? 'vertical' : 'next chain hit'));
-  d.querySelectorAll('[data-lab-action="nextStance"]').forEach(b => setButtonHTML(b, isMoves ? '△ Sweep' : '△ Authored', isMoves ? 'horizontal' : 'next stance'));
-  d.querySelectorAll('[data-lab-action="randomStance"]').forEach(b => setButtonHTML(b, isMoves ? '○ Thrust' : '○ Random', isMoves ? 'thrust' : 'new chain'));
-
-  const meta = d.getElementById('moveTestModeMeta');
-  if (meta) {
-    if (isMoves) {
-      const c = countRatings();
-      meta.innerHTML = `<strong>Individual Moves</strong><br>□ Slice / vertical · △ Sweep / horizontal · ○ Thrust repeat the selected move. D-pad ↑/↓ changes the selected move.<br><span class="rating-badge">${c.up} 👍</span><span class="rating-badge">${c.down} 👎</span><span class="rating-badge">${c.count} rated</span>`;
-    } else {
-      meta.innerHTML = '<strong>Stance Cards</strong><br>□ Attack plays the next chain hit. △ cycles authored stances. ○ creates a random stance. LB/RB rate the current stance trial.';
-    }
-  }
-  updateMoveRatingMeta();
-  updateMoveSequenceReadout();
-}
-
-function slotData(group,index,total){
-  const info = groupInfo[group] || groupInfo.vertical;
-  const row = state.ratings[moveId(group,index)];
-  const isLast = state.lastMove?.group === group && state.lastMove?.index === index;
-  const label = row?.label || (isLast ? state.lastMove.label : `${info.label} ${index || '?'}${total ? '/' + total : ''}`);
-  return { label, glyph: ratingGlyph(row?.rating || '') };
-}
-
-function selectedRecord(group = state.lastGroup){
-  const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
-  const info = groupInfo[group] || groupInfo.vertical;
-  const row = state.ratings[moveId(group,idx)];
-  const isLast = state.lastMove?.group === group && state.lastMove?.index === idx;
-  const label = row?.label || (isLast ? state.lastMove.label : `${info.label} ${idx}/${totalFor(group)}`);
-  return { group, index:idx, total:totalFor(group), label, weapon:readWeapon() };
-}
-
-function getSequencePreview(){
-  const group = state.lastGroup || 'vertical';
-  const info = groupInfo[group] || groupInfo.vertical;
-  const total = totalFor(group);
-  const selectedIndex = wrapIndex(state.selected[group] || 1, total);
-  const prevIndex = wrapIndex(selectedIndex - 1, total);
-  const nextIndex = wrapIndex(selectedIndex + 1, total);
-  const thenIndex = wrapIndex(selectedIndex + 2, total);
-  return {
-    group, info, total,
-    prev: slotData(group, prevIndex, total),
-    selected: slotData(group, selectedIndex, total),
-    next: slotData(group, nextIndex, total),
-    then: slotData(group, thenIndex, total)
-  };
-}
-
-function reviewRow(label,data){
-  return `<div class="move-review-row"><span>${esc(label)}</span><strong>${esc(data.label)}</strong><b class="move-review-rate">${esc(data.glyph)}</b></div>`;
-}
-function updateMoveSequenceReadout(){
-  const d = doc();
-  if (!d) return;
-  const panel = d.getElementById('moveReviewPanel');
-  if (!panel) return;
-  if (state.mode !== 'moves') {
-    panel.innerHTML = '';
-    d.body.classList.remove('move-test-review');
-    return;
-  }
-  const p = getSequencePreview();
-  panel.innerHTML = `<div class="move-review-title">${esc(p.info.pad)} ${esc(p.info.label)} / ${esc(p.info.family)} test</div>`
-    + reviewRow('Previous', p.prev)
-    + reviewRow('Selected', p.selected)
-    + reviewRow('Next', p.next)
-    + reviewRow('Then', p.then);
-}
-
-function updateMoveRatingMeta(){
-  const d = doc();
-  if (!d) return;
-  const el = d.getElementById('moveRatingMeta');
-  if (!el) return;
-  if (state.mode !== 'moves') {
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = 'block';
-  const rec = selectedRecord();
-  const glyph = ratingGlyph(state.ratings[moveId(rec.group,rec.index)]?.rating || '');
-  el.innerHTML = `Selected move: <strong>${esc(rec.label)}</strong> · ${esc(groupInfo[rec.group].label)} ${rec.index}/${rec.total} · ${esc(rec.weapon)} <span class="rating-badge">${glyph}</span>`;
-}
-
-function installModeControls(){
-  const d = doc();
-  if (!d || d.getElementById('moveTestModeSelect')) return;
-  const combatMeta = d.getElementById('combatMeta');
-  if (!combatMeta) return;
-  combatMeta.insertAdjacentHTML('afterend', `<div class="section">Test Mode</div><label class="row short"><span>Mode</span><select id="moveTestModeSelect" aria-label="Move test mode"><option value="stance">Stance Cards</option><option value="moves">Individual Moves</option></select></label><div class="combat-meta lab-meta" id="moveTestModeMeta"></div><div class="combat-meta lab-meta" id="moveRatingMeta"></div>`);
-  const sel = d.getElementById('moveTestModeSelect');
-  sel.value = state.mode;
-  sel.addEventListener('change', e => setMode(e.target.value));
-  syncInjectedUI();
-}
-
-function selectMoveGroup(group){
-  if (!groupInfo[group]) return;
-  state.lastGroup = group;
-  setCoreFamilyButtonTargets();
-  updateMoveRatingMeta();
-  updateMoveSequenceReadout();
-}
-function nudgeSelectedMove(delta){
-  if (state.mode !== 'moves') return false;
-  const group = state.lastGroup || 'vertical';
-  state.selected[group] = wrapIndex((state.selected[group] || 1) + delta, totalFor(group));
-  setCoreFamilyButtonTargets();
-  updateMoveRatingMeta();
-  updateMoveSequenceReadout();
-  return true;
-}
-
-function capturePlayedMove(group,index){
-  state.lastGroup = group;
-  state.selected[group] = wrapIndex(index || state.selected[group] || 1, totalFor(group));
-  setTimeout(() => {
-    const cur = parseCurrentAttack();
-    const rec = selectedRecord(group);
-    const label = cur.label || rec.label;
-    const id = moveId(group, rec.index);
-    state.lastMove = { id, group, index:rec.index, total:rec.total, label, weapon:readWeapon(), playedAt:new Date().toISOString() };
-    updateMoveRatingMeta();
-    updateMoveSequenceReadout();
-  }, 90);
-}
-function playMoveFamily(group){
-  selectMoveGroup(group);
-  setCoreFamilyButtonTargets();
-  const idx = wrapIndex(state.selected[group] || 1, totalFor(group));
-  const ok = clickInCore('#' + groupInfo[group].button);
-  if (ok) capturePlayedMove(group,idx);
-  return ok;
-}
-
-function rateMove(value){
-  if (state.mode !== 'moves') {
-    clickInCore(`[data-lab-action="${value === 'up' ? 'rateUp' : value === 'down' ? 'rateDown' : 'clearRating'}"]`);
-    return;
-  }
-  const rec = selectedRecord();
-  const id = moveId(rec.group, rec.index);
-  if (value) {
-    state.ratings[id] = { id, group:rec.group, index:rec.index, total:rec.total, label:rec.label, weapon:rec.weapon, rating:value, updatedAt:new Date().toISOString(), playedAt:state.lastMove?.id === id ? state.lastMove.playedAt : '' };
-  } else {
-    delete state.ratings[id];
-  }
-  saveRatings();
-  syncInjectedUI();
-}
-
-function handleModeAction(action){
-  if (state.mode !== 'moves') {
-    clickInCore(`[data-lab-action="${action}"]`);
-    return;
-  }
-  if (action === 'attack') playMoveFamily('vertical');
-  else if (action === 'nextStance') playMoveFamily('horizontal');
-  else if (action === 'randomStance') playMoveFamily('stab');
-  else if (action === 'rateDown') rateMove('down');
-  else if (action === 'rateUp') rateMove('up');
-  else if (action === 'clearRating') rateMove('');
-  else clickInCore(`[data-lab-action="${action}"]`);
-}
-
-function onCorePointerDown(e){
-  const pad = e.target.closest?.('.pad-btn[data-dir]');
-  if (pad && state.mode === 'moves' && (pad.dataset.dir === 'up' || pad.dataset.dir === 'down')) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation?.();
-    nudgeSelectedMove(pad.dataset.dir === 'up' ? -1 : 1);
-    return;
-  }
-
-  const attackBtn = e.target.closest?.('[data-attack]');
-  if (attackBtn) {
-    const key = attackBtn.dataset.attack;
-    const group = groupForAttackKey(key);
-    if (groupInfo[group]) {
-      state.selected[group] = groupInfo[key] ? state.selected[group] || 1 : indexForAttackKey(group,key);
-      capturePlayedMove(group, state.selected[group]);
-    }
-    return;
-  }
-
-  const labBtn = e.target.closest?.('[data-lab-action]');
-  if (!labBtn) return;
-  const action = labBtn.dataset.labAction;
-  if (state.mode === 'moves' && ['attack','nextStance','randomStance','rateDown','rateUp','clearRating'].includes(action)) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation?.();
-    handleModeAction(action);
-  }
-}
-function installPointerRemap(){
-  const d = doc();
-  if (!d || d.__moveModePointerRemap) return;
-  d.__moveModePointerRemap = true;
-  d.addEventListener('pointerdown', onCorePointerDown, true);
-}
-
-function proxyIframeGamepads(){
-  const w = win();
-  if (!w || w.__moveModeGamepadProxy) return;
-  try {
-    Object.defineProperty(w.navigator, 'getGamepads', {
-      configurable:true,
-      value: () => {
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        return Array.from(pads).map(gp => {
-          if (!gp) return null;
-          const buttons = Array.from(gp.buttons || []).map((b,i) => {
-            const clear = [0,1,2,3,4,5].includes(i) || (state.mode === 'moves' && [12,13].includes(i));
-            return { pressed: clear ? false : !!b.pressed, touched: clear ? false : !!b.touched, value: clear ? 0 : Number(b.value) || 0 };
-          });
-          return { id:gp.id, index:gp.index, connected:gp.connected, mapping:gp.mapping, timestamp:gp.timestamp, axes:Array.from(gp.axes || []), buttons };
-        });
-      }
-    });
-    w.__moveModeGamepadProxy = true;
-  } catch(e) {}
-}
-function gpPressed(gp,i){
-  const down = !!gp.buttons[i]?.pressed;
-  const key = gp.index + '_' + i;
-  const was = !!state.gpPrev[key];
-  state.gpPrev[key] = down;
-  return down && !was;
-}
-function pollGamepads(){
-  proxyIframeGamepads();
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  for (const gp of pads) {
-    if (!gp) continue;
-    if (gpPressed(gp,12)) nudgeSelectedMove(-1);
-    if (gpPressed(gp,13)) nudgeSelectedMove(1);
-    if (gpPressed(gp,2)) handleModeAction('attack');
-    if (gpPressed(gp,3)) handleModeAction('nextStance');
-    if (gpPressed(gp,1)) handleModeAction('randomStance');
-    if (gpPressed(gp,0)) handleModeAction('nextWeapon');
-    if (gpPressed(gp,4)) handleModeAction('rateDown');
-    if (gpPressed(gp,5)) handleModeAction('rateUp');
-    break;
-  }
-  requestAnimationFrame(pollGamepads);
-}
-
-function isHeavyWeapon(){ return /Hammer|Mace|Claymore|Greatsword|Axe/i.test(state.weapon); }
-const AudioDirector = (() => {
-  let AC, master, noiseBuf, lastAt = 0;
-  function init(){
-    if (AC) return;
-    AC = new (window.AudioContext || window.webkitAudioContext)();
-    master = AC.createGain();
-    master.gain.value = .70;
-    const comp = AC.createDynamicsCompressor();
-    comp.threshold.value = -14;
-    comp.ratio.value = 6;
-    comp.attack.value = .003;
-    comp.release.value = .16;
-    master.connect(comp).connect(AC.destination);
-    noiseBuf = AC.createBuffer(1, AC.sampleRate * 1.2, AC.sampleRate);
-    const data = noiseBuf.getChannelData(0);
-    let seed = 9119;
-    for (let i=0;i<data.length;i++) { seed = seed * 16807 % 2147483647; data[i] = seed / 1073741823 - 1; }
-  }
-  function env(g,t,p,d,a=.004){
-    g.gain.setValueAtTime(.0001,t);
-    g.gain.exponentialRampToValueAtTime(Math.max(.0001,p),t+a);
-    g.gain.exponentialRampToValueAtTime(.0001,t+d);
-  }
-  function tone(type,f0,f1,dur,g,delay=0){
-    init();
-    const t=AC.currentTime+delay,o=AC.createOscillator(),gn=AC.createGain();
-    o.type=type;
-    o.frequency.setValueAtTime(Math.max(20,f0),t);
-    if(f1) o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur*.9);
-    env(gn,t,g,dur);
-    o.connect(gn).connect(master);
-    o.start(t);
-    o.stop(t+dur+.04);
-  }
-  function noise(filter,f0,f1,dur,g,delay=0,q=1.5){
-    init();
-    const t=AC.currentTime+delay,s=AC.createBufferSource(),f=AC.createBiquadFilter(),gn=AC.createGain();
-    s.buffer=noiseBuf;
-    s.playbackRate.value=.75+Math.random()*.55;
-    f.type=filter;
-    f.Q.value=q;
-    f.frequency.setValueAtTime(Math.max(25,f0),t);
-    if(f1) f.frequency.exponentialRampToValueAtTime(Math.max(25,f1),t+dur*.9);
-    env(gn,t,g,dur,.002);
-    s.connect(f).connect(gn).connect(master);
-    s.start(t,Math.random()*.45);
-    s.stop(t+dur+.05);
-  }
-  function play(event,ctx={}){
-    init();
-    if (AC.state === 'suspended') AC.resume();
-    const now = performance.now();
-    if (now - lastAt < 22 && event !== 'hurt') return;
-    lastAt = now;
-    const damage = Number(ctx.damage) || 0;
-    const beast = clamp(state.surge + damage / 420, 0, 1);
-    if (event === 'swingLight') {
-      const thrust = state.group === 'stab';
-      tone('triangle', thrust ? 155 : 178, thrust ? 92 : 105, .12, .07);
-      noise('bandpass', thrust ? 1250 : 820, thrust ? 2700 : 2200, thrust ? .10 : .14, .17, .01, thrust ? 3.4 : 2.1);
-      if (beast > .45) tone('sawtooth',160,78,.16,.06*beast,.01);
-    } else if (event === 'swingHeavy') {
-      tone('triangle',132,58,.28,.14);
-      noise('bandpass',330,1500,.29,.32,.01,1.6);
-      tone('square',165,90,.13,.05,.04);
-      if (beast > .35) tone('sawtooth',90,42,.42,.08*beast,.02);
-    } else if (event === 'hitLight') {
-      noise('highpass',2800,1180,.055,.32,0,1);
-      tone('square',390,185,.075,.10);
-      noise('bandpass',850,220,.11,.13,0,2.3);
-    } else if (event === 'hitHeavy') {
-      tone('sine',145,39,.22,.38);
-      noise('lowpass',680,110,.20,.42,0,1);
-      noise('bandpass',1600,260,.13,.25,.015,3);
-    } else if (event === 'kill') {
-      tone('sine',170,36,.30,.48);
-      noise('lowpass',760,80,.27,.46,0,1.1);
-      tone('square',310,110,.09,.08,.02);
-    } else if (event === 'hurt') {
-      tone('sawtooth',220,70,.20,.16);
-      noise('bandpass',520,140,.22,.22,0,2.5);
-    }
-  }
-  return { play, init };
-})();
-
-function watchCombatMeta(){
-  const d = doc();
-  const meta = d?.getElementById('combatMeta');
-  if (!meta || meta.__audioWatch) return;
-  meta.__audioWatch = true;
-  const read = () => {
-    readWeapon();
-    const cur = parseCurrentAttack();
-    if (cur.group) state.group = cur.group;
-    if (cur.idle) { state.lastAttackToken = ''; return; }
-    if (cur.label) {
-      const token = `${cur.label}|${cur.group}|${cur.meta}`;
-      if (token !== state.lastAttackToken) {
-        state.lastAttackToken = token;
-        AudioDirector.play(isHeavyWeapon() ? 'swingHeavy' : 'swingLight', { damage:isHeavyWeapon()?42:22 });
-      }
-    }
-  };
-  new MutationObserver(read).observe(meta, { childList:true, characterData:true, subtree:true });
-  read();
-}
-function readDummy(txt){
-  if (!txt || txt === state.lastDummy) return;
-  state.lastDummy = txt;
-  const dmg = (txt.match(/(\d+) dmg/) || [])[1];
-  if (/shattered/i.test(txt)) {
-    state.surge = clamp(state.surge + .18, 0, 1);
-    AudioDirector.play('kill', { damage:Number(dmg) || 70, kill:true });
-  } else if (dmg) {
-    const n = Number(dmg);
-    state.surge = clamp(state.surge + n / 520, 0, 1);
-    AudioDirector.play(n >= 34 ? 'hitHeavy' : 'hitLight', { damage:n });
-  }
-}
-function watchDummy(){
-  const d = doc();
-  const meta = d?.getElementById('dummyMeta');
-  if (!meta || meta.__audioWatch) return;
-  meta.__audioWatch = true;
-  new MutationObserver(() => readDummy(meta.textContent || '')).observe(meta, { childList:true, characterData:true, subtree:true });
-  readDummy(meta.textContent || '');
-}
-
-function install(){
-  installMoveReviewChrome();
-  installModeControls();
-  installPointerRemap();
-  proxyIframeGamepads();
-  watchCombatMeta();
-  watchDummy();
-  const d = doc();
-  const weaponSel = d?.getElementById('combatWeaponSelect');
-  if (weaponSel && !weaponSel.__audioWeaponWatch) {
-    weaponSel.__audioWeaponWatch = true;
-    weaponSel.addEventListener('change', () => setTimeout(readWeapon,80));
-    readWeapon();
-  }
-  syncInjectedUI();
-}
-function statusLoop(){
-  updateMoveSequenceReadout();
-  requestAnimationFrame(statusLoop);
-}
-
-frame.addEventListener('load', () => setTimeout(install, 350));
-loadRatings();
-pollGamepads();
-statusLoop();
-setInterval(install, 1000);
+const state={mode:localStorage.getItem(MODE_KEY)||'stance',ratings:{},selected:{vertical:1,horizontal:1,stab:1},lastMove:null,lastGroup:'vertical',gpPrev:{},weapon:'Longsword',group:'vertical',lastDummy:'',lastAttackToken:'',surge:0};
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function doc(){try{return frame.contentDocument}catch(e){return null}}
+function win(){try{return frame.contentWindow}catch(e){return null}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));}
+function loadRatings(){try{state.ratings=JSON.parse(localStorage.getItem(RATINGS_KEY)||'{}')||{};}catch(e){state.ratings={};}}
+function saveRatings(){try{localStorage.setItem(RATINGS_KEY,JSON.stringify(state.ratings));}catch(e){}}
+function readWeapon(){const d=doc(),sel=d?.getElementById('combatWeaponSelect');if(sel)state.weapon=sel.options?.[sel.selectedIndex]?.textContent?.replace(/\s*\(.+\)$/,'')||state.weapon;return state.weapon;}
+function parseCurrentAttack(){const d=doc(),meta=d?.getElementById('combatMeta')?.textContent||'';const m=meta.match(/Current:\s*([^(.]+?)(?:\s*—\s*([^(.]+?))?\s*\(([^)]+)\)/i);return{meta,label:m?(m[1]||'').trim():'',detail:m?(m[2]||'').trim():'',group:m?(m[3]||'').trim():'',idle:/Current:\s*idle/i.test(meta)};}
+function totalFor(group){return (attackKeys[group]||[]).length||1;}
+function wrapIndex(i,total){return total?((i-1+total)%total)+1:i;}
+function attackKeyFor(group,index){const list=attackKeys[group]||attackKeys.vertical;return list[wrapIndex(index,list.length)-1];}
+function groupForAttackKey(key){if(groupInfo[key])return key;return Object.keys(attackKeys).find(group=>attackKeys[group].includes(key))||null;}
+function indexForAttackKey(group,key){const idx=(attackKeys[group]||[]).indexOf(key);return idx>=0?idx+1:1;}
+function moveId(group,index){return `${group}:${index||'?'}`;}
+function ratingGlyph(v){return v==='up'?'👍':(v==='down'?'👎':'—');}
+function ratingFor(group,index){return state.ratings[moveId(group,index)]?.rating||'';}
+function countRatings(){const vals=Object.values(state.ratings);return{count:vals.length,up:vals.filter(r=>r.rating==='up').length,down:vals.filter(r=>r.rating==='down').length};}
+function dispatchPress(el){if(!el)return false;const w=win()||window;try{el.dispatchEvent(new w.PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerId:1,pointerType:'mouse',isPrimary:true}));}catch(e){el.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,cancelable:true}));}return true;}
+function clickInCore(selector){const d=doc();return !!(d&&dispatchPress(d.querySelector(selector)));}
+function installMoveReviewChrome(){const d=doc();if(!d)return;if(!d.getElementById('moveReviewStyle')){const style=d.createElement('style');style.id='moveReviewStyle';style.textContent=`
+#moveReviewPanel{display:none}
+body.move-test-review #panel{width:min(760px, calc(100vw - 24px))}
+body.move-test-review #panel header{align-items:flex-start;gap:12px;padding:12px 14px}
+body.move-test-review #panel header > div:first-child{min-width:0;flex:1}
+body.move-test-review #panel header > div:first-child > h1,body.move-test-review #panel header > div:first-child > p{display:none!important}
+body.move-test-review #panel header .header-actions{flex:0 0 auto;align-self:flex-start}
+body.move-test-review #moveReviewPanel{display:grid;gap:5px;font-size:12px;line-height:1.22;color:var(--muted)}
+body.move-test-review .move-review-title{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--text);font-weight:900;margin-bottom:2px}
+body.move-test-review .move-review-row{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;gap:8px;align-items:baseline}
+body.move-test-review .move-review-row span:first-child{color:rgba(238,246,255,.64);font-weight:850}
+body.move-test-review .move-review-row strong{color:var(--text);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.move-test-review .move-review-rate{text-align:right;font-weight:900;color:var(--text)}
+body.move-test-review #miniStatus{display:none!important}
+@media(max-width:700px){body.move-test-review #panel{left:max(8px, env(safe-area-inset-left));top:max(8px, env(safe-area-inset-top));width:calc(100vw - 16px)}body.move-test-review #panel header{padding:10px 12px}body.move-test-review .move-review-row{grid-template-columns:60px minmax(0,1fr) 24px;gap:6px;font-size:11px}body.move-test-review .move-review-title{font-size:11px}}
+`;d.head.appendChild(style);}const headerInfo=d.querySelector('#panel header > div:first-child');if(headerInfo&&!d.getElementById('moveReviewPanel')){const panel=d.createElement('div');panel.id='moveReviewPanel';headerInfo.appendChild(panel);}}
+function setButtonHTML(button,main,small){if(!button)return;button.innerHTML=small?`${main}<br><small>${small}</small>`:main;}
+function setCoreFamilyButtonTargets(){const d=doc();if(!d)return;for(const group of Object.keys(groupInfo)){const info=groupInfo[group],btn=d.getElementById(info.button),small=d.getElementById(info.readout);if(!btn)continue;if(state.mode==='moves'){const idx=wrapIndex(state.selected[group]||1,totalFor(group));state.selected[group]=idx;btn.dataset.attack=attackKeyFor(group,idx);if(small)small.textContent=`selected ${idx}/${totalFor(group)}`;}else{btn.dataset.attack=group;}}}
+function setMode(mode){state.mode=mode==='moves'?'moves':'stance';localStorage.setItem(MODE_KEY,state.mode);syncInjectedUI();}
+function syncInjectedUI(){const d=doc();if(!d)return;installMoveReviewChrome();const isMoves=state.mode==='moves';d.body.classList.toggle('move-test-review',isMoves);const sel=d.getElementById('moveTestModeSelect');if(sel&&sel.value!==state.mode)sel.value=state.mode;setCoreFamilyButtonTargets();d.querySelectorAll('[data-lab-action="attack"]').forEach(b=>setButtonHTML(b,isMoves?'□ Slice':'□ Attack',isMoves?'vertical':'next chain hit'));d.querySelectorAll('[data-lab-action="nextStance"]').forEach(b=>setButtonHTML(b,isMoves?'△ Sweep':'△ Authored',isMoves?'horizontal':'next stance'));d.querySelectorAll('[data-lab-action="randomStance"]').forEach(b=>setButtonHTML(b,isMoves?'○ Thrust':'○ Random',isMoves?'thrust':'new chain'));const meta=d.getElementById('moveTestModeMeta');if(meta){if(isMoves){const c=countRatings();meta.innerHTML=`<strong>Individual Moves</strong><br>□ Slice / vertical · △ Sweep / horizontal · ○ Thrust repeat the selected move. D-pad ↑/↓ changes the selected move.<br><span class="rating-badge">${c.up} 👍</span><span class="rating-badge">${c.down} 👎</span><span class="rating-badge">${c.count} rated</span>`;}else meta.innerHTML='<strong>Stance Cards</strong><br>□ Attack plays the next chain hit. △ cycles authored stances. ○ creates a random stance. LB/RB rate the current stance trial.';}updateMoveRatingMeta();updateMoveSequenceReadout();}
+function slotData(group,index,total){const info=groupInfo[group]||groupInfo.vertical,row=state.ratings[moveId(group,index)],isLast=state.lastMove?.group===group&&state.lastMove?.index===index;const label=row?.label||(isLast?state.lastMove.label:`${info.label} ${index||'?'}${total?'/'+total:''}`);return{label,glyph:ratingGlyph(row?.rating||'')};}
+function selectedRecord(group=state.lastGroup){const idx=wrapIndex(state.selected[group]||1,totalFor(group)),info=groupInfo[group]||groupInfo.vertical,row=state.ratings[moveId(group,idx)],isLast=state.lastMove?.group===group&&state.lastMove?.index===idx;const label=row?.label||(isLast?state.lastMove.label:`${info.label} ${idx}/${totalFor(group)}`);return{group,index:idx,total:totalFor(group),label,weapon:readWeapon(),key:attackKeyFor(group,idx)};}
+function getSequencePreview(){const group=state.lastGroup||'vertical',info=groupInfo[group]||groupInfo.vertical,total=totalFor(group),selectedIndex=wrapIndex(state.selected[group]||1,total),prevIndex=wrapIndex(selectedIndex-1,total),nextIndex=wrapIndex(selectedIndex+1,total),thenIndex=wrapIndex(selectedIndex+2,total);return{group,info,total,prev:slotData(group,prevIndex,total),selected:slotData(group,selectedIndex,total),next:slotData(group,nextIndex,total),then:slotData(group,thenIndex,total)};}
+function reviewRow(label,data){return `<div class="move-review-row"><span>${esc(label)}</span><strong>${esc(data.label)}</strong><b class="move-review-rate">${esc(data.glyph)}</b></div>`;}
+function updateMoveSequenceReadout(){const d=doc();if(!d)return;const panel=d.getElementById('moveReviewPanel');if(!panel)return;if(state.mode!=='moves'){panel.innerHTML='';d.body.classList.remove('move-test-review');return;}const p=getSequencePreview();panel.innerHTML=`<div class="move-review-title">${esc(p.info.pad)} ${esc(p.info.label)} / ${esc(p.info.family)} test</div>`+reviewRow('Previous',p.prev)+reviewRow('Selected',p.selected)+reviewRow('Next',p.next)+reviewRow('Then',p.then);}
+function updateMoveRatingMeta(){const d=doc();if(!d)return;const el=d.getElementById('moveRatingMeta');if(!el)return;if(state.mode!=='moves'){el.style.display='none';return;}el.style.display='block';const rec=selectedRecord();const glyph=ratingGlyph(state.ratings[moveId(rec.group,rec.index)]?.rating||'');el.innerHTML=`Selected move: <strong>${esc(rec.label)}</strong> · ${esc(groupInfo[rec.group].label)} ${rec.index}/${rec.total} · ${esc(rec.weapon)} <span class="rating-badge">${glyph}</span>`;}
+function installModeControls(){const d=doc();if(!d||d.getElementById('moveTestModeSelect'))return;const combatMeta=d.getElementById('combatMeta');if(!combatMeta)return;combatMeta.insertAdjacentHTML('afterend',`<div class="section">Test Mode</div><label class="row short"><span>Mode</span><select id="moveTestModeSelect" aria-label="Move test mode"><option value="stance">Stance Cards</option><option value="moves">Individual Moves</option></select></label><div class="combat-meta lab-meta" id="moveTestModeMeta"></div><div class="combat-meta lab-meta" id="moveRatingMeta"></div>`);const sel=d.getElementById('moveTestModeSelect');sel.value=state.mode;sel.addEventListener('change',e=>setMode(e.target.value));syncInjectedUI();}
+function selectMoveGroup(group){if(!groupInfo[group])return;state.lastGroup=group;setCoreFamilyButtonTargets();updateMoveRatingMeta();updateMoveSequenceReadout();}
+function nudgeSelectedMove(delta){if(state.mode!=='moves')return false;const group=state.lastGroup||'vertical';state.selected[group]=wrapIndex((state.selected[group]||1)+delta,totalFor(group));setCoreFamilyButtonTargets();updateMoveRatingMeta();updateMoveSequenceReadout();return true;}
+function capturePlayedMove(group,index){state.lastGroup=group;state.selected[group]=wrapIndex(index||state.selected[group]||1,totalFor(group));setTimeout(()=>{const cur=parseCurrentAttack(),rec=selectedRecord(group);const label=cur.label||rec.label,id=moveId(group,rec.index);state.lastMove={id,group,index:rec.index,total:rec.total,label,weapon:readWeapon(),playedAt:new Date().toISOString()};updateMoveRatingMeta();updateMoveSequenceReadout();},90);}
+function playExactMove(group){selectMoveGroup(group);const rec=selectedRecord(group),w=win();if(w&&typeof w.startCombatAttack==='function'){if(typeof w.flashCombatButton==='function')w.flashCombatButton(group);w.startCombatAttack(rec.key,group);capturePlayedMove(group,rec.index);return true;}setCoreFamilyButtonTargets();const ok=clickInCore('#'+groupInfo[group].button);if(ok)capturePlayedMove(group,rec.index);return ok;}
+function rateMove(value){if(state.mode!=='moves'){clickInCore(`[data-lab-action="${value==='up'?'rateUp':value==='down'?'rateDown':'clearRating'}"]`);return;}const rec=selectedRecord(),id=moveId(rec.group,rec.index);if(value)state.ratings[id]={id,group:rec.group,index:rec.index,total:rec.total,label:rec.label,weapon:rec.weapon,rating:value,updatedAt:new Date().toISOString(),playedAt:state.lastMove?.id===id?state.lastMove.playedAt:''};else delete state.ratings[id];saveRatings();syncInjectedUI();}
+function handleModeAction(action){if(state.mode!=='moves'){clickInCore(`[data-lab-action="${action}"]`);return;}if(action==='attack')playExactMove('vertical');else if(action==='nextStance')playExactMove('horizontal');else if(action==='randomStance')playExactMove('stab');else if(action==='rateDown')rateMove('down');else if(action==='rateUp')rateMove('up');else if(action==='clearRating')rateMove('');else clickInCore(`[data-lab-action="${action}"]`);}
+function onCorePointerDown(e){const pad=e.target.closest?.('.pad-btn[data-dir]');if(pad&&state.mode==='moves'&&(pad.dataset.dir==='up'||pad.dataset.dir==='down')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();nudgeSelectedMove(pad.dataset.dir==='up'?-1:1);return;}const labBtn=e.target.closest?.('[data-lab-action]');if(labBtn){const action=labBtn.dataset.labAction;if(state.mode==='moves'&&['attack','nextStance','randomStance','rateDown','rateUp','clearRating'].includes(action)){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();handleModeAction(action);return;}}const attackBtn=e.target.closest?.('[data-attack]');if(attackBtn&&state.mode==='moves'){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();const key=attackBtn.dataset.attack,group=groupForAttackKey(key);if(groupInfo[group]){state.selected[group]=groupInfo[key]?(state.selected[group]||1):indexForAttackKey(group,key);playExactMove(group);}return;}if(attackBtn){const key=attackBtn.dataset.attack,group=groupForAttackKey(key);if(groupInfo[group])capturePlayedMove(group,indexForAttackKey(group,key));}}
+function installPointerRemap(){const d=doc();if(!d||d.__moveModePointerRemap)return;d.__moveModePointerRemap=true;d.addEventListener('pointerdown',onCorePointerDown,true);}
+function proxyIframeGamepads(){const w=win();if(!w||w.__moveModeGamepadProxy)return;try{Object.defineProperty(w.navigator,'getGamepads',{configurable:true,value:()=>{const pads=navigator.getGamepads?navigator.getGamepads():[];return Array.from(pads).map(gp=>{if(!gp)return null;const buttons=Array.from(gp.buttons||[]).map((b,i)=>{const clear=[0,1,2,3,4,5].includes(i)||(state.mode==='moves'&&[12,13].includes(i));return{pressed:clear?false:!!b.pressed,touched:clear?false:!!b.touched,value:clear?0:Number(b.value)||0};});return{id:gp.id,index:gp.index,connected:gp.connected,mapping:gp.mapping,timestamp:gp.timestamp,axes:Array.from(gp.axes||[]),buttons};});}});w.__moveModeGamepadProxy=true;}catch(e){}}
+function gpPressed(gp,i){const down=!!gp.buttons[i]?.pressed,key=gp.index+'_'+i,was=!!state.gpPrev[key];state.gpPrev[key]=down;return down&&!was;}
+function pollGamepads(){proxyIframeGamepads();const pads=navigator.getGamepads?navigator.getGamepads():[];for(const gp of pads){if(!gp)continue;if(gpPressed(gp,12))nudgeSelectedMove(-1);if(gpPressed(gp,13))nudgeSelectedMove(1);if(gpPressed(gp,2))handleModeAction('attack');if(gpPressed(gp,3))handleModeAction('nextStance');if(gpPressed(gp,1))handleModeAction('randomStance');if(gpPressed(gp,0))handleModeAction('nextWeapon');if(gpPressed(gp,4))handleModeAction('rateDown');if(gpPressed(gp,5))handleModeAction('rateUp');break;}requestAnimationFrame(pollGamepads);}
+function isHeavyWeapon(){return /Hammer|Mace|Claymore|Greatsword|Axe/i.test(state.weapon);}
+const AudioDirector=(()=>{let AC,master,noiseBuf,lastAt=0;function init(){if(AC)return;AC=new(window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=.70;const comp=AC.createDynamicsCompressor();comp.threshold.value=-14;comp.ratio.value=6;comp.attack.value=.003;comp.release.value=.16;master.connect(comp).connect(AC.destination);noiseBuf=AC.createBuffer(1,AC.sampleRate*1.2,AC.sampleRate);const data=noiseBuf.getChannelData(0);let seed=9119;for(let i=0;i<data.length;i++){seed=seed*16807%2147483647;data[i]=seed/1073741823-1;}}function env(g,t,p,d,a=.004){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0001,p),t+a);g.gain.exponentialRampToValueAtTime(.0001,t+d);}function tone(type,f0,f1,dur,g,delay=0){init();const t=AC.currentTime+delay,o=AC.createOscillator(),gn=AC.createGain();o.type=type;o.frequency.setValueAtTime(Math.max(20,f0),t);if(f1)o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur*.9);env(gn,t,g,dur);o.connect(gn).connect(master);o.start(t);o.stop(t+dur+.04);}function noise(filter,f0,f1,dur,g,delay=0,q=1.5){init();const t=AC.currentTime+delay,s=AC.createBufferSource(),f=AC.createBiquadFilter(),gn=AC.createGain();s.buffer=noiseBuf;s.playbackRate.value=.75+Math.random()*.55;f.type=filter;f.Q.value=q;f.frequency.setValueAtTime(Math.max(25,f0),t);if(f1)f.frequency.exponentialRampToValueAtTime(Math.max(25,f1),t+dur*.9);env(gn,t,g,dur,.002);s.connect(f).connect(gn).connect(master);s.start(t,Math.random()*.45);s.stop(t+dur+.05);}function play(event,ctx={}){init();if(AC.state==='suspended')AC.resume();const now=performance.now();if(now-lastAt<22&&event!=='hurt')return;lastAt=now;const damage=Number(ctx.damage)||0,beast=clamp(state.surge+damage/420,0,1);if(event==='swingLight'){const thrust=state.group==='stab';tone('triangle',thrust?155:178,thrust?92:105,.12,.07);noise('bandpass',thrust?1250:820,thrust?2700:2200,thrust?.10:.14,.17,.01,thrust?3.4:2.1);if(beast>.45)tone('sawtooth',160,78,.16,.06*beast,.01);}else if(event==='swingHeavy'){tone('triangle',132,58,.28,.14);noise('bandpass',330,1500,.29,.32,.01,1.6);tone('square',165,90,.13,.05,.04);if(beast>.35)tone('sawtooth',90,42,.42,.08*beast,.02);}else if(event==='hitLight'){noise('highpass',2800,1180,.055,.32,0,1);tone('square',390,185,.075,.10);noise('bandpass',850,220,.11,.13,0,2.3);}else if(event==='hitHeavy'){tone('sine',145,39,.22,.38);noise('lowpass',680,110,.20,.42,0,1);noise('bandpass',1600,260,.13,.25,.015,3);}else if(event==='kill'){tone('sine',170,36,.30,.48);noise('lowpass',760,80,.27,.46,0,1.1);tone('square',310,110,.09,.08,.02);}else if(event==='hurt'){tone('sawtooth',220,70,.20,.16);noise('bandpass',520,140,.22,.22,0,2.5);}}return{play,init};})();
+function watchCombatMeta(){const d=doc(),meta=d?.getElementById('combatMeta');if(!meta||meta.__audioWatch)return;meta.__audioWatch=true;const read=()=>{readWeapon();const cur=parseCurrentAttack();if(cur.group)state.group=cur.group;if(cur.idle){state.lastAttackToken='';return;}if(cur.label){const token=`${cur.label}|${cur.group}|${cur.meta}`;if(token!==state.lastAttackToken){state.lastAttackToken=token;AudioDirector.play(isHeavyWeapon()?'swingHeavy':'swingLight',{damage:isHeavyWeapon()?42:22});}}};new MutationObserver(read).observe(meta,{childList:true,characterData:true,subtree:true});read();}
+function readDummy(txt){if(!txt||txt===state.lastDummy)return;state.lastDummy=txt;const dmg=(txt.match(/(\d+) dmg/)||[])[1];if(/shattered/i.test(txt)){state.surge=clamp(state.surge+.18,0,1);AudioDirector.play('kill',{damage:Number(dmg)||70,kill:true});}else if(dmg){const n=Number(dmg);state.surge=clamp(state.surge+n/520,0,1);AudioDirector.play(n>=34?'hitHeavy':'hitLight',{damage:n});}}
+function watchDummy(){const d=doc(),meta=d?.getElementById('dummyMeta');if(!meta||meta.__audioWatch)return;meta.__audioWatch=true;new MutationObserver(()=>readDummy(meta.textContent||'')).observe(meta,{childList:true,characterData:true,subtree:true});readDummy(meta.textContent||'');}
+function install(){installMoveReviewChrome();installModeControls();installPointerRemap();proxyIframeGamepads();watchCombatMeta();watchDummy();const d=doc(),weaponSel=d?.getElementById('combatWeaponSelect');if(weaponSel&&!weaponSel.__audioWeaponWatch){weaponSel.__audioWeaponWatch=true;weaponSel.addEventListener('change',()=>setTimeout(readWeapon,80));readWeapon();}syncInjectedUI();}
+function statusLoop(){updateMoveSequenceReadout();requestAnimationFrame(statusLoop);}
+frame.addEventListener('load',()=>setTimeout(install,350));
+loadRatings();pollGamepads();statusLoop();setInterval(install,1000);
 </script>
 </body>
 </html>
