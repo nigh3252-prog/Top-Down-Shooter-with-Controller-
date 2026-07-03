@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sound Foundry — Retro Beast Audio Lab</title>
+<style>
+  :root{
+    --ink:#14120f;
+    --ink2:#1c1915;
+    --ink3:#252119;
+    --bone:#e8e0cf;
+    --ash:#8a8272;
+    --ember:#b03a2e;
+    --emberhi:#d4553f;
+    --line:#3a342a;
+    /* element colors */
+    --c-partials:#7d8fa3;
+    --c-noise:#9a8f7a;
+    --c-thud:#8a5a44;
+    --c-whoosh:#6f8f86;
+    --c-click:#d8cfb8;
+    --c-ring:#b39b5e;
+    --c-psg:#79b6d8;
+    --c-lfsr:#d29a57;
+    --c-fm:#a984d8;
+    --c-voice:#c46969;
+    --c-pulse:#c3c06a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--ink);color:var(--bone);font-family:Georgia,'Times New Roman',serif;}
+  body{padding-bottom:96px;}
+
+  header{
+    padding:18px 16px 14px;
+    border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:linear-gradient(var(--ink) 88%,rgba(20,18,15,0));
+    z-index:10;
+  }
+  h1{font-size:20px;font-weight:normal;letter-spacing:.28em;text-transform:uppercase;}
+  h1 .amp{color:var(--ember);}
+  .sub{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--ash);letter-spacing:.12em;margin-top:4px;text-transform:uppercase;}
+  #scope{display:block;width:100%;height:56px;margin-top:10px;background:var(--ink2);border:1px solid var(--line);}
+
+  .masterRow,.retroGrid{
+    display:grid;gap:10px;margin-top:10px;align-items:center;
+    font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--ash);letter-spacing:.08em;
+  }
+  .masterRow{grid-template-columns:1fr 1fr;}
+  .retroPanel{margin-top:10px;padding:10px;border:1px solid var(--line);background:rgba(28,25,21,.72);}
+  .retroHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
+  .retroHead b{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:normal;color:var(--bone);font-family:ui-monospace,Menlo,monospace;}
+  .retroHead span{font-size:9px;color:var(--ash);font-family:ui-monospace,Menlo,monospace;}
+  .retroGrid{grid-template-columns:1fr 1fr;}
+  @media(min-width:780px){.retroGrid{grid-template-columns:repeat(4,1fr);}}
+  label.ctrl{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  label.ctrl span{display:flex;justify-content:space-between;gap:8px;white-space:nowrap;}
+  label.ctrl em{font-style:normal;color:var(--bone);opacity:.86;}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;min-width:60px;}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:0;background:var(--bone);
+    margin-top:-6px;border:1px solid var(--ink);transform:rotate(45deg);
+  }
+
+  .legend{
+    display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 16px;
+    font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.1em;color:var(--ash);text-transform:uppercase;
+    border-bottom:1px solid var(--line);
+  }
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .swatch{width:8px;height:8px;display:inline-block;transform:rotate(45deg);}
+
+  section{padding:14px 12px 4px;}
+  .secHead{display:flex;align-items:baseline;justify-content:space-between;padding:0 4px 8px;gap:12px;}
+  .secHead h2{font-size:14px;font-weight:normal;letter-spacing:.2em;text-transform:uppercase;}
+  .secHead .desc{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--ash);letter-spacing:.06em;display:block;margin-top:3px;text-transform:none;}
+  button.reroll{
+    background:none;border:1px solid var(--line);color:var(--ash);
+    font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:7px 12px;cursor:pointer;flex:0 0 auto;
+  }
+  button.reroll:active{border-color:var(--bone);color:var(--bone);}
+
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+  @media(min-width:700px){.grid{grid-template-columns:repeat(10,1fr);}}
+  .cell{
+    position:relative;background:var(--ink2);border:1px solid var(--line);
+    aspect-ratio:1/1;cursor:pointer;user-select:none;-webkit-user-select:none;
+    display:flex;flex-direction:column;justify-content:space-between;padding:6px;
+    transition:background .08s;
+  }
+  .cell:active,.cell.playing{background:var(--ink3);border-color:var(--ash);}
+  .cell .num{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--ash);}
+  .cell .chips{display:flex;gap:3px;flex-wrap:wrap;align-content:flex-end;max-width:72px;}
+  .chip{width:7px;height:7px;transform:rotate(45deg);opacity:.9;}
+  .star{position:absolute;top:2px;right:2px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:var(--line);font-size:14px;line-height:1;}
+  .cell.fav{border-color:var(--ember);}
+  .cell.fav .star{color:var(--ember);}
+  .cell.fav .num{color:var(--emberhi);}
+
+  footer{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:var(--ink);border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;z-index:10;}
+  #exportBtn{flex:1;background:var(--ember);border:none;color:var(--bone);font-family:Georgia,serif;font-size:13px;letter-spacing:.22em;text-transform:uppercase;padding:13px;cursor:pointer;}
+  #exportBtn:disabled{background:var(--ink3);color:var(--ash);}
+  #favCount{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--ash);white-space:nowrap;}
+  #boot{position:fixed;inset:0;background:var(--ink);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer;text-align:center;padding:18px;}
+  #boot .rune{font-size:34px;color:var(--ember);}
+  #boot .t{letter-spacing:.3em;text-transform:uppercase;font-size:14px;}
+  #boot .s{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--ash);letter-spacing:.15em;line-height:1.6;max-width:360px;}
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="rune">&#10022;</div>
+  <div class="t">Sound Foundry</div>
+  <div class="s">tap to light the forge<br>retro texture + creature calls enabled</div>
+</div>
+
+<header>
+  <h1>Sound <span class="amp">&amp;</span> Foundry</h1>
+  <div class="sub">procedural melee + beasts &mdash; tap a cell to strike &middot; star what snarls</div>
+  <canvas id="scope" width="600" height="56"></canvas>
+  <div class="masterRow">
+    <label class="ctrl"><span>vol <em id="volVal">70</em></span><input type="range" id="vol" min="0" max="100" value="70"></label>
+    <label class="ctrl"><span>reverb <em id="wetVal">18</em></span><input type="range" id="wet" min="0" max="100" value="14"></label>
+  </div>
+  <div class="retroPanel">
+    <div class="retroHead"><b>Retro Texture</b><span>left = Atari-ish / right = Genesis-ish</span></div>
+    <div class="retroGrid">
+      <label class="ctrl"><span>retro <em id="retroVal">42</em></span><input type="range" id="retro" min="0" max="100" value="42"></label>
+      <label class="ctrl"><span>hardware <em id="hardwareVal">62</em></span><input type="range" id="hardware" min="0" max="100" value="62"></label>
+      <label class="ctrl"><span>ring cut <em id="ringCutVal">64</em></span><input type="range" id="ringCut" min="0" max="100" value="64"></label>
+      <label class="ctrl"><span>grit <em id="gritVal">38</em></span><input type="range" id="grit" min="0" max="100" value="38"></label>
+      <label class="ctrl"><span>pitch step <em id="pitchStepVal">28</em></span><input type="range" id="pitchStep" min="0" max="100" value="28"></label>
+      <label class="ctrl"><span>bit depth <em id="bitDepthVal">9</em></span><input type="range" id="bitDepth" min="5" max="14" value="9"></label>
+      <label class="ctrl"><span>sample hz <em id="sampleHzVal">14000</em></span><input type="range" id="sampleHz" min="6000" max="32000" value="14000" step="1000"></label>
+      <label class="ctrl"><span>organic <em id="organicVal">72</em></span><input type="range" id="organic" min="0" max="100" value="72"></label>
+    </div>
+  </div>
+</header>
+
+<div class="legend" id="legend"></div>
+<main id="sections"></main>
+
+<footer>
+  <span id="favCount">0 starred</span>
+  <button id="exportBtn" disabled>Export favorites</button>
+</footer>
+
+<script>
+'use strict';
+/* =====================================================================
+   SOUND FOUNDRY — retro melee + beast audio lab
+   Every sound is still a plain JSON recipe. The current retro sliders
+   are applied at playback/export time so the grid can stay lightweight.
+   ===================================================================== */
+
+// ---------- seeded RNG ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeRand(seed){const r=mulberry32(seed>>>0);return{f:(a,b)=>a+(b-a)*r(),i:(a,b)=>Math.floor(a+(b-a+1)*r()),pick:(arr)=>arr[Math.floor(r()*arr.length)],chance:(p)=>r()<p,raw:r};}
+const round3=v=>Math.round(v*1000)/1000;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+// ---------- controls ----------
+const CTRL_IDS=['vol','wet','retro','hardware','ringCut','grit','pitchStep','bitDepth','sampleHz','organic'];
+function val(id,def){const el=document.getElementById(id);return el?+el.value:def;}
+function getStyle(){
+  return {
+    retro:val('retro',42)/100,
+    hardware:val('hardware',62)/100,
+    ringCut:val('ringCut',64)/100,
+    grit:val('grit',38)/100,
+    pitchStep:val('pitchStep',28)/100,
+    bitDepth:val('bitDepth',9),
+    sampleHz:val('sampleHz',14000),
+    organic:val('organic',72)/100
+  };
+}
+function updateControlLabels(){
+  const map={vol:'volVal',wet:'wetVal',retro:'retroVal',hardware:'hardwareVal',ringCut:'ringCutVal',grit:'gritVal',pitchStep:'pitchStepVal',bitDepth:'bitDepthVal',sampleHz:'sampleHzVal',organic:'organicVal'};
+  Object.keys(map).forEach(id=>{const a=document.getElementById(id),b=document.getElementById(map[id]);if(a&&b)b.textContent=a.value;});
+  if(master)master.gain.value=val('vol',70)/100;
+  if(wetGain)wetGain.gain.value=val('wet',14)/100*0.6;
+  renderAllGrids();
+}
+
+// ---------- audio graph ----------
+let AC=null, master=null, dryGain=null, wetGain=null, analyser=null, crusher=null;
+let noiseBuf=null, crusherHold=[0,0], crusherPhase=[0,0];
+
+function initAudio(){
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=val('vol',70)/100;
+  const comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-14; comp.knee.value=20; comp.ratio.value=6; comp.attack.value=0.002; comp.release.value=0.15;
+  analyser=AC.createAnalyser(); analyser.fftSize=1024;
+  dryGain=AC.createGain(); dryGain.gain.value=1.0;
+  wetGain=AC.createGain(); wetGain.gain.value=val('wet',14)/100*0.6;
+  const verb=AC.createConvolver(); verb.buffer=makeImpulse(1.05,2.7);
+  const sum=AC.createGain();
+
+  master.connect(dryGain).connect(sum);
+  master.connect(verb).connect(wetGain).connect(sum);
+
+  crusher=AC.createScriptProcessor(1024,2,2);
+  crusher.onaudioprocess=e=>{
+    const s=getStyle();
+    const amount=s.retro*(0.45+0.55*s.grit);
+    const holdSamples=Math.max(1,Math.round(AC.sampleRate/Math.max(2000,s.sampleHz)));
+    const levels=Math.pow(2,Math.max(3,Math.round(s.bitDepth)));
+    for(let ch=0;ch<e.outputBuffer.numberOfChannels;ch++){
+      const input=e.inputBuffer.getChannelData(ch<e.inputBuffer.numberOfChannels?ch:0);
+      const output=e.outputBuffer.getChannelData(ch);
+      for(let i=0;i<input.length;i++){
+        let held=crusherHold[ch]||0;
+        if((crusherPhase[ch]||0)<=0){
+          held=Math.round(input[i]*levels)/levels;
+          crusherHold[ch]=held; crusherPhase[ch]=holdSamples;
+        }
+        crusherPhase[ch]--;
+        const dry=input[i];
+        output[i]=dry*(1-amount)+held*amount;
+      }
+    }
+  };
+  sum.connect(crusher).connect(comp).connect(analyser).connect(AC.destination);
+
+  // shared white noise buffer (2s)
+  noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);
+  const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+}
+function makeImpulse(seconds,decay){
+  const len=AC.sampleRate*seconds, buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);}
+  return buf;
+}
+
+// ---------- ELEMENTS ------------------------------------------------
+const FLOOR=0.0001;
+function env(g,t,peak,dur,attack){
+  attack=attack||0.002; dur=Math.max(0.008,dur||0.03);
+  g.gain.setValueAtTime(FLOOR,t);
+  g.gain.exponentialRampToValueAtTime(Math.max(peak,FLOOR),t+attack);
+  g.gain.exponentialRampToValueAtTime(FLOOR,t+dur);
+}
+function steppedEnv(g,t,peak,dur,steps){
+  steps=Math.max(3,steps||7); dur=Math.max(0.01,dur||0.04);
+  g.gain.setValueAtTime(FLOOR,t);
+  for(let i=0;i<steps;i++){
+    const x=i/(steps-1), time=t+x*dur, level=FLOOR+(peak-FLOOR)*Math.pow(1-x,1.7);
+    g.gain.setValueAtTime(Math.max(FLOOR,level),time);
+  }
+  g.gain.setValueAtTime(FLOOR,t+dur+0.002);
+}
+function pitchStepHz(hz,stepAmt){
+  if(!stepAmt)return hz;
+  const midi=69+12*Math.log2(Math.max(20,hz)/440);
+  const step=1+Math.round(stepAmt*5); // semitone chunks
+  const q=Math.round(midi/step)*step;
+  return round3(440*Math.pow(2,(q-69)/12));
+}
+function schedulePitch(param,t,p,style){
+  const f0=pitchStepHz(p.f0||p.freq||220,style.pitchStep*style.retro);
+  const f1=pitchStepHz(p.f1||f0,style.pitchStep*style.retro);
+  param.setValueAtTime(f0,t);
+  if(f1!==f0)param.exponentialRampToValueAtTime(Math.max(20,f1),t+(p.dur||0.1));
+}
+function makeLfsrBuffer(seed,dur,density){
+  const len=Math.max(64,Math.floor(AC.sampleRate*Math.max(0.01,dur))), buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  let reg=(seed||0xACE1)&0xffff; if(!reg)reg=0xACE1;
+  let sample=1, hold=0, holdN=Math.max(1,Math.round((1-density)*22));
+  for(let i=0;i<len;i++){
+    if(hold--<=0){const bit=((reg>>0)^(reg>>2)^(reg>>3)^(reg>>5))&1;reg=(reg>>1)|(bit<<15);sample=(reg&1)?1:-1;hold=holdN;}
+    d[i]=sample*(0.72+0.28*((reg>>8)&1));
+  }
+  return buf;
+}
+function startSource(s,t,dur){s.start(t,0);s.stop(t+dur+0.06);}
+
+const ELEMENTS={
+  partials(t,p){
+    p.ratios.forEach((r,i)=>{
+      const o=AC.createOscillator(); o.type=p.wave||'sine'; o.frequency.value=p.base*r;
+      const g=AC.createGain(), t0=t+(p.delay||0), dur=p.decays[i]||0.15;
+      (p.stepped?steppedEnv:env)(g,t0,p.gain*p.gains[i],dur,0.001);
+      o.connect(g).connect(master); o.start(t0); o.stop(t0+dur+0.05);
+    });
+  },
+  noise(t,p){
+    const s=AC.createBufferSource(); s.buffer=noiseBuf; s.playbackRate.value=p.rate||1;
+    const f=AC.createBiquadFilter(); f.type=p.filter; f.Q.value=p.q||0.8;
+    const t0=t+(p.delay||0); f.frequency.setValueAtTime(p.cutoff,t0);
+    if(p.cutoffEnd)f.frequency.exponentialRampToValueAtTime(Math.max(p.cutoffEnd,20),t0+p.dur);
+    const g=AC.createGain(); (p.stepped?steppedEnv:env)(g,t0,p.gain,p.dur,p.attack||0.002);
+    s.connect(f).connect(g).connect(master); s.start(t0,Math.random()*1.2); s.stop(t0+p.dur+0.05);
+  },
+  thud(t,p){
+    const o=AC.createOscillator(); o.type=p.wave||'sine';
+    const t0=t+(p.delay||0); o.frequency.setValueAtTime(p.f0,t0); o.frequency.exponentialRampToValueAtTime(Math.max(p.f1,20),t0+p.dur);
+    const g=AC.createGain(); (p.stepped?steppedEnv:env)(g,t0,p.gain,p.dur,0.003);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0+p.dur+0.05);
+  },
+  whoosh(t,p){
+    const s=AC.createBufferSource(); s.buffer=noiseBuf;
+    const f=AC.createBiquadFilter(); f.type='bandpass'; f.Q.value=p.q;
+    const t0=t+(p.delay||0), mid=t0+p.dur*p.peakAt;
+    f.frequency.setValueAtTime(p.f0,t0); f.frequency.exponentialRampToValueAtTime(p.fPeak,mid); f.frequency.exponentialRampToValueAtTime(Math.max(p.f1,40),t0+p.dur);
+    const g=AC.createGain(); g.gain.setValueAtTime(FLOOR,t0); g.gain.exponentialRampToValueAtTime(p.gain,mid); g.gain.exponentialRampToValueAtTime(FLOOR,t0+p.dur);
+    s.connect(f).connect(g).connect(master); s.start(t0,Math.random()*1.2); s.stop(t0+p.dur+0.05);
+  },
+  click(t,p){
+    const s=AC.createBufferSource(); s.buffer=noiseBuf;
+    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=p.cutoff;
+    const g=AC.createGain(); env(g,t+(p.delay||0),p.gain,p.dur,0.0008);
+    s.connect(f).connect(g).connect(master); s.start(t+(p.delay||0),Math.random()*1.2); s.stop(t+(p.delay||0)+p.dur+0.02);
+  },
+  ring(t,p){
+    const o=AC.createOscillator(); o.type=p.wave||'sine'; o.frequency.value=p.freq;
+    const g=AC.createGain(); (p.stepped?steppedEnv:env)(g,t+(p.delay||0),p.gain,p.dur,0.004);
+    o.connect(g).connect(master); o.start(t+(p.delay||0)); o.stop(t+(p.delay||0)+p.dur+0.05);
+  },
+  psg(t,p){
+    const o=AC.createOscillator(); o.type=p.wave||'square';
+    const style=getStyle(), t0=t+(p.delay||0);
+    schedulePitch(o.frequency,t0,p,style);
+    const f=AC.createBiquadFilter(); f.type=p.filter||'lowpass'; f.frequency.value=p.cutoff||4200; f.Q.value=p.q||0.4;
+    const g=AC.createGain(); steppedEnv(g,t0,p.gain,p.dur,p.steps||6);
+    o.connect(f).connect(g).connect(master); o.start(t0); o.stop(t0+p.dur+0.05);
+  },
+  fm(t,p){
+    const t0=t+(p.delay||0);
+    const carrier=AC.createOscillator(), mod=AC.createOscillator(), modGain=AC.createGain();
+    carrier.type=p.wave||'sine'; mod.type='sine';
+    carrier.frequency.setValueAtTime(p.carrier,t0); if(p.carrierEnd)carrier.frequency.exponentialRampToValueAtTime(Math.max(20,p.carrierEnd),t0+p.dur);
+    mod.frequency.setValueAtTime(p.mod,t0);
+    modGain.gain.setValueAtTime(p.index,t0); modGain.gain.exponentialRampToValueAtTime(FLOOR,t0+p.dur);
+    mod.connect(modGain).connect(carrier.frequency);
+    const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=p.cutoff||p.carrier*2; f.Q.value=p.q||2.5;
+    const g=AC.createGain(); steppedEnv(g,t0,p.gain,p.dur,p.steps||8);
+    carrier.connect(f).connect(g).connect(master); mod.start(t0); carrier.start(t0); mod.stop(t0+p.dur+0.05); carrier.stop(t0+p.dur+0.05);
+  },
+  lfsr(t,p){
+    const dur=p.dur||0.04, t0=t+(p.delay||0), s=AC.createBufferSource(); s.buffer=makeLfsrBuffer(p.seed||0xACE1,dur,p.density||0.55);
+    const f=AC.createBiquadFilter(); f.type=p.filter||'bandpass'; f.frequency.value=p.cutoff||1800; f.Q.value=p.q||1.2;
+    const g=AC.createGain(); steppedEnv(g,t0,p.gain,dur,p.steps||5);
+    s.connect(f).connect(g).connect(master); startSource(s,t0,dur);
+  },
+  voice(t,p){
+    const t0=t+(p.delay||0), dur=p.dur||0.25;
+    const source=p.noise?AC.createBufferSource():AC.createOscillator();
+    if(p.noise){source.buffer=makeLfsrBuffer(p.seed||0xBAD1,dur,p.density||0.42);}
+    else{source.type=p.wave||'sawtooth'; source.frequency.setValueAtTime(p.f0||80,t0); if(p.f1)source.frequency.exponentialRampToValueAtTime(Math.max(20,p.f1),t0+dur);}
+    const out=AC.createGain(); env(out,t0,p.gain||0.35,dur,p.attack||0.012);
+    const trem=AC.createOscillator(), tremG=AC.createGain();
+    trem.frequency.value=p.tremHz||0; tremG.gain.value=(p.trem||0)*0.35; if(p.tremHz){trem.connect(tremG).connect(out.gain); trem.start(t0); trem.stop(t0+dur+0.04);}
+    const formants=p.formants||[{f:700,q:6,g:1}];
+    formants.forEach(fr=>{const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(fr.f,t0); if(fr.fEnd)bp.frequency.exponentialRampToValueAtTime(Math.max(40,fr.fEnd),t0+dur); bp.Q.value=fr.q||5; const fg=AC.createGain(); fg.gain.value=(fr.g||1)/formants.length; source.connect(bp).connect(fg).connect(out);});
+    out.connect(master); source.start(t0); source.stop(t0+dur+0.06);
+  },
+  pulse(t,p){
+    const t0=t+(p.delay||0), pulses=p.count||4;
+    for(let i=0;i<pulses;i++){
+      const tt=t0+i*(p.gap||0.045), o=AC.createOscillator(), g=AC.createGain();
+      o.type=p.wave||'square'; o.frequency.value=(p.freq||120)*Math.pow(p.ratio||1,i);
+      steppedEnv(g,tt,(p.gain||0.15)*Math.pow(p.fade||0.9,i),p.dur||0.025,p.steps||4);
+      o.connect(g).connect(master); o.start(tt); o.stop(tt+(p.dur||0.025)+0.02);
+    }
+  }
+};
+
+function playRecipe(recipe,seed){
+  if(!AC)return;
+  const t=AC.currentTime+0.02;
+  const finalRecipe=applyRetroStyle(recipe,seed||0);
+  finalRecipe.elements.forEach(e=>{if(ELEMENTS[e.kind])ELEMENTS[e.kind](t,e.p);});
+}
+
+// ---------- RECIPE GENERATORS ---------------------------------------
+function metalRatios(R,n,spread){const bases=[1,2.76,5.40,8.93,13.34,18.64];const out=[];for(let i=0;i<n;i++)out.push(round3(bases[i]*R.f(1-spread,1+spread)));return out;}
+function recipe(vibe,elements){return {vibe,elements};}
+
+const GENERATORS={
+  'armor-clang':{name:'Sword vs Armor',desc:'FM grit + short inharmonic metal, less musical ring',gen(R){
+    const n=R.i(4,6), base=R.f(380,920), ratios=metalRatios(R,n,0.06);
+    const decays=ratios.map((r,i)=>round3(R.f(0.12,0.36)/(1+i*R.f(0.6,1.0))));
+    const gains=ratios.map((r,i)=>round3(1/(1+i*R.f(0.8,1.4))));
+    const els=[
+      {kind:'click',p:{cutoff:R.i(2500,5000),dur:round3(R.f(0.006,0.014)),gain:round3(R.f(0.45,0.78))}},
+      {kind:'noise',p:{filter:'highpass',cutoff:R.i(1800,4200),dur:round3(R.f(0.02,0.05)),gain:round3(R.f(0.18,0.4)),q:1}},
+      {kind:'partials',p:{wave:R.pick(['sine','triangle']),base:round3(base),ratios,decays,gains,gain:round3(R.f(0.22,0.42))}},
+      {kind:'fm',p:{carrier:round3(base*R.f(0.8,1.25)),carrierEnd:round3(base*R.f(0.55,0.9)),mod:round3(base*R.f(1.8,3.7)),index:R.i(90,360),cutoff:R.i(1000,4200),dur:round3(R.f(0.055,0.14)),gain:round3(R.f(0.12,0.28)),q:round3(R.f(1.5,4))}}
+    ];
+    if(R.chance(0.35))els.push({kind:'ring',p:{freq:round3(base*R.pick([2.76,5.4])),dur:round3(R.f(0.22,0.52)),gain:round3(R.f(0.025,0.07)),delay:0.01}});
+    if(R.chance(0.45))els.push({kind:'thud',p:{f0:R.i(120,200),f1:R.i(50,80),dur:round3(R.f(0.06,0.12)),gain:round3(R.f(0.15,0.3))}});
+    return recipe('metal',els);
+  }},
+  'flesh-thrust':{name:'Blade into Flesh',desc:'dirty downsampled puncture, wet but not pretty',gen(R){
+    const els=[
+      {kind:'noise',p:{filter:'lowpass',cutoff:R.i(850,1450),cutoffEnd:R.i(120,320),dur:round3(R.f(0.12,0.24)),gain:round3(R.f(0.45,0.76)),q:round3(R.f(0.7,1.4))}},
+      {kind:'thud',p:{f0:R.i(90,160),f1:R.i(35,60),dur:round3(R.f(0.1,0.2)),gain:round3(R.f(0.32,0.56))}},
+      {kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(1100,3600),dur:round3(R.f(0.035,0.09)),gain:round3(R.f(0.12,0.32)),q:round3(R.f(1.4,4.2)),delay:round3(R.f(0.01,0.035)),density:round3(R.f(0.24,0.55))}}
+    ];
+    if(R.chance(0.45))els.push({kind:'noise',p:{filter:'bandpass',cutoff:R.i(2000,4800),dur:round3(R.f(0.03,0.07)),gain:round3(R.f(0.06,0.16)),q:3,delay:round3(R.f(0.05,0.09))}});
+    return recipe('flesh',els);
+  }},
+  'slash-whoosh':{name:'Slash / Whoosh',desc:'organic air with subtle stepped chip edge',gen(R){
+    const heavy=R.chance(0.4), f0=heavy?R.i(180,320):R.i(350,560);
+    const els=[{kind:'whoosh',p:{f0,fPeak:R.i(heavy?800:1400,heavy?1600:2600),f1:R.i(120,300),dur:round3(R.f(heavy?0.18:0.1,heavy?0.3:0.2)),peakAt:round3(R.f(0.35,0.55)),q:round3(R.f(1,3)),gain:round3(R.f(0.32,0.56))}}];
+    if(R.chance(0.55))els.push({kind:'whoosh',p:{f0:f0*2,fPeak:R.i(2800,5200),f1:R.i(400,800),dur:round3(R.f(0.08,0.16)),peakAt:0.45,q:round3(R.f(2,5)),gain:round3(R.f(0.08,0.22)),delay:round3(R.f(0.01,0.04))}});
+    if(R.chance(0.5))els.push({kind:'psg',p:{f0:R.i(320,760),f1:R.i(180,420),dur:round3(R.f(0.035,0.075)),gain:round3(R.f(0.025,0.08)),delay:round3(R.f(0.025,0.055)),cutoff:R.i(1800,4200),wave:'square'}});
+    return recipe('air',els);
+  }},
+  'parry':{name:'Parry / Block',desc:'short Genesis-y spark, FM clang, minimal sustain',gen(R){
+    const base=R.f(900,1700), n=R.i(3,5), ratios=metalRatios(R,n,0.05);
+    const decays=ratios.map((r,i)=>round3(R.f(0.055,0.16)/(1+i*0.8))), gains=ratios.map((r,i)=>round3(1/(1+i)));
+    const els=[
+      {kind:'click',p:{cutoff:R.i(3800,7000),dur:round3(R.f(0.004,0.008)),gain:round3(R.f(0.72,1.0))}},
+      {kind:'psg',p:{f0:R.i(900,2400),f1:R.i(420,900),dur:round3(R.f(0.025,0.055)),gain:round3(R.f(0.1,0.24)),cutoff:R.i(2800,7200),wave:'square'}},
+      {kind:'fm',p:{carrier:round3(base),carrierEnd:round3(base*R.f(0.52,0.8)),mod:round3(base*R.f(2,4.5)),index:R.i(160,520),cutoff:R.i(1700,6200),dur:round3(R.f(0.045,0.11)),gain:round3(R.f(0.18,0.36)),q:round3(R.f(2,5))}},
+      {kind:'partials',p:{wave:'sine',base:round3(base),ratios,decays,gains,gain:round3(R.f(0.12,0.26))}}
+    ];
+    if(R.chance(0.25))els.push({kind:'ring',p:{freq:round3(base*2.76),dur:round3(R.f(0.16,0.36)),gain:round3(R.f(0.025,0.07))}});
+    return recipe('metal',els);
+  }},
+  'blunt':{name:'Heavy Blunt Impact',desc:'big body hit with low-bit crunch and debris',gen(R){
+    const els=[
+      {kind:'thud',p:{f0:R.i(140,240),f1:R.i(30,55),dur:round3(R.f(0.15,0.3)),gain:round3(R.f(0.55,0.88))}},
+      {kind:'noise',p:{filter:'lowpass',cutoff:R.i(360,840),cutoffEnd:R.i(80,180),dur:round3(R.f(0.1,0.2)),gain:round3(R.f(0.35,0.62)),q:1}},
+      {kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(700,2300),dur:round3(R.f(0.045,0.1)),gain:round3(R.f(0.12,0.3)),q:1.2,density:round3(R.f(0.2,0.5))}}
+    ];
+    if(R.chance(0.35))els.push({kind:'partials',p:{wave:'triangle',base:R.i(180,360),ratios:[1,2.76],decays:[0.09,0.05],gains:[1,0.35],gain:round3(R.f(0.04,0.12))}});
+    return recipe('impact',els);
+  }},
+  'step-stone':{name:'Footstep — Stone',desc:'clicky stone step with PSG grit',gen(R){return stepRecipe(R,{vibe:'step',cut:[1400,2600],tick:true,thump:[70,110],dur:[0.03,0.06]});}},
+  'step-dirt':{name:'Footstep — Dirt',desc:'dark scuff, soft body, LFSR grains',gen(R){return stepRecipe(R,{vibe:'step',cut:[500,1100],tick:false,thump:[60,95],dur:[0.05,0.09],scuff:true});}},
+  'step-metal':{name:'Footstep — Metal Grate',desc:'thump + tiny FM grate ping',gen(R){
+    const rec=stepRecipe(R,{vibe:'step',cut:[1000,2000],tick:true,thump:[75,120],dur:[0.03,0.06]});
+    rec.elements.push({kind:'fm',p:{carrier:R.i(260,620),carrierEnd:R.i(180,360),mod:R.i(700,1800),index:R.i(60,180),cutoff:R.i(700,2500),dur:round3(R.f(0.05,0.14)),gain:round3(R.f(0.04,0.12)),q:2}});
+    return rec;
+  }},
+  'dog-bark':{name:'Dog / Wolf Bark',desc:'short formant bark, growl, yelp and snarl variants',gen(R){return barkRecipe(R);}},
+  'lion-roar':{name:'Lion Roar',desc:'low roar with noise chest, formant sweep and tremor',gen(R){return lionRecipe(R);}},
+  'koala-bellow':{name:'Koala Bellow',desc:'weird low inhale/exhale engine bellow',gen(R){return koalaRecipe(R);}},
+  'walrus-call':{name:'Walrus Call',desc:'knocks, grunts, rasps, whistles and bell tones',gen(R){return walrusRecipe(R);}},
+  'beast-chatter':{name:'Mutant Chatter',desc:'hyena/monkey/bird-ish repeated creature bursts',gen(R){return chatterRecipe(R);}}
+};
+
+function stepRecipe(R,o){
+  const els=[
+    {kind:'noise',p:{filter:'lowpass',cutoff:R.i(o.cut[0],o.cut[1]),dur:round3(R.f(o.dur[0],o.dur[1])),gain:round3(R.f(0.25,0.48)),q:round3(R.f(0.7,1.5))}},
+    {kind:'thud',p:{f0:R.i(o.thump[0],o.thump[1]),f1:R.i(30,50),dur:round3(R.f(0.05,0.1)),gain:round3(R.f(0.18,0.36))}}
+  ];
+  if(o.tick)els.push({kind:'psg',p:{f0:R.i(480,1400),f1:R.i(280,700),dur:round3(R.f(0.008,0.022)),gain:round3(R.f(0.05,0.13)),cutoff:R.i(2200,5200)}});
+  if(o.scuff)els.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(500,1300),dur:round3(R.f(0.06,0.12)),gain:round3(R.f(0.08,0.2)),q:1.5,delay:round3(R.f(0.015,0.04)),density:round3(R.f(0.18,0.38))}});
+  return recipe(o.vibe||'step',els);
+}
+function barkRecipe(R){
+  const low=R.i(95,180), sharp=R.chance(0.45);
+  const els=[
+    {kind:'thud',p:{f0:R.i(120,220),f1:R.i(45,80),dur:round3(R.f(0.04,0.085)),gain:round3(R.f(0.2,0.38))}},
+    {kind:'voice',p:{wave:'sawtooth',f0:low,f1:R.i(70,130),dur:round3(R.f(0.12,0.24)),gain:round3(R.f(0.32,0.62)),tremHz:R.i(18,34),trem:round3(R.f(0.15,0.5)),formants:[{f:R.i(450,760),q:R.f(4,8),g:1.2,fEnd:R.i(350,640)},{f:R.i(1000,1700),q:R.f(5,12),g:0.8},{f:R.i(2100,3200),q:R.f(4,10),g:0.35}]}}
+  ];
+  if(sharp)els.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(1300,3000),dur:round3(R.f(0.025,0.06)),gain:round3(R.f(0.1,0.24)),q:R.f(1.2,3.8),density:0.45}});
+  if(R.chance(0.4))els.push({kind:'pulse',p:{freq:R.i(90,160),count:R.i(2,4),gap:round3(R.f(0.07,0.12)),dur:round3(R.f(0.018,0.034)),gain:round3(R.f(0.05,0.13)),wave:'square',fade:0.72}});
+  return recipe('beast',els);
+}
+function lionRecipe(R){
+  const dur=round3(R.f(0.75,1.45));
+  return recipe('beast',[
+    {kind:'thud',p:{f0:R.i(80,130),f1:R.i(32,48),dur:round3(dur*0.55),gain:round3(R.f(0.38,0.68)),wave:'triangle'}},
+    {kind:'voice',p:{wave:'sawtooth',f0:R.i(55,88),f1:R.i(38,64),dur,gain:round3(R.f(0.45,0.78)),attack:0.025,tremHz:R.i(7,14),trem:round3(R.f(0.35,0.8)),formants:[{f:R.i(170,260),fEnd:R.i(120,210),q:R.f(5,11),g:1.4},{f:R.i(520,880),fEnd:R.i(420,720),q:R.f(5,10),g:1.0},{f:R.i(1200,1900),q:R.f(3,8),g:0.45}]}},
+    {kind:'voice',p:{noise:true,seed:R.i(1,999999),density:round3(R.f(0.2,0.4)),dur:round3(dur*0.9),gain:round3(R.f(0.18,0.34)),attack:0.03,tremHz:R.i(11,18),trem:0.35,formants:[{f:R.i(180,380),q:2.5,g:1},{f:R.i(600,1200),q:2,g:0.75}]}}
+  ]);
+}
+function koalaRecipe(R){
+  const low=R.i(34,58);
+  const els=[
+    {kind:'pulse',p:{freq:low,count:R.i(4,7),gap:round3(R.f(0.095,0.15)),dur:round3(R.f(0.05,0.09)),gain:round3(R.f(0.11,0.22)),wave:'sawtooth',ratio:R.f(0.96,1.02),fade:0.95,steps:5}},
+    {kind:'voice',p:{wave:'sawtooth',f0:low,f1:R.i(28,44),dur:round3(R.f(0.85,1.55)),gain:round3(R.f(0.35,0.65)),attack:0.04,tremHz:R.i(5,9),trem:round3(R.f(0.55,0.95)),formants:[{f:R.i(95,160),fEnd:R.i(75,130),q:R.f(8,15),g:1.4},{f:R.i(240,420),fEnd:R.i(200,360),q:R.f(6,12),g:0.9},{f:R.i(700,1200),q:R.f(3,7),g:0.35}]}}
+  ];
+  if(R.chance(0.7))els.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'lowpass',cutoff:R.i(160,420),dur:round3(R.f(0.32,0.7)),gain:round3(R.f(0.08,0.18)),delay:R.f(0.05,0.15),density:0.18,steps:6}});
+  return recipe('beast',els);
+}
+function walrusRecipe(R){
+  const els=[];
+  if(R.chance(0.6))els.push({kind:'pulse',p:{freq:R.i(70,140),count:R.i(3,7),gap:round3(R.f(0.055,0.11)),dur:round3(R.f(0.022,0.05)),gain:round3(R.f(0.08,0.18)),wave:'square',fade:0.86}});
+  els.push({kind:'voice',p:{wave:R.pick(['sine','triangle','sawtooth']),f0:R.i(65,120),f1:R.i(55,95),dur:round3(R.f(0.42,0.95)),gain:round3(R.f(0.22,0.48)),attack:0.03,tremHz:R.i(4,10),trem:R.f(0.25,0.7),formants:[{f:R.i(180,320),q:R.f(5,10),g:1.1},{f:R.i(420,820),q:R.f(5,12),g:0.8},{f:R.i(900,1600),q:R.f(4,8),g:0.25}]}});
+  if(R.chance(0.72))els.push({kind:'ring',p:{freq:R.i(250,520),dur:round3(R.f(0.28,0.74)),gain:round3(R.f(0.04,0.12)),wave:'sine',delay:R.f(0.04,0.2)}});
+  if(R.chance(0.55))els.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(400,1400),dur:round3(R.f(0.14,0.32)),gain:round3(R.f(0.07,0.18)),q:1.1,density:R.f(0.12,0.34)}});
+  return recipe('beast',els);
+}
+function chatterRecipe(R){
+  const count=R.i(4,9), gap=R.f(0.045,0.095), start=R.i(190,520);
+  const els=[{kind:'pulse',p:{freq:start,count,gap:round3(gap),dur:round3(R.f(0.014,0.035)),gain:round3(R.f(0.06,0.16)),wave:R.pick(['square','sawtooth']),ratio:round3(R.f(0.92,1.08)),fade:round3(R.f(0.82,0.99)),steps:4}}];
+  for(let i=0;i<R.i(1,3);i++)els.push({kind:'voice',p:{wave:'sawtooth',f0:R.i(150,600),f1:R.i(120,760),dur:round3(R.f(0.08,0.18)),gain:round3(R.f(0.08,0.2)),delay:round3(R.f(0,0.22)),tremHz:R.i(22,44),trem:0.35,formants:[{f:R.i(800,1800),q:R.f(5,12),g:1},{f:R.i(2100,4200),q:R.f(4,10),g:0.5}]}});
+  if(R.chance(0.65))els.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'highpass',cutoff:R.i(900,2600),dur:round3(R.f(0.08,0.2)),gain:round3(R.f(0.04,0.13)),density:R.f(0.4,0.8)}});
+  return recipe('beast',els);
+}
+
+// ---------- RETRO STYLE PASS ----------------------------------------
+function applyRetroStyle(recipeIn,seed){
+  const s=getStyle(), R=makeRand((seed^0x9E3779B9)>>>0), rec=clone(recipeIn), out=[];
+  const atari=1-s.hardware, genesis=s.hardware, retro=s.retro;
+  rec.elements.forEach(e=>{
+    const ee=clone(e);
+    if(ee.kind==='ring'){
+      ee.p.gain=round3((ee.p.gain||0.05)*(1-retro*s.ringCut*0.86));
+      ee.p.dur=round3((ee.p.dur||0.4)*(1-retro*s.ringCut*0.65));
+      if(ee.p.gain>0.003&&ee.p.dur>0.04)out.push(ee);
+      return;
+    }
+    if(ee.kind==='partials'){
+      ee.p.gain=round3((ee.p.gain||0.2)*(1-retro*0.28));
+      ee.p.decays=(ee.p.decays||[]).map(d=>round3(d*(1-retro*s.ringCut*0.42)));
+      ee.p.stepped=retro>0.18;
+    }
+    if(['noise','thud','whoosh','click'].includes(ee.kind)){
+      if(ee.p.gain!==undefined)ee.p.gain=round3(ee.p.gain*(0.72+0.28*s.organic));
+      ee.p.stepped=retro>0.5&&R.chance(retro*0.45);
+    }
+    out.push(ee);
+  });
+
+  const kinds=out.map(e=>e.kind), vibe=rec.vibe||'';
+  if(retro>0.03){
+    const gainBase=retro*(0.35+0.65*s.grit);
+    if(vibe==='metal'||kinds.includes('partials')||kinds.includes('ring')){
+      if(genesis>0.16)out.push({kind:'fm',p:{carrier:R.i(280,1100),carrierEnd:R.i(120,620),mod:R.i(700,3400),index:R.i(90,420),cutoff:R.i(900,4200),q:R.f(1.2,4.8),dur:round3(R.f(0.035,0.12)),gain:round3(gainBase*genesis*R.f(0.08,0.22)),delay:R.f(0,0.018),steps:R.i(4,9)}});
+      if(atari>0.12)out.push({kind:'psg',p:{f0:R.i(420,1900),f1:R.i(160,760),dur:round3(R.f(0.018,0.06)),gain:round3(gainBase*atari*R.f(0.05,0.16)),delay:R.f(0,0.02),cutoff:R.i(1600,5200),wave:'square',steps:R.i(3,7)}});
+    }
+    if(vibe==='air'||kinds.includes('whoosh')){
+      out.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(650,2600),dur:round3(R.f(0.055,0.14)),gain:round3(gainBase*R.f(0.035,0.12)),q:R.f(0.9,3),delay:R.f(0.01,0.05),density:R.f(0.25,0.65),steps:R.i(4,8)}});
+    }
+    if(vibe==='flesh'||vibe==='impact'||vibe==='step'){
+      out.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:vibe==='flesh'?'lowpass':'bandpass',cutoff:R.i(vibe==='flesh'?220:420,vibe==='flesh'?900:2200),dur:round3(R.f(0.025,0.11)),gain:round3(gainBase*R.f(0.04,0.15)),q:R.f(0.7,2.2),delay:R.f(0,0.025),density:R.f(0.12,0.48),steps:R.i(3,7)}});
+    }
+    if(vibe==='beast'){
+      // Light stylization only: keep the animal-ish source-filter body, add a game-hardware edge.
+      if(R.chance(0.65))out.push({kind:'lfsr',p:{seed:R.i(1,999999),filter:'bandpass',cutoff:R.i(260,1800),dur:round3(R.f(0.04,0.18)),gain:round3(gainBase*R.f(0.025,0.09)),q:R.f(0.8,2.5),delay:R.f(0,0.08),density:R.f(0.12,0.46),steps:R.i(4,8)}});
+      if(atari>0.45&&R.chance(0.45))out.push({kind:'psg',p:{f0:R.i(70,480),f1:R.i(60,340),dur:R.f(0.035,0.11),gain:round3(gainBase*atari*0.05),delay:R.f(0,0.06),cutoff:R.i(600,2400),wave:'square',steps:R.i(3,6)}});
+    }
+  }
+  return {vibe:rec.vibe,elements:out};
+}
+
+// ---------- STATE & UI ----------------------------------------------
+const VARIANTS=10;
+const state={};
+const ELEMENT_COLORS={partials:'--c-partials',noise:'--c-noise',thud:'--c-thud',whoosh:'--c-whoosh',click:'--c-click',ring:'--c-ring',psg:'--c-psg',lfsr:'--c-lfsr',fm:'--c-fm',voice:'--c-voice',pulse:'--c-pulse'};
+function rollType(type){const list=[];for(let i=0;i<VARIANTS;i++){const seed=(Math.random()*0xffffffff)>>>0;list.push({seed,recipe:GENERATORS[type].gen(makeRand(seed)),fav:false});}state[type]=list;}
+function buildLegend(){const el=document.getElementById('legend');el.innerHTML=Object.keys(ELEMENT_COLORS).map(k=>`<span><i class="swatch" style="background:var(${ELEMENT_COLORS[k]})"></i>${k}</span>`).join('');}
+function buildUI(){
+  const main=document.getElementById('sections'); main.innerHTML='';
+  Object.keys(GENERATORS).forEach(type=>{const sec=document.createElement('section'), g=GENERATORS[type]; sec.innerHTML=`<div class="secHead"><h2>${g.name}<span class="desc">${g.desc}</span></h2><button class="reroll" data-type="${type}">reroll</button></div><div class="grid" data-type="${type}"></div>`; main.appendChild(sec); renderGrid(type);});
+  main.addEventListener('click',onMainClick);
+}
+function renderGrid(type){
+  const grid=document.querySelector(`.grid[data-type="${type}"]`); if(!grid||!state[type])return;
+  grid.innerHTML=state[type].map((v,i)=>{
+    const preview=applyRetroStyle(v.recipe,v.seed);
+    const chips=preview.elements.map(e=>`<i class="chip" title="${e.kind}" style="background:var(${ELEMENT_COLORS[e.kind]||'--ash'})"></i>`).join('');
+    return `<div class="cell${v.fav?' fav':''}" data-type="${type}" data-i="${i}"><span class="num">${String(i+1).padStart(2,'0')}</span><span class="chips">${chips}</span><span class="star">&#10022;</span></div>`;
+  }).join('');
+}
+function renderAllGrids(){Object.keys(state).forEach(renderGrid);}
+function onMainClick(ev){
+  const reroll=ev.target.closest('.reroll'); if(reroll){const type=reroll.dataset.type;rollType(type);renderGrid(type);updateFooter();return;}
+  const star=ev.target.closest('.star'), cell=ev.target.closest('.cell'); if(!cell)return;
+  const type=cell.dataset.type, i=+cell.dataset.i;
+  if(star){state[type][i].fav=!state[type][i].fav;cell.classList.toggle('fav',state[type][i].fav);updateFooter();}
+  else{playRecipe(state[type][i].recipe,state[type][i].seed);cell.classList.add('playing');setTimeout(()=>cell.classList.remove('playing'),160);}
+}
+function updateFooter(){let n=0;Object.values(state).forEach(list=>list.forEach(v=>{if(v.fav)n++;}));document.getElementById('favCount').textContent=`${n} starred`;document.getElementById('exportBtn').disabled=n===0;}
+
+// ---------- EXPORT ---------------------------------------------------
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const favorites=[], style=getStyle();
+  Object.keys(state).forEach(type=>{state[type].forEach((v,i)=>{if(v.fav){const styled=applyRetroStyle(v.recipe,v.seed);favorites.push({type,label:`${GENERATORS[type].name} #${String(i+1).padStart(2,'0')}`,seed:v.seed,vibe:v.recipe.vibe,style,rawElements:v.recipe.elements,elements:styled.elements});}});});
+  const data={format:'sound-foundry/2-retro-beasts',created:new Date().toISOString(),note:'Favorites export the styled recipe the current sliders produce. New element kinds include psg, lfsr, fm, voice and pulse in addition to the original partials/noise/thud/whoosh/click/ring.',favorites};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='sound-foundry-retro-beasts-favorites.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+
+// ---------- scope ----------------------------------------------------
+function drawScope(){
+  const cv=document.getElementById('scope'),cx=cv.getContext('2d'),buf=new Uint8Array(analyser?analyser.fftSize:1024);
+  (function frame(){requestAnimationFrame(frame);cx.fillStyle='#1c1915';cx.fillRect(0,0,cv.width,cv.height);if(!analyser)return;analyser.getByteTimeDomainData(buf);cx.strokeStyle='#e8e0cf';cx.lineWidth=1.4;cx.beginPath();const step=cv.width/buf.length;for(let i=0;i<buf.length;i++){const y=(buf[i]/255)*cv.height;i?cx.lineTo(i*step,y):cx.moveTo(0,y);}cx.stroke();})();
+}
+
+// ---------- boot / init ---------------------------------------------
+CTRL_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updateControlLabels);});
+document.getElementById('boot').addEventListener('click',()=>{initAudio();AC.resume();document.getElementById('boot').remove();drawScope();playRecipe(GENERATORS['armor-clang'].gen(makeRand(1337)),1337);});
+Object.keys(GENERATORS).forEach(rollType);
+buildLegend(); buildUI(); updateFooter(); updateControlLabels();
+</script>
+</body>
+</html>
