@@ -14,6 +14,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let wave = 1;
   let kills = 0;
   let spawnTimer = 2.0;
+  const tuning = { heightScale: 1, speedScale: 1 };
 
   const tmp = new THREE.Vector3();
   const matByKind = {
@@ -21,6 +22,17 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     brute: materials.brute || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.brute.color, roughness: .72, flatShading: true }),
     flash: materials.flash || new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: .9, roughness: .45, flatShading: true })
   };
+
+  function visualHeight(e){ return e.height * tuning.heightScale; }
+
+  function applyEnemyVisual(e){
+    const h = visualHeight(e);
+    e.body.position.y = h * .5;
+    e.body.scale.set(1, tuning.heightScale, .92);
+    e.eye.position.set(0, h * .62, e.radius * .88);
+    e.barBg.position.set(0, h + .32, 0);
+    e.bar.position.y = e.barBg.position.y;
+  }
 
   function makeMesh(kind){
     const s = ENEMY_STATS[kind] || ENEMY_STATS.chaser;
@@ -40,7 +52,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     const bar = new THREE.Mesh(new THREE.BoxGeometry(s.radius * 1.7, .065, .045), matByKind.chaser);
     bar.position.copy(barBg.position); bar.position.z += .012;
     root.add(barBg, bar);
-    return { root, body, bar };
+    return { root, body, eye, barBg, bar };
   }
 
   function spawn(kind = Math.random() < .22 ? 'brute' : 'chaser'){
@@ -56,6 +68,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     visual.root.position.set(x, 0, z);
     group.add(visual.root);
     const e = { kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, ...visual };
+    applyEnemyVisual(e);
     enemies.push(e);
     return e;
   }
@@ -84,15 +97,20 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     for(const e of enemies){
       e.flash = Math.max(0, e.flash - dt);
       const dx = player.x - e.x, dz = player.z - e.z, dist = Math.hypot(dx, dz) || 1;
-      if(dist > e.stop){ e.x += dx / dist * e.speed * dt; e.z += dz / dist * e.speed * dt; }
+      if(dist > e.stop){ e.x += dx / dist * e.speed * tuning.speedScale * dt; e.z += dz / dist * e.speed * tuning.speedScale * dt; }
       e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
       e.root.position.set(e.x, 0, e.z);
       e.root.rotation.y = Math.atan2(dx, dz);
-      e.root.scale.setScalar(1 + Math.max(0, e.flash) * .18);
+      const flashScale = 1 + Math.max(0, e.flash) * .18;
+      e.root.scale.set(flashScale, 1, flashScale);
+      applyEnemyVisual(e);
       e.body.material = e.flash > 0 ? matByKind.flash : matByKind[e.kind];
       const f = clamp(e.hp / e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f) * e.radius * .85; e.bar.lookAt(tmp.set(player.x, 2, player.z));
     }
   }
 
-  return { enemies, group, spawn, reset, update, damageEnemy, get wave(){ return wave; }, get kills(){ return kills; } };
+  function setHeightScale(value){ tuning.heightScale = clamp(Number(value) || 1, .5, 4); enemies.forEach(applyEnemyVisual); }
+  function setSpeedScale(value){ tuning.speedScale = clamp(Number(value) || 1, .25, 1.5); }
+
+  return { enemies, group, spawn, reset, update, damageEnemy, setHeightScale, setSpeedScale, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get wave(){ return wave; }, get kills(){ return kills; } };
 }
