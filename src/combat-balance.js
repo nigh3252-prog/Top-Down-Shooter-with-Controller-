@@ -123,6 +123,23 @@ function requireFiniteMultiplier(tableName, key, value, context = {}) {
   throw balanceConfigError(`Missing or non-finite ${tableName} multiplier.`, { key, value, ...context });
 }
 
+function getHitTypeMultiplier(weapon, hitType, context = {}) {
+  // Some weapon contact zones use descriptive hit languages that are not direct
+  // affinity columns. Resolve those terms here so the balance layer owns the
+  // damage meaning instead of forcing weapon-lab.html to special-case them.
+  if (hitType === 'weak') {
+    return 1.0;
+  }
+
+  if (hitType === 'hybrid') {
+    const pierce = requireFiniteMultiplier('weapon hit-type', 'pierce', weapon.pierce, context);
+    const blunt = requireFiniteMultiplier('weapon hit-type', 'blunt', weapon.blunt, context);
+    return Math.max(pierce, blunt);
+  }
+
+  return requireFiniteMultiplier('weapon hit-type', hitType, weapon[hitType], context);
+}
+
 export function getWeaponAffinity(weaponId, weaponDef) {
   const resolvedWeaponId = weaponId || weaponDef?.id;
   if (!resolvedWeaponId) {
@@ -155,8 +172,11 @@ export function getWeaponDamageMultiplier({
   const groupMult = requireFiniteMultiplier('weapon attack-group', attackGroup, weapon[attackGroup], {
     weaponId: resolvedWeaponId, allowedKeys: WEAPON_STYLE_KEYS
   });
-  const typeMult = requireFiniteMultiplier('weapon hit-type', hitType, weapon[hitType], {
-    weaponId: resolvedWeaponId, allowedKeys: WEAPON_STYLE_KEYS
+  const typeMult = getHitTypeMultiplier(weapon, hitType, {
+    weaponId: resolvedWeaponId,
+    allowedKeys: WEAPON_STYLE_KEYS,
+    hitType,
+    zoneId
   });
   const attackMult = requireFiniteMultiplier('attack', attackKey, ATTACK_DAMAGE_MODIFIERS[attackKey], {
     knownAttacks: Object.keys(ATTACK_DAMAGE_MODIFIERS)
