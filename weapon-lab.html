@@ -113,11 +113,12 @@
 
     .combat-touch{display:none}
     body[data-launch-mode="combat"] .status, body[data-launch-mode="combat"] .mini-status, body[data-launch-mode="combat"] .dpad, body[data-launch-mode="combat"] .combat-pad{display:none!important}
-    body[data-launch-mode="combat"] #panel.collapsed{width:auto;background:transparent;border:0;box-shadow:none;backdrop-filter:none;overflow:visible}
-    body[data-launch-mode="combat"] #panel.collapsed header{border:0;padding:0;gap:8px}
-    body[data-launch-mode="combat"] #panel.collapsed header>div:first-child{display:none}
+    body[data-launch-mode="combat"] #panel.collapsed, body[data-launch-mode="combat"].combat-start-collapsed #panel{width:auto;background:transparent;border:0;box-shadow:none;backdrop-filter:none;overflow:visible}
+    body[data-launch-mode="combat"] #panel.collapsed header, body[data-launch-mode="combat"].combat-start-collapsed #panel header{border:0;padding:0;gap:8px}
+    body[data-launch-mode="combat"] #panel.collapsed header>div:first-child, body[data-launch-mode="combat"].combat-start-collapsed #panel header>div:first-child{display:none}
     body[data-launch-mode="combat"] #collapseBtn{font-size:0}
     body[data-launch-mode="combat"] #collapseBtn::before{content:'☰';font-size:16px}
+    body[data-launch-mode="combat"].combat-start-collapsed #panel .body{display:none}
     @media (pointer:coarse){body[data-launch-mode="combat"] .combat-touch{display:block}}
     .stick{position:fixed;left:max(22px,env(safe-area-inset-left));bottom:max(28px,calc(env(safe-area-inset-bottom) + 18px));width:132px;height:132px;border-radius:999px;border:1px solid rgba(141,210,255,.22);background:rgba(8,13,22,.34);backdrop-filter:blur(8px);touch-action:none;z-index:12}
     .stick .knob{position:absolute;left:42px;top:42px;width:48px;height:48px;border-radius:999px;background:rgba(141,210,255,.42);box-shadow:0 0 22px rgba(141,210,255,.16), inset 0 1px rgba(255,255,255,.18)}
@@ -128,6 +129,13 @@
   </style>
 </head>
 <body>
+<script>
+  (() => {
+    const mode = new URLSearchParams(location.search).get('mode') || 'lab';
+    document.body.dataset.launchMode = mode;
+    if(mode === 'combat') document.body.classList.add('combat-start-collapsed');
+  })();
+</script>
 <div id="stage"></div>
 <section class="panel" id="panel">
   <header>
@@ -1451,19 +1459,21 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   const zones = getWeaponHitZones();
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
-    const center = new THREE.Vector3(e.x, e.radius * 1.05, e.z);
+    const h = e.height || e.radius * 2;
+    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
     let best = null;
     for(const zone of zones){
       const a = weaponRoot.localToWorld(zone.from.clone());
       const b = weaponRoot.localToWorld(zone.to.clone());
-      const d = pointSegmentDistance(center, a, b);
-      const threshold = e.radius + zone.radius + .35;
-      if(d <= threshold){
-        const quality = 1 - clamp(d / threshold, 0, 1);
+      const threshold = e.radius + zone.radius + .38;
+      let bestDist = Infinity, bestCenter = hitSamples[1];
+      for(const center of hitSamples){ const d = pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
+      if(bestDist <= threshold){
+        const quality = 1 - clamp(bestDist / threshold, 0, 1);
         const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
         const raw = zone.damage * (.82 + quality * .42) * weaponMult;
         const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
-        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: center.clone().lerp(tipScene, .25), motion };
+        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: bestCenter.clone().lerp(tipScene, .25), motion };
         if(!best || cand.damage > best.damage) best = cand;
       }
     }
@@ -2052,6 +2062,7 @@ document.getElementById('showGuide').addEventListener('change', e => {
 });
 document.getElementById('collapseBtn').addEventListener('click', ()=>{
   const panel = document.getElementById('panel');
+  document.body.classList.remove('combat-start-collapsed');
   panel.classList.toggle('collapsed');
   document.getElementById('collapseBtn').textContent = panel.classList.contains('collapsed') ? '+' : '−';
   updateMainStatusLine();

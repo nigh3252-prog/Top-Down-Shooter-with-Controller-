@@ -1,6 +1,6 @@
 export const ENEMY_STATS = {
-  chaser: { radius: .52, hp: 38, speed: 4.2, stop: 1.15, color: 0xff8f72 },
-  brute: { radius: .76, hp: 72, speed: 2.9, stop: 1.45, color: 0xd96b6b }
+  chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.15, color: 0xff8f72 },
+  brute: { radius: .62, height: 3.55, hp: 72, speed: 2.9, stop: 1.45, color: 0xd96b6b }
 };
 
 export function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
@@ -26,16 +26,17 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     const s = ENEMY_STATS[kind] || ENEMY_STATS.chaser;
     const root = new THREE.Group();
     root.name = `${kind} enemy`;
-    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(s.radius, kind === 'brute' ? 1 : 0), matByKind[kind]);
-    body.position.y = s.radius;
-    body.scale.set(1, kind === 'brute' ? 1.25 : 1.05, .9);
+    const capsuleLength = Math.max(.1, s.height - s.radius * 2);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(s.radius, capsuleLength, 5, 12), matByKind[kind]);
+    body.position.y = s.height * .5;
+    body.scale.set(1, 1, .92);
     body.castShadow = body.receiveShadow = true;
     root.add(body);
     const eye = new THREE.Mesh(new THREE.BoxGeometry(s.radius * .44, s.radius * .16, s.radius * .08), matByKind.flash);
-    eye.position.set(0, s.radius * 1.18, s.radius * .72);
+    eye.position.set(0, s.height * .62, s.radius * .88);
     root.add(eye);
     const barBg = new THREE.Mesh(new THREE.BoxGeometry(s.radius * 1.7, .055, .035), matByKind.flash);
-    barBg.position.set(0, s.radius * 2.35, 0);
+    barBg.position.set(0, s.height + .32, 0);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(s.radius * 1.7, .065, .045), matByKind.chaser);
     bar.position.copy(barBg.position); bar.position.z += .012;
     root.add(barBg, bar);
@@ -54,7 +55,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     else { x = -bounds - margin; z = THREE.MathUtils.randFloat(-bounds, bounds); }
     visual.root.position.set(x, 0, z);
     group.add(visual.root);
-    const e = { kind, x, z, radius: s.radius, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, ...visual };
+    const e = { kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, ...visual };
     enemies.push(e);
     return e;
   }
