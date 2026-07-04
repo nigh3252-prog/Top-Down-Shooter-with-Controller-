@@ -915,31 +915,17 @@ const TUNE_DEFAULTS = {
   windup:1.00, follow:1.00, recovery:1.00,
   impact:1.00, trailBoost:1.00
 };
-const WEAPON_ORDER=['longsword','dagger','rapier','saber','mace','spear','battleaxe','warhammer','claymore','greatsword'];
-const WEAPONS = {
-  longsword:{label:'Longsword',weightClass:'Medium',kind:'blade',baseLength:1.00,profile:'balanced sword; default testing weapon',
-    tune:{length:1.00,weight:0.35,pullback:1.00,swingWidth:1.00,windup:1.00,follow:1.00,recovery:1.00,impact:1.00,trailBoost:1.00}},
-  dagger:{label:'Dagger',weightClass:'Light',kind:'blade',baseLength:0.55,profile:'short, snappy, little recovery',
-    tune:{length:0.55,weight:0.06,pullback:0.28,swingWidth:0.62,windup:0.62,follow:0.60,recovery:0.55,impact:0.48,trailBoost:0.58}},
-  rapier:{label:'Rapier',weightClass:'Light',kind:'rapier',baseLength:0.98,profile:'needle tip; best on thrusts with quick recovery',
-    tune:{length:0.92,weight:0.12,pullback:0.55,swingWidth:0.58,windup:0.72,follow:0.70,recovery:0.62,impact:0.62,trailBoost:0.75}},
-  saber:{label:'Saber',weightClass:'Light/Medium',kind:'saber',baseLength:0.92,profile:'curved cutter; wider slashes, still fast',
-    tune:{length:0.88,weight:0.24,pullback:0.78,swingWidth:1.12,windup:0.82,follow:0.88,recovery:0.78,impact:0.82,trailBoost:1.05}},
-  whip:{label:'Whip',weightClass:'Light / Reach',kind:'whip',baseLength:1.65,profile:'flexible lash; snaps forward near contact',
-    tune:{length:1.42,weight:0.10,pullback:1.25,swingWidth:1.35,windup:0.86,follow:1.05,recovery:0.86,impact:0.70,trailBoost:1.70}},
-  mace:{label:'Mace',weightClass:'Medium',kind:'mace',baseLength:0.82,profile:'compact blunt head; chunky impact',
-    tune:{length:0.78,weight:0.52,pullback:1.08,swingWidth:0.96,windup:1.08,follow:1.10,recovery:1.12,impact:1.38,trailBoost:0.88}},
-  spear:{label:'Spear',weightClass:'Medium / Reach',kind:'spear',baseLength:1.58,profile:'long shaft; big reach and direct thrusts',
-    tune:{length:1.42,weight:0.34,pullback:0.95,swingWidth:0.72,windup:0.96,follow:0.96,recovery:0.94,impact:0.95,trailBoost:0.90}},
-  battleaxe:{label:'Battle Axe',weightClass:'Medium/Heavy',kind:'axe',baseLength:1.02,profile:'top-heavy blade; committed chops',
-    tune:{length:1.02,weight:0.64,pullback:1.25,swingWidth:1.22,windup:1.22,follow:1.34,recovery:1.30,impact:1.55,trailBoost:1.05}},
-  warhammer:{label:'War Hammer',weightClass:'Heavy',kind:'hammer',baseLength:0.98,profile:'heavy blunt head; slow windup and huge hit feel',
-    tune:{length:0.98,weight:0.88,pullback:1.52,swingWidth:1.08,windup:1.42,follow:1.55,recovery:1.60,impact:1.90,trailBoost:0.92}},
-  claymore:{label:'Claymore',weightClass:'Heavy',kind:'blade',baseLength:1.48,profile:'big two-handed blade; wide arcs and deep pullback',
-    tune:{length:1.55,weight:0.84,pullback:1.65,swingWidth:1.45,windup:1.55,follow:1.62,recovery:1.72,impact:1.75,trailBoost:1.45}},
-  greatsword:{label:'Greatsword',weightClass:'Heavy',kind:'blade',baseLength:1.70,profile:'longest rigid blade; extra reach and camera room',
-    tune:{length:1.78,weight:0.76,pullback:1.58,swingWidth:1.34,windup:1.46,follow:1.50,recovery:1.58,impact:1.60,trailBoost:1.32}}
-};
+// Weapon definitions are intentionally not duplicated in this raw core.
+// The official Stone Weapon Lab wrapper must provide these from src/weapons.js
+// before this module runs.
+const WEAPON_ORDER = window.__STONE_WEAPON_ORDER__;
+const WEAPONS = window.__STONE_WEAPONS__;
+if (!Array.isArray(WEAPON_ORDER) || !WEAPON_ORDER.length || !WEAPONS || typeof WEAPONS !== 'object') {
+  const message = 'Stone weapon definitions were not provided by src/weapons.js. Load this core through stone-wanderer-stance-chain-lab.html.';
+  const statusEl = document.getElementById('status');
+  if (statusEl) statusEl.textContent = message;
+  throw new Error(message);
+}
 
 /* easing ----------------------------------------------------------------- */
 const Ease = {
