@@ -19,13 +19,14 @@
     <label class="audioRow"><span>Damage</span><input id="audioDamage" type="range" min="0" max="100" value="0"><b id="audioDamageOut">0</b></label>
     <div class="grid"><button data-test="swingLight">Swing</button><button data-test="hitLight">Hit</button><button data-test="swingHeavy">Heavy</button><button data-test="kill">Kill</button><button data-test="hurt">Hurt</button></div>
     <div class="log" id="log">Loading Stone Lab…</div>
-    <div class="hint">The Red Toll greatsword lives in <code>src/weapons.js</code>. The audio director lives in <code>src/combat-audio.js</code>.</div>
-    <div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Raw core</a><a href="sound-foundry-retro-beasts.html">Sound Foundry</a></div>
+    <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
+    <div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Raw core</a><a href="stone-wanderer-individual-move-test.html">Old move test</a><a href="sound-foundry-retro-beasts.html">Sound Foundry</a></div>
   </div>
 </section>
 <script type="module">
 import { createRedTollGreatswordCorePatch } from './src/weapons.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
+import { applyLabModeCorePatch, installLabModeChrome } from './src/lab-modes.js';
 
 const frame=document.getElementById('labFrame');
 const log=document.getElementById('log');
@@ -52,6 +53,7 @@ installCombatAudioDirector({
     testButtons:document.querySelectorAll('[data-test]')
   }
 });
+installLabModeChrome({frame});
 function mustPatch(html, needle, replacement, label){
   if(!html.includes(needle)) throw new Error('Patch target not found: '+label);
   return html.replace(needle,replacement);
@@ -63,16 +65,17 @@ function patchCore(html){
   const attackAudioNeedle='combatState.lastAttackLabel=att.label; aimState.lastSwing=att.label;';
   const attackAudioHook=`${attackAudioNeedle}\n  try{ window.parent.__stoneCombatAudio?.onAttackStart?.({key,group:combatState.attackGroup,label:att.label,weapon:currentWeapon().label}); }catch(e){}`;
   html=mustPatch(html,attackAudioNeedle,attackAudioHook,'combat audio attack-start hook');
-  html=html.replace('Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.','Red Toll greatsword branch loaded. Greatsword visual code is sourced from src/weapons.js; combat audio is re-hooked from src/combat-audio.js.');
+  html=applyLabModeCorePatch(html);
+  html=html.replace('Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.','Red Toll greatsword branch loaded. Weapon visuals, combat audio, and lab modes are sourced from src modules.');
   return html;
 }
 async function load(){
   try{
-    log.textContent='Loading core, Red Toll weapon module, and combat audio…';
+    log.textContent='Loading core, Red Toll weapon module, combat audio, and lab modes…';
     const r=await fetch(CORE_FILE,{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     frame.srcdoc=patchCore(await r.text());
-    log.textContent='Patch loaded. Choose Greatsword; audio should trigger on real attacks and dummy hits.';
+    log.textContent='Patch loaded. Use Lab Mode inside the Stone panel for Stance Cards or Individual Moves.';
   }catch(e){
     log.textContent='Patch failed: '+(e&&e.message?e.message:e);
     frame.src=CORE_FILE;
