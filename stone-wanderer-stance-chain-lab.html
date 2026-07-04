@@ -19,13 +19,12 @@
     <label class="audioRow"><span>Damage</span><input id="audioDamage" type="range" min="0" max="100" value="0"><b id="audioDamageOut">0</b></label>
     <div class="grid"><button data-test="swingLight">Swing</button><button data-test="hitLight">Hit</button><button data-test="swingHeavy">Heavy</button><button data-test="kill">Kill</button><button data-test="hurt">Hurt</button></div>
     <div class="log" id="log">Loading Stone Lab…</div>
-    <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/weapon-core-patch.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
+    <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
     <div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Raw core</a><a href="stone-wanderer-individual-move-test.html">Old move test</a><a href="sound-foundry-retro-beasts.html">Sound Foundry</a></div>
   </div>
 </section>
 <script type="module">
-import { createRedTollGreatswordCorePatch } from './src/weapons.js';
-import { replaceCoreWeaponDefinitionsWithModuleData } from './src/weapon-core-patch.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, createRedTollGreatswordCorePatch } from './src/weapons.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { applyLabModeCorePatch, installLabModeChrome } from './src/lab-modes.js';
 
@@ -59,8 +58,12 @@ function mustPatch(html, needle, replacement, label){
   if(!html.includes(needle)) throw new Error('Patch target not found: '+label);
   return html.replace(needle,replacement);
 }
+function injectWeaponDefinitions(html){
+  const script=`<script>\nwindow.__STONE_WEAPON_ORDER__=${JSON.stringify(STONE_WEAPON_ORDER)};\nwindow.__STONE_WEAPONS__=${JSON.stringify(cloneWeaponDefinitions())};\n<\/script>\n`;
+  return mustPatch(html,'<script type="module">',script+'<script type="module">','weapon module globals');
+}
 function patchCore(html){
-  html=replaceCoreWeaponDefinitionsWithModuleData(html);
+  html=injectWeaponDefinitions(html);
   const tuningNeedle='    <label class="row short">\n      <span>Attack lock</span>';
   html=mustPatch(html,tuningNeedle,UI+tuningNeedle,'Red Toll tuning panel');
   html=mustPatch(html,'function updateWeaponDynamicVisual(time=0,dt=0){',INJECT+'\nfunction updateWeaponDynamicVisual(time=0,dt=0){\n  rtApply();','weapon dynamic visual hook');
@@ -77,7 +80,7 @@ async function load(){
     const r=await fetch(CORE_FILE,{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     frame.srcdoc=patchCore(await r.text());
-    log.textContent='Patch loaded. Weapon definitions are sourced from src/weapons.js. Use Lab Mode inside the Stone panel.';
+    log.textContent='Patch loaded. Weapon definitions are sourced only from src/weapons.js. Use Lab Mode inside the Stone panel.';
   }catch(e){
     log.textContent='Patch failed: '+(e&&e.message?e.message:e);
     frame.src=CORE_FILE;
