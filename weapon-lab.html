@@ -376,6 +376,10 @@ import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
 import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
+import { STANCE_CARDS } from './src/stance-cards.js';
+
+const launchParams = new URLSearchParams(location.search);
+const launchMode = launchParams.get('mode') || 'lab';
 
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
@@ -1105,28 +1109,7 @@ function attackDisplayLabel(key){
   const att=ATTACKS[key];
   return att ? `${att.label} — ${attackIndexLabel(key)}` : key;
 }
-const AUTHORED_STANCES = [
-  {id:'A01',name:'A01 Rising Cross-Poke',chain:['vertical2','vertical3','stab2']},
-  {id:'A02',name:'A02 Blade Walk',chain:['horizontal','horizontal2','stab']},
-  {id:'A03',name:'A03 Needle Drill',chain:['stab2','stab3','stab6']},
-  {id:'A04',name:'A04 Snap-Cross-Slam',chain:['vertical5','horizontal3','vertical6']},
-  {id:'A05',name:'A05 Wide Cut Feint',chain:['horizontal4','vertical3','stab5']},
-  {id:'A06',name:'A06 Poke Sweep Chop',chain:['stab','horizontal5','vertical4']},
-  {id:'A07',name:'A07 Upper Chain',chain:['vertical7','vertical8','horizontal6']},
-  {id:'A08',name:'A08 Heavy Drop Set',chain:['vertical10','vertical11','vertical5']},
-  {id:'A09',name:'A09 Low Spear Cross',chain:['stab4','vertical2','horizontal2']},
-  {id:'A10',name:'A10 Spiral Impale',chain:['horizontal6','stab5','vertical13']},
-  {id:'A11',name:'A11 Moon Step',chain:['vertical12','horizontal4','stab3']},
-  {id:'A12',name:'A12 Impale Reset',chain:['stab6','horizontal3','vertical14']},
-  {id:'A13',name:'A13 Guillotine Poke',chain:['vertical15','vertical16','stab2']},
-  {id:'A14',name:'A14 Double Hori Drop',chain:['horizontal2','horizontal5','vertical9']},
-  {id:'A15',name:'A15 Chop Needle Needle',chain:['vertical3','stab2','stab4']},
-  {id:'A16',name:'A16 Thrust Snap Cut',chain:['stab3','vertical5','horizontal']},
-  {id:'A17',name:'A17 Launch Long Sweep',chain:['vertical8','stab6','horizontal6']},
-  {id:'A18',name:'A18 Feint Hammer',chain:['horizontal4','vertical10','vertical11']},
-  {id:'A19',name:'A19 Needle Rise',chain:['stab5','stab2','vertical7']},
-  {id:'A20',name:'A20 Cross Finish',chain:['vertical4','horizontal6','stab']},
-];
+const AUTHORED_STANCES = STANCE_CARDS;
 const labState = {
   sessionId:'S-'+Date.now().toString(36), authoredIndex:0, randomCounter:0,
   currentStance:null, source:'authored', comboIndex:0, comboWindow:.82, comboDeadline:0,
@@ -1246,7 +1229,17 @@ function downloadLabCsv(){
   const rows=[headers,...labState.trials.map(trialToCsvRow)]; downloadTextFile(`stance-lab-${labState.sessionId}.csv`, rows.map(r=>r.map(csvCell).join(',')).join('\n'), 'text/csv');
 }
 function downloadLabJson(){
-  downloadTextFile(`stance-lab-${labState.sessionId}.json`, JSON.stringify({sessionId:labState.sessionId, exportedAt:new Date().toISOString(), authoredStances:AUTHORED_STANCES, trials:labState.trials.map(t=>summarizeTrial(t))},null,2), 'application/json');
+  downloadTextFile(`stance-lab-${labState.sessionId}.json`, JSON.stringify({sessionId:labState.sessionId, exportedAt:new Date().toISOString(), authoredStances:STANCE_CARDS, trials:labState.trials.map(t=>summarizeTrial(t))},null,2), 'application/json');
+}
+
+function applyLaunchMode(){
+  document.body.dataset.launchMode = launchMode;
+  if(launchMode !== 'combat') return;
+  document.title = 'Stone Wanderer Combat';
+  document.querySelector('#panel h1').textContent = 'Stone Wanderer Combat';
+  document.querySelector('#panel header p').textContent = '3D top-down action RPG prototype · □ attack · △ stance';
+  document.getElementById('panel')?.classList.add('collapsed');
+  ['redTollTuning','combatAudioTuning'].forEach(id=>document.getElementById(id)?.removeAttribute('open'));
 }
 function bindLabUI(){document.querySelectorAll('[data-lab-action]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); labAction(btn.dataset.labAction);}));}
 
@@ -1771,6 +1764,7 @@ spawnCharacter();
 createTrainingDummy();
 bindDummyUI();
 loadLabData();
+applyLaunchMode();
 bindLabUI();
 selectAuthoredStance(labState.authoredIndex||0);
 
