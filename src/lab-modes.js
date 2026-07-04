@@ -128,6 +128,15 @@ export function installLabModes(api) {
   function play(group) {
     selectGroup(group);
     const s = slot(group, poolIndex(group));
+
+    // Mobile pointer events can arrive in fast bursts. Do not create a new lab
+    // event or overwrite pending state until the core combo gate says the current
+    // attack can accept a follow-up; otherwise individual move review can queue
+    // stale thrust events faster than the animation can drain them.
+    if (combatState.attack && api.canAcceptLabFollowup && !api.canAcceptLabFollowup()) {
+      return true;
+    }
+
     const event = api.makeLabEvent(s.key, s.index);
     event.moveTest = true;
     api.flashCombatButton(group);

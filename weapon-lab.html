@@ -374,6 +374,7 @@ import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } 
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
+import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 
 const stage = document.getElementById('stage');
@@ -472,7 +473,7 @@ const LabAPI = {
   get labState(){ return labState; }, get ATTACK_GROUPS(){ return ATTACK_GROUPS; },
   get ATTACK_POOLS(){ return { approved: APPROVED_VERTICAL_ATTACKS, bad: BAD_VERTICAL_ATTACKS, all: ALL_VERTICAL_ATTACKS }; },
   attackDisplayLabel, makeLabEvent, startCombatAttack, labOnAttackComplete, flashCombatButton,
-  updateLabUI, updateVariantReadout, updateMainStatusLine,
+  canAcceptLabFollowup, updateLabUI, updateVariantReadout, updateMainStatusLine,
   get WEAPONS(){ return WEAPONS; }, get RIG(){ return RIG; }, get BASE_RIG(){ return BASE_RIG; }, get BASE_BLADE_LEN(){ return BASE_BLADE_LEN; },
   get weaponRoot(){ return weaponRoot; },
   get activeWeaponKind(){ return activeWeaponKind; }, set activeWeaponKind(v){ activeWeaponKind = v; },
@@ -1070,282 +1071,29 @@ function A(group,label,phases){
   att.label=label;
   return att;
 }
-const ATTACKS = {
-  vertical: A('vertical','Overhead Cleave',[
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.40,1.60,-0.02], tip:[0.30,0.78,-0.55], roll:0.10,
-        twist:0.10, pitch:-0.16, lean:0.10, hipTwist:0.05, hip:[0.05,0,-0.06], lower:-0.04, head:[0.05,-0.18] }) },
-    { dur:0.10, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.06,0.62,0.55], tip:[0.0,-0.85,0.50], roll:0.0,
-        twist:-0.05, pitch:0.34, lean:-0.04, hipTwist:-0.03, hip:[0,0,0.05], lower:0.16, lunge:0.18, head:[0.0,0.22] }) },
-    { dur:0.14, ease:Ease.outCubic, pose:P({ hold:[-0.14,0.52,0.50], tip:[-0.12,-0.92,0.32], roll:-0.10,
-        twist:-0.12, pitch:0.28, lean:-0.10, hipTwist:-0.06, hip:[-0.03,0,0.04], lower:0.16, lunge:0.12, head:[-0.02,0.18] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical2: A('vertical','Rising Splitter',[
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[-0.24,0.58,0.18], tip:[-0.28,-0.55,0.78], roll:-0.20,
-        twist:-0.24, pitch:0.24, lean:-0.10, hipTwist:-0.18, hip:[-0.03,0,0.02], lower:0.14, head:[-0.08,0.12] }) },
-    { dur:0.11, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.10,1.26,0.60], tip:[0.04,0.90,0.36], roll:0.08,
-        twist:0.08, pitch:-0.18, lean:0.08, hipTwist:0.06, hip:[0.02,0,0.06], lower:0.02, lunge:0.22, head:[0.04,-0.10] }) },
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[0.22,1.46,0.38], tip:[0.08,0.94,0.22], roll:0.16,
-        twist:0.18, pitch:-0.20, lean:0.12, hipTwist:0.12, hip:[0.04,0,0.03], lower:0.00, lunge:0.12, head:[0.06,-0.14] }) },
-    { dur:0.30, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical3: A('vertical','Right Diagonal Chop',[
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.52,1.50,-0.10], tip:[0.64,0.64,-0.42], roll:0.34,
-        twist:0.36, pitch:-0.10, lean:0.18, hipTwist:0.26, hip:[0.06,0,-0.05], lower:-0.02, head:[0.15,-0.10] }) },
-    { dur:0.09, ease:Ease.inCubic, contact:true, pose:P({ hold:[-0.10,0.74,0.62], tip:[-0.36,-0.76,0.54], roll:-0.12,
-        twist:-0.10, pitch:0.26, lean:-0.08, hipTwist:-0.06, hip:[-0.02,0,0.06], lower:0.14, lunge:0.20, head:[-0.02,0.16] }) },
-    { dur:0.15, ease:Ease.outQuad, pose:P({ hold:[-0.38,0.64,0.44], tip:[-0.62,-0.70,0.34], roll:-0.28,
-        twist:-0.28, pitch:0.22, lean:-0.16, hipTwist:-0.18, hip:[-0.05,0,0.04], lower:0.15, lunge:0.12, head:[-0.12,0.12] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical4: A('vertical','Left Diagonal Chop',[
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[-0.46,1.48,-0.08], tip:[-0.58,0.68,-0.44], roll:-0.34,
-        twist:-0.34, pitch:-0.10, lean:-0.16, hipTwist:-0.24, hip:[-0.06,0,-0.05], lower:-0.02, head:[-0.15,-0.10] }) },
-    { dur:0.09, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.12,0.74,0.62], tip:[0.32,-0.76,0.54], roll:0.12,
-        twist:0.10, pitch:0.26, lean:0.08, hipTwist:0.06, hip:[0.02,0,0.06], lower:0.14, lunge:0.20, head:[0.02,0.16] }) },
-    { dur:0.15, ease:Ease.outQuad, pose:P({ hold:[0.38,0.64,0.44], tip:[0.60,-0.70,0.34], roll:0.28,
-        twist:0.28, pitch:0.22, lean:0.16, hipTwist:0.18, hip:[0.05,0,0.04], lower:0.15, lunge:0.12, head:[0.12,0.12] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical5: A('vertical','Snap Chop',[
-    { dur:0.12, ease:Ease.outCubic, pose:P({ hold:[0.24,1.34,0.16], tip:[0.12,0.82,-0.30], roll:0.04,
-        twist:0.06, pitch:-0.10, lean:0.04, hipTwist:0.04, hip:[0.02,0,-0.02], lower:0.00, head:[0.03,-0.06] }) },
-    { dur:0.07, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.02,0.86,0.64], tip:[0.00,-0.58,0.82], roll:0.00,
-        twist:-0.02, pitch:0.18, lean:-0.02, hipTwist:-0.02, hip:[0,0,0.04], lower:0.07, lunge:0.10, head:[0,0.08] }) },
-    { dur:0.10, ease:Ease.outQuad, pose:P({ hold:[-0.06,0.76,0.48], tip:[-0.04,-0.72,0.58], roll:-0.04,
-        twist:-0.05, pitch:0.16, lean:-0.04, hipTwist:-0.03, hip:[-0.01,0,0.02], lower:0.06, lunge:0.05, head:[-0.02,0.06] }) },
-    { dur:0.24, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical6: A('vertical','Executioner Drop',[
-    { dur:0.28, ease:Ease.outCubic, pose:P({ hold:[0.18,1.78,-0.16], tip:[0.08,0.76,-0.64], roll:0.00,
-        twist:0.00, pitch:-0.24, lean:0.00, hipTwist:0.02, hip:[0,0,-0.08], lower:-0.08, head:[0,-0.22] }) },
-    { dur:0.13, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.02,0.54,0.66], tip:[0.0,-0.96,0.26], roll:0.0,
-        twist:-0.02, pitch:0.42, lean:0.0, hipTwist:0.0, hip:[0,0,0.08], lower:0.22, lunge:0.24, head:[0,0.28] }) },
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.02,0.42,0.48], tip:[0.00,-0.98,0.10], roll:0.00,
-        twist:-0.04, pitch:0.36, lean:0.00, hipTwist:-0.03, hip:[0,0,0.05], lower:0.22, lunge:0.16, head:[0,0.22] }) },
-    { dur:0.42, ease:Ease.outBack, pose:IDLE },
-  ]),
+const ATTACKS = buildAttackLibrary(ATTACK_DEFINITIONS);
+function materializeAttackPose(pose){
+  return pose === 'IDLE' ? IDLE : P(pose);
+}
+function materializeAttackPhase(phase){
+  const ease = Ease[phase.ease] || Ease.linear;
+  const out = { dur:phase.dur, ease, pose:materializeAttackPose(phase.pose) };
+  if(phase.contact) out.contact = true;
+  return out;
+}
+function buildAttackLibrary(definitions){
+  const attacks = {};
+  Object.entries(definitions).forEach(([key,def])=>{
+    const att = A(def.group, def.label, def.phases.map(materializeAttackPhase));
+    att.approved = def.approved !== false;
+    att.definitionKey = key;
+    if(def.tags) att.tags = [...def.tags];
+    if(def.meta) att.meta = {...def.meta};
+    attacks[key] = att;
+  });
+  return attacks;
+}
 
-  vertical7: A('vertical','Rising Splitter — Wide Hook',[
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[-0.34,0.54,0.10], tip:[-0.42,-0.58,0.70], roll:-0.28,
-        twist:-0.34, pitch:0.30, lean:-0.14, hipTwist:-0.24, hip:[-0.05,0,0.00], lower:0.17, head:[-0.10,0.14] }) },
-    { dur:0.12, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.14,1.34,0.66], tip:[0.08,0.86,0.50], roll:0.16,
-        twist:0.12, pitch:-0.22, lean:0.10, hipTwist:0.08, hip:[0.03,0,0.07], lower:0.02, lunge:0.28, head:[0.05,-0.12] }) },
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.34,1.52,0.36], tip:[0.18,0.92,0.20], roll:0.28,
-        twist:0.28, pitch:-0.22, lean:0.16, hipTwist:0.18, hip:[0.05,0,0.03], lower:0.00, lunge:0.14, head:[0.08,-0.16] }) },
-    { dur:0.32, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical8: A('vertical','Rising Splitter — Cross Step',[
-    { dur:0.15, ease:Ease.outCubic, pose:P({ hold:[0.28,0.56,0.12], tip:[0.34,-0.60,0.72], roll:0.18,
-        twist:0.22, pitch:0.24, lean:0.10, hipTwist:0.20, hip:[0.04,0,0.00], lower:0.16, head:[0.08,0.12] }) },
-    { dur:0.10, ease:Ease.inCubic, contact:true, pose:P({ hold:[-0.08,1.24,0.62], tip:[-0.04,0.88,0.44], roll:-0.10,
-        twist:-0.08, pitch:-0.16, lean:-0.06, hipTwist:-0.05, hip:[-0.01,0,0.06], lower:0.04, lunge:0.24, head:[-0.03,-0.08] }) },
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[-0.26,1.42,0.40], tip:[-0.12,0.94,0.25], roll:-0.22,
-        twist:-0.20, pitch:-0.18, lean:-0.12, hipTwist:-0.14, hip:[-0.04,0,0.03], lower:0.02, lunge:0.12, head:[-0.06,-0.12] }) },
-    { dur:0.30, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical9: A('vertical','Rising Splitter — Deep Launch',[
-    { dur:0.22, ease:Ease.outCubic, pose:P({ hold:[-0.18,0.46,-0.06], tip:[-0.20,-0.74,0.64], roll:-0.12,
-        twist:-0.18, pitch:0.36, lean:-0.06, hipTwist:-0.14, hip:[-0.02,0,-0.04], lower:0.24, head:[-0.06,0.18] }) },
-    { dur:0.12, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.06,1.42,0.72], tip:[0.02,0.96,0.28], roll:0.04,
-        twist:0.04, pitch:-0.26, lean:0.04, hipTwist:0.02, hip:[0.01,0,0.08], lower:-0.02, lunge:0.34, head:[0.02,-0.18] }) },
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.18,1.62,0.34], tip:[0.05,0.98,0.12], roll:0.10,
-        twist:0.12, pitch:-0.28, lean:0.08, hipTwist:0.08, hip:[0.03,0,0.02], lower:-0.02, lunge:0.18, head:[0.04,-0.20] }) },
-    { dur:0.38, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical10: A('vertical','Snap Chop — Hammer Tap',[
-    { dur:0.10, ease:Ease.outCubic, pose:P({ hold:[0.28,1.26,0.20], tip:[0.10,0.78,-0.20], roll:0.04,
-        twist:0.08, pitch:-0.08, lean:0.05, hipTwist:0.05, hip:[0.02,0,-0.02], lower:0.02, head:[0.03,-0.04] }) },
-    { dur:0.055, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.02,0.82,0.68], tip:[0.00,-0.50,0.86], roll:0.00,
-        twist:-0.01, pitch:0.16, lean:-0.01, hipTwist:-0.01, hip:[0,0,0.05], lower:0.08, lunge:0.12, head:[0,0.08] }) },
-    { dur:0.08, ease:Ease.outQuad, pose:P({ hold:[-0.04,0.72,0.50], tip:[-0.02,-0.68,0.64], roll:-0.03,
-        twist:-0.04, pitch:0.15, lean:-0.03, hipTwist:-0.02, hip:[0,0,0.02], lower:0.07, lunge:0.06, head:[-0.01,0.05] }) },
-    { dur:0.22, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical11: A('vertical','Snap Chop — Twitch Feint',[
-    { dur:0.08, ease:Ease.outCubic, pose:P({ hold:[-0.18,1.18,0.22], tip:[-0.12,0.76,-0.12], roll:-0.08,
-        twist:-0.05, pitch:-0.05, lean:-0.04, hipTwist:-0.04, hip:[-0.01,0,-0.01], lower:0.03, head:[-0.02,-0.03] }) },
-    { dur:0.06, ease:Ease.outQuad, pose:P({ hold:[0.24,1.34,0.10], tip:[0.18,0.84,-0.28], roll:0.10,
-        twist:0.08, pitch:-0.10, lean:0.06, hipTwist:0.06, hip:[0.02,0,-0.03], lower:0.00, head:[0.04,-0.06] }) },
-    { dur:0.055, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.00,0.84,0.68], tip:[0.00,-0.58,0.82], roll:0.00,
-        twist:-0.02, pitch:0.17, lean:-0.02, hipTwist:-0.02, hip:[0,0,0.05], lower:0.08, lunge:0.12, head:[0,0.08] }) },
-    { dur:0.10, ease:Ease.outQuad, pose:P({ hold:[-0.08,0.76,0.50], tip:[-0.05,-0.72,0.58], roll:-0.05,
-        twist:-0.06, pitch:0.16, lean:-0.04, hipTwist:-0.03, hip:[-0.01,0,0.02], lower:0.07, lunge:0.05, head:[-0.02,0.06] }) },
-    { dur:0.24, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical12: A('vertical','Meteor Drop',[
-    { dur:0.34, ease:Ease.outCubic, pose:P({ hold:[0.06,1.94,-0.34], tip:[0.00,0.66,-0.74], roll:0.0,
-        twist:0.00, pitch:-0.34, lean:0.00, hipTwist:0.00, hip:[0,0,-0.12], lower:-0.10, head:[0,-0.30] }) },
-    { dur:0.14, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.02,0.44,0.74], tip:[0.0,-0.99,0.14], roll:0.0,
-        twist:-0.03, pitch:0.50, lean:0.0, hipTwist:0.0, hip:[0,0,0.10], lower:0.28, lunge:0.30, head:[0,0.34] }) },
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.00,0.36,0.44], tip:[0.00,-1.0,0.04], roll:0.00,
-        twist:-0.05, pitch:0.42, lean:0.00, hipTwist:-0.04, hip:[0,0,0.05], lower:0.26, lunge:0.16, head:[0,0.26] }) },
-    { dur:0.46, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical13: A('vertical','Full-Body Pendulum',[
-    { dur:0.24, ease:Ease.outCubic, pose:P({ hold:[0.62,1.46,-0.22], tip:[0.70,0.44,-0.56], roll:0.44,
-        twist:0.56, pitch:-0.14, lean:0.22, hipTwist:0.42, hip:[0.08,0,-0.08], lower:0.02, head:[0.20,-0.14] }) },
-    { dur:0.12, ease:Ease.inCubic, contact:true, pose:P({ hold:[-0.18,0.66,0.68], tip:[-0.42,-0.82,0.38], roll:-0.18,
-        twist:-0.18, pitch:0.34, lean:-0.12, hipTwist:-0.10, hip:[-0.03,0,0.08], lower:0.18, lunge:0.28, head:[-0.05,0.22] }) },
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[-0.52,0.58,0.34], tip:[-0.80,-0.56,0.22], roll:-0.36,
-        twist:-0.46, pitch:0.26, lean:-0.20, hipTwist:-0.32, hip:[-0.08,0,0.02], lower:0.16, lunge:0.10, head:[-0.18,0.12] }) },
-    { dur:0.42, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical14: A('vertical','Scorpion Hook Chop',[
-    { dur:0.22, ease:Ease.outCubic, pose:P({ hold:[-0.42,1.62,0.04], tip:[-0.18,0.54,-0.82], roll:-0.50,
-        twist:-0.36, pitch:-0.20, lean:-0.14, hipTwist:-0.28, hip:[-0.06,0,-0.08], lower:-0.04, head:[-0.12,-0.18] }) },
-    { dur:0.10, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.18,0.70,0.70], tip:[0.38,-0.86,0.32], roll:0.20,
-        twist:0.14, pitch:0.36, lean:0.10, hipTwist:0.08, hip:[0.03,0,0.08], lower:0.18, lunge:0.24, head:[0.05,0.22] }) },
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.44,0.54,0.44], tip:[0.70,-0.68,0.18], roll:0.38,
-        twist:0.36, pitch:0.28, lean:0.16, hipTwist:0.22, hip:[0.06,0,0.04], lower:0.18, lunge:0.10, head:[0.14,0.14] }) },
-    { dur:0.38, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical15: A('vertical','Skyhook Uppercut',[
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.06,0.48,-0.10], tip:[0.10,-0.86,0.48], roll:0.12,
-        twist:0.08, pitch:0.40, lean:0.04, hipTwist:0.06, hip:[0.02,0,-0.06], lower:0.26, head:[0.03,0.20] }) },
-    { dur:0.11, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.04,1.56,0.68], tip:[0.02,0.98,0.18], roll:0.06,
-        twist:0.04, pitch:-0.30, lean:0.04, hipTwist:0.02, hip:[0.00,0,0.08], lower:-0.04, lunge:0.30, head:[0.02,-0.22] }) },
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.08,1.78,0.24], tip:[0.00,1.00,0.04], roll:0.10,
-        twist:0.10, pitch:-0.34, lean:0.08, hipTwist:0.06, hip:[0.02,0,0.02], lower:-0.06, lunge:0.14, head:[0.04,-0.24] }) },
-    { dur:0.42, ease:Ease.outBack, pose:IDLE },
-  ]),
-  vertical16: A('vertical','Spiral Guillotine',[
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.54,1.56,-0.20], tip:[0.64,0.46,-0.62], roll:0.64,
-        twist:0.62, pitch:-0.16, lean:0.24, hipTwist:0.50, hip:[0.08,0,-0.08], lower:0.00, head:[0.22,-0.16] }) },
-    { dur:0.09, ease:Ease.inCubic, pose:P({ hold:[-0.48,1.18,0.32], tip:[-0.66,0.12,0.74], roll:-0.58,
-        twist:-0.42, pitch:0.02, lean:-0.20, hipTwist:-0.32, hip:[-0.06,0,0.04], lower:0.06, lunge:0.12, head:[-0.18,0.02] }) },
-    { dur:0.10, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.02,0.58,0.74], tip:[0.0,-0.96,0.26], roll:0.0,
-        twist:-0.04, pitch:0.44, lean:0.0, hipTwist:0.0, hip:[0,0,0.10], lower:0.24, lunge:0.28, head:[0,0.30] }) },
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[-0.18,0.46,0.48], tip:[-0.16,-0.98,0.10], roll:-0.12,
-        twist:-0.14, pitch:0.38, lean:-0.10, hipTwist:-0.08, hip:[-0.03,0,0.05], lower:0.22, lunge:0.14, head:[-0.04,0.24] }) },
-    { dur:0.44, ease:Ease.outBack, pose:IDLE },
-  ]),
-
-  horizontal: A('horizontal','Crosscut',[
-    { dur:0.20, ease:Ease.outCubic, pose:P({ hold:[0.52,1.06,0.06], tip:[0.72,0.18,-0.45], roll:0.50,
-        twist:0.50, pitch:0.04, lean:0.06, hipTwist:0.30, hip:[0.06,0,-0.04], lower:0.06, head:[0.18,0.0] }) },
-    { dur:0.06, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.06,1.06,0.52], tip:[0.05,0.12,1.0], roll:0.0,
-        twist:0.10, pitch:0.05, lean:0.0, hipTwist:0.08, hip:[0,0,0.04], lower:0.07, lunge:0.06, head:[0.02,0.02] }) },
-    { dur:0.08, ease:Ease.outQuad, pose:P({ hold:[-0.50,1.06,0.18], tip:[-0.72,0.12,0.40], roll:-0.50,
-        twist:-0.45, pitch:0.04, lean:-0.04, hipTwist:-0.22, hip:[-0.05,0,0.02], lower:0.06, head:[-0.20,0.0] }) },
-    { dur:0.12, ease:Ease.outCubic, pose:P({ hold:[-0.54,1.06,-0.06], tip:[-0.62,0.18,-0.30], roll:-0.60,
-        twist:-0.58, pitch:0.02, lean:-0.08, hipTwist:-0.30, hip:[-0.05,0,-0.02], lower:0.06, head:[-0.24,0.0] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  horizontal2: A('horizontal','Backhand Cut',[
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[-0.52,1.08,0.02], tip:[-0.72,0.14,-0.42], roll:-0.52,
-        twist:-0.50, pitch:0.02, lean:-0.08, hipTwist:-0.30, hip:[-0.06,0,-0.04], lower:0.05, head:[-0.18,0] }) },
-    { dur:0.07, ease:Ease.inCubic, contact:true, pose:P({ hold:[-0.04,1.06,0.58], tip:[-0.02,0.10,1.0], roll:0.0,
-        twist:-0.08, pitch:0.06, lean:0.0, hipTwist:-0.06, hip:[0,0,0.04], lower:0.07, lunge:0.08, head:[-0.02,0.02] }) },
-    { dur:0.10, ease:Ease.outQuad, pose:P({ hold:[0.48,1.06,0.20], tip:[0.70,0.10,0.46], roll:0.48,
-        twist:0.42, pitch:0.04, lean:0.06, hipTwist:0.22, hip:[0.05,0,0.02], lower:0.06, head:[0.18,0] }) },
-    { dur:0.14, ease:Ease.outCubic, pose:P({ hold:[0.54,1.04,-0.02], tip:[0.64,0.12,-0.26], roll:0.58,
-        twist:0.54, pitch:0.02, lean:0.10, hipTwist:0.28, hip:[0.05,0,-0.02], lower:0.06, head:[0.22,0] }) },
-    { dur:0.32, ease:Ease.outBack, pose:IDLE },
-  ]),
-  horizontal3: A('horizontal','Low Sweep',[
-    { dur:0.19, ease:Ease.outCubic, pose:P({ hold:[0.46,0.78,0.10], tip:[0.70,-0.14,-0.36], roll:0.40,
-        twist:0.36, pitch:0.22, lean:0.10, hipTwist:0.26, hip:[0.05,0,-0.02], lower:0.18, head:[0.12,0.12] }) },
-    { dur:0.08, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.00,0.74,0.62], tip:[0.00,-0.18,0.98], roll:0.0,
-        twist:0.04, pitch:0.24, lean:0.0, hipTwist:0.04, hip:[0,0,0.05], lower:0.20, lunge:0.12, head:[0,0.18] }) },
-    { dur:0.14, ease:Ease.outQuad, pose:P({ hold:[-0.50,0.78,0.22], tip:[-0.72,-0.12,0.50], roll:-0.42,
-        twist:-0.40, pitch:0.18, lean:-0.08, hipTwist:-0.24, hip:[-0.05,0,0.03], lower:0.18, lunge:0.06, head:[-0.16,0.12] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  horizontal4: A('horizontal','High Guard Slash',[
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.48,1.30,0.00], tip:[0.66,0.34,-0.48], roll:0.62,
-        twist:0.44, pitch:-0.08, lean:0.08, hipTwist:0.26, hip:[0.04,0,-0.05], lower:0.00, head:[0.14,-0.06] }) },
-    { dur:0.07, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.02,1.30,0.54], tip:[0.02,0.28,0.96], roll:0.06,
-        twist:0.08, pitch:-0.04, lean:0.0, hipTwist:0.05, hip:[0,0,0.04], lower:0.02, lunge:0.08, head:[0.02,-0.02] }) },
-    { dur:0.12, ease:Ease.outQuad, pose:P({ hold:[-0.46,1.28,0.16], tip:[-0.66,0.28,0.46], roll:-0.56,
-        twist:-0.38, pitch:-0.06, lean:-0.08, hipTwist:-0.20, hip:[-0.04,0,0.02], lower:0.02, head:[-0.16,-0.04] }) },
-    { dur:0.32, ease:Ease.outBack, pose:IDLE },
-  ]),
-  horizontal5: A('horizontal','Turning Cut',[
-    { dur:0.24, ease:Ease.outCubic, pose:P({ hold:[0.58,1.04,-0.12], tip:[0.84,0.08,-0.46], roll:0.70,
-        twist:0.72, pitch:0.04, lean:0.18, hipTwist:0.56, hip:[0.08,0,-0.07], lower:0.08, head:[0.22,0.02] }) },
-    { dur:0.08, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.02,1.08,0.60], tip:[0.04,0.06,1.0], roll:0.04,
-        twist:0.18, pitch:0.04, lean:0.02, hipTwist:0.14, hip:[0,0,0.06], lower:0.08, lunge:0.14, head:[0.04,0.04] }) },
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[-0.58,1.04,-0.04], tip:[-0.86,0.08,0.34], roll:-0.74,
-        twist:-0.70, pitch:0.04, lean:-0.18, hipTwist:-0.52, hip:[-0.08,0,-0.02], lower:0.08, lunge:0.08, head:[-0.22,0.02] }) },
-    { dur:0.40, ease:Ease.outBack, pose:IDLE },
-  ]),
-  horizontal6: A('horizontal','Compact Waist Cut',[
-    { dur:0.12, ease:Ease.outCubic, pose:P({ hold:[0.34,0.96,0.18], tip:[0.48,0.10,-0.18], roll:0.38,
-        twist:0.22, pitch:0.08, lean:0.04, hipTwist:0.16, hip:[0.03,0,-0.01], lower:0.08, head:[0.08,0.02] }) },
-    { dur:0.05, ease:Ease.inCubic, contact:true, pose:P({ hold:[0.02,0.96,0.58], tip:[0.02,0.04,1.0], roll:0.0,
-        twist:0.04, pitch:0.08, lean:0.0, hipTwist:0.04, hip:[0,0,0.03], lower:0.08, lunge:0.06, head:[0.01,0.02] }) },
-    { dur:0.08, ease:Ease.outQuad, pose:P({ hold:[-0.34,0.96,0.24], tip:[-0.50,0.08,0.34], roll:-0.34,
-        twist:-0.22, pitch:0.08, lean:-0.04, hipTwist:-0.16, hip:[-0.03,0,0.02], lower:0.08, lunge:0.04, head:[-0.08,0.02] }) },
-    { dur:0.24, ease:Ease.outBack, pose:IDLE },
-  ]),
-
-  stab: A('stab','Straight Thrust',[
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[0.26,1.00,-0.06], tip:[0.02,0.05,1.0], roll:0.0,
-        twist:0.22, pitch:-0.06, lean:0.02, hipTwist:0.12, hip:[0.04,0,-0.06], lower:0.12, head:[0.06,0.0] }) },
-    { dur:0.09, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.10,1.00,0.90], tip:[0.0,0.0,1.0], roll:0.0,
-        twist:-0.12, pitch:0.20, lean:-0.02, hipTwist:-0.06, hip:[0,0,0.10], lower:0.10, lunge:0.70, head:[0.0,0.06] }) },
-    { dur:0.10, ease:Ease.outQuad, pose:P({ hold:[0.08,1.01,0.96], tip:[0.0,0.0,1.0], roll:0.0,
-        twist:-0.14, pitch:0.22, lean:-0.02, hipTwist:-0.07, hip:[0,0,0.11], lower:0.10, lunge:0.72, head:[0.0,0.06] }) },
-    { dur:0.36, ease:Ease.outBack, pose:IDLE },
-  ]),
-  stab2: A('stab','High Spear Thrust',[
-    { dur:0.18, ease:Ease.outCubic, pose:P({ hold:[0.20,1.20,-0.10], tip:[0.04,0.20,0.98], roll:0.08,
-        twist:0.18, pitch:-0.14, lean:0.04, hipTwist:0.10, hip:[0.03,0,-0.06], lower:0.06, head:[0.04,-0.06] }) },
-    { dur:0.08, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.08,1.22,0.92], tip:[0.02,0.22,0.98], roll:0.04,
-        twist:-0.08, pitch:0.04, lean:-0.02, hipTwist:-0.04, hip:[0,0,0.10], lower:0.06, lunge:0.64, head:[0.0,-0.02] }) },
-    { dur:0.12, ease:Ease.outQuad, pose:P({ hold:[0.04,1.22,0.98], tip:[0.01,0.24,0.98], roll:0.02,
-        twist:-0.10, pitch:0.04, lean:-0.02, hipTwist:-0.05, hip:[0,0,0.10], lower:0.06, lunge:0.66, head:[0.0,-0.02] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  stab3: A('stab','Low Gut Thrust',[
-    { dur:0.16, ease:Ease.outCubic, pose:P({ hold:[0.22,0.76,-0.06], tip:[0.02,-0.18,0.98], roll:-0.04,
-        twist:0.18, pitch:0.18, lean:0.02, hipTwist:0.10, hip:[0.03,0,-0.04], lower:0.20, head:[0.04,0.12] }) },
-    { dur:0.08, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.04,0.76,0.92], tip:[0.0,-0.14,0.99], roll:0.0,
-        twist:-0.08, pitch:0.28, lean:-0.02, hipTwist:-0.04, hip:[0,0,0.10], lower:0.22, lunge:0.62, head:[0.0,0.16] }) },
-    { dur:0.12, ease:Ease.outQuad, pose:P({ hold:[0.02,0.76,0.96], tip:[0.0,-0.12,0.99], roll:0.0,
-        twist:-0.10, pitch:0.26, lean:-0.02, hipTwist:-0.05, hip:[0,0,0.10], lower:0.22, lunge:0.64, head:[0.0,0.14] }) },
-    { dur:0.36, ease:Ease.outBack, pose:IDLE },
-  ]),
-  stab4: A('stab','Rising Lunge',[
-    { dur:0.17, ease:Ease.outCubic, pose:P({ hold:[-0.12,0.72,0.00], tip:[-0.10,-0.28,0.95], roll:-0.10,
-        twist:-0.12, pitch:0.22, lean:-0.04, hipTwist:-0.08, hip:[-0.02,0,-0.04], lower:0.20, head:[-0.03,0.12] }) },
-    { dur:0.09, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.08,1.12,0.88], tip:[0.02,0.26,0.97], roll:0.08,
-        twist:0.06, pitch:-0.08, lean:0.04, hipTwist:0.04, hip:[0,0,0.10], lower:0.04, lunge:0.66, head:[0.02,-0.04] }) },
-    { dur:0.14, ease:Ease.outQuad, pose:P({ hold:[0.12,1.24,0.86], tip:[0.04,0.38,0.92], roll:0.14,
-        twist:0.12, pitch:-0.10, lean:0.08, hipTwist:0.08, hip:[0.02,0,0.09], lower:0.02, lunge:0.58, head:[0.04,-0.08] }) },
-    { dur:0.36, ease:Ease.outBack, pose:IDLE },
-  ]),
-  stab5: A('stab','Side Feint Thrust',[
-    { dur:0.14, ease:Ease.outCubic, pose:P({ hold:[0.44,1.04,-0.02], tip:[0.38,0.02,0.92], roll:0.22,
-        twist:0.34, pitch:-0.02, lean:0.10, hipTwist:0.22, hip:[0.05,0,-0.04], lower:0.08, head:[0.12,0.0] }) },
-    { dur:0.10, ease:Ease.inCubic, pose:P({ hold:[-0.10,1.00,0.28], tip:[-0.12,0.00,0.99], roll:-0.08,
-        twist:-0.12, pitch:0.04, lean:-0.04, hipTwist:-0.08, hip:[-0.02,0,0.02], lower:0.10, lunge:0.14, head:[-0.04,0.02] }) },
-    { dur:0.07, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.04,1.00,0.96], tip:[0.0,0.0,1.0], roll:0.0,
-        twist:-0.08, pitch:0.16, lean:-0.02, hipTwist:-0.04, hip:[0,0,0.12], lower:0.10, lunge:0.72, head:[0,0.04] }) },
-    { dur:0.34, ease:Ease.outBack, pose:IDLE },
-  ]),
-  stab6: A('stab','Heavy Impale',[
-    { dur:0.24, ease:Ease.outCubic, pose:P({ hold:[0.30,0.96,-0.18], tip:[0.04,-0.02,1.0], roll:0.0,
-        twist:0.26, pitch:-0.02, lean:0.04, hipTwist:0.18, hip:[0.05,0,-0.08], lower:0.14, head:[0.08,0.02] }) },
-    { dur:0.11, ease:Ease.inQuint, contact:true, pose:P({ hold:[0.08,0.96,1.06], tip:[0.0,0.0,1.0], roll:0.0,
-        twist:-0.16, pitch:0.18, lean:-0.04, hipTwist:-0.08, hip:[0,0,0.14], lower:0.14, lunge:0.82, head:[0,0.06] }) },
-    { dur:0.18, ease:Ease.outQuad, pose:P({ hold:[0.06,0.96,1.08], tip:[0.0,0.0,1.0], roll:0.0,
-        twist:-0.18, pitch:0.20, lean:-0.05, hipTwist:-0.09, hip:[0,0,0.14], lower:0.14, lunge:0.84, head:[0,0.06] }) },
-    { dur:0.46, ease:Ease.outBack, pose:IDLE },
-  ]),
-};
-const ATTACK_GROUPS = {
-  vertical:['vertical','vertical2','vertical3','vertical4','vertical5','vertical6','vertical7','vertical8','vertical9','vertical10','vertical11','vertical12','vertical13','vertical14','vertical15','vertical16'],
-  horizontal:['horizontal','horizontal2','horizontal3','horizontal4','horizontal5','horizontal6'],
-  stab:['stab','stab2','stab3','stab4','stab5','stab6'],
-};
-// Lab-mode vertical pool curation, baked in permanently (was a runtime string
-// patch before; the wrapper always applied it, so this changes no behavior).
-const APPROVED_VERTICAL_ATTACKS=['vertical2','vertical3','vertical4','vertical5','vertical7','vertical8','vertical9','vertical10','vertical11','vertical15','vertical16'];
-const BAD_VERTICAL_ATTACKS=['vertical','vertical6','vertical12','vertical13','vertical14'];
-const ALL_VERTICAL_ATTACKS=[...ATTACK_GROUPS.vertical];
-const EXACT_ATTACK_POOL = [...APPROVED_VERTICAL_ATTACKS, ...ATTACK_GROUPS.horizontal, ...ATTACK_GROUPS.stab];
 const LAB_SAVE_KEY = 'stoneWandererStanceLab.v1';
 function attackIndexLabel(key){
   const att=ATTACKS[key], group=att ? (att.group || attackGroupFor(key)) : attackGroupFor(key);
