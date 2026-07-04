@@ -1,21 +1,22 @@
 // Stone Wanderer combat audio director.
 //
-// This restores the old wrapper audio behavior while keeping it as a source module
-// instead of letting the Red Toll wrapper own another large inline subsystem.
+// weapon-lab.html imports this directly and calls onAttackStart/onDummyEvent at
+// the exact point those events happen in its own combat code. No iframe, no DOM
+// scraping, no MutationObserver — the old wrapper needed those because the lab
+// lived behind an iframe boundary; now it's the same page.
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function installCombatAudioDirector({ frame, log, controls = {} }) {
+// controls: { enabled, beast, grit, damage, beastOut, gritOut, damageOut, testButtons }
+export function installCombatAudioDirector({ log, controls = {} } = {}) {
   const state = {
     enabled: true,
     beast: 0.55,
     grit: 1,
     damage: 0,
     surge: 0,
-    lastDummy: '',
     weapon: 'Longsword',
-    group: 'vertical',
-    hooked: false
+    group: 'vertical'
   };
 
   function setLog(text) {
@@ -212,78 +213,27 @@ export function installCombatAudioDirector({ frame, log, controls = {} }) {
     return /Hammer|Mace|Claymore|Greatsword|Axe/i.test(state.weapon);
   }
 
-  function readWeapon() {
-    let doc;
-    try { doc = frame.contentDocument; } catch (e) { return; }
-    if (!doc) return;
-    const sel = doc.getElementById('combatWeaponSelect');
-    if (sel) {
-      state.weapon = sel.options[sel.selectedIndex]?.textContent?.replace(/\s*\(.+\)$/, '') || state.weapon;
-      setLog(`Weapon: ${state.weapon}`);
-    }
-  }
-
-  function onAttackStart(data = {}) {
-    if (data.group) state.group = data.group;
-    if (data.weapon) state.weapon = data.weapon;
-    else readWeapon();
+  // Call this the moment a real attack starts in the host's combat code.
+  function onAttackStart({ group, weapon: weaponLabel } = {}) {
+    if (group) state.group = group;
+    if (weaponLabel) state.weapon = weaponLabel;
     AudioDirector.play(isHeavyWeapon() ? 'swingHeavy' : 'swingLight', { damage: isHeavyWeapon() ? 42 : 22 });
   }
 
-  function readDummy(txt) {
-    if (!txt || txt === state.lastDummy) return;
-    state.lastDummy = txt;
-    const dmg = (txt.match(/(\d+) dmg/) || [])[1];
-    if (/shattered/i.test(txt)) {
+  // Call this the moment a dummy hit (or kill) resolves in the host's combat code.
+  function onDummyEvent({ damage = 0, kill = false } = {}) {
+    if (kill) {
       state.surge = clamp(state.surge + 0.18, 0, 1);
-      AudioDirector.play('kill', { damage: Number(dmg) || 70, kill: true });
-    } else if (dmg) {
-      const n = Number(dmg);
-      state.surge = clamp(state.surge + n / 520, 0, 1);
-      AudioDirector.play(n >= 34 ? 'hitHeavy' : 'hitLight', { damage: n });
+      AudioDirector.play('kill', { damage: damage || 70, kill: true });
+    } else {
+      state.surge = clamp(state.surge + damage / 520, 0, 1);
+      AudioDirector.play(damage >= 34 ? 'hitHeavy' : 'hitLight', { damage });
     }
   }
 
-  function hookLab() {
-    let doc;
-    try { doc = frame.contentDocument; } catch (e) {
-      setLog('Could not access Stone Lab iframe for audio hook.');
-      return;
-    }
-    if (!doc) {
-      setTimeout(hookLab, 250);
-      return;
-    }
-
-    if (!state.hooked) {
-      state.hooked = true;
-      setLog('Combat audio hooked. Attack and hit events should play sounds.');
-    }
-
-    doc.addEventListener('pointerdown', e => {
-      const attack = e.target.closest?.('[data-lab-action="attack"],[data-attack]');
-      if (attack) state.group = attack.dataset.attack || state.group;
-      const weaponBtn = e.target.closest?.('[data-lab-action="nextWeapon"]');
-      if (weaponBtn) setTimeout(readWeapon, 120);
-    }, true);
-
-    const weaponSel = doc.getElementById('combatWeaponSelect');
-    if (weaponSel) {
-      weaponSel.addEventListener('change', () => setTimeout(readWeapon, 80));
-      readWeapon();
-    }
-
-    const meta = doc.getElementById('dummyMeta');
-    if (meta) {
-      new MutationObserver(() => readDummy(meta.textContent || '')).observe(meta, { childList: true, characterData: true, subtree: true });
-      readDummy(meta.textContent || '');
-    }
-  }
-
-  window.__stoneCombatAudio = {
+  const api = {
     onAttackStart,
-    readWeapon,
-    readDummy,
+    onDummyEvent,
     playTest(event) {
       if (event === 'hurt') {
         state.damage = clamp(state.damage + 0.18, 0, 1);
@@ -295,13 +245,11 @@ export function installCombatAudioDirector({ frame, log, controls = {} }) {
     }
   };
 
-  if (frame) frame.addEventListener('load', () => setTimeout(hookLab, 350));
-
   if (controls.testButtons) {
     controls.testButtons.forEach(button => {
-      button.addEventListener('click', () => window.__stoneCombatAudio.playTest(button.dataset.test));
+      button.addEventListener('click', () => api.playTest(button.dataset.test));
     });
   }
 
-  return window.__stoneCombatAudio;
+  return api;
 }

@@ -20,7 +20,7 @@
     <div class="grid"><button data-test="swingLight">Swing</button><button data-test="hitLight">Hit</button><button data-test="swingHeavy">Heavy</button><button data-test="kill">Kill</button><button data-test="hurt">Hurt</button></div>
     <div class="log" id="log">Loading Stone Lab…</div>
     <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
-    <div class="links"><a href="reference/stone-wanderer-stance-chain-lab-core.html">Reference core</a><a href="reference/stone-wanderer-individual-move-test.html">Old move test</a><a href="reference/sound-foundry-retro-beasts.html">Sound Foundry</a></div>
+    <div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Reference core</a><a href="stone-wanderer-individual-move-test.html">Old move test</a><a href="sound-foundry-retro-beasts.html">Sound Foundry</a></div>
   </div>
 </section>
 <script type="module">
@@ -30,7 +30,7 @@ import { applyLabModeCorePatch, installLabModeChrome } from './src/lab-modes.js'
 
 const frame=document.getElementById('labFrame');
 const log=document.getElementById('log');
-const CORE_FILE='reference/stone-wanderer-stance-chain-lab-core.html';
+const CORE_FILE='stone-wanderer-stance-chain-lab-core.html';
 const UI=`    <div class="section">Red Toll Sword Tuning</div>
     <div class="hint">Use Greatsword. Weapon definitions are sourced from <code>src/weapons.js</code>; Red Toll is the greatsword visual variant for this lab. Greatsword reach is still 30% longer through the procedural weapon length, so the visible blade and hit zones grow together. Rotation controls tune the red edge per attack family.</div>
     <label class="row"><span>Global rot</span><input id="rtRotGlobal" type="range" min="-180" max="180" step="1" value="180" /><span class="readout" id="rtRotGlobalReadout">180°</span></label>

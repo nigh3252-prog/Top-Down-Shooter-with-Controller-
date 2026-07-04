@@ -2,6 +2,15 @@
 
 A phone/controller-friendly HTML5 top-down action prototype.
 
+## Repo layout
+
+- `index.html` — launcher.
+- `top-down-shooter.html` — the original top-down shooter prototype (notes below).
+- `weapon-lab.html` — the Stone Wanderer weapon test lab: Red Toll greatsword, bent-horizon scrolling world, combat audio, and Stance Cards / Individual Moves modes. A single ES-module page that imports everything from `src/` directly — no runtime HTML patching.
+- `src/` — real source modules (`weapons.js`, `combat-audio.js`, `lab-modes.js`, `bent-world.js`). See `src/README.md` for the module architecture.
+- `archive/` — the retired iframe wrapper, the old string-patched lab core, and donor pages. Kept for reference only; nothing links to them.
+- `docs/` — source-move libraries (Hades, Diablo III) used as design references.
+
 ## Current goal
 
 This is a first-pass feel test for a top-down ARPG/brawler combat model:
