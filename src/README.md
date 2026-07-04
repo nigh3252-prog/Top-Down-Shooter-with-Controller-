@@ -6,9 +6,10 @@ HTML patching anywhere in this repo: the old wrapper used to `fetch()` a copy of
 the core page and string-replace pieces of it before running; that wrapper and
 the core page it patched are retired to `archive/`.
 
-- `weapons.js` — the Stone weapon order/definitions, plus `installRedTollGreatsword()`,
-  which installs the Red Toll greatsword visual variant directly into a running
-  lab instance.
+- `weapons.js` — the Stone weapon order/definitions, shared combat weapon mesh
+  builders, optional weapon visual update hooks, and `installRedTollGreatsword()`,
+  which selects/tunes the Red Toll greatsword visual variant without replacing
+  the lab's common rebuild path.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
 - `combat-audio.js` — `installCombatAudioDirector()`, the procedural combat audio
   director. `weapon-lab.html` calls its `onAttackStart`/`onDummyEvent` methods
@@ -26,17 +27,16 @@ the page's own module scope — and passes it to each `installX()` call. Getters
 defer evaluation, so `LabAPI` can be built (and `installBentWorld` called)
 before most of the state it exposes even exists yet; nothing reads a getter
 until the corresponding `installX()` runs, by which point the page has finished
-declaring it. `rebuildCombatWeaponMesh` and `activeWeaponKind` get real
-get/set pairs because `weapons.js` needs to reassign them — since the getter/
-setter closes over the same variable the rest of the page already calls,
-every existing call site keeps working with zero changes.
+declaring it. Mutable page-owned values such as `activeWeaponKind` stay behind
+get/set pairs so modules can coordinate with the live runtime state without
+copying it or patching the page source.
 
-A few features that used to live in the page (Individual Moves' extension
-points, the Red Toll rotation UI) are now small named hook points in
-`weapon-lab.html` — e.g. `LabAPI.moveTest?.intercept?.(action)` at the top of
-`labAction()` — that are inert until the matching module installs real
-behavior into them. That replaces the old approach of patching the function
-body's source text at load time.
+A few features that used to live in the page (for example Individual Moves'
+extension points) are now small named hook points in `weapon-lab.html` — e.g.
+`LabAPI.moveTest?.intercept?.(action)` at the top of `labAction()` — that are
+inert until the matching module installs real behavior into them. Weapon
+visuals use a shared build/update lifecycle instead of page-source patching or
+weapon-specific rebuild overrides.
 
 ## Extending this
 
