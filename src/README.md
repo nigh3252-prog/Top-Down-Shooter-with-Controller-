@@ -9,6 +9,7 @@ the core page it patched are retired to `archive/`.
 - `weapons.js` — the Stone weapon order/definitions, plus `installRedTollGreatsword()`,
   which installs the Red Toll greatsword visual variant directly into a running
   lab instance.
+- `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
 - `combat-audio.js` — `installCombatAudioDirector()`, the procedural combat audio
   director. `weapon-lab.html` calls its `onAttackStart`/`onDummyEvent` methods
   directly at the point those events happen in its own combat code.
