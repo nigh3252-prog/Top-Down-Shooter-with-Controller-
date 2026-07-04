@@ -3,25 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Top-Down / Stone Lab Launcher</title>
+<title>Top-Down Shooter / Weapon Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#05070d;--panel:rgba(10,15,24,.88);--line:rgba(255,255,255,.17);--text:#eef6ff;--muted:#aab3c5;--blue:#8dbfff;--purple:#c474ff;--gold:#f3ce79;--green:#8dffbf}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 28%,#253552 0,#101724 48%,#05070d 100%);color:var(--text);font-family:system-ui,Segoe UI,Arial,sans-serif}.wrap{min-height:100dvh;display:grid;place-items:center;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.card{width:min(880px,96vw);border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,rgba(17,25,39,.92),rgba(6,10,17,.86));box-shadow:0 24px 80px #000b;padding:22px;display:grid;gap:16px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}h1{margin:0;font-size:clamp(28px,6vw,46px);line-height:1.02}p{margin:0;color:var(--muted);line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile{display:grid;gap:5px;min-height:116px;padding:16px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.055);color:var(--text);text-decoration:none;box-shadow:inset 0 1px rgba(255,255,255,.08)}.tile strong{font-size:18px}.tile span{font-size:13px;color:var(--muted);line-height:1.35}.tile.primary{background:linear-gradient(180deg,rgba(141,191,255,.25),rgba(141,191,255,.07));border-color:rgba(141,191,255,.38)}.tile.beast{background:linear-gradient(180deg,rgba(196,116,255,.25),rgba(196,116,255,.07));border-color:rgba(196,116,255,.40)}.tile.gold{background:linear-gradient(180deg,rgba(243,206,121,.22),rgba(243,206,121,.06));border-color:rgba(243,206,121,.34)}.tile.move{background:linear-gradient(180deg,rgba(141,255,191,.22),rgba(141,255,191,.06));border-color:rgba(141,255,191,.34)}.note{font-size:12px;color:#95a3bf;border-top:1px solid rgba(255,255,255,.10);padding-top:12px}@media(max-width:640px){.card{padding:16px;border-radius:22px}.grid{grid-template-columns:1fr}.tile{min-height:88px;padding:14px}}
+:root{color-scheme:dark;--bg:#05070d;--panel:rgba(10,15,24,.88);--line:rgba(255,255,255,.17);--text:#eef6ff;--muted:#aab3c5;--blue:#8dbfff;--purple:#c474ff;--gold:#f3ce79}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 28%,#253552 0,#101724 48%,#05070d 100%);color:var(--text);font-family:system-ui,Segoe UI,Arial,sans-serif}.wrap{min-height:100dvh;display:grid;place-items:center;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.card{width:min(760px,96vw);border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,rgba(17,25,39,.92),rgba(6,10,17,.86));box-shadow:0 24px 80px #000b;padding:22px;display:grid;gap:16px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}h1{margin:0;font-size:clamp(28px,6vw,46px);line-height:1.02}p{margin:0;color:var(--muted);line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile{display:grid;gap:5px;min-height:120px;padding:18px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.055);color:var(--text);text-decoration:none;box-shadow:inset 0 1px rgba(255,255,255,.08)}.tile strong{font-size:20px}.tile span{font-size:13px;color:var(--muted);line-height:1.35}.tile.primary{background:linear-gradient(180deg,rgba(141,191,255,.25),rgba(141,191,255,.07));border-color:rgba(141,191,255,.38)}.tile.beast{background:linear-gradient(180deg,rgba(196,116,255,.25),rgba(196,116,255,.07));border-color:rgba(196,116,255,.40)}.note{font-size:12px;color:#95a3bf;border-top:1px solid rgba(255,255,255,.10);padding-top:12px}@media(max-width:640px){.card{padding:16px;border-radius:22px}.grid{grid-template-columns:1fr}.tile{min-height:92px;padding:14px}}
 </style>
 </head>
 <body>
 <main class="wrap">
   <section class="card">
-    <div class="eyebrow">Branch launcher</div>
-    <h1>Pick a test area</h1>
-    <p>The Red Toll Greatsword Lab is now the main Stone weapon lab. It includes Red Toll visuals, restored combat audio, and a Lab Mode selector for Stance Cards versus Individual Moves.</p>
+    <div class="eyebrow">Game launcher</div>
+    <h1>Pick a play area</h1>
+    <p>This launcher now only exposes the original top-down shooter and the current consolidated weapon test lab.</p>
     <div class="grid">
-      <a class="tile primary" href="top-down-shooter.html"><strong>Play Top-Down Shooter</strong><span>The original top-down shooter page, preserved separately from the launcher.</span></a>
-      <a class="tile beast" href="stone-wanderer-stance-chain-lab.html"><strong>Stone Weapon Lab</strong><span>The consolidated Red Toll + audio lab with Stance Cards and Individual Moves modes.</span></a>
-      <a class="tile move" href="stone-wanderer-individual-move-test.html"><strong>Old Individual Move Test</strong><span>Temporary reference copy of the earlier wrapper while the main lab absorbs its behavior.</span></a>
-      <a class="tile" href="stone-wanderer-stance-chain-lab-core.html"><strong>Stone Lab Core</strong><span>The raw stance / weapon / dummy lab without the experimental wrapper pages.</span></a>
-      <a class="tile gold" href="sound-foundry-retro-beasts.html"><strong>Open Sound Foundry</strong><span>The retro beast sound palette and sound-generation lab.</span></a>
+      <a class="tile primary" href="top-down-shooter.html"><strong>Play Top-Down Shooter</strong><span>The original top-down shooter game prototype.</span></a>
+      <a class="tile beast" href="stone-wanderer-stance-chain-lab.html"><strong>Weapon Test Lab</strong><span>The consolidated Stone weapon lab with Red Toll visuals, combat audio, and stance / individual move modes.</span></a>
     </div>
-    <p class="note">The current consolidation path is one official Stone Weapon Lab entry, with donor pages kept temporarily for comparison.</p>
+    <p class="note">Older donor pages have been moved under <code>reference/</code> so the root stays focused.</p>
   </section>
 </main>
 </body>
