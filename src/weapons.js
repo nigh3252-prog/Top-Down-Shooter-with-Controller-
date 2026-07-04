@@ -128,6 +128,124 @@ export function getStoneWeapon(id) {
   return STONE_WEAPONS[id] || STONE_WEAPONS.longsword;
 }
 
+
+export function buildStoneWeaponMesh(ctx) {
+  const {
+    THREE,
+    weaponDef,
+    weaponRoot,
+    RIG,
+    bladeLen,
+    base,
+    materials = {},
+    helpers = {},
+    weaponParts = {}
+  } = ctx || {};
+  if (!THREE || !weaponRoot || !RIG || !weaponDef) return;
+
+  const { matSilver, matBronze, matGlow } = materials;
+  const { addGrip, addGuard, meshLocalBox, meshLocalIco } = helpers;
+  const kind = weaponDef.kind || 'blade';
+
+  if (kind === 'whip') {
+    addGrip(.024, .34);
+    addGuard(.18);
+    const N = 22;
+    const arr = new Float32Array(N * 3);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending }));
+    weaponRoot.add(line);
+    weaponParts.whipLine = line;
+    weaponParts.whipPos = arr;
+    weaponParts.whipN = N;
+    weaponParts.beads = [];
+    for (let i = 0; i < 5; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.020 * (1 - i * .08), 8, 6), matSilver);
+      b.position.y = base + bladeLen * (i / 4);
+      weaponRoot.add(b);
+      weaponParts.beads.push(b);
+    }
+    weaponParts.tipBead = new THREE.Mesh(new THREE.SphereGeometry(.038, 10, 8), matGlow);
+    weaponRoot.add(weaponParts.tipBead);
+  } else if (kind === 'mace') {
+    addGrip(.026, .50);
+    addGuard(.22);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .023, bladeLen * .86, 7), matBronze);
+    shaft.position.y = base + bladeLen * .43;
+    weaponRoot.add(shaft);
+    weaponRoot.add(meshLocalIco(.15, matSilver, [0, base + bladeLen * .92, 0]));
+  } else if (kind === 'hammer') {
+    addGrip(.028, .52);
+    addGuard(.20);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.020, .026, bladeLen * .88, 7), matBronze);
+    shaft.position.y = base + bladeLen * .44;
+    weaponRoot.add(shaft);
+    weaponRoot.add(meshLocalBox(.44, .18, .22, matSilver, .015, [0, base + bladeLen * .92, 0]));
+    const pick = new THREE.Mesh(new THREE.ConeGeometry(.06, .24, 4), matSilver);
+    pick.position.set(.31, base + bladeLen * .92, 0);
+    pick.rotation.z = -Math.PI / 2;
+    weaponRoot.add(pick);
+  } else if (kind === 'axe') {
+    addGrip(.026, .50);
+    addGuard(.18);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .024, bladeLen * .96, 7), matBronze);
+    shaft.position.y = base + bladeLen * .48;
+    weaponRoot.add(shaft);
+    weaponRoot.add(meshLocalBox(.28, .27, .08, matSilver, .015, [.13, base + bladeLen * .88, 0]));
+    const lip = new THREE.Mesh(new THREE.ConeGeometry(.12, .24, 4), matSilver);
+    lip.position.set(.25, base + bladeLen * .88, 0);
+    lip.rotation.z = -Math.PI / 2;
+    lip.scale.z = .45;
+    weaponRoot.add(lip);
+  } else if (kind === 'spear') {
+    addGrip(.021, .46);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.014, .018, bladeLen * .84, 8), matBronze);
+    shaft.position.y = base + bladeLen * .42;
+    weaponRoot.add(shaft);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(.06, bladeLen * .24, 4), matSilver);
+    tip.position.y = base + bladeLen * .96;
+    tip.scale.set(.65, 1, 1.35);
+    weaponRoot.add(tip);
+  } else if (kind === 'rapier') {
+    addGrip(.019, .38);
+    const guard = new THREE.Mesh(new THREE.TorusGeometry(.11, .008, 6, 24), matBronze);
+    guard.position.y = base;
+    guard.rotation.x = Math.PI / 2;
+    weaponRoot.add(guard);
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(.008, .014, bladeLen, 5), matSilver);
+    blade.position.y = base + bladeLen / 2;
+    blade.scale.set(.55, 1, .55);
+    weaponRoot.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(.022, .10, 5), matSilver);
+    tip.position.y = RIG.bladeTip + .02;
+    weaponRoot.add(tip);
+  } else if (kind === 'saber') {
+    addGrip(.021, .40);
+    addGuard(.30);
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(.010, .043, bladeLen, 5), matSilver);
+    blade.position.y = base + bladeLen / 2;
+    blade.scale.set(.42, 1, 1.55);
+    blade.rotation.z = .08;
+    weaponRoot.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(.045, .12, 5), matSilver);
+    tip.position.set(.045, RIG.bladeTip + .02, 0);
+    tip.scale.set(.45, 1, 1.5);
+    weaponRoot.add(tip);
+  } else {
+    addGrip(.023, .42);
+    addGuard(weaponDef.weightClass === 'Heavy' ? .46 : .34);
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(.012, .05, bladeLen, 4), matSilver);
+    blade.position.y = base + bladeLen / 2;
+    blade.scale.set(.5, 1, 1.7);
+    weaponRoot.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .14, 4), matSilver);
+    tip.position.y = RIG.bladeTip + .02;
+    tip.scale.set(.5, 1, 1.7);
+    weaponRoot.add(tip);
+  }
+}
+
 // Installs the Red Toll greatsword visual variant directly into a running lab
 // instance. `api` is the host page's dependency surface — a getter/setter bag
 // built in the same module scope as the functions it overrides, so assigning
