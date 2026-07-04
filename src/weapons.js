@@ -111,6 +111,9 @@ export const STONE_WEAPONS = {
         label: 'Red Toll',
         meshBuilder: 'redTollGreatsword',
         lengthMultiplier: 1.30,
+        // Baked Red Toll yaw offsets, in degrees. These are weapon-variant data,
+        // not stance/attack choreography: global is always applied, then the
+        // current attack family's offset is added on top.
         rotationDefaults: { global: 180, vertical: 90, horizontal: 0, stab: 0 }
       }
     }
@@ -137,17 +140,20 @@ export function getStoneWeapon(id) {
 //     applyCombatWeaponTuning }
 export function installRedTollGreatsword(api) {
   const { THREE, WEAPONS, combatState, RIG } = api;
-  const RT_KEYS = { g: 'redToll.rot.global.v4', v: 'redToll.rot.vertical.v4', h: 'redToll.rot.horizontal.v4', s: 'redToll.rot.stab.v4' };
-  const RT_GS_LENGTH = 1.78 * 1.30;
+  const redTollVariant = WEAPONS?.greatsword?.visualVariants?.redToll
+    || STONE_WEAPONS.greatsword.visualVariants.redToll;
+  const bakedRotation = redTollVariant.rotationDefaults || {};
+  const numberOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const RT_GS_LENGTH = 1.78 * (numberOr(redTollVariant.lengthMultiplier, 1.30));
   if (WEAPONS && WEAPONS.greatsword && WEAPONS.greatsword.tune) {
     WEAPONS.greatsword.tune.length = Math.min(2.45, RT_GS_LENGTH);
     WEAPONS.greatsword.baseLength = WEAPONS.greatsword.tune.length;
     WEAPONS.greatsword.visualVariant = 'redToll';
   }
-  let rtRotGlobal = Number(localStorage.getItem(RT_KEYS.g) || 180);
-  let rtRotVertical = Number(localStorage.getItem(RT_KEYS.v) || 90);
-  let rtRotHorizontal = Number(localStorage.getItem(RT_KEYS.h) || 0);
-  let rtRotStab = Number(localStorage.getItem(RT_KEYS.s) || 0);
+  let rtRotGlobal = numberOr(bakedRotation.global, 180);
+  let rtRotVertical = numberOr(bakedRotation.vertical, 90);
+  let rtRotHorizontal = numberOr(bakedRotation.horizontal, 0);
+  let rtRotStab = numberOr(bakedRotation.stab, 0);
   let rtSword = null;
   function rtGroup() { return (combatState && combatState.attack && (combatState.attack.group || combatState.attackGroup)) || combatState.attackGroup || combatState.last || 'vertical'; }
   function rtDegrees() { const g = rtGroup(); return (rtRotGlobal || 0) + (g === 'horizontal' ? (rtRotHorizontal || 0) : g === 'stab' ? (rtRotStab || 0) : (rtRotVertical || 0)); }
@@ -228,7 +234,15 @@ export function installRedTollGreatsword(api) {
   function bindRedTollTuning() {
     const rows = [['rtRotGlobal', 'g', 'rtRotGlobalReadout'], ['rtRotVertical', 'v', 'rtRotVerticalReadout'], ['rtRotHorizontal', 'h', 'rtRotHorizontalReadout'], ['rtRotStab', 's', 'rtRotStabReadout']];
     const get = k => k === 'g' ? rtRotGlobal : k === 'v' ? rtRotVertical : k === 'h' ? rtRotHorizontal : rtRotStab;
-    const set = (k, v) => { if (k === 'g') rtRotGlobal = v; else if (k === 'v') rtRotVertical = v; else if (k === 'h') rtRotHorizontal = v; else rtRotStab = v; localStorage.setItem(RT_KEYS[k], String(v)); rtApply(); };
+    const set = (k, v) => {
+      if (k === 'g') rtRotGlobal = v;
+      else if (k === 'v') rtRotVertical = v;
+      else if (k === 'h') rtRotHorizontal = v;
+      else rtRotStab = v;
+      // Slider adjustments are intentionally runtime-only now. The committed
+      // source-of-truth values live in visualVariants.redToll.rotationDefaults.
+      rtApply();
+    };
     rows.forEach(([id, k, outId]) => {
       const el = document.getElementById(id), out = document.getElementById(outId);
       if (!el || !out) return;
