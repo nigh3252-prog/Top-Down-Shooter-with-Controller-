@@ -19,12 +19,13 @@
     <label class="audioRow"><span>Damage</span><input id="audioDamage" type="range" min="0" max="100" value="0"><b id="audioDamageOut">0</b></label>
     <div class="grid"><button data-test="swingLight">Swing</button><button data-test="hitLight">Hit</button><button data-test="swingHeavy">Heavy</button><button data-test="kill">Kill</button><button data-test="hurt">Hurt</button></div>
     <div class="log" id="log">Loading Stone Lab…</div>
-    <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
+    <div class="hint">Modules: <code>src/weapons.js</code>, <code>src/weapon-core-patch.js</code>, <code>src/combat-audio.js</code>, and <code>src/lab-modes.js</code>.</div>
     <div class="links"><a href="stone-wanderer-stance-chain-lab-core.html">Raw core</a><a href="stone-wanderer-individual-move-test.html">Old move test</a><a href="sound-foundry-retro-beasts.html">Sound Foundry</a></div>
   </div>
 </section>
 <script type="module">
 import { createRedTollGreatswordCorePatch } from './src/weapons.js';
+import { replaceCoreWeaponDefinitionsWithModuleData } from './src/weapon-core-patch.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { applyLabModeCorePatch, installLabModeChrome } from './src/lab-modes.js';
 
@@ -32,7 +33,7 @@ const frame=document.getElementById('labFrame');
 const log=document.getElementById('log');
 const CORE_FILE='stone-wanderer-stance-chain-lab-core.html';
 const UI=`    <div class="section">Red Toll Sword Tuning</div>
-    <div class="hint">Use Greatsword. The Red Toll visual variant now lives in <code>src/weapons.js</code>. Greatsword reach is still 30% longer through the procedural weapon length, so the visible blade and hit zones grow together. Rotation controls tune the red edge per attack family.</div>
+    <div class="hint">Use Greatsword. Weapon definitions are sourced from <code>src/weapons.js</code>; Red Toll is the greatsword visual variant for this lab. Greatsword reach is still 30% longer through the procedural weapon length, so the visible blade and hit zones grow together. Rotation controls tune the red edge per attack family.</div>
     <label class="row"><span>Global rot</span><input id="rtRotGlobal" type="range" min="-180" max="180" step="1" value="180" /><span class="readout" id="rtRotGlobalReadout">180°</span></label>
     <label class="row"><span>Vertical rot</span><input id="rtRotVertical" type="range" min="-180" max="180" step="1" value="90" /><span class="readout" id="rtRotVerticalReadout">90°</span></label>
     <label class="row"><span>Horizontal rot</span><input id="rtRotHorizontal" type="range" min="-180" max="180" step="1" value="0" /><span class="readout" id="rtRotHorizontalReadout">0°</span></label>
@@ -59,6 +60,7 @@ function mustPatch(html, needle, replacement, label){
   return html.replace(needle,replacement);
 }
 function patchCore(html){
+  html=replaceCoreWeaponDefinitionsWithModuleData(html);
   const tuningNeedle='    <label class="row short">\n      <span>Attack lock</span>';
   html=mustPatch(html,tuningNeedle,UI+tuningNeedle,'Red Toll tuning panel');
   html=mustPatch(html,'function updateWeaponDynamicVisual(time=0,dt=0){',INJECT+'\nfunction updateWeaponDynamicVisual(time=0,dt=0){\n  rtApply();','weapon dynamic visual hook');
@@ -66,16 +68,16 @@ function patchCore(html){
   const attackAudioHook=`${attackAudioNeedle}\n  try{ window.parent.__stoneCombatAudio?.onAttackStart?.({key,group:combatState.attackGroup,label:att.label,weapon:currentWeapon().label}); }catch(e){}`;
   html=mustPatch(html,attackAudioNeedle,attackAudioHook,'combat audio attack-start hook');
   html=applyLabModeCorePatch(html);
-  html=html.replace('Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.','Red Toll greatsword branch loaded. Weapon visuals, combat audio, and lab modes are sourced from src modules.');
+  html=html.replace('Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.','Red Toll greatsword branch loaded. Weapon definitions, combat audio, and lab modes are sourced from src modules.');
   return html;
 }
 async function load(){
   try{
-    log.textContent='Loading core, Red Toll weapon module, combat audio, and lab modes…';
+    log.textContent='Loading core, weapon definitions module, combat audio, and lab modes…';
     const r=await fetch(CORE_FILE,{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     frame.srcdoc=patchCore(await r.text());
-    log.textContent='Patch loaded. Use Lab Mode inside the Stone panel for Stance Cards or Individual Moves.';
+    log.textContent='Patch loaded. Weapon definitions are sourced from src/weapons.js. Use Lab Mode inside the Stone panel.';
   }catch(e){
     log.textContent='Patch failed: '+(e&&e.message?e.message:e);
     frame.src=CORE_FILE;
