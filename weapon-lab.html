@@ -66,7 +66,7 @@
       .dpad{grid-template-columns:56px 56px 56px;grid-template-rows:56px 56px 56px;gap:7px;bottom:max(14px, calc(env(safe-area-inset-bottom) + 76px))}
       .pad-btn{border-radius:14px;font-size:21px}
     }
-  
+
     .subpanel{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.035);overflow:hidden}
     .subpanel summary{list-style:none;cursor:pointer;padding:10px 11px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(238,246,255,.84);font-weight:900}
     .subpanel summary::-webkit-details-marker{display:none}
@@ -83,7 +83,7 @@
     .combat-pad button{min-height:58px;border-radius:16px;border:1px solid rgba(255,218,143,.24);background:rgba(12,18,29,.62);backdrop-filter:blur(10px);color:#eef6ff;font-size:13px;font-weight:900;touch-action:manipulation;box-shadow:inset 0 1px rgba(255,255,255,.07)}
     .combat-pad button.fire{background:rgba(255,218,143,.24);border-color:rgba(255,218,143,.56)}
     .panel:not(.collapsed) ~ .combat-pad{display:none}
-    body.gamepad-active .combat-pad, body.gamepad-active .dpad{display:none}
+    body.gamepad-active .combat-pad, body.gamepad-active .dpad, body.gamepad-active .combat-touch{display:none}
     .lab-meta strong{color:var(--text)}
     .lab-chain{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
     .lab-chip{border:1px solid rgba(141,210,255,.20);background:rgba(141,210,255,.08);border-radius:999px;padding:3px 7px;font-size:11px;color:var(--text)}
@@ -110,6 +110,21 @@
       body.move-test-review .move-review-row{grid-template-columns:60px minmax(0,1fr) 24px;gap:6px;font-size:11px}
       body.move-test-review .move-review-title{font-size:11px}
     }
+
+    .combat-touch{display:none}
+    body[data-launch-mode="combat"] .status, body[data-launch-mode="combat"] .mini-status, body[data-launch-mode="combat"] .dpad, body[data-launch-mode="combat"] .combat-pad{display:none!important}
+    body[data-launch-mode="combat"] #panel.collapsed{width:auto;background:transparent;border:0;box-shadow:none;backdrop-filter:none;overflow:visible}
+    body[data-launch-mode="combat"] #panel.collapsed header{border:0;padding:0;gap:8px}
+    body[data-launch-mode="combat"] #panel.collapsed header>div:first-child{display:none}
+    body[data-launch-mode="combat"] #collapseBtn{font-size:0}
+    body[data-launch-mode="combat"] #collapseBtn::before{content:'☰';font-size:16px}
+    @media (pointer:coarse){body[data-launch-mode="combat"] .combat-touch{display:block}}
+    .stick{position:fixed;left:max(22px,env(safe-area-inset-left));bottom:max(28px,calc(env(safe-area-inset-bottom) + 18px));width:132px;height:132px;border-radius:999px;border:1px solid rgba(141,210,255,.22);background:rgba(8,13,22,.34);backdrop-filter:blur(8px);touch-action:none;z-index:12}
+    .stick .knob{position:absolute;left:42px;top:42px;width:48px;height:48px;border-radius:999px;background:rgba(141,210,255,.42);box-shadow:0 0 22px rgba(141,210,255,.16), inset 0 1px rgba(255,255,255,.18)}
+    .combat-touch-buttons{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(30px,calc(env(safe-area-inset-bottom) + 16px));display:grid;grid-template-columns:82px 82px;grid-template-areas:'stance attack' 'weapon attack';gap:10px;z-index:12}
+    .combat-touch-buttons button{min-height:62px;border-radius:18px;border:1px solid rgba(255,218,143,.28);background:rgba(12,18,29,.62);backdrop-filter:blur(10px);color:#eef6ff;font-weight:900;touch-action:manipulation}
+    .combat-touch-buttons [data-combat-touch=attack]{grid-area:attack;min-height:134px;background:rgba(255,218,143,.20)}
+    .combat-touch-buttons [data-combat-touch=stance]{grid-area:stance}.combat-touch-buttons [data-combat-touch=weapon]{grid-area:weapon}
   </style>
 </head>
 <body>
@@ -360,6 +375,14 @@
   <button data-lab-action="rateDown">LB 👎</button>
   <button data-lab-action="rateUp">RB 👍</button>
 </div>
+<div class="combat-touch" id="combatTouch">
+  <div class="stick" id="moveStick"><div class="knob" id="moveKnob"></div></div>
+  <div class="combat-touch-buttons">
+    <button data-combat-touch="stance">Stance</button>
+    <button data-combat-touch="attack">Attack</button>
+    <button data-combat-touch="weapon">Weapon</button>
+  </div>
+</div>
 
 <script type="importmap">
 {
@@ -377,6 +400,7 @@ import { installBentWorld } from './src/bent-world.js';
 import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { createCombatEnemySystem } from './src/enemies.js';
 
 const launchParams = new URLSearchParams(location.search);
 const launchMode = launchParams.get('mode') || 'lab';
@@ -1239,6 +1263,9 @@ function applyLaunchMode(){
   document.querySelector('#panel h1').textContent = 'Stone Wanderer Combat';
   document.querySelector('#panel header p').textContent = '3D top-down action RPG prototype · □ attack · △ stance';
   document.getElementById('panel')?.classList.add('collapsed');
+  ['moveTestModeSelect','moveVerticalPoolSelect','redTollTuning','combatAudioTuning','dummyHeight','dummyMotionMode','resetDummyBtn','moveDummyBtn','dummyHitboxBtn','showContactLabels','loopCombat','showCombatDriver','attackV','attackH','attackS'].forEach(id=>{ const el=document.getElementById(id); const row=el?.closest?.('label,details,.combat-buttons,.combat-meta'); if(row) row.style.display='none'; });
+  document.querySelectorAll('[data-lab-action]').forEach(btn=>{ if(!['attack','nextStance','nextWeapon'].includes(btn.dataset.labAction)) btn.style.display='none'; });
+  document.querySelectorAll('[data-attack]').forEach(btn=>btn.style.display='none');
   ['redTollTuning','combatAudioTuning'].forEach(id=>document.getElementById(id)?.removeAttribute('open'));
 }
 function bindLabUI(){document.querySelectorAll('[data-lab-action]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); labAction(btn.dataset.labAction);}));}
@@ -1307,6 +1334,8 @@ const dummyState = {
 };
 const HIT_TYPE_COLOR = {slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4};
 let dummyRoot=null, dummyBody=null, dummyHead=null, dummyBase=null, dummyHealthFill=null, dummyHealthBillboard=null, dummyHitboxGroup=null;
+let enemySystem=null;
+const touchMove = new THREE.Vector2(0,0);
 function makeDummyMaterial(hex,rough=.82,metal=.05){return new THREE.MeshStandardMaterial({color:hex,roughness:rough,metalness:metal,flatShading:true});}
 const matDummyWood=makeDummyMaterial(0x7c6040,.92,.02), matDummyDark=makeDummyMaterial(0x4b3829,.88,.02), matDummyRope=makeDummyMaterial(0xb69a65,.75,.03);
 function getDummyHeightScale(){ return clamp(Number(dummyState.heightScale || 1), .5, 5.0); }
@@ -1415,6 +1444,43 @@ function detectDummyHits(dt){
   }
   if(best){combatState.hitIds.add(best.zone.id); applyDummyHit(best);}
 }
+
+function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
+  if(!combatState.attack || !weaponRoot || !enemySystem) return;
+  if(!combatState.hitIds) combatState.hitIds = new Set();
+  const zones = getWeaponHitZones();
+  for(const e of [...enemySystem.enemies]){
+    if(combatState.hitIds.has(e)) continue;
+    const center = new THREE.Vector3(e.x, e.radius * 1.05, e.z);
+    let best = null;
+    for(const zone of zones){
+      const a = weaponRoot.localToWorld(zone.from.clone());
+      const b = weaponRoot.localToWorld(zone.to.clone());
+      const d = pointSegmentDistance(center, a, b);
+      const threshold = e.radius + zone.radius + .35;
+      if(d <= threshold){
+        const quality = 1 - clamp(d / threshold, 0, 1);
+        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
+        const raw = zone.damage * (.82 + quality * .42) * weaponMult;
+        const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
+        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: center.clone().lerp(tipScene, .25), motion };
+        if(!best || cand.damage > best.damage) best = cand;
+      }
+    }
+    if(best){
+      combatState.hitIds.add(e);
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger });
+      const typeName = best.zone.type === 'hybrid' ? 'pierce/blunt' : best.zone.type;
+      aimState.lastDamage = killed ? `defeated ${e.kind}` : `${best.damage} ${typeName} vs ${e.kind}`;
+      labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: tipSpeed || 0 }, typeName);
+      if(killed) labRecordKill();
+      spawnHitEffect(best.point, best.zone.type, best.damage, best.zone.label);
+      CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
+      updateMainStatusLine();
+    }
+  }
+}
+
 function applyDummyHit(hit){
   dummyState.hp-=hit.damage; const typeName=hit.zone.type==='hybrid'?'pierce/blunt':hit.zone.type;
   dummyState.lastHit=`${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg, speed ${hit.speed.toFixed(1)}.`;
@@ -1674,7 +1740,7 @@ function applyCombatPoseToWarden(p,dt,now,sway){
   placeSegment(rightArmA,shR,eR,.070); placeSegment(rightArmB,eR,rightLocal,.060); placeSegment(leftArmA,shL,eL,.070); placeSegment(leftArmB,eL,leftLocal,.060);
   rightHandProxy.position.copy(rightLocal); rightHandProxy.quaternion.copy(weaponQ); leftHandProxy.position.copy(leftLocal); leftHandProxy.quaternion.copy(weaponQ); updateCombatArmVisibility();
   weaponBaseLocal.set(0,RIG.bladeBase,0); const tipScene=weaponRoot.localToWorld(weaponTipLocal.clone()); const baseScene=weaponRoot.localToWorld(weaponBaseLocal.clone());
-  let tipSpeed=0; if(haveCombatTip && dt>0) tipSpeed=prevCombatTip.distanceTo(tipScene)/dt; prevCombatTip.copy(tipScene); haveCombatTip=true; updateCombatTrail(tipScene,baseScene,tipSpeed,dt); detectDummyHits(dt);
+  let tipSpeed=0; if(haveCombatTip && dt>0) tipSpeed=prevCombatTip.distanceTo(tipScene)/dt; prevCombatTip.copy(tipScene); haveCombatTip=true; updateCombatTrail(tipScene,baseScene,tipSpeed,dt); if(launchMode === 'combat') detectEnemyHits(dt, tipScene, baseScene, tipSpeed); else detectDummyHits(dt);
   if(driverDebug){
     driverDebug.visible=combatState.showDriver;
     const rawTip=combatToWarden(new THREE.Vector3(0,RIG.bladeTip,0),new THREE.Vector3());
@@ -1761,8 +1827,14 @@ function spawnCharacter() {
   document.getElementById('status').textContent = 'Stone Wanderer loaded. Dungeon size now scales the room; zoom stays readable far out.';
 }
 spawnCharacter();
-createTrainingDummy();
-bindDummyUI();
+if(launchMode === 'combat'){
+  enemySystem = createCombatEnemySystem({ THREE, worldRoot, dungeonScale, materials:{ chaser:new THREE.MeshStandardMaterial({color:0xff8f72,roughness:.72,flatShading:true}), brute:new THREE.MeshStandardMaterial({color:0xd96b6b,roughness:.75,flatShading:true}) } });
+  enemySystem.reset();
+  aimState.autoFace = true;
+} else {
+  createTrainingDummy();
+  bindDummyUI();
+}
 loadLabData();
 applyLaunchMode();
 bindLabUI();
@@ -1794,6 +1866,12 @@ function getCommitLabel(){
   return ({free:'Free',soft:'Soft',hard:'Hard',narrow:'Thrust/vertical'})[aimState.commitMode] || 'Soft';
 }
 function getDummyAimFacing(){
+  if(launchMode === 'combat' && enemySystem){
+    let best=null, bestD=Infinity;
+    for(const e of enemySystem.enemies){ const d=Math.hypot(e.x-actorPos.x,e.z-actorPos.y); if(d<bestD){best=e; bestD=d;} }
+    if(best && bestD <= aimState.autoRange) return {angle:Math.atan2(best.x-actorPos.x,best.z-actorPos.y), source:'Auto enemy'};
+    return null;
+  }
   if(!aimState.autoFace || !dummyRoot || !dummyState || !dummyState.alive) return null;
   const dx=dummyRoot.position.x-actorPos.x, dz=dummyRoot.position.z-actorPos.y;
   const dist=Math.hypot(dx,dz);
@@ -1875,10 +1953,10 @@ function pollGamepads(){
     if(LabAPI.moveTest?.dpadSelect){ if(gpPressed(gp,12)) LabAPI.moveTest.dpadSelect(-1); if(gpPressed(gp,13)) LabAPI.moveTest.dpadSelect(1); }
     if(gpPressed(gp,2)) labAction('attack');        // Square / X button
     if(gpPressed(gp,3)) labAction('nextStance');    // Triangle / Y button
-    if(gpPressed(gp,1)) labAction('randomStance');  // Circle / B button
-    if(gpPressed(gp,0)) labAction('nextWeapon');    // Cross / A button
-    if(gpPressed(gp,4)) labAction('rateDown');      // LB
-    if(gpPressed(gp,5)) labAction('rateUp');        // RB
+    if(gpPressed(gp,1)) labAction(launchMode === 'combat' ? 'nextWeapon' : 'randomStance');  // Circle / B button
+    if(gpPressed(gp,0) && launchMode !== 'combat') labAction('nextWeapon');    // Cross / A button
+    if(gpPressed(gp,4) && launchMode !== 'combat') labAction('rateDown');      // LB
+    if(gpPressed(gp,5) && launchMode !== 'combat') labAction('rateUp');        // RB
     if(gpPressed(gp,9)) toggleFullscreen();
     break;
   }
@@ -1897,10 +1975,10 @@ window.addEventListener('keydown', e => {
   if(!e.repeat && !e.target.closest?.('input,select,textarea')) {
     if(k==='j' || k===' ') labAction('attack');
     if(k==='t') labAction('nextStance');
-    if(k==='c') labAction('randomStance');
+    if(k==='c' && launchMode !== 'combat') labAction('randomStance');
     if(k==='x') labAction('nextWeapon');
-    if(k==='[') labAction('rateDown');
-    if(k===']') labAction('rateUp');
+    if(k==='[' && launchMode !== 'combat') labAction('rateDown');
+    if(k===']' && launchMode !== 'combat') labAction('rateUp');
     if(k==='0') labAction('clearRating');
     if(k==='1') triggerCombatAttack('vertical');
     if(k==='2') triggerCombatAttack('horizontal');
@@ -1928,6 +2006,19 @@ for(const btn of document.querySelectorAll('.pad-btn')) {
   btn.addEventListener('pointerleave', up);
   btn.addEventListener('pointercancel', up);
 }
+
+function bindCombatTouchControls(){
+  const stick=document.getElementById('moveStick'), knob=document.getElementById('moveKnob');
+  if(stick && knob){
+    const reset=()=>{touchMove.set(0,0); knob.style.transform='translate(0px,0px)';};
+    const update=ev=>{const r=stick.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2; let x=ev.clientX-cx, y=ev.clientY-cy; const len=Math.hypot(x,y), max=42; if(len>max){x=x/len*max; y=y/len*max;} knob.style.transform=`translate(${x}px,${y}px)`; touchMove.set(x/max, y/max); document.body.classList.remove('gamepad-active');};
+    stick.addEventListener('pointerdown',ev=>{ev.preventDefault(); stick.setPointerCapture?.(ev.pointerId); update(ev);});
+    stick.addEventListener('pointermove',ev=>{if(ev.buttons) update(ev);});
+    stick.addEventListener('pointerup',reset); stick.addEventListener('pointercancel',reset);
+  }
+  document.querySelectorAll('[data-combat-touch]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ev.preventDefault(); const a=btn.dataset.combatTouch; if(a==='attack') labAction('attack'); else if(a==='stance') labAction('nextStance'); else if(a==='weapon') labAction('nextWeapon');}));
+}
+bindCombatTouchControls();
 
 
 function bindReadout(id, suffix='') {
@@ -1982,7 +2073,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), .033);
   pollGamepads();
   const keyboardMove = new THREE.Vector2((keyState.right?1:0) - (keyState.left?1:0), (keyState.down?1:0) - (keyState.up?1:0));
-  const move = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove.clone() : keyboardMove;
+  const move = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove.clone() : (touchMove.lengthSq()>.01 ? touchMove.clone() : keyboardMove);
   const isMoving = move.lengthSq() > 0;
   const desiredMove = new THREE.Vector2(0,0);
   if (isMoving) {
@@ -2020,6 +2111,7 @@ function animate() {
   const sway = isMoving ? Math.sin(walkPhase * .5) * 0.03 : 0;
   actorVisual.position.y = 0.02 + bob;
   updateCombat(dt, performance.now()/1000, sway);
+  if(enemySystem) enemySystem.update(dt, {x: actorPos.x, z: actorPos.y});
   updateDummy(dt);
 
   // BENT WORLD: camera scroll-follows the actor, then sky renders under the world.
