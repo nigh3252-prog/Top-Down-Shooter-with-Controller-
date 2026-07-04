@@ -370,7 +370,7 @@
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } from './src/weapons.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, buildStoneWeaponMesh } from './src/weapons.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
@@ -459,10 +459,9 @@ let rollStartDist = 12;    // flat play field extends this far past the camera f
 // Everything below is a getter so this object can be built here — before most
 // of the properties it exposes are even declared — and still stay correct:
 // getters only evaluate when a module actually calls them, by which point the
-// rest of this script has finished running. rebuildCombatWeaponMesh and
-// activeWeaponKind get real get/set pairs because src/weapons.js needs to
-// reassign them; every existing call site in this file keeps working
-// unchanged, since it's the same underlying variable.
+// rest of this script has finished running. Mutable page-owned values such as
+// activeWeaponKind stay behind accessors so modules coordinate with the live
+// runtime state without copying it or patching this page's source.
 const LabAPI = {
   THREE, scene, camera, renderer, worldRoot,
   get actorRoot(){ return actorRoot; },
@@ -1008,8 +1007,8 @@ const TUNE_DEFAULTS = {
 };
 // Weapon definitions are intentionally not duplicated in this raw core.
 // Weapon definitions come straight from the src/weapons.js import now — no
-// window globals, no fallback stub. Cloned so installRedTollGreatsword's tune
-// mutations don't touch the shared module object.
+// window globals, no fallback stub. Cloned so runtime variant/tuning changes
+// don't touch the shared module object.
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
 const WEAPONS = cloneWeaponDefinitions();
 
@@ -1586,37 +1585,40 @@ function meshLocalIco(r,mat,pos=[0,0,0]){const m=new THREE.Mesh(new THREE.Icosah
 function addGrip(r=.022,len=.40){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8),matLeather); m.position.y=-.14; m.castShadow=m.receiveShadow=true; weaponRoot.add(m); const pom=meshLocalIco(.045,matIron,[0,-.37,0]); weaponRoot.add(pom);}
 function addGuard(w=.34){weaponRoot.add(meshLocalBox(w,.045,.07,matBronze,.005,[0,RIG.bladeBase,0]));}
 function rebuildCombatWeaponMesh(){
-  if(!weaponRoot) return; clearWeaponRoot(); const def=currentWeapon(); activeWeaponKind=def.kind||'blade'; const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase), base=RIG.bladeBase;
-  if(activeWeaponKind==='whip'){
-    addGrip(.024,.34); addGuard(.18); const N=22, arr=new Float32Array(N*3); const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(arr,3));
-    const line=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xbfe6ff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending})); weaponRoot.add(line); weaponParts.whipLine=line; weaponParts.whipPos=arr; weaponParts.whipN=N; weaponParts.beads=[];
-    for(let i=0;i<5;i++){const b=new THREE.Mesh(new THREE.SphereGeometry(.020*(1-i*.08),8,6),matSilver); b.position.y=base+bladeLen*(i/4); weaponRoot.add(b); weaponParts.beads.push(b);} weaponParts.tipBead=new THREE.Mesh(new THREE.SphereGeometry(.038,10,8),matGlow); weaponRoot.add(weaponParts.tipBead);
-  } else if(activeWeaponKind==='mace'){
-    addGrip(.026,.50); addGuard(.22); const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.018,.023,bladeLen*.86,7),matBronze); shaft.position.y=base+bladeLen*.43; weaponRoot.add(shaft); weaponRoot.add(meshLocalIco(.15,matSilver,[0,base+bladeLen*.92,0]));
-  } else if(activeWeaponKind==='hammer'){
-    addGrip(.028,.52); addGuard(.20); const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.020,.026,bladeLen*.88,7),matBronze); shaft.position.y=base+bladeLen*.44; weaponRoot.add(shaft); weaponRoot.add(meshLocalBox(.44,.18,.22,matSilver,.015,[0,base+bladeLen*.92,0])); const pick=new THREE.Mesh(new THREE.ConeGeometry(.06,.24,4),matSilver); pick.position.set(.31,base+bladeLen*.92,0); pick.rotation.z=-Math.PI/2; weaponRoot.add(pick);
-  } else if(activeWeaponKind==='axe'){
-    addGrip(.026,.50); addGuard(.18); const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.018,.024,bladeLen*.96,7),matBronze); shaft.position.y=base+bladeLen*.48; weaponRoot.add(shaft); weaponRoot.add(meshLocalBox(.28,.27,.08,matSilver,.015,[.13,base+bladeLen*.88,0])); const lip=new THREE.Mesh(new THREE.ConeGeometry(.12,.24,4),matSilver); lip.position.set(.25,base+bladeLen*.88,0); lip.rotation.z=-Math.PI/2; lip.scale.z=.45; weaponRoot.add(lip);
-  } else if(activeWeaponKind==='spear'){
-    addGrip(.021,.46); const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.014,.018,bladeLen*.84,8),matBronze); shaft.position.y=base+bladeLen*.42; weaponRoot.add(shaft); const tip=new THREE.Mesh(new THREE.ConeGeometry(.06,bladeLen*.24,4),matSilver); tip.position.y=base+bladeLen*.96; tip.scale.set(.65,1,1.35); weaponRoot.add(tip);
-  } else if(activeWeaponKind==='rapier'){
-    addGrip(.019,.38); const guard=new THREE.Mesh(new THREE.TorusGeometry(.11,.008,6,24),matBronze); guard.position.y=base; guard.rotation.x=Math.PI/2; weaponRoot.add(guard); const blade=new THREE.Mesh(new THREE.CylinderGeometry(.008,.014,bladeLen,5),matSilver); blade.position.y=base+bladeLen/2; blade.scale.set(.55,1,.55); weaponRoot.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(.022,.10,5),matSilver); tip.position.y=RIG.bladeTip+.02; weaponRoot.add(tip);
-  } else if(activeWeaponKind==='saber'){
-    addGrip(.021,.40); addGuard(.30); const blade=new THREE.Mesh(new THREE.CylinderGeometry(.010,.043,bladeLen,5),matSilver); blade.position.y=base+bladeLen/2; blade.scale.set(.42,1,1.55); blade.rotation.z=.08; weaponRoot.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(.045,.12,5),matSilver); tip.position.set(.045,RIG.bladeTip+.02,0); tip.scale.set(.45,1,1.5); weaponRoot.add(tip);
-  } else {
-    addGrip(.023,.42); addGuard(def.weightClass==='Heavy'?.46:.34); const blade=new THREE.Mesh(new THREE.CylinderGeometry(.012,.05,bladeLen,4),matSilver); blade.position.y=base+bladeLen/2; blade.scale.set(.5,1,1.7); weaponRoot.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(.05,.14,4),matSilver); tip.position.y=RIG.bladeTip+.02; tip.scale.set(.5,1,1.7); weaponRoot.add(tip);
-  }
+  if(!weaponRoot) return;
+  clearWeaponRoot();
+  const def=currentWeapon();
+  activeWeaponKind=def.kind||'blade';
+  const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase), base=RIG.bladeBase;
+  buildStoneWeaponMesh({
+    THREE,
+    weaponDef:def,
+    weaponRoot,
+    RIG,
+    bladeLen,
+    base,
+    materials:{matSilver,matBronze,matGlow,matLeather,matIron},
+    helpers:{addGrip,addGuard,meshLocalBox,meshLocalIco},
+    weaponParts
+  });
   updateWeaponDynamicVisual(0,0);
 }
 function updateWeaponDynamicVisual(time=0,dt=0){
   weaponBaseLocal.set(0,RIG.bladeBase,0); weaponTipLocal.set(0,RIG.bladeTip,0);
-  const def=currentWeapon(); if(def.kind!=='whip' || !weaponParts.whipPos) return;
-  const arr=weaponParts.whipPos, N=weaponParts.whipN||22, bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase), contact=combatState.attack?Math.max(.001,combatState.attack.contactAt):.001, t=combatState.attack?combatState.t:0;
-  const pre=combatState.attack?1-smoothstep(contact*.12,contact*.98,t):.55, crack=combatState.attack?smoothstep(contact*.55,contact*1.02,t)*(1-smoothstep(contact+.08,contact+.30,t)):0, follow=combatState.attack?smoothstep(contact,combatState.attack.total,t):0, group=combatState.attack?(combatState.attack.group||combatState.attackGroup):'idle', side=group==='horizontal'?Math.sign(work.hold.x||1):1;
-  const amp=(.16+combatState.tune.swingWidth*.11)*(.55+pre*.75)*(1-crack*.72), wave=time*11+t*22;
-  for(let i=0;i<N;i++){const s=i/(N-1), tail=Math.pow(s,.85), snap=smoothstep(.45,1,s)*crack; const x=Math.sin(wave-s*7)*amp*tail*side+side*snap*.10; const z=(-pre*.22+snap*.35+follow*.10)*tail+Math.sin(wave*.63+s*5)*amp*.35*tail; const y=RIG.bladeBase+bladeLen*s*(.92+crack*.10); arr[i*3]=x; arr[i*3+1]=y; arr[i*3+2]=z; if(i===N-1) weaponTipLocal.set(x,y,z);}
-  if(weaponParts.beads){ for(let b=0;b<weaponParts.beads.length;b++){const i=Math.min(N-1,Math.round(b*(N-1)/(weaponParts.beads.length-1))); weaponParts.beads[b].position.set(arr[i*3],arr[i*3+1],arr[i*3+2]); }}
-  if(weaponParts.tipBead) weaponParts.tipBead.position.copy(weaponTipLocal); weaponParts.whipLine.geometry.attributes.position.needsUpdate=true;
+  const def=currentWeapon(), visualVariant=def.visualVariants?.[def.visualVariant];
+  weaponParts.visualUpdate?.({
+    THREE,
+    weaponDef:def,
+    visualVariant,
+    weaponParts,
+    combatState,
+    RIG,
+    weaponBaseLocal,
+    weaponTipLocal,
+    time,
+    dt,
+    helpers:{smoothstep,work}
+  });
 }
 function placeSegment(mesh,a,b,r=.055){
   const dir=tmpA.subVectors(b,a), len=dir.length(); if(len<1e-5) return; dir.normalize(); mesh.position.copy(a).addScaledVector(dir,len*.5); mesh.quaternion.setFromUnitVectors(THREE_UP,dir); mesh.scale.set(r,len,r);
