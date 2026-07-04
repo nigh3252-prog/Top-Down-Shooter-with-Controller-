@@ -158,8 +158,8 @@
     </label>
     <label class="row">
       <span>View yaw</span>
-      <input id="viewYaw" type="range" min="-40" max="40" step="1" value="-20" />
-      <span class="readout" id="viewYawReadout">-20°</span>
+      <input id="viewYaw" type="range" min="-40" max="40" step="1" value="0" />
+      <span class="readout" id="viewYawReadout">0°</span>
     </label>
     <label class="row">
       <span>Zoom</span>
@@ -374,6 +374,7 @@ import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } 
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
+import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
@@ -1624,6 +1625,10 @@ function getWeaponHitZones(){
     add('rapierTip','Rapier tip','pierce',.88,1.06,.15,grp==='stab'?36:14,1.05,0,0,'stab');
     add('rapierSide','Rapier side','weak',.20,.82,.07,grp==='stab'?6:5,.25,0,0,'swing');
     add('rapierGuard','Rapier guard','blunt',-.05,.04,.12,4,.20,0,0,'any');
+  } else if(kind==='saber'){
+    add('saberTip','Saber tip','pierce',.88,1.06,.14,grp==='stab'?18:10,.72,0,0,'stab');
+    add('saberEdge','Curved edge','slice',.22,.92,.15,grp==='horizontal'?27:(grp==='vertical'?23:12),1.00,0,0,'swing');
+    add('saberGuard','Guard','blunt',-.07,.06,.13,5,.26,0,0,'any');
   } else if(kind==='spear'){
     add('spearTip','Spear head','pierce',.84,1.08,.20,grp==='stab'?34:24,1.18,0,0,'any');
     add('spearShaft','Spear shaft','blunt',.12,.78,.11,8,.42,0,0,'any');
@@ -1656,7 +1661,7 @@ function testZoneAgainstDummy(zw,dt){
   if(!dummyRoot || !dummyState.alive) return null;
   let best=null; const volumes=getDummyVolumesLocal();
   for(const vol of volumes){const center=dummyRoot.localToWorld(vol.c.clone()); let d=pointSegmentDistance(center,zw.a,zw.b); if(zw.prev){d=Math.min(d,pointSegmentDistance(center,zw.prev.a,zw.prev.b),pointSegmentDistance(center,zw.prev.a,zw.a),pointSegmentDistance(center,zw.prev.b,zw.b),pointSegmentDistance(center,zw.prev.mid,zw.mid));}
-    const threshold=vol.r*getDummyHeightScale()+zw.zone.radius; if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.35) continue; const quality=1-clamp(d/threshold,0,1); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1); const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
+    const threshold=vol.r*getDummyHeightScale()+zw.zone.radius; if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.35) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
   return best;
 }
 function detectDummyHits(dt){
