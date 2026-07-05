@@ -276,7 +276,7 @@ export function buildStoneWeaponMesh(ctx) {
 // overrides the host rebuild function: Red Toll is built by buildStoneWeaponMesh
 // like every other weapon.
 export function installRedTollGreatsword(api) {
-  const { WEAPONS, combatState } = api;
+  const { WEAPONS, combatState, settings = null } = api;
   const redTollVariant = WEAPONS?.greatsword?.visualVariants?.redToll
     || STONE_WEAPONS.greatsword.visualVariants.redToll;
   const bakedRotation = redTollVariant.attackYawOffsets || redTollVariant.rotationDefaults || {};
@@ -304,10 +304,11 @@ export function installRedTollGreatsword(api) {
     rows.forEach(([id, key, outId]) => {
       const el = document.getElementById(id), out = document.getElementById(outId);
       if (!el || !out) return;
-      el.value = String(runtimeOffsets[key] || 0);
+      el.value = String(settings?.get?.('combat.redToll.' + key, runtimeOffsets[key] || 0) ?? (runtimeOffsets[key] || 0));
       const update = () => {
         const value = Number(el.value) || 0;
         runtimeOffsets[key] = value;
+        settings?.set?.('combat.redToll.' + key, el.value);
         out.textContent = Math.round(value) + '°';
         api.updateWeaponDynamicVisual?.(0, 0);
       };

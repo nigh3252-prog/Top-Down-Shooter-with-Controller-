@@ -370,6 +370,11 @@
     <h2>Stone Wanderer Combat</h2>
     <p>Left stick or virtual joystick moves. □ attacks, △ stance, ○ weapon.</p>
     <label class="row">
+      <span>Warden speed</span>
+      <input id="combatMoveSpeed" type="range" min="1.5" max="18" step="0.1" value="5.0" />
+      <span class="readout" id="combatMoveSpeedReadout">5.0</span>
+    </label>
+    <label class="row">
       <span>Enemy height</span>
       <input id="enemyHeightScale" type="range" min="0.5" max="4" step="0.05" value="1" />
       <span class="readout" id="enemyHeightScaleReadout">1.0×</span>
@@ -428,6 +433,7 @@ import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTI
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { createCombatEnemySystem } from './src/enemies.js';
+import { StoneSettings } from './src/settings.js';
 
 const launchParams = new URLSearchParams(location.search);
 const launchMode = launchParams.get('mode') || 'lab';
@@ -518,6 +524,7 @@ let rollStartDist = 12;    // flat play field extends this far past the camera f
 // activeWeaponKind stay behind accessors so modules coordinate with the live
 // runtime state without copying it or patching this page's source.
 const LabAPI = {
+  settings: StoneSettings,
   THREE, scene, camera, renderer, worldRoot,
   get actorRoot(){ return actorRoot; },
   get camYaw(){ return camYaw; }, get camDistance(){ return camDistance; },
@@ -1287,9 +1294,10 @@ function applyLaunchMode(){
   document.body.dataset.launchMode = launchMode;
   if(launchMode !== 'combat') return;
   document.title = 'Stone Wanderer Combat';
+  if(StoneSettings.get('combat.panelCollapsed', false)){ const panel=document.getElementById('panel'); panel.classList.add('collapsed'); document.getElementById('collapseBtn').textContent='+'; }
   document.querySelector('#panel h1').textContent = 'Stone Wanderer Combat';
   document.querySelector('#panel header p').textContent = '3D top-down action RPG prototype · □ attack · △ stance';
-  ['redTollTuning','combatAudioTuning'].forEach(id=>document.getElementById(id)?.removeAttribute('open'));
+  ['redTollTuning','combatAudioTuning'].forEach(id=>{ const details=document.getElementById(id); if(!details) return; details.open=!!StoneSettings.get('combat.details.' + id, false); });
 }
 function bindLabUI(){document.querySelectorAll('[data-lab-action]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); labAction(btn.dataset.labAction);}));}
 
@@ -1808,7 +1816,7 @@ function syncCombatScaleReadout(){
   const slider=document.getElementById('combatScale');
   const out=document.getElementById('combatScaleReadout');
   if(!slider || !out) return;
-  combatState.puppetScale=clamp(Number(slider.value),.5,5.0);
+  combatState.puppetScale=clamp(Number(slider.value),.5,5.0); StoneSettings.set('combat.puppetScale', slider.value);
   out.textContent=combatState.puppetScale.toFixed(1)+'×';
   syncCombatStatus();
 }
@@ -1816,7 +1824,7 @@ function syncCombatShoulderDropReadout(){
   const slider=document.getElementById('combatShoulderDrop');
   const out=document.getElementById('combatShoulderDropReadout');
   if(!slider || !out) return;
-  combatState.shoulderDrop=clamp(Number(slider.value),0,4.0);
+  combatState.shoulderDrop=clamp(Number(slider.value),0,4.0); StoneSettings.set('combat.shoulderDrop', slider.value);
   out.textContent=combatState.shoulderDrop.toFixed(2);
   syncCombatStatus();
 }
@@ -1824,25 +1832,30 @@ function syncCombatFloorBlendReadout(){
   const slider=document.getElementById('combatFloorBlend');
   const out=document.getElementById('combatFloorBlendReadout');
   if(!slider || !out) return;
-  combatState.floorBlend=clamp(Number(slider.value)/100,0,1.0);
+  combatState.floorBlend=clamp(Number(slider.value)/100,0,1.0); StoneSettings.set('combat.floorBlend', slider.value);
   out.textContent=Math.round(combatState.floorBlend*100)+'%';
   syncCombatStatus();
 }
 function bindCombatUI(){
-  const scaleSlider=document.getElementById('combatScale');
+  StoneSettings.applyValue('attackCommitMode','combat.attackCommitMode','soft');
+  StoneSettings.applyValue('autoFaceToggle','combat.autoFace',true);
+  StoneSettings.applyValue('showCombatDriver','combat.showDriver',false);
+  StoneSettings.applyValue('hideCombatArms','combat.hideArms',true);
+  StoneSettings.applyValue('loopCombat','combat.loop',false);
+  const scaleSlider=StoneSettings.applyValue('combatScale','combat.puppetScale','4.0');
   if(scaleSlider){ scaleSlider.addEventListener('input',syncCombatScaleReadout); syncCombatScaleReadout(); }
-  const shoulderSlider=document.getElementById('combatShoulderDrop');
+  const shoulderSlider=StoneSettings.applyValue('combatShoulderDrop','combat.shoulderDrop','3.05');
   if(shoulderSlider){ shoulderSlider.addEventListener('input',syncCombatShoulderDropReadout); syncCombatShoulderDropReadout(); }
-  const floorSlider=document.getElementById('combatFloorBlend');
+  const floorSlider=StoneSettings.applyValue('combatFloorBlend','combat.floorBlend','100');
   if(floorSlider){ floorSlider.addEventListener('input',syncCombatFloorBlendReadout); syncCombatFloorBlendReadout(); }
-  const sel=document.getElementById('combatWeaponSelect'); if(sel){ sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.addEventListener('change',e=>selectCombatWeapon(e.target.value)); }
-  const commit=document.getElementById('attackCommitMode'); if(commit){ aimState.commitMode=commit.value; commit.addEventListener('change',e=>{aimState.commitMode=e.target.value; updateMainStatusLine();}); }
-  const autoFace=document.getElementById('autoFaceToggle'); if(autoFace){ aimState.autoFace=autoFace.checked; autoFace.addEventListener('change',e=>{aimState.autoFace=e.target.checked; updateMainStatusLine();}); }
+  const sel=document.getElementById('combatWeaponSelect'); if(sel){ sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.value=StoneSettings.get('combat.weapon','longsword'); sel.addEventListener('change',e=>{ StoneSettings.set('combat.weapon', e.target.value); selectCombatWeapon(e.target.value); }); }
+  const commit=document.getElementById('attackCommitMode'); if(commit){ aimState.commitMode=commit.value; commit.addEventListener('change',e=>{aimState.commitMode=e.target.value; StoneSettings.set('combat.attackCommitMode', e.target.value); updateMainStatusLine();}); }
+  const autoFace=document.getElementById('autoFaceToggle'); if(autoFace){ aimState.autoFace=autoFace.checked; autoFace.addEventListener('change',e=>{aimState.autoFace=e.target.checked; StoneSettings.set('combat.autoFace', e.target.checked); updateMainStatusLine();}); }
   document.querySelectorAll('[data-attack]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); triggerCombatAttack(btn.dataset.attack);}));
-  const dbg=document.getElementById('showCombatDriver'); if(dbg) dbg.addEventListener('change',e=>{combatState.showDriver=e.target.checked; if(driverDebug) driverDebug.visible=combatState.showDriver;});
-  const hideArms=document.getElementById('hideCombatArms'); if(hideArms){ hideArms.checked=true; combatState.hideArms=true; hideArms.addEventListener('change',e=>{combatState.hideArms=e.target.checked; updateCombatArmVisibility();}); updateCombatArmVisibility(); }
-  const loop=document.getElementById('loopCombat'); if(loop) loop.addEventListener('change',e=>{combatState.loop=e.target.checked;});
-  updateVariantReadout(); selectCombatWeapon('longsword');
+  const dbg=document.getElementById('showCombatDriver'); if(dbg){ combatState.showDriver=dbg.checked; if(driverDebug) driverDebug.visible=combatState.showDriver; dbg.addEventListener('change',e=>{combatState.showDriver=e.target.checked; StoneSettings.set('combat.showDriver', e.target.checked); if(driverDebug) driverDebug.visible=combatState.showDriver;}); }
+  const hideArms=document.getElementById('hideCombatArms'); if(hideArms){ combatState.hideArms=hideArms.checked; hideArms.addEventListener('change',e=>{combatState.hideArms=e.target.checked; StoneSettings.set('combat.hideArms', e.target.checked); updateCombatArmVisibility();}); updateCombatArmVisibility(); }
+  const loop=document.getElementById('loopCombat'); if(loop){ combatState.loop=loop.checked; loop.addEventListener('change',e=>{combatState.loop=e.target.checked; StoneSettings.set('combat.loop', e.target.checked);}); }
+  updateVariantReadout(); selectCombatWeapon(StoneSettings.get('combat.weapon','longsword'));
 }
 
 
@@ -2057,20 +2070,22 @@ bindCombatTouchControls();
 function bindCombatChrome(){
   const menuBtn=document.getElementById('combatMenuBtn'), menu=document.getElementById('combatMenu'), full=document.getElementById('combatFullscreenBtn');
   if(menuBtn && menu){
-    menuBtn.addEventListener('click',()=>{ const open=!menu.classList.contains('open'); menu.classList.toggle('open',open); menuBtn.setAttribute('aria-expanded', String(open)); });
+    const savedOpen=StoneSettings.get('combat.menuOpen', false); menu.classList.toggle('open', savedOpen); menuBtn.setAttribute('aria-expanded', String(savedOpen)); menuBtn.addEventListener('click',()=>{ const open=!menu.classList.contains('open'); menu.classList.toggle('open',open); menuBtn.setAttribute('aria-expanded', String(open)); StoneSettings.set('combat.menuOpen', open); });
   }
   if(full) full.addEventListener('click',toggleFullscreen);
-  const height=document.getElementById('enemyHeightScale'), heightOut=document.getElementById('enemyHeightScaleReadout');
-  const speedCtl=document.getElementById('enemySpeedScale'), speedOut=document.getElementById('enemySpeedScaleReadout');
-  const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); };
-  const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); };
-  height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed);
-  syncHeight(); syncSpeed();
+  const playerSpeed=StoneSettings.applyValue('combatMoveSpeed','combat.playerSpeed',StoneSettings.get('lab.moveSpeed','5.0')), playerSpeedOut=document.getElementById('combatMoveSpeedReadout');
+  const height=StoneSettings.applyValue('enemyHeightScale','combat.enemyHeight','1'), heightOut=document.getElementById('enemyHeightScaleReadout');
+  const speedCtl=StoneSettings.applyValue('enemySpeedScale','combat.enemySpeed','1'), speedOut=document.getElementById('enemySpeedScaleReadout');
+  const syncPlayerSpeed=()=>{ const v=clamp(Number(playerSpeed?.value || speed), 1.5, 18); speed=v; if(playerSpeedOut) playerSpeedOut.textContent=v.toFixed(1); StoneSettings.set('combat.playerSpeed', playerSpeed?.value || String(v)); const labSpeed=document.getElementById('moveSpeed'); if(labSpeed) labSpeed.value=String(v); const labOut=document.getElementById('moveSpeedReadout'); if(labOut) labOut.textContent=v.toFixed(1); };
+  const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); StoneSettings.set('combat.enemyHeight', height?.value || String(v)); };
+  const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); StoneSettings.set('combat.enemySpeed', speedCtl?.value || String(v)); };
+  playerSpeed?.addEventListener('input',syncPlayerSpeed); height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed);
+  syncPlayerSpeed(); syncHeight(); syncSpeed();
 }
 bindCombatChrome();
 
 function bindReadout(id, suffix='') {
-  const el = document.getElementById(id);
+  const el = StoneSettings.applyValue(id, id === 'moveSpeed' ? 'lab.moveSpeed' : 'lab.' + id);
   const out = document.getElementById(id + 'Readout');
   const update = () => {
     const v = Number(el.value);
@@ -2079,7 +2094,7 @@ function bindReadout(id, suffix='') {
     if(id === 'characterLean') leanDeg = v;
     if(id === 'horizonRoll') horizonRollPct = v;
     if(id === 'rollStart') rollStartDist = v;
-    if(id === 'moveSpeed') speed = v;
+    if(id === 'moveSpeed'){ speed = v; StoneSettings.set('lab.moveSpeed', el.value); const combatSpeed=document.getElementById('combatMoveSpeed'); if(combatSpeed) combatSpeed.value=el.value; const combatOut=document.getElementById('combatMoveSpeedReadout'); if(combatOut) combatOut.textContent=v.toFixed(1); }
     if(id === 'dungeonScale') dungeonScale = v;
     applyPresentation();
   };
@@ -2095,12 +2110,18 @@ bindReadout('zoom', '');
 bindReadout('dungeonScale', '×');
 bindReadout('moveSpeed', '');
 
+['viewMoveTuning','redTollTuning','combatAudioTuning'].forEach(id=>{ const details=document.getElementById(id); if(!details) return; details.open=!!StoneSettings.get('combat.details.' + id, details.open); details.addEventListener('toggle',()=>StoneSettings.set('combat.details.' + id, details.open)); });
+
+StoneSettings.applyValue('showGuide','combat.showGuide',true);
+document.getElementById('miniStatus').style.display = document.getElementById('showGuide').checked ? 'block' : 'none';
 document.getElementById('showGuide').addEventListener('change', e => {
+  StoneSettings.set('combat.showGuide', e.target.checked);
   document.getElementById('miniStatus').style.display = e.target.checked ? 'block' : 'none';
 });
 document.getElementById('collapseBtn').addEventListener('click', ()=>{
   const panel = document.getElementById('panel');
   panel.classList.toggle('collapsed');
+  StoneSettings.set('combat.panelCollapsed', panel.classList.contains('collapsed'));
   document.getElementById('collapseBtn').textContent = panel.classList.contains('collapsed') ? '+' : '−';
   updateMainStatusLine();
 });
@@ -2172,9 +2193,12 @@ function animate() {
 // and every function LabAPI exposes are declared. No HTML string-patching — these
 // are ordinary function calls against the live page.
 installRedTollGreatsword(LabAPI);
+LabAPI.launchMode = launchMode;
 LabAPI.moveTest = installLabModes(LabAPI);
+['audioEnabled','audioBeast','audioGrit','audioDamage'].forEach(id=>StoneSettings.applyValue(id, 'combat.' + id));
 const CombatAudio = installCombatAudioDirector({
   log: document.getElementById('audioLog'),
+  settings: StoneSettings,
   controls: {
     enabled: document.getElementById('audioEnabled'),
     beast: document.getElementById('audioBeast'),

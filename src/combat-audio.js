@@ -8,7 +8,7 @@
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // controls: { enabled, beast, grit, damage, beastOut, gritOut, damageOut, testButtons }
-export function installCombatAudioDirector({ log, controls = {} } = {}) {
+export function installCombatAudioDirector({ log, controls = {}, settings = null } = {}) {
   const state = {
     enabled: true,
     beast: 0.55,
@@ -28,6 +28,10 @@ export function installCombatAudioDirector({ log, controls = {} } = {}) {
     if (controls.beast) state.beast = Number(controls.beast.value || 0) / 100;
     if (controls.grit) state.grit = Number(controls.grit.value || 0) / 100;
     if (controls.damage) state.damage = Number(controls.damage.value || 0) / 100;
+    settings?.set?.('combat.audioEnabled', state.enabled);
+    if (controls.beast) settings?.set?.('combat.audioBeast', controls.beast.value);
+    if (controls.grit) settings?.set?.('combat.audioGrit', controls.grit.value);
+    if (controls.damage) settings?.set?.('combat.audioDamage', controls.damage.value);
     if (controls.beastOut && controls.beast) controls.beastOut.textContent = controls.beast.value;
     if (controls.gritOut && controls.grit) controls.gritOut.textContent = controls.grit.value;
     if (controls.damageOut && controls.damage) controls.damageOut.textContent = controls.damage.value;
