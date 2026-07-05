@@ -32,6 +32,7 @@ function row(label, data) {
 function moveGlyph(v) { return v === 'up' ? '👍' : (v === 'down' ? '👎' : '—'); }
 
 export function installLabModes(api) {
+  const combatLaunch = api.launchMode === 'combat';
   const { ATTACK_GROUPS, attackDisplayLabel, combatState, aimState, labState, ATTACK_POOLS } = api;
 
   const state = { selectedGroup: 'vertical', selected: { vertical: 0, horizontal: 0, stab: 0 }, ratings: {} };
@@ -62,9 +63,10 @@ export function installLabModes(api) {
   loadRatings();
   seedLockedRatings();
 
-  function isMoveTestMode() { return localStorage.getItem(MODE_KEY) === 'moves'; }
+  function isMoveTestMode() { return !combatLaunch && localStorage.getItem(MODE_KEY) === 'moves'; }
   function verticalPoolMode() { return localStorage.getItem(VERTICAL_POOL_KEY) || 'approved'; }
   function setMode(mode) {
+    if (combatLaunch) mode = 'stance';
     localStorage.setItem(MODE_KEY, mode === 'moves' ? 'moves' : 'stance');
     api.updateVariantReadout?.();
     api.updateLabUI?.();
