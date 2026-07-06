@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mace Goblin Sandbox</title>
+  <style>
+    :root{
+      color-scheme:dark;
+      --bg:#05070b;--panel:rgba(9,14,22,.86);--panel2:rgba(255,255,255,.045);
+      --line:rgba(170,210,255,.18);--text:#eef7ff;--muted:#9badc4;--gold:#e2c979;--red:#ff8f72;--green:#9bd078;--blue:#8dd2ff;
+    }
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 30%,#1b293b 0%,#0a111b 42%,#04070d 100%);font-family:Inter,system-ui,Segoe UI,sans-serif;color:var(--text);touch-action:none;}
+    #stage{position:fixed;inset:0;}
+    #errorScreen{display:none;position:fixed;inset:0;z-index:999;background:#12070a;color:#fff;padding:24px;box-sizing:border-box;overflow:auto;}
+    #errorScreen h1{margin:0 0 10px;font-size:20px;color:#ffb3a3;}
+    #errorScreen pre{white-space:pre-wrap;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px;line-height:1.35;}
+    .panel{position:fixed;left:max(10px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));width:min(440px,calc(100vw - 20px));max-height:calc(100vh - 20px);z-index:20;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(17,25,38,.94),rgba(8,12,20,.82));backdrop-filter:blur(10px);box-shadow:0 18px 60px rgba(0,0,0,.45);overflow:hidden;user-select:none;}
+    .panel header{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.09);gap:10px;}
+    .title{min-width:0}.title h1{font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:0}.title p{font-size:12px;color:var(--muted);margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .mini{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:var(--text);border-radius:12px;padding:8px 10px;font-weight:900;cursor:pointer;}
+    .body{padding:12px;display:grid;gap:10px;overflow:auto;max-height:calc(100vh - 83px);}
+    .panel.collapsed .body{display:none;}
+    .row{display:grid;grid-template-columns:118px 1fr 48px;gap:9px;align-items:center;font-size:12px;color:var(--muted);}
+    .row.wide{grid-template-columns:118px 1fr;}.readout{text-align:right;color:var(--text);font-variant-numeric:tabular-nums;}
+    select,input[type=range]{width:100%;accent-color:var(--blue);} select{min-height:38px;border-radius:12px;border:1px solid rgba(141,210,255,.28);background:rgba(6,10,17,.86);color:var(--text);font-weight:850;padding:0 10px;}
+    input[type=checkbox]{accent-color:var(--blue);}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+    button.action{min-height:42px;border-radius:13px;border:1px solid rgba(226,201,121,.34);background:linear-gradient(180deg,rgba(226,201,121,.18),rgba(141,210,255,.05));color:var(--text);font-weight:900;cursor:pointer;}
+    button.action.active{border-color:rgba(141,210,255,.7);background:rgba(141,210,255,.18);}
+    .section{border-top:1px solid rgba(255,255,255,.09);padding-top:10px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(238,247,255,.78);font-weight:900;}
+    .meta{border:1px solid rgba(255,255,255,.10);background:var(--panel2);border-radius:14px;padding:9px 10px;font-size:12px;line-height:1.35;color:var(--muted);}
+    .meta strong{color:var(--text);} .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.chip{border:1px solid rgba(141,210,255,.22);background:rgba(141,210,255,.08);border-radius:999px;padding:3px 7px;color:var(--text);font-size:11px;}
+    #hud{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10;max-width:min(780px,calc(100vw - 24px));padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(5,8,14,.55);backdrop-filter:blur(8px);font-size:12px;color:rgba(238,247,255,.88);text-align:center;pointer-events:none;}
+    @media(max-width:700px){.row{grid-template-columns:96px 1fr 42px}.row.wide{grid-template-columns:96px 1fr}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.panel{width:calc(100vw - 20px)}#hud{left:10px;right:10px;transform:none;border-radius:16px}.title p{white-space:normal}.body{max-height:calc(100vh - 78px)}}
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="errorScreen"><h1>Mace Goblin Sandbox didn’t load</h1><p>This prototype intentionally shows a real error instead of silently falling back.</p><pre id="errorText"></pre></div>
+  <section class="panel" id="panel">
+    <header>
+      <div class="title"><h1>Mace Goblin Sandbox</h1><p>Local enemy prototype · tune first, split into modules later</p></div>
+      <button class="mini" id="collapseBtn">−</button>
+    </header>
+    <div class="body">
+      <label class="row wide"><span>Stance</span><select id="stanceSelect"></select></label>
+      <div class="meta" id="stanceMeta">Loading stance…</div>
+      <div class="grid">
+        <button class="action" id="playBtn">Pause</button>
+        <button class="action" id="stepBtn">Step Attack</button>
+        <button class="action" id="resetBtn">Reset</button>
+      </div>
+      <div class="section">Enemy Shape</div>
+      <label class="row"><span>Goblin scale</span><input id="goblinScale" type="range" min="0.55" max="1.35" step="0.01" value="0.82"><span class="readout" id="goblinScaleOut">0.82×</span></label>
+      <label class="row"><span>Mace scale</span><input id="maceScale" type="range" min="0.55" max="1.65" step="0.01" value="0.92"><span class="readout" id="maceScaleOut">0.92×</span></label>
+      <label class="row"><span>Puppet height</span><input id="puppetYOffset" type="range" min="-0.95" max="0.50" step="0.01" value="-0.42"><span class="readout" id="puppetYOffsetOut">-0.42</span></label>
+      <label class="row"><span>Distance</span><input id="distance" type="range" min="1.5" max="4.6" step="0.05" value="2.7"><span class="readout" id="distanceOut">2.7</span></label>
+      <div class="section">Attack Timing</div>
+      <label class="row"><span>Attack speed</span><input id="attackSpeed" type="range" min="0.45" max="1.9" step="0.01" value="1.0"><span class="readout" id="attackSpeedOut">1.00×</span></label>
+      <label class="row"><span>Windup tell</span><input id="windupTell" type="range" min="0.4" max="1.8" step="0.01" value="1.0"><span class="readout" id="windupTellOut">1.00×</span></label>
+      <label class="row"><span>Recovery</span><input id="recovery" type="range" min="0.45" max="1.8" step="0.01" value="1.0"><span class="readout" id="recoveryOut">1.00×</span></label>
+      <div class="section">Debug View</div>
+      <label class="row wide"><span>Hitbox</span><label><input id="showHitbox" type="checkbox" checked> show mace contact sphere</label></label>
+      <label class="row wide"><span>Trail</span><label><input id="showTrail" type="checkbox" checked> show recent mace-head path</label></label>
+      <label class="row wide"><span>Ghosts</span><label><input id="showGhosts" type="checkbox" checked> show windup/contact markers</label></label>
+      <label class="row wide"><span>Puppet rig</span><label><input id="showPuppet" type="checkbox"> show invisible weapon puppet</label></label>
+      <div class="meta" id="debugMeta">Status loading…</div>
+    </div>
+  </section>
+  <div id="hud">Loading…</div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+function showLoadError(err){
+  console.error(err);
+  $('errorText').textContent = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
+  $('errorScreen').style.display = 'block';
+}
+
+(async function boot(){
+try{
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js');
+  start(THREE);
+}catch(err){ showLoadError(err); }
+})();
+
+function start(THREE){
+  const stage = $('stage');
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x101923, 28, 62);
+  const camera = new THREE.PerspectiveCamera(36, innerWidth/innerHeight, 0.1, 120);
+  camera.position.set(5.2, 5.0, 8.2);
+  camera.lookAt(0, 1.0, .4);
+
+  const ambient = new THREE.HemisphereLight(0xb9dcff, 0x141824, 2.2); scene.add(ambient);
+  const key = new THREE.DirectionalLight(0xffffff, 3.2); key.position.set(-4.5, 8, 5); key.castShadow = true; key.shadow.mapSize.set(2048,2048); scene.add(key);
+  const warm = new THREE.PointLight(0xffd7a0, 14, 24, 1.4); warm.position.set(3,2.2,1); scene.add(warm);
+  const rim = new THREE.PointLight(0x78caff, 12, 28, 1.2); rim.position.set(-4,3,-3); scene.add(rim);
+
+  const root = new THREE.Group(); scene.add(root);
+  const floor = new THREE.Mesh(new THREE.CylinderGeometry(5.8, 5.8, .18, 9), new THREE.MeshStandardMaterial({color:0x1c2732, roughness:.9, metalness:.04, flatShading:true}));
+  floor.position.y = -.09; floor.receiveShadow = true; root.add(floor);
+  const grid = new THREE.GridHelper(11, 11, 0x6a8a9f, 0x263748); grid.position.y = .012; root.add(grid);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.55,.025,8,80), new THREE.MeshBasicMaterial({color:0x8dd2ff, transparent:true, opacity:.18})); ring.rotation.x = Math.PI/2; ring.position.y=.03; root.add(ring);
+
+  const mat = {
+    goblin: new THREE.MeshStandardMaterial({color:0x6fa45b, roughness:.84, metalness:.02, flatShading:true}),
+    goblinDark: new THREE.MeshStandardMaterial({color:0x2e3d28, roughness:.9, metalness:.02, flatShading:true}),
+    leather: new THREE.MeshStandardMaterial({color:0x3c2a1b, roughness:.86, metalness:.04, flatShading:true}),
+    cloth: new THREE.MeshStandardMaterial({color:0x695039, roughness:.92, metalness:.02, flatShading:true}),
+    bone: new THREE.MeshStandardMaterial({color:0xd4c098, roughness:.62, metalness:.04, flatShading:true}),
+    bronze: new THREE.MeshStandardMaterial({color:0x9a6f30, roughness:.36, metalness:.82, flatShading:true}),
+    silver: new THREE.MeshStandardMaterial({color:0xbfc0ba, roughness:.36, metalness:.55, flatShading:true}),
+    red: new THREE.MeshStandardMaterial({color:0xff8f72, emissive:0x7a1f12, emissiveIntensity:.15, roughness:.5, flatShading:true}),
+    blue: new THREE.MeshBasicMaterial({color:0x8dd2ff, transparent:true, opacity:.22, wireframe:true}),
+    hit: new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:.42, wireframe:true}),
+    ghostWind: new THREE.MeshBasicMaterial({color:0x9bd078, transparent:true, opacity:.20, wireframe:true}),
+    ghostHit: new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:.32, wireframe:true}),
+    flash: new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:.75, roughness:.45, flatShading:true})
+  };
+
+  function mesh(parent, geo, material, pos=[0,0,0], rot=[0,0,0], scale=[1,1,1]){
+    const m = new THREE.Mesh(geo, material);
+    m.position.set(...pos); m.rotation.set(...rot); m.scale.set(...scale);
+    m.castShadow = m.receiveShadow = true; parent.add(m); return m;
+  }
+
+  function makeMace(){
+    const g = new THREE.Group();
+    const handle = mesh(g, new THREE.CylinderGeometry(.035,.045,.94,7), mat.bronze, [0,0,.47], [Math.PI/2,0,0]);
+    const grip = mesh(g, new THREE.CylinderGeometry(.05,.055,.32,8), mat.leather, [0,0,-.08], [Math.PI/2,0,0]);
+    const head = mesh(g, new THREE.IcosahedronGeometry(.18,0), mat.silver, [0,0,1.02], [0,0,0], [1.0,1.0,1.0]);
+    for(let i=0;i<8;i++){
+      const a=i/8*Math.PI*2;
+      const spike = mesh(g, new THREE.ConeGeometry(.025,.16,5), mat.silver, [Math.cos(a)*.15, Math.sin(a)*.15, 1.02], [0,0,0]);
+      spike.lookAt(new THREE.Vector3(Math.cos(a)*.5, Math.sin(a)*.5, 1.02));
+    }
+    const top = mesh(g, new THREE.ConeGeometry(.035,.18,5), mat.silver, [0,0,1.18], [Math.PI/2,0,0]);
+    g.userData.head = head;
+    return g;
+  }
+
+  function makeGoblin(){
+    const root = new THREE.Group(); root.name='Mace Goblin';
+    const pelvis = new THREE.Group(); root.add(pelvis);
+
+    // Visible goblin: no arms, no legs. It reads as a chunky little capsule enemy
+    // with just enough goblin personality for a top-down prototype.
+    const core = mesh(pelvis, new THREE.CapsuleGeometry(.34,.74,5,10), mat.goblin, [0,.78,0], [0,0,0], [1.0,1.0,.82]);
+    const belly = mesh(pelvis, new THREE.IcosahedronGeometry(.34,1), mat.goblin, [0,.72,.10], [0,0,0], [1.04,.78,.64]);
+    const hood = mesh(pelvis, new THREE.CapsuleGeometry(.28,.32,4,8), mat.goblinDark, [0,1.18,.02], [0,0,0], [1.05,.84,.78]);
+    const face = mesh(pelvis, new THREE.IcosahedronGeometry(.24,1), mat.goblin, [0,1.16,.18], [0,0,0], [.98,.72,.56]);
+    mesh(pelvis, new THREE.ConeGeometry(.14,.36,5), mat.goblin, [-.29,1.18,.08], [0,0,.82], [1,.58,1]);
+    mesh(pelvis, new THREE.ConeGeometry(.14,.36,5), mat.goblin, [.29,1.18,.08], [0,0,-.82], [1,.58,1]);
+    mesh(pelvis, new THREE.BoxGeometry(.08,.04,.035), mat.goblinDark, [-.09,1.20,.37], [0,0,.10]);
+    mesh(pelvis, new THREE.BoxGeometry(.08,.04,.035), mat.goblinDark, [.09,1.20,.37], [0,0,-.10]);
+    mesh(pelvis, new THREE.BoxGeometry(.18,.055,.045), mat.goblinDark, [0,1.08,.37]);
+    mesh(pelvis, new THREE.BoxGeometry(.64,.16,.36), mat.cloth, [0,.58,.02]);
+    mesh(pelvis, new THREE.CylinderGeometry(.34,.40,.16,8), mat.leather, [0,.13,0], [0,Math.PI/8,0], [1,.55,.82]);
+    mesh(pelvis, new THREE.CylinderGeometry(.05,.05,.06,8), mat.bone, [-.18,1.02,.39], [Math.PI/2,0,0]);
+    mesh(pelvis, new THREE.CylinderGeometry(.05,.05,.06,8), mat.bone, [.18,1.02,.39], [Math.PI/2,0,0]);
+
+    // Invisible puppet rig: this is the weapon animation driver. It can be lowered
+    // independently to line the mace swing up with the shorter goblin body.
+    const puppetRoot = new THREE.Group(); puppetRoot.name='Invisible weapon puppet'; pelvis.add(puppetRoot);
+    const macePivot = new THREE.Group(); puppetRoot.add(macePivot);
+    const mace = makeMace(); macePivot.add(mace);
+
+    const puppetDebug = new THREE.Group(); puppetDebug.name='Puppet debug'; puppetRoot.add(puppetDebug);
+    const dbgMat = new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:.24, wireframe:true, depthWrite:false});
+    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(.08,10,6), dbgMat); shoulder.position.set(.38,1.05,.12); puppetDebug.add(shoulder);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(.065,10,6), dbgMat); elbow.position.set(.36,.80,.27); puppetDebug.add(elbow);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(.075,10,6), dbgMat); puppetDebug.add(hand);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9),3));
+    const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({color:0xffd27a, transparent:true, opacity:.45, depthWrite:false}));
+    puppetDebug.add(line);
+    puppetDebug.visible = false;
+
+    root.userData = {pelvis, core, belly, hood, face, puppetRoot, puppetDebug, puppetLine:line, puppetHand:hand, macePivot, mace};
+    return root;
+  }
+
+  function makeTrainingDummy(){
+    const d = new THREE.Group(); d.name='Target Dummy';
+    mesh(d, new THREE.CylinderGeometry(.30,.42,.18,8), mat.leather, [0,.09,0]);
+    mesh(d, new THREE.CylinderGeometry(.08,.10,1.0,7), mat.cloth, [0,.58,0]);
+    const body = mesh(d, new THREE.BoxGeometry(.52,.70,.28), mat.cloth, [0,.82,0], [0,.08,0]);
+    const head = mesh(d, new THREE.IcosahedronGeometry(.20,0), mat.cloth, [0,1.32,0], [0,0,0], [1,1.12,.86]);
+    mesh(d, new THREE.CylinderGeometry(.045,.06,.86,7), mat.cloth, [0,.92,0], [0,0,Math.PI/2]);
+    const barBg = mesh(d, new THREE.BoxGeometry(.72,.06,.03), new THREE.MeshBasicMaterial({color:0x101722, transparent:true, opacity:.85}), [0,1.76,0]);
+    const bar = mesh(d, new THREE.BoxGeometry(.68,.045,.035), new THREE.MeshBasicMaterial({color:0x8dd2ff, transparent:true, opacity:.95}), [0,1.76,.012]);
+    d.userData = {body, head, bar, hp:100, maxHp:100, flash:0, knock:0};
+    return d;
+  }
+
+  const goblin = makeGoblin(); root.add(goblin);
+  const dummy = makeTrainingDummy(); root.add(dummy);
+  const hitSphere = new THREE.Mesh(new THREE.SphereGeometry(.24,16,10), mat.hit); scene.add(hitSphere);
+  const windGhost = new THREE.Mesh(new THREE.SphereGeometry(.16,12,8), mat.ghostWind); scene.add(windGhost);
+  const contactGhost = new THREE.Mesh(new THREE.SphereGeometry(.20,12,8), mat.ghostHit); scene.add(contactGhost);
+
+  const trailN = 34;
+  const trailPositions = new Float32Array(trailN*3);
+  const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions,3));
+  const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({color:0xbfe6ff, transparent:true, opacity:.72})); scene.add(trail);
+  const trailHistory = [];
+
+  const STANCES = [
+    {id:'S02', name:'S02 Bell Ringer', note:'Best default goblin: waist swing → hammer tap → skyhook finisher.', chain:['horizontal6','vertical10','vertical15']},
+    {id:'S01', name:'S01 Hammerfall Guard', note:'Simpler blunt chain: fast tap → snap chop → rising launch.', chain:['vertical10','vertical5','vertical9']},
+    {id:'S05', name:'S05 Grave Mallet', note:'Meaner little goblin: low sweep → snap chop → uppercut.', chain:['horizontal3','vertical5','vertical15']}
+  ];
+  const ATTACKS = {
+    horizontal6:{label:'Compact Waist Cut', kind:'waist', group:'horizontal', wind:.32, hit:.13, rec:.34, radius:.30, damage:8},
+    vertical10:{label:'Snap Chop — Hammer Tap', kind:'tap', group:'vertical', wind:.30, hit:.11, rec:.30, radius:.28, damage:9},
+    vertical15:{label:'Skyhook Uppercut', kind:'upper', group:'vertical', wind:.46, hit:.15, rec:.48, radius:.32, damage:14},
+    vertical5:{label:'Snap Chop', kind:'snap', group:'vertical', wind:.26, hit:.10, rec:.28, radius:.27, damage:8},
+    vertical9:{label:'Rising Splitter — Deep Launch', kind:'launch', group:'vertical', wind:.42, hit:.16, rec:.46, radius:.31, damage:12},
+    horizontal3:{label:'Low Sweep', kind:'lowSweep', group:'horizontal', wind:.36, hit:.14, rec:.38, radius:.30, damage:9}
+  };
+
+  const ui = {
+    stanceSelect:$('stanceSelect'), stanceMeta:$('stanceMeta'), debugMeta:$('debugMeta'), hud:$('hud'),
+    play:$('playBtn'), step:$('stepBtn'), reset:$('resetBtn'),
+    goblinScale:$('goblinScale'), maceScale:$('maceScale'), puppetYOffset:$('puppetYOffset'), distance:$('distance'), attackSpeed:$('attackSpeed'), windupTell:$('windupTell'), recovery:$('recovery'),
+    showHitbox:$('showHitbox'), showTrail:$('showTrail'), showGhosts:$('showGhosts'), showPuppet:$('showPuppet')
+  };
+  for(const st of STANCES){ const opt=document.createElement('option'); opt.value=st.id; opt.textContent=`${st.name} — ${st.chain.join(' / ')}`; ui.stanceSelect.appendChild(opt); }
+  let state = { stance:STANCES[0], attackIndex:0, t:0, paused:false, forcedStep:false, lastHitAttack:-1, hitCount:0, totalDamage:0, time:0 };
+
+  function val(id){ return Number($(id).value); }
+  function out(id, txt){ $(id+'Out').textContent = txt; }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+  function easeInCubic(t){ return t*t*t; }
+  function easeInOut(t){ return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2; }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function angleLerp(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
+
+  function attackDuration(att){ return att.wind*val('windupTell') + att.hit + att.rec*val('recovery') + .32; }
+  function currentAttack(){ return ATTACKS[state.stance.chain[state.attackIndex % state.stance.chain.length]]; }
+  function attackPhase(att, t){
+    const wind = att.wind*val('windupTell'), hit=att.hit, rec=att.rec*val('recovery');
+    if(t<wind) return {phase:'windup', u:t/Math.max(.001,wind)};
+    if(t<wind+hit) return {phase:'hit', u:(t-wind)/Math.max(.001,hit)};
+    if(t<wind+hit+rec) return {phase:'recover', u:(t-wind-hit)/Math.max(.001,rec)};
+    return {phase:'pause', u:(t-wind-hit-rec)/.32};
+  }
+
+  const poseTmp = {pos:new THREE.Vector3(), rot:new THREE.Euler()};
+  function getPoseFor(att, phase, u, out=poseTmp){
+    let p0, p1, e;
+    const set = (x,y,z,rx,ry,rz)=>({x,y,z,rx,ry,rz});
+    const idle = set(.12,.88,.26,.05,.06,-.16);
+    if(att.kind==='waist'){
+      p0=set(.45,.82,-.28,.08,1.45,-.22); p1=set(-.38,.84,.42,.04,-1.12,.18);
+      if(phase==='windup'){ e=easeOutCubic(u); p1=p0; p0=idle; }
+      else if(phase==='hit'){ e=easeInOut(u); }
+      else if(phase==='recover'){ e=easeOutCubic(u); p0=p1; p1=idle; }
+      else { e=1; p0=idle; p1=idle; }
+    } else if(att.kind==='lowSweep'){
+      p0=set(.50,.55,-.18,.22,1.52,-.18); p1=set(-.45,.60,.45,.18,-1.18,.12);
+      if(phase==='windup'){ e=easeOutCubic(u); p1=p0; p0=idle; }
+      else if(phase==='hit'){ e=easeInOut(u); }
+      else if(phase==='recover'){ e=easeOutCubic(u); p0=p1; p1=idle; }
+      else { e=1; p0=idle; p1=idle; }
+    } else if(att.kind==='tap' || att.kind==='snap'){
+      p0=set(.30,1.42,-.18,-.92,.22,-.08); p1=set(.04,.78,.58,.78,.02,.02);
+      if(phase==='windup'){ e=easeOutCubic(u); p1=p0; p0=idle; }
+      else if(phase==='hit'){ e=easeInCubic(u); }
+      else if(phase==='recover'){ e=easeOutCubic(u); p0=p1; p1=idle; }
+      else { e=1; p0=idle; p1=idle; }
+    } else if(att.kind==='upper' || att.kind==='launch'){
+      p0=set(.34,.48,.10,1.05,.10,.08); p1=set(.04,1.30,.66,-.70,-.05,.04);
+      if(phase==='windup'){ e=easeOutCubic(u); p1=p0; p0=idle; }
+      else if(phase==='hit'){ e=easeInOut(u); }
+      else if(phase==='recover'){ e=easeOutCubic(u); p0=p1; p1=idle; }
+      else { e=1; p0=idle; p1=idle; }
+    } else {
+      p0=idle; p1=idle; e=1;
+    }
+    out.pos.set(lerp(p0.x,p1.x,e), lerp(p0.y,p1.y,e), lerp(p0.z,p1.z,e));
+    out.rot.set(lerp(p0.rx,p1.rx,e), angleLerp(p0.ry,p1.ry,e), lerp(p0.rz,p1.rz,e));
+    return out;
+  }
+
+  function setMacePose(pose){
+    const u = goblin.userData;
+    u.macePivot.position.copy(pose.pos);
+    u.macePivot.rotation.copy(pose.rot);
+    if(u.puppetHand) u.puppetHand.position.copy(pose.pos);
+    if(u.puppetLine){
+      const arr = u.puppetLine.geometry.attributes.position.array;
+      arr[0]=.38; arr[1]=1.05; arr[2]=.12;
+      arr[3]=.36; arr[4]=.80; arr[5]=.27;
+      arr[6]=pose.pos.x; arr[7]=pose.pos.y; arr[8]=pose.pos.z;
+      u.puppetLine.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  function maceHeadWorld(){
+    const head = goblin.userData.mace.userData.head;
+    return head.localToWorld(new THREE.Vector3());
+  }
+  function setGhosts(att){
+    const wind = getPoseFor(att,'windup',1,{pos:new THREE.Vector3(), rot:new THREE.Euler()});
+    const hit = getPoseFor(att,'hit',.55,{pos:new THREE.Vector3(), rot:new THREE.Euler()});
+    const oldPos = goblin.userData.macePivot.position.clone();
+    const oldRot = goblin.userData.macePivot.rotation.clone();
+    setMacePose(wind); windGhost.position.copy(maceHeadWorld());
+    setMacePose(hit); contactGhost.position.copy(maceHeadWorld());
+    goblin.userData.macePivot.position.copy(oldPos); goblin.userData.macePivot.rotation.copy(oldRot);
+  }
+
+  function damageDummy(amount, knock){
+    const d = dummy.userData;
+    d.hp = Math.max(0, d.hp - amount); d.flash = .16; d.knock = Math.min(.35, d.knock + knock);
+    d.bar.scale.x = Math.max(.01, d.hp/d.maxHp);
+    d.bar.position.x = -(1-d.hp/d.maxHp)*.34;
+    d.bar.material.color.setHex(d.hp>55?0x8dd2ff:(d.hp>25?0xffd27a:0xff8f72));
+    if(d.hp<=0){ setTimeout(()=>{ d.hp=d.maxHp; d.bar.scale.x=1; d.bar.position.x=0; d.bar.material.color.setHex(0x8dd2ff); state.hitCount=0; state.totalDamage=0; }, 520); }
+  }
+
+  function updateUIReadouts(){
+    out('goblinScale', val('goblinScale').toFixed(2)+'×'); out('maceScale', val('maceScale').toFixed(2)+'×'); out('puppetYOffset', val('puppetYOffset').toFixed(2)); out('distance', val('distance').toFixed(1));
+    out('attackSpeed', val('attackSpeed').toFixed(2)+'×'); out('windupTell', val('windupTell').toFixed(2)+'×'); out('recovery', val('recovery').toFixed(2)+'×');
+    const chips = state.stance.chain.map((k,i)=>`<span class="chip">${i+1}. ${ATTACKS[k]?.label || k}</span>`).join('');
+    ui.stanceMeta.innerHTML = `<strong>${state.stance.name}</strong><br>${state.stance.note}<div class="chips">${chips}</div>`;
+  }
+
+  function resetSandbox(){
+    state.t=0; state.attackIndex=0; state.lastHitAttack=-1; state.hitCount=0; state.totalDamage=0;
+    dummy.userData.hp=100; dummy.userData.bar.scale.x=1; dummy.userData.bar.position.x=0; dummy.userData.bar.material.color.setHex(0x8dd2ff);
+    trailHistory.length=0;
+  }
+
+  ui.stanceSelect.addEventListener('change',()=>{ state.stance = STANCES.find(s=>s.id===ui.stanceSelect.value) || STANCES[0]; resetSandbox(); updateUIReadouts(); });
+  ui.play.addEventListener('click',()=>{ state.paused=!state.paused; ui.play.textContent = state.paused ? 'Play' : 'Pause'; ui.play.classList.toggle('active', state.paused); });
+  ui.step.addEventListener('click',()=>{ state.attackIndex=(state.attackIndex+1)%state.stance.chain.length; state.t=0; state.lastHitAttack=-1; });
+  ui.reset.addEventListener('click',resetSandbox);
+  $('collapseBtn').addEventListener('click',()=>{ $('panel').classList.toggle('collapsed'); $('collapseBtn').textContent = $('panel').classList.contains('collapsed') ? '+' : '−'; });
+  document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input', updateUIReadouts));
+  updateUIReadouts();
+
+  let last = performance.now();
+  const tmp = new THREE.Vector3();
+  function animate(now){
+    requestAnimationFrame(animate);
+    const dt = Math.min(.05, (now-last)/1000); last=now; state.time += dt;
+    updateUIReadouts();
+    const dist = val('distance');
+    goblin.position.set(0,0,-dist/2); dummy.position.set(0,0,dist/2);
+    goblin.lookAt(dummy.position.x, .8, dummy.position.z);
+    dummy.lookAt(camera.position.x, dummy.position.y, camera.position.z);
+    goblin.scale.setScalar(val('goblinScale'));
+    goblin.userData.puppetRoot.position.y = val('puppetYOffset');
+    goblin.userData.puppetDebug.visible = ui.showPuppet.checked;
+    goblin.userData.mace.scale.setScalar(val('maceScale'));
+
+    const att = currentAttack();
+    const dur = attackDuration(att);
+    if(!state.paused){ state.t += dt*val('attackSpeed'); }
+    if(state.t >= dur){ state.t -= dur; state.attackIndex = (state.attackIndex+1)%state.stance.chain.length; state.lastHitAttack=-1; }
+    const phase = attackPhase(att, state.t);
+    const pose = getPoseFor(att, phase.phase, phase.u);
+    setMacePose(pose);
+
+    const breathing = Math.sin(state.time*5.5)*.018;
+    const attacking = phase.phase==='hit' ? 1 : 0;
+    goblin.userData.pelvis.position.y = breathing - (phase.phase==='windup' ? .04*phase.u : 0) + (att.kind==='upper' && phase.phase==='hit' ? .10*phase.u : 0);
+    goblin.userData.pelvis.rotation.z = Math.sin(state.time*3)*.025 + pose.pos.x*.045;
+    goblin.userData.pelvis.rotation.x = phase.phase==='windup' ? -.08*phase.u : (phase.phase==='hit' ? .06 : 0);
+
+    const headPos = maceHeadWorld();
+    hitSphere.position.copy(headPos); hitSphere.scale.setScalar(att.radius/.24);
+    hitSphere.visible = ui.showHitbox.checked && phase.phase==='hit';
+    setGhosts(att); windGhost.visible = contactGhost.visible = ui.showGhosts.checked;
+    trail.visible = ui.showTrail.checked;
+    trailHistory.unshift(headPos.clone());
+    while(trailHistory.length>trailN) trailHistory.pop();
+    for(let i=0;i<trailN;i++){
+      const p = trailHistory[i] || headPos;
+      trailPositions[i*3]=p.x; trailPositions[i*3+1]=p.y; trailPositions[i*3+2]=p.z;
+    }
+    trail.geometry.attributes.position.needsUpdate = true;
+
+    const dummyTarget = dummy.localToWorld(tmp.set(0,.85,0));
+    const hitDist = headPos.distanceTo(dummyTarget);
+    const attackSerial = state.attackIndex + Math.floor(state.time*0); // per active slot; reset uses lastHitAttack
+    if(phase.phase==='hit' && state.lastHitAttack !== state.attackIndex && hitDist < att.radius + .44){
+      state.lastHitAttack = state.attackIndex;
+      state.hitCount++; state.totalDamage += att.damage;
+      damageDummy(att.damage, .12 + att.damage*.006);
+    }
+    if(phase.phase!=='hit' && state.lastHitAttack===state.attackIndex && phase.phase==='pause') state.lastHitAttack=-1;
+    dummy.userData.flash = Math.max(0, dummy.userData.flash - dt);
+    dummy.userData.body.material = dummy.userData.flash>0 ? mat.flash : mat.cloth;
+    dummy.userData.head.material = dummy.userData.flash>0 ? mat.flash : mat.cloth;
+    dummy.userData.knock *= Math.pow(.05, dt);
+    dummy.position.z += dummy.userData.knock;
+
+    const phaseLabel = phase.phase==='windup'?'tell / windup':phase.phase==='hit'?'CONTACT':phase.phase==='recover'?'recovery':'reset beat';
+    ui.debugMeta.innerHTML = `Current: <strong>${att.label}</strong> · ${phaseLabel}<br>Hits: <strong>${state.hitCount}</strong> · Damage: <strong>${state.totalDamage}</strong> · Dummy HP: <strong>${Math.ceil(dummy.userData.hp)}/100</strong> · Puppet Y: <strong>${val('puppetYOffset').toFixed(2)}</strong>`;
+    ui.hud.textContent = `${state.stance.name} · ${att.label} · ${phaseLabel} · mace-head distance ${hitDist.toFixed(2)}`;
+
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+}
+</script>
+</body>
+</html>
