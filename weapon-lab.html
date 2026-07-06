@@ -116,6 +116,7 @@
     body[data-launch-mode="combat"] .combat-chrome{display:block}
     .combat-chrome{position:fixed;left:max(12px, env(safe-area-inset-left));right:max(12px, env(safe-area-inset-right));top:max(12px, env(safe-area-inset-top));z-index:80;pointer-events:none}
     .combat-chrome-bar{display:flex;gap:8px;align-items:center;pointer-events:auto}
+    .combat-runtime-text{padding:8px 11px;border-radius:14px;background:rgba(6,10,17,.58);border:1px solid rgba(255,255,255,.10);color:#eef6ff;font-size:12px;font-weight:850;line-height:1.25;backdrop-filter:blur(10px)}
     .combat-menu{display:none;position:fixed;left:max(12px, env(safe-area-inset-left));right:max(12px, env(safe-area-inset-right));top:max(62px, calc(env(safe-area-inset-top) + 62px));z-index:120;max-width:430px;max-height:min(70vh, calc(100vh - 92px));overflow:auto;padding:14px;border:1px solid rgba(171,208,255,.22);border-radius:18px;background:linear-gradient(180deg, rgba(16,24,38,.96), rgba(8,12,21,.90));box-shadow:0 18px 60px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(12px);pointer-events:auto}
     .combat-menu.open{display:grid;gap:12px}
     .combat-menu h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.combat-menu p{margin:0;color:var(--muted);font-size:12px;line-height:1.35}
@@ -365,19 +366,20 @@
   <div class="combat-chrome-bar">
     <button class="mini" id="combatMenuBtn" type="button" aria-controls="combatMenu" aria-expanded="false">☰</button>
     <button class="mini" id="combatFullscreenBtn" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">⛶</button>
+    <div class="combat-runtime-text" id="combatRuntimeText">Encounter: One Attacker · Stance: —</div>
   </div>
   <div class="combat-menu" id="combatMenu" role="dialog" aria-label="Combat options">
     <h2>Stone Wanderer Combat</h2>
     <p>Left stick or virtual joystick moves. □ attacks, △ stance, ○ weapon.</p>
     <label class="row">
       <span>Warden speed</span>
-      <input id="combatMoveSpeed" type="range" min="1.5" max="18" step="0.1" value="5.0" />
-      <span class="readout" id="combatMoveSpeedReadout">5.0</span>
+      <input id="combatMoveSpeed" type="range" min="1.5" max="18" step="0.1" value="10.0" />
+      <span class="readout" id="combatMoveSpeedReadout">10.0</span>
     </label>
     <label class="row">
       <span>Enemy height</span>
-      <input id="enemyHeightScale" type="range" min="0.5" max="4" step="0.05" value="1" />
-      <span class="readout" id="enemyHeightScaleReadout">1.0×</span>
+      <input id="enemyHeightScale" type="range" min="0.5" max="4" step="0.05" value="2" />
+      <span class="readout" id="enemyHeightScaleReadout">2.0×</span>
     </label>
     <label class="row">
       <span>Enemy speed</span>
@@ -396,6 +398,16 @@
     <label class="row">
       <span>Cycle on clear</span>
       <input id="combatCycleDirector" type="checkbox" checked />
+    </label>
+    <label class="row">
+      <span>Wave enemies</span>
+      <input id="combatWaveSize" type="range" min="1" max="20" step="1" value="6" />
+      <span class="readout" id="combatWaveSizeReadout">6</span>
+    </label>
+    <label class="row">
+      <span>Idle range</span>
+      <input id="combatIdleRange" type="range" min="1" max="6" step="0.1" value="4.5" />
+      <span class="readout" id="combatIdleRangeReadout">4.5×</span>
     </label>
   </div>
 </div>
@@ -1980,7 +1992,11 @@ function updateMainStatusLine(){
   const st=labState.currentStance; const tr=labState.currentTrial;
   const stance=st ? ` · Stance: ${st.name} ${ratingGlyph(tr?.rating||'')}` : '';
   const director = enemySystem?.director?.getDebugState?.();
-  const enemy = director ? ` · Director: ${director.mode} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget}` : '';
+  const encounterLabel = director ? (DIRECTOR_MODES.find(m => m.id === director.mode)?.label || director.mode) : '—';
+  const stanceName = st?.name || '—';
+  const runtime=document.getElementById('combatRuntimeText');
+  if(runtime) runtime.textContent=`Encounter: ${encounterLabel} · Stance: ${stanceName}`;
+  const enemy = director ? ` · Director: ${director.mode} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
   const hp = enemySystem ? ` · HP ${Math.ceil(enemySystem.playerHp)}/100${enemySystem.lastPlayerHit ? ' · '+enemySystem.lastPlayerHit : ''}` : '';
   el.textContent=`□ Attack · △ Stance · ○ Random · ✕ Weapon · Aim: ${aimState.source || 'Idle'} · Last: ${swing}${stance}${damage}${enemy}${hp}${gp}`;
 }
@@ -2025,8 +2041,8 @@ function pollGamepads(){
     break;
   }
 }
-window.addEventListener('gamepadconnected',e=>{aimState.connected=true; aimState.gamepadName=e.gamepad?.id||'controller'; updateMainStatusLine();});
-window.addEventListener('gamepaddisconnected',()=>{aimState.connected=false; updateMainStatusLine();});
+window.addEventListener('gamepadconnected',e=>{aimState.connected=true; aimState.gamepadName=e.gamepad?.id||'controller'; document.body.classList.add('gamepad-active'); updateMainStatusLine();});
+window.addEventListener('gamepaddisconnected',()=>{aimState.connected=false; document.body.classList.remove('gamepad-active'); updateMainStatusLine();});
 
 const keyState = { up:false, down:false, left:false, right:false };
 function setDir(dir, on) { if(LabAPI.moveTest?.dpadY?.(dir, on)){ keyState[dir]=false; updatePadVisuals(); return; } keyState[dir] = on; updatePadVisuals(); }
@@ -2090,18 +2106,21 @@ function bindCombatChrome(){
     const savedOpen=StoneSettings.get('combat.menuOpen', false); menu.classList.toggle('open', savedOpen); menuBtn.setAttribute('aria-expanded', String(savedOpen)); menuBtn.addEventListener('click',()=>{ const open=!menu.classList.contains('open'); menu.classList.toggle('open',open); menuBtn.setAttribute('aria-expanded', String(open)); StoneSettings.set('combat.menuOpen', open); });
   }
   if(full) full.addEventListener('click',toggleFullscreen);
-  const playerSpeed=StoneSettings.applyValue('combatMoveSpeed','combat.playerSpeed',StoneSettings.get('lab.moveSpeed','5.0')), playerSpeedOut=document.getElementById('combatMoveSpeedReadout');
-  const height=StoneSettings.applyValue('enemyHeightScale','combat.enemyHeight','1'), heightOut=document.getElementById('enemyHeightScaleReadout');
+  const playerSpeed=StoneSettings.applyValue('combatMoveSpeed','combat.playerSpeed','10.0'), playerSpeedOut=document.getElementById('combatMoveSpeedReadout');
+  const height=StoneSettings.applyValue('enemyHeightScale','combat.enemyHeight','2'), heightOut=document.getElementById('enemyHeightScaleReadout');
   const speedCtl=StoneSettings.applyValue('enemySpeedScale','combat.enemySpeed','1'), speedOut=document.getElementById('enemySpeedScaleReadout');
   const directorMode=document.getElementById('combatDirectorMode'), pressureCtl=StoneSettings.applyValue('combatPressureBudget','combat.pressureBudget','1.75'), pressureOut=document.getElementById('combatPressureBudgetReadout'), cycleCtl=document.getElementById('combatCycleDirector');
+  const waveSizeCtl=StoneSettings.applyValue('combatWaveSize','combat.waveSize','6'), waveSizeOut=document.getElementById('combatWaveSizeReadout'), idleRangeCtl=StoneSettings.applyValue('combatIdleRange','combat.idleRange','4.5'), idleRangeOut=document.getElementById('combatIdleRangeReadout');
   const syncPlayerSpeed=()=>{ const v=clamp(Number(playerSpeed?.value || speed), 1.5, 18); speed=v; if(playerSpeedOut) playerSpeedOut.textContent=v.toFixed(1); StoneSettings.set('combat.playerSpeed', playerSpeed?.value || String(v)); const labSpeed=document.getElementById('moveSpeed'); if(labSpeed) labSpeed.value=String(v); const labOut=document.getElementById('moveSpeedReadout'); if(labOut) labOut.textContent=v.toFixed(1); };
   const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); StoneSettings.set('combat.enemyHeight', height?.value || String(v)); };
   const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); StoneSettings.set('combat.enemySpeed', speedCtl?.value || String(v)); };
   if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','oneAttacker'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
   const syncPressure=()=>{ const v=clamp(Number(pressureCtl?.value || 1.75), .5, 4); if(pressureOut) pressureOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.00$/,''); enemySystem?.setPressureBudget(v); StoneSettings.set('combat.pressureBudget', pressureCtl?.value || String(v)); };
+  const syncWaveSize=()=>{ const v=clamp(Math.round(Number(waveSizeCtl?.value || 6)), 1, 20); if(waveSizeOut) waveSizeOut.textContent=String(v); enemySystem?.setWaveSize(v); StoneSettings.set('combat.waveSize', waveSizeCtl?.value || String(v)); };
+  const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 4.5), 1, 6); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(1)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
   if(cycleCtl){ cycleCtl.checked=StoneSettings.get('combat.cycleDirector', true) !== 'false'; cycleCtl.addEventListener('change',e=>{ enemySystem?.setCycleOnWaveClear(e.target.checked); StoneSettings.set('combat.cycleDirector', e.target.checked); }); }
-  playerSpeed?.addEventListener('input',syncPlayerSpeed); height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed); pressureCtl?.addEventListener('input',syncPressure);
-  syncPlayerSpeed(); syncHeight(); syncSpeed(); syncPressure(); if(directorMode) enemySystem?.setDirectorMode(directorMode.value); if(cycleCtl) enemySystem?.setCycleOnWaveClear(cycleCtl.checked);
+  playerSpeed?.addEventListener('input',syncPlayerSpeed); height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed); pressureCtl?.addEventListener('input',syncPressure); waveSizeCtl?.addEventListener('input',syncWaveSize); idleRangeCtl?.addEventListener('input',syncIdleRange);
+  syncPlayerSpeed(); syncHeight(); syncSpeed(); syncPressure(); syncWaveSize(); syncIdleRange(); if(directorMode) enemySystem?.setDirectorMode(directorMode.value); if(cycleCtl) enemySystem?.setCycleOnWaveClear(cycleCtl.checked);
 }
 bindCombatChrome();
 
