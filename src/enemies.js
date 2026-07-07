@@ -57,7 +57,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let spawnedThisWave = 0;
   let spawnTimer = 2.0;
   let nextId = 1;
-  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5 };
+  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 1.15 };
 
   const tmp = new THREE.Vector3();
   const weaponUp = new THREE.Vector3(0, 1, 0);
@@ -328,7 +328,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function setPressureBudget(value){ director.settings.pressureBudget = clamp(Number(value) || 1.75, .5, 4); }
   function setCycleOnWaveClear(value){ director.settings.cycleOnWaveClear = !!value; }
   function setWaveSize(value){ tuning.waveSize = clamp(Math.round(Number(value) || 6), 1, 20); }
-  function setIdleRangeScale(value){ tuning.idleRangeScale = clamp(Number(value) || 4.5, 1, 6); director.settings.battleCircleRadius = 4.5 * tuning.idleRangeScale; director.getDebugState().slots.forEach(slot => { slot.radius = director.settings.battleCircleRadius; }); }
+  function setIdleRangeScale(value){ tuning.idleRangeScale = clamp(Number(value) || 1.15, .75, 3); }
 
   return { enemies, group, director, spawn, reset, update, damageEnemy, setGoblinColors, setGoblinRigDebug, setSpawnGoblins, setHeightScale, setSpeedScale, setDirectorMode, setPressureBudget, setCycleOnWaveClear, setWaveSize, setIdleRangeScale, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get waveSize(){ return tuning.waveSize; }, get idleRangeScale(){ return tuning.idleRangeScale; }, get wave(){ return wave; }, get waveKills(){ return waveKills; }, get kills(){ return kills; }, get playerHp(){ return tuning.playerHp; }, get lastPlayerHit(){ return tuning.lastPlayerHit; } };
 }
