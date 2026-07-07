@@ -214,6 +214,16 @@
       <span>Weapon</span>
       <select id="combatWeaponSelect" aria-label="Combat weapon"></select>
     </label>
+    <label class="row short">
+      <span>Weapon hitbox</span>
+      <select id="weaponHitboxScale" aria-label="Weapon hitbox size">
+        <option value="1">1× normal</option>
+        <option value="2">2× bigger</option>
+        <option value="3">3× bigger</option>
+        <option value="4">4× bigger</option>
+        <option value="5">5× bigger</option>
+      </select>
+    </label>
     <label class="row">
       <span>Puppet size</span>
       <input id="combatScale" type="range" min="0.5" max="5" step="0.1" value="4.0" />
@@ -405,9 +415,9 @@
       <span class="readout" id="combatWaveSizeReadout">6</span>
     </label>
     <label class="row">
-      <span>Idle range</span>
-      <input id="combatIdleRange" type="range" min="1" max="6" step="0.1" value="4.5" />
-      <span class="readout" id="combatIdleRangeReadout">4.5×</span>
+      <span>Enemy spacing</span>
+      <input id="combatIdleRange" type="range" min="0.75" max="1.75" step="0.05" value="1" />
+      <span class="readout" id="combatIdleRangeReadout">1.00×</span>
     </label>
   </div>
 </div>
@@ -1194,6 +1204,16 @@ function attackDisplayLabel(key){
   return att ? `${att.label} — ${attackIndexLabel(key)}` : key;
 }
 const AUTHORED_STANCES = STANCE_CARDS;
+function authoredStancePoolForWeapon(weaponId = combatState.weapon){
+  const matching = AUTHORED_STANCES.filter(st => Array.isArray(st.preferredWeapons) && st.preferredWeapons.includes(weaponId));
+  return matching.length ? { stances: matching, fallback:false } : { stances: AUTHORED_STANCES, fallback:true };
+}
+function currentAuthoredPool(){ return authoredStancePoolForWeapon(combatState.weapon); }
+function stanceValidForWeapon(stance, weaponId = combatState.weapon){
+  if(!stance || stance.source === 'random') return true;
+  const pool = authoredStancePoolForWeapon(weaponId);
+  return pool.fallback || pool.stances.some(st => st.id === stance.id);
+}
 const labState = {
   sessionId:'S-'+Date.now().toString(36), authoredIndex:0, randomCounter:0,
   currentStance:null, source:'authored', comboIndex:0, comboWindow:.82, comboDeadline:0,
@@ -1219,18 +1239,29 @@ function setCurrentStance(stance,reason='select'){
   labState.currentStance={...stance,chain:[...stance.chain]}; labState.source=stance.source||labState.source; labState.comboIndex=0; labState.comboDeadline=0; labState.activeEvent=null; makeTrial(labState.currentStance,reason); updateLabUI(); updateMainStatusLine();
 }
 function selectAuthoredStance(index=0){
-  labState.authoredIndex=((index%AUTHORED_STANCES.length)+AUTHORED_STANCES.length)%AUTHORED_STANCES.length;
-  const st={...AUTHORED_STANCES[labState.authoredIndex], source:'authored'}; setCurrentStance(st,'authored');
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  labState.authoredIndex=((index%pool.length)+pool.length)%pool.length;
+  const st={...pool[labState.authoredIndex], source:'authored'}; setCurrentStance(st,'authored');
 }
 function nextAuthoredStance(){selectAuthoredStance(labState.authoredIndex+1);}
 function randomStance(){
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  const stance = pool[Math.floor(Math.random()*pool.length)] || AUTHORED_STANCES[0];
   labState.randomCounter++;
-  const chain=[0,1,2].map(()=>EXACT_ATTACK_POOL[Math.floor(Math.random()*EXACT_ATTACK_POOL.length)]);
-  setCurrentStance({id:'R'+String(labState.randomCounter).padStart(4,'0'), name:'Random '+String(labState.randomCounter).padStart(4,'0'), source:'random', chain},'random');
+  setCurrentStance({...stance, id:'R'+String(labState.randomCounter).padStart(4,'0')+'-'+stance.id, name:'Random '+stance.name, source:'random', chain:[...stance.chain]},'random');
+}
+function ensureStanceMatchesWeapon(reason='weapon'){
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  if(!stanceValidForWeapon(labState.currentStance, combatState.weapon)){ labState.authoredIndex = 0; setCurrentStance({...pool[0], source:'authored'}, reason); return true; }
+  const idx = pool.findIndex(st => st.id === labState.currentStance?.id); if(idx >= 0) labState.authoredIndex = idx;
+  return false;
 }
 function nextWeaponForLab(){
   const idx=WEAPON_ORDER.indexOf(combatState.weapon); const next=WEAPON_ORDER[(idx+1+WEAPON_ORDER.length)%WEAPON_ORDER.length];
-  selectCombatWeapon(next); makeTrial(labState.currentStance || {...AUTHORED_STANCES[0],source:'authored'}, 'weapon'); updateLabUI(); updateMainStatusLine();
+  const beforeTrialSeq = labState.trialSeq;
+  selectCombatWeapon(next);
+  if(labState.trialSeq === beforeTrialSeq) makeTrial(labState.currentStance || {...currentAuthoredPool().stances[0],source:'authored'}, 'weapon');
+  updateLabUI(); updateMainStatusLine();
 }
 function setLabRating(value){
   if(!labState.currentTrial) return;
@@ -1249,7 +1280,8 @@ function updateLabUI(){
   summarizeTrial(tr);
   const chain=st.chain.map((key,i)=>`<span class="lab-chip">${i+1}. ${attackDisplayLabel(key)}</span>`).join('');
   const nextKey=st.chain[labState.comboIndex%3]; const deadline=labState.comboDeadline ? Math.max(0,labState.comboDeadline-performance.now()/1000) : 0;
-  el.innerHTML=`<strong>${st.name}</strong> <span class="rating-badge">${ratingGlyph(tr.rating)}</span><br>${st.source} · Weapon: <strong>${currentWeapon().label}</strong> · Next: <strong>${attackDisplayLabel(nextKey)}</strong>${deadline?` · Chain window ${deadline.toFixed(1)}s`:''}<div class="lab-chain">${chain}</div><div style="margin-top:6px">Trial ${tr.trialId}: ${tr.attempts||0} attacks · ${tr.hitCount||0} hits · ${tr.whiffCount||0} whiffs · ${tr.totalDamage||0} dmg · ${tr.kills||0} kills · saved rows ${labState.trials.length}</div>`;
+  const poolInfo=currentAuthoredPool(); const weaponFilter=poolInfo.fallback ? `Weapon: ${currentWeapon().label} · No matching stances, showing all` : `Weapon: ${currentWeapon().label} · Stances: ${poolInfo.stances.length} matching`;
+  el.innerHTML=`<strong>${st.name}</strong> <span class="rating-badge">${ratingGlyph(tr.rating)}</span><br>${st.source} · ${weaponFilter} · Next: <strong>${attackDisplayLabel(nextKey)}</strong>${deadline?` · Chain window ${deadline.toFixed(1)}s`:''}<div class="lab-chain">${chain}</div><div style="margin-top:6px">Trial ${tr.trialId}: ${tr.attempts||0} attacks · ${tr.hitCount||0} hits · ${tr.whiffCount||0} whiffs · ${tr.totalDamage||0} dmg · ${tr.kills||0} kills · saved rows ${labState.trials.length}</div>`;
 }
 function makeLabEvent(key,slot){
   const e={slot, attackKey:key, attackLabel:attackDisplayLabel(key), startedAt:new Date().toISOString(), completed:false, damage:0, hitCount:0, kills:0, zones:[], types:[], volumes:[], bestSpeed:0};
@@ -1342,7 +1374,7 @@ const DEFAULT_COMBAT_SCALE = 4.00;
 const combatState = {
   weapon:'longsword', attack:null, attackKey:null, attackGroup:'vertical', t:0, fired:false,
   pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
-  tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, hideArms:false, loop:false, showDriver:false,
+  tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
   commitYaw:0, lastAttackLabel:'none',
   hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
 };
@@ -1446,6 +1478,7 @@ function bindDummyUI(){
 }
 function pointSegmentDistance(p,a,b){const ab=tmpA.subVectors(b,a); const len2=ab.lengthSq(); if(len2<1e-8) return p.distanceTo(a); const t=clamp(tmpB.subVectors(p,a).dot(ab)/len2,0,1); return p.distanceTo(tmpV.copy(a).addScaledVector(ab,t));}
 function createZonePoint(frac,x=0,z=0){const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase); return new THREE.Vector3(x,RIG.bladeBase+bladeLen*frac,z);}
+function getWeaponHitboxScale(){ return clamp(Number(combatState.weaponHitboxScale) || 1, 1, 5); }
 function getWeaponHitZones(){
   const def=currentWeapon(), kind=def.kind, grp=combatState.attackGroup||'vertical'; const zones=[];
   const add=(id,label,type,from,to,r,damage,stagger=1,x=0,z=0,prefer='any')=>zones.push({id,label,type,from:createZonePoint(from,x,z),to:createZonePoint(to,x,z),radius:r,damage,stagger,prefer});
@@ -1478,6 +1511,8 @@ function getWeaponHitZones(){
     add('guard','Guard / pommel','blunt',-.08,.05,.14,6,.28,0,0,'any');
   }
   zones.sort((a,b)=>{const score=z=>z.prefer===grp?3:(z.prefer==='swing'&&(grp==='vertical'||grp==='horizontal')?2:(z.prefer==='any'?1:0)); return score(b)-score(a) || b.damage-a.damage;});
+  const hitboxScale = getWeaponHitboxScale();
+  if(hitboxScale !== 1) zones.forEach(zone => { zone.radius *= hitboxScale; zone.hitboxScale = hitboxScale; });
   return zones;
 }
 function getZoneWorld(zone){
@@ -1614,6 +1649,7 @@ function selectCombatWeapon(id){
   combatState.weapon=id;
   combatState.tune=Object.assign({},TUNE_DEFAULTS,WEAPONS[id].tune||{});
   applyCombatWeaponTuning();
+  if(labState?.currentStance) ensureStanceMatchesWeapon('weapon');
   syncCombatUI();
 }
 function applyCombatWeaponTuning(){
@@ -1660,7 +1696,7 @@ function updateVariantReadout(){
 }
 function syncCombatStatus(){
   const def=currentWeapon(); const meta=document.getElementById('combatMeta');
-  if(meta){ const att=combatState.attack ? `${combatState.attack.label} (${combatState.attackGroup})` : 'idle'; meta.textContent=`${def.label} — ${def.weightClass}. ${def.profile}. Scale: ${getCombatScale().toFixed(1)}×. Shoulder drop: ${getCombatShoulderDrop().toFixed(2)}. Floor align: ${Math.round(getCombatFloorBlend()*100)}%. Current: ${att}.`; }
+  if(meta){ const att=combatState.attack ? `${combatState.attack.label} (${combatState.attackGroup})` : 'idle'; meta.textContent=`${def.label} — ${def.weightClass}. ${def.profile}. Scale: ${getCombatScale().toFixed(1)}×. Shoulder drop: ${getCombatShoulderDrop().toFixed(2)}. Floor align: ${Math.round(getCombatFloorBlend()*100)}%. Hitbox: ${getWeaponHitboxScale().toFixed(0)}×. Current: ${att}.`; }
 }
 function syncCombatUI(){
   const sel=document.getElementById('combatWeaponSelect'); if(sel && sel.value!==combatState.weapon) sel.value=combatState.weapon;
@@ -1875,6 +1911,8 @@ function bindCombatUI(){
   const floorSlider=StoneSettings.applyValue('combatFloorBlend','combat.floorBlend','100');
   if(floorSlider){ floorSlider.addEventListener('input',syncCombatFloorBlendReadout); syncCombatFloorBlendReadout(); }
   const sel=document.getElementById('combatWeaponSelect'); if(sel){ sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.value=StoneSettings.get('combat.weapon','longsword'); sel.addEventListener('change',e=>{ StoneSettings.set('combat.weapon', e.target.value); selectCombatWeapon(e.target.value); }); }
+  const hitboxScale=StoneSettings.applyValue('weaponHitboxScale','combat.weaponHitboxScale','1');
+  if(hitboxScale){ combatState.weaponHitboxScale=Number(hitboxScale.value)||1; hitboxScale.addEventListener('change',e=>{ combatState.weaponHitboxScale=clamp(Number(e.target.value)||1,1,5); StoneSettings.set('combat.weaponHitboxScale', String(combatState.weaponHitboxScale)); if(dummyState) dummyState.prevZones.clear(); syncCombatStatus(); updateMainStatusLine(); }); }
   const commit=document.getElementById('attackCommitMode'); if(commit){ aimState.commitMode=commit.value; commit.addEventListener('change',e=>{aimState.commitMode=e.target.value; StoneSettings.set('combat.attackCommitMode', e.target.value); updateMainStatusLine();}); }
   const autoFace=document.getElementById('autoFaceToggle'); if(autoFace){ aimState.autoFace=autoFace.checked; autoFace.addEventListener('change',e=>{aimState.autoFace=e.target.checked; StoneSettings.set('combat.autoFace', e.target.checked); updateMainStatusLine();}); }
   document.querySelectorAll('[data-attack]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); triggerCombatAttack(btn.dataset.attack);}));
@@ -2110,14 +2148,14 @@ function bindCombatChrome(){
   const height=StoneSettings.applyValue('enemyHeightScale','combat.enemyHeight','2'), heightOut=document.getElementById('enemyHeightScaleReadout');
   const speedCtl=StoneSettings.applyValue('enemySpeedScale','combat.enemySpeed','1'), speedOut=document.getElementById('enemySpeedScaleReadout');
   const directorMode=document.getElementById('combatDirectorMode'), pressureCtl=StoneSettings.applyValue('combatPressureBudget','combat.pressureBudget','1.75'), pressureOut=document.getElementById('combatPressureBudgetReadout'), cycleCtl=document.getElementById('combatCycleDirector');
-  const waveSizeCtl=StoneSettings.applyValue('combatWaveSize','combat.waveSize','6'), waveSizeOut=document.getElementById('combatWaveSizeReadout'), idleRangeCtl=StoneSettings.applyValue('combatIdleRange','combat.idleRange','4.5'), idleRangeOut=document.getElementById('combatIdleRangeReadout');
+  const waveSizeCtl=StoneSettings.applyValue('combatWaveSize','combat.waveSize','6'), waveSizeOut=document.getElementById('combatWaveSizeReadout'), idleRangeCtl=StoneSettings.applyValue('combatIdleRange','combat.idleRange','1'), idleRangeOut=document.getElementById('combatIdleRangeReadout');
   const syncPlayerSpeed=()=>{ const v=clamp(Number(playerSpeed?.value || speed), 1.5, 18); speed=v; if(playerSpeedOut) playerSpeedOut.textContent=v.toFixed(1); StoneSettings.set('combat.playerSpeed', playerSpeed?.value || String(v)); const labSpeed=document.getElementById('moveSpeed'); if(labSpeed) labSpeed.value=String(v); const labOut=document.getElementById('moveSpeedReadout'); if(labOut) labOut.textContent=v.toFixed(1); };
   const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); StoneSettings.set('combat.enemyHeight', height?.value || String(v)); };
   const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); StoneSettings.set('combat.enemySpeed', speedCtl?.value || String(v)); };
   if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','oneAttacker'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
   const syncPressure=()=>{ const v=clamp(Number(pressureCtl?.value || 1.75), .5, 4); if(pressureOut) pressureOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.00$/,''); enemySystem?.setPressureBudget(v); StoneSettings.set('combat.pressureBudget', pressureCtl?.value || String(v)); };
   const syncWaveSize=()=>{ const v=clamp(Math.round(Number(waveSizeCtl?.value || 6)), 1, 20); if(waveSizeOut) waveSizeOut.textContent=String(v); enemySystem?.setWaveSize(v); StoneSettings.set('combat.waveSize', waveSizeCtl?.value || String(v)); };
-  const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 4.5), 1, 6); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(1)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
+  const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 1), .75, 1.75); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(2)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
   if(cycleCtl){ cycleCtl.checked=StoneSettings.get('combat.cycleDirector', true) !== 'false'; cycleCtl.addEventListener('change',e=>{ enemySystem?.setCycleOnWaveClear(e.target.checked); StoneSettings.set('combat.cycleDirector', e.target.checked); }); }
   playerSpeed?.addEventListener('input',syncPlayerSpeed); height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed); pressureCtl?.addEventListener('input',syncPressure); waveSizeCtl?.addEventListener('input',syncWaveSize); idleRangeCtl?.addEventListener('input',syncIdleRange);
   syncPlayerSpeed(); syncHeight(); syncSpeed(); syncPressure(); syncWaveSize(); syncIdleRange(); if(directorMode) enemySystem?.setDirectorMode(directorMode.value); if(cycleCtl) enemySystem?.setCycleOnWaveClear(cycleCtl.checked);
