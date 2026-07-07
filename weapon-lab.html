@@ -150,6 +150,13 @@
     </div>
   </header>
   <div class="body">
+    <div class="section">Combat Director Projection</div>
+    <label class="row short">
+      <span>2D director</span>
+      <label><input id="directorProjectionToggle" type="checkbox" /> project combat lab circles on floor</label>
+    </label>
+    <div class="combat-meta" id="directorProjectionMeta">Projection off — enable to validate 2D director spacing against the Stone Wanderer.</div>
+
     <div class="single-character-card" id="characterLocked">
       <strong>Stone Wanderer</strong>
       <span>Locked model: Great Helm · gradient 58% · face 1.42× · crown 0.65× · width 1.25×</span>
@@ -1997,6 +2004,97 @@ function bindCombatUI(){
 }
 
 
+const directorProjection = {
+  enabled:false,
+  group:new THREE.Group(),
+  markers:new Map(),
+  materials:{
+    idle:new THREE.MeshBasicMaterial({color:0x8dd2ff,transparent:true,opacity:.72,depthWrite:false}),
+    windup:new THREE.MeshBasicMaterial({color:0xffd36a,transparent:true,opacity:.88,depthWrite:false}),
+    active:new THREE.MeshBasicMaterial({color:0xff6060,transparent:true,opacity:.95,depthWrite:false}),
+    token:new THREE.MeshBasicMaterial({color:0xffe08a,transparent:true,opacity:.95,depthWrite:false}),
+    player:new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85,depthWrite:false})
+  },
+  player:null
+};
+directorProjection.group.name = '2D Combat Director Projection';
+directorProjection.group.visible = false;
+worldRoot.add(directorProjection.group);
+
+function makeProjectionRing(radius, material, tube=.018){
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 6, 48), material);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = .035;
+  return ring;
+}
+function makeProjectionMarker(){
+  const root = new THREE.Group();
+  root.add(makeProjectionRing(.58, directorProjection.materials.idle, .022));
+  root.add(makeProjectionRing(.82, directorProjection.materials.token, .016));
+  root.children[1].visible = false;
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(.12, 20), directorProjection.materials.idle);
+  dot.rotation.x = -Math.PI / 2;
+  dot.position.y = .04;
+  root.add(dot);
+  directorProjection.group.add(root);
+  return root;
+}
+function ensureDirectorProjectionSystem(){
+  if(enemySystem) return;
+  enemySystem = createCombatEnemySystem({ THREE, worldRoot, dungeonScale, materials:{ chaser:new THREE.MeshStandardMaterial({color:0xff8f72,roughness:.72,flatShading:true}), brute:new THREE.MeshStandardMaterial({color:0xd96b6b,roughness:.75,flatShading:true}) } });
+  enemySystem.reset();
+  enemySystem.group.visible = false;
+  enemySystem.setHeightScale?.(1);
+  enemySystem.setDirectorMode?.(StoneSettings.get('combat.directorMode','oneAttacker'));
+  enemySystem.setPressureBudget?.(StoneSettings.get('combat.pressureBudget','1.75'));
+  enemySystem.setWaveSize?.(StoneSettings.get('combat.waveSize','6'));
+  enemySystem.setIdleRangeScale?.(StoneSettings.get('combat.idleRange','4.5'));
+}
+function setDirectorProjectionEnabled(value){
+  directorProjection.enabled = !!value && launchMode !== 'combat';
+  if(directorProjection.enabled) ensureDirectorProjectionSystem();
+  if(enemySystem && launchMode !== 'combat') enemySystem.group.visible = false;
+  directorProjection.group.visible = directorProjection.enabled;
+  const meta = document.getElementById('directorProjectionMeta');
+  if(meta) meta.textContent = directorProjection.enabled
+    ? 'Projection on — combat director enemies are running invisibly; circles show their synced floor positions around the Stone Wanderer.'
+    : 'Projection off — enable to validate 2D director spacing against the Stone Wanderer.';
+  updateDirectorProjection(0);
+}
+function bindDirectorProjectionUI(){
+  const toggle = StoneSettings.applyValue('directorProjectionToggle','lab.directorProjection',false);
+  if(!toggle) return;
+  toggle.addEventListener('change', e => { StoneSettings.set('lab.directorProjection', e.target.checked); setDirectorProjectionEnabled(e.target.checked); });
+  setDirectorProjectionEnabled(toggle.checked);
+}
+function updateDirectorProjection(dt){
+  if(!directorProjection.enabled) return;
+  if(!directorProjection.player){
+    directorProjection.player = makeProjectionRing(.76, directorProjection.materials.player, .024);
+    directorProjection.group.add(directorProjection.player);
+  }
+  directorProjection.player.position.set(actorPos.x, .045, actorPos.y);
+  const live = new Set();
+  for(const e of enemySystem?.enemies || []){
+    live.add(e.id);
+    let marker = directorProjection.markers.get(e.id);
+    if(!marker){ marker = makeProjectionMarker(); directorProjection.markers.set(e.id, marker); }
+    marker.position.set(e.x, .02, e.z);
+    const active = e.state === 'active', windup = e.state === 'windup';
+    const mat = active ? directorProjection.materials.active : (windup ? directorProjection.materials.windup : directorProjection.materials.idle);
+    marker.children[0].material = mat;
+    marker.children[2].material = mat;
+    marker.children[1].visible = !!e.token;
+    marker.scale.setScalar(1 + (active ? .14 : windup ? .08 : 0) + Math.sin(performance.now()*.006 + e.id) * .025);
+  }
+  for(const [id, marker] of directorProjection.markers){
+    if(live.has(id)) continue;
+    marker.parent?.remove(marker);
+    directorProjection.markers.delete(id);
+  }
+}
+
+
 function spawnCharacter() {
   activeCharacter = 'stoneWanderer';
   if(activeModel) actorVisual.remove(activeModel);
@@ -2023,6 +2121,7 @@ if(launchMode === 'combat'){
 loadLabData();
 applyLaunchMode();
 bindLabUI();
+bindDirectorProjectionUI();
 selectAuthoredStance(labState.authoredIndex||0);
 
 function applyPresentation() {
@@ -2334,6 +2433,7 @@ function animate() {
   actorVisual.position.y = 0.02 + bob;
   updateCombat(dt, performance.now()/1000, sway);
   if(enemySystem) enemySystem.update(dt, {x: actorPos.x, z: actorPos.y});
+  updateDirectorProjection(dt);
   updateDummy(dt);
 
   // BENT WORLD: camera scroll-follows the actor, then sky renders under the world.
