@@ -224,28 +224,30 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
 
 
   function addDeathPieceFromObject(obj, geo, mat, knock, spread = 1){
-    const mesh = new THREE.Mesh(geo, mat); obj.getWorldPosition(mesh.position); obj.getWorldQuaternion(mesh.quaternion); obj.getWorldScale(mesh.scale); mesh.castShadow = mesh.receiveShadow = true; worldRoot.add(mesh);
+    const pieceGeo = geo || obj.geometry?.clone?.() || new THREE.BoxGeometry(.2, .2, .2);
+    const pieceMat = mat || obj.material || matByKind.flash;
+    const mesh = new THREE.Mesh(pieceGeo, pieceMat); obj.getWorldPosition(mesh.position); obj.getWorldQuaternion(mesh.quaternion); obj.getWorldScale(mesh.scale); mesh.castShadow = mesh.receiveShadow = true; worldRoot.add(mesh);
     const dir = new THREE.Vector3(knock.x || 0, 0, knock.z || 0); if(dir.lengthSq() < 1e-5) dir.set((Math.random()-.5), 0, (Math.random()-.5)); dir.normalize();
     const vel = dir.multiplyScalar((1.2 + Math.random() * 1.8) * spread).add(new THREE.Vector3((Math.random()-.5)*1.2, 1.4 + Math.random()*1.8, (Math.random()-.5)*1.2));
     deathPieces.push({ mesh, vel, ang:new THREE.Vector3((Math.random()-.5)*5, (Math.random()-.5)*5, (Math.random()-.5)*5), age:0 });
   }
   function shatterEnemy(e, knock = { x:0, z:0 }){
     if(GOBLIN_KINDS.has(e.kind)){
-      addDeathPieceFromObject(e.body, new THREE.CapsuleGeometry(e.radius*.55, Math.max(.08, e.height*.38), 4, 8), matByKind[e.kind], knock, 1.05);
-      if(e.belly) addDeathPieceFromObject(e.belly, new THREE.SphereGeometry(e.radius*.32, 8, 6), e.belly.material, knock, .95);
-      if(e.head) addDeathPieceFromObject(e.head, new THREE.SphereGeometry(e.radius*.42, 10, 8), matByKind[e.kind], knock, 1.2);
-      (e.ears || []).forEach(ear => addDeathPieceFromObject(ear, new THREE.ConeGeometry(e.radius*.13, e.radius*.26, 4), matByKind[e.kind], knock, 1.4));
-      if(e.belt) addDeathPieceFromObject(e.belt, new THREE.BoxGeometry(e.radius*.9, .12, e.radius*.18), e.belt.material, knock, 1.0);
+      addDeathPieceFromObject(e.body, null, e.body.material, knock, 1.05);
+      if(e.belly) addDeathPieceFromObject(e.belly, null, e.belly.material, knock, .95);
+      if(e.head) addDeathPieceFromObject(e.head, null, e.head.material, knock, 1.2);
+      (e.ears || []).forEach(ear => addDeathPieceFromObject(ear, null, ear.material, knock, 1.4));
+      if(e.belt) addDeathPieceFromObject(e.belt, null, e.belt.material, knock, 1.0);
       if(e.weaponRoot) addDeathPieceFromObject(e.weaponRoot, new THREE.BoxGeometry(.08, Math.max(.45, e.RIG?.bladeTip || .9), .08), matByKind.matIron, knock, 1.35);
       return;
     }
-    const top = new THREE.Object3D(), mid = new THREE.Object3D(), bot = new THREE.Object3D(), eye = new THREE.Object3D();
-    [top, mid, bot, eye].forEach(o => e.root.add(o));
-    top.position.set(0, e.height*.78, 0); mid.position.set(0, e.height*.48, 0); bot.position.set(0, e.height*.20, 0); eye.position.copy(e.eye.position);
+    const top = new THREE.Object3D(), mid = new THREE.Object3D(), bot = new THREE.Object3D();
+    [top, mid, bot].forEach(o => e.body.add(o));
+    top.position.set(0, e.height*.18, 0); mid.position.set(0, 0, 0); bot.position.set(0, -e.height*.18, 0);
     addDeathPieceFromObject(top, new THREE.SphereGeometry(e.radius*.55, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, 1.1);
     addDeathPieceFromObject(mid, new THREE.BoxGeometry(e.radius*.9, e.height*.24, e.radius*.7), matByKind[e.kind] || matByKind.chaser, knock, 1.0);
     addDeathPieceFromObject(bot, new THREE.SphereGeometry(e.radius*.48, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, .9);
-    addDeathPieceFromObject(eye, new THREE.BoxGeometry(e.radius*.44, e.radius*.16, e.radius*.08), matByKind.flash, knock, 1.35);
+    addDeathPieceFromObject(e.eye, null, e.eye.material, knock, 1.35);
   }
   function updateDeathPieces(dt){
     for(let i = deathPieces.length - 1; i >= 0; i--){
