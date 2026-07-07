@@ -61,7 +61,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let spawnedThisWave = 0;
   let spawnTimer = 2.0;
   let nextId = 1;
-  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5, encounterFlow: false, arrivalTime: 1.5, lullTime: 1.6 };
+  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5, encounterFlow: false, arrivalTime: 1.5, lullTime: 1.6, playerRadius: 0.65 };
   // Encounter Flow state: composes the director's tactical modes across one wave's beats.
   // Beginning (arrival) -> Middle (sustain) -> optional Spotlight -> End (lull), then repeat.
   const encounter = { phase: 'idle', timer: 0, queue: [], spotlightPending: false, spotlightAt: 0, crowdCap: 6, planned: 0 };
@@ -262,10 +262,15 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
   function steer(e, x, z, amount, dt){ e.x += x * e.speed * tuning.speedScale * amount * dt; e.z += z * e.speed * tuning.speedScale * amount * dt; }
   function approach(e, p, dt){ const n = norm(p.x - e.x, p.z - e.z); steer(e, n.x, n.z, 1, dt); e.facing = n; }
-  function idleDesired(e){ return (e.kind === 'brute' ? 3.2 : 2.6) * tuning.idleRangeScale; }
-  function orbit(e, p, dt, amount=.55){ const away = norm(e.x - p.x, e.z - p.z); const side = e.id % 2 ? 1 : -1; const tangent = { x:-away.z * side, z:away.x * side }; const d = dist(e,p); const desired = idleDesired(e); const radial = d < desired - .4 ? 1 : (d > desired + 1.1 ? -1 : 0); const dir = norm(tangent.x * .85 - away.x * radial, tangent.z * .85 - away.z * radial); steer(e, dir.x, dir.z, amount, dt); e.facing = norm(p.x - e.x, p.z - e.z); }
+  // Waiting enemies hold a standoff ring just outside their striking range, so only the
+  // enemy the director grants an opening actually closes into melee. Based on attack range
+  // (fallback to stop distance) plus a small idle-range-tunable spread — NOT the old
+  // 2.6*idleRangeScale, which pushed the ring ~12 units out (far past the arena) and left
+  // the radial correction below dragging everyone onto the player instead.
+  function idleDesired(e){ const a = ENEMY_ATTACK_BY_KIND[e.kind]; const base = a ? a.range : e.stop; return base + 0.9 + clamp(tuning.idleRangeScale, 1, 6) * 0.22; }
+  function orbit(e, p, dt, amount=.55){ const away = norm(e.x - p.x, e.z - p.z); const side = e.id % 2 ? 1 : -1; const tangent = { x:-away.z * side, z:away.x * side }; const d = dist(e,p); const desired = idleDesired(e); const radial = d < desired - .4 ? -1 : (d > desired + 1.1 ? 1 : 0); const dir = norm(tangent.x * .85 - away.x * radial, tangent.z * .85 - away.z * radial); steer(e, dir.x, dir.z, amount, dt); e.facing = norm(p.x - e.x, p.z - e.z); }
   function moveToSlot(e, p, dt){ const slots = director.getDebugState().slots; const slot = slots[e.slotIndex]; if(!slot){ orbit(e,p,dt); return; } const tx = p.x + Math.cos(slot.angle) * slot.radius, tz = p.z + Math.sin(slot.angle) * slot.radius; const d = Math.hypot(tx-e.x, tz-e.z); const n = norm(tx-e.x, tz-e.z); if(d > .6) steer(e, n.x, n.z, .95, dt); else orbit(e,p,dt,.18); e.facing = norm(p.x - e.x, p.z - e.z); }
-  function deniedBehavior(e, p, dt){ if(director.getMode() === 'battleCircle') return moveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < 5 * tuning.idleRangeScale) steer(e, away.x, away.z, .7, dt); else orbit(e,p,dt,.45); return; } orbit(e,p,dt,e.kind === 'brute' ? .35 : .65); }
+  function deniedBehavior(e, p, dt){ if(director.getMode() === 'battleCircle') return moveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < 5 * tuning.idleRangeScale) steer(e, away.x, away.z, .7, dt); else orbit(e,p,dt,.45); return; } if(dist(e,p) > idleDesired(e) + 1.5) approach(e, p, dt); else orbit(e,p,dt,e.kind === 'brute' ? .35 : .65); }
   function chooseAttack(e, p){ const a = ENEMY_ATTACK_BY_KIND[e.kind]; return a && dist(e,p) <= a.range + .65 ? a : null; }
   function prepareGoblinAttack(e){ if(!GOBLIN_KINDS.has(e.kind) || !e.stance?.chain?.length) return; const key = e.stance.chain[e.comboIndex % e.stance.chain.length]; const def = ATTACK_DEFINITIONS[key]; e.comboIndex++; e.visualAttackKey = key; e.visualAttack = def ? poseTools.buildAttack(def) : null; e.visualAttackTime = 0; e.visualAttackContactAt = e.visualAttack?.contactAt || 0; e.visualAttackTotal = e.visualAttack?.total || 0; }
   function startAttack(e, attack){ prepareGoblinAttack(e); e.attack = attack; e.state = 'windup'; e.stateTime = 0; e.windup = attack.windup; e.active = attack.active; e.recovery = attack.recovery; e.hitDone = false; e.facing = norm((lastPlayer.x ?? e.x) - e.x, (lastPlayer.z ?? e.z) - e.z); director.grant(e, attack); }
@@ -355,6 +360,24 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     }
   }
 
+  // Hard guarantee that no enemy occupies the player's body. The steering above keeps
+  // waiting enemies at a standoff ring, but this is the backstop that makes "sit on top of
+  // me" impossible even mid-lunge or when several attackers converge at once.
+  function resolvePlayerSpacing(player){
+    if(!player) return;
+    const pr = tuning.playerRadius;
+    for(const e of enemies){
+      if(e.state === 'dead') continue;
+      let dx = e.x - player.x, dz = e.z - player.z;
+      let d = Math.hypot(dx, dz);
+      const minD = e.radius + pr;
+      if(d >= minD) continue;
+      if(d < 1e-4){ const ang = ((e.id * 47) % 360) * Math.PI / 180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
+      const nx = dx / d, nz = dz / d;
+      e.x = player.x + nx * minD; e.z = player.z + nz * minD;
+    }
+  }
+
   function updateEnemy(e, dt, player){
     e.flash = Math.max(0, e.flash - dt); e.stateTime += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.stunned = Math.max(0, e.stunned - dt);
     if(e.state === 'stunned' && e.stunned <= 0){ e.state = 'approach'; e.stateTime = 0; }
@@ -363,11 +386,18 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     else if(e.state === 'active'){ if(!e.hitDone){ hitPlayer(e, player); e.hitDone = true; } if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; director.release(e); } }
     else if(e.state === 'recovery'){ if(e.stateTime >= e.recovery){ e.cooldown = (e.attack?.cooldown || 1) * e.personality; e.attack = null; e.state = 'approach'; e.stateTime = 0; } }
     else if(e.state !== 'dead'){
-      const attack = chooseAttack(e, player);
-      if(attack && e.cooldown <= 0 && director.canGrant(e, attack, { enemies, pressureBudget: director.settings.pressureBudget })) startAttack(e, attack);
-      else if(attack && e.cooldown <= 0) deniedBehavior(e, player, dt);
+      const a = ENEMY_ATTACK_BY_KIND[e.kind];
+      const permitted = a && e.cooldown <= 0 && director.canGrant(e, a, { enemies, pressureBudget: director.settings.pressureBudget });
+      // Trigger the swing only once actually within striking range (hitPlayer needs range+.45),
+      // so a granted attacker closes in and connects instead of swinging at the outer buffer.
+      const inRange = a && dist(e, player) <= a.range;
+      // Only an enemy the director has cleared to attack closes into melee; everyone else
+      // holds the standoff ring (deniedBehavior -> orbit). This is what keeps the crowd off
+      // the player instead of every idle enemy pathing straight onto them.
+      if(permitted && inRange) startAttack(e, a);
+      else if(permitted) approach(e, player, dt);
       else if(director.getMode() === 'battleCircle') moveToSlot(e, player, dt);
-      else if(dist(e, player) > e.stop * Math.min(tuning.idleRangeScale, 2.5)) approach(e, player, dt); else orbit(e, player, dt, .4);
+      else deniedBehavior(e, player, dt);
     }
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     applyGoblinPose(e, dt);
@@ -388,6 +418,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     director.update(dt, { enemies, pressureBudget: director.settings.pressureBudget }); director.markNearEligible(enemies, player); director.assignBattleCircleSlots(enemies, player);
     for(const e of [...enemies]) updateEnemy(e, dt, player);
     resolveEnemySpacing();
+    resolvePlayerSpacing(player);
     for(const e of enemies) e.root.position.set(e.x, 0, e.z);
     updateDeathPieces(dt);
   }
