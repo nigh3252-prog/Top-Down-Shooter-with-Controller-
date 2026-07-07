@@ -2,24 +2,73 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Top-Down Shooter / Weapon Lab</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Playground File Launcher</title>
 <style>
-:root{color-scheme:dark;--bg:#05070d;--panel:rgba(10,15,24,.88);--line:rgba(255,255,255,.17);--text:#eef6ff;--muted:#aab3c5;--blue:#8dbfff;--purple:#c474ff;--gold:#f3ce79}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 28%,#253552 0,#101724 48%,#05070d 100%);color:var(--text);font-family:system-ui,Segoe UI,Arial,sans-serif}.wrap{min-height:100dvh;display:grid;place-items:center;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.card{width:min(760px,96vw);border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,rgba(17,25,39,.92),rgba(6,10,17,.86));box-shadow:0 24px 80px #000b;padding:22px;display:grid;gap:16px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}h1{margin:0;font-size:clamp(28px,6vw,46px);line-height:1.02}p{margin:0;color:var(--muted);line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile{display:grid;gap:5px;min-height:120px;padding:18px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.055);color:var(--text);text-decoration:none;box-shadow:inset 0 1px rgba(255,255,255,.08)}.tile strong{font-size:20px}.tile span{font-size:13px;color:var(--muted);line-height:1.35}.tile.primary{background:linear-gradient(180deg,rgba(141,191,255,.25),rgba(141,191,255,.07));border-color:rgba(141,191,255,.38)}.tile.beast{background:linear-gradient(180deg,rgba(196,116,255,.25),rgba(196,116,255,.07));border-color:rgba(196,116,255,.40)}.note{font-size:12px;color:#95a3bf;border-top:1px solid rgba(255,255,255,.10);padding-top:12px}@media(max-width:640px){.card{padding:16px;border-radius:22px}.grid{grid-template-columns:1fr}.tile{min-height:92px;padding:14px}}
+:root{color-scheme:dark;--bg:#05070d;--panel:rgba(10,15,24,.88);--card:rgba(255,255,255,.055);--card2:rgba(255,255,255,.085);--line:rgba(255,255,255,.16);--text:#eef6ff;--muted:#aab3c5;--blue:#8dbfff;--purple:#c474ff;--gold:#f3ce79;--green:#79f3b2}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 10%,#2a3d61 0,#101724 44%,#05070d 100%);color:var(--text);font-family:system-ui,Segoe UI,Arial,sans-serif}body{padding:max(20px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.wrap{width:min(1080px,100%);margin:0 auto;display:grid;gap:18px}.hero,.section{border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,rgba(17,25,39,.94),rgba(6,10,17,.88));box-shadow:0 24px 80px #0009}.hero{padding:24px;display:grid;gap:12px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}h1,h2{margin:0;line-height:1.05}h1{font-size:clamp(32px,7vw,58px)}h2{font-size:clamp(20px,4vw,30px)}p{margin:0;color:var(--muted);line-height:1.5}.quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:4px}.tile,.file{color:var(--text);text-decoration:none;border:1px solid var(--line);background:var(--card);box-shadow:inset 0 1px rgba(255,255,255,.08);transition:transform .14s ease,border-color .14s ease,background .14s ease}.tile:hover,.file:hover{transform:translateY(-2px);border-color:rgba(141,191,255,.55);background:var(--card2)}.tile{display:grid;gap:7px;min-height:132px;padding:18px;border-radius:20px}.tile strong{font-size:20px}.tile span,.file span{font-size:13px;color:var(--muted);line-height:1.35}.primary{background:linear-gradient(180deg,rgba(141,191,255,.25),rgba(141,191,255,.07));border-color:rgba(141,191,255,.38)}.purple{background:linear-gradient(180deg,rgba(196,116,255,.25),rgba(196,116,255,.07));border-color:rgba(196,116,255,.40)}.green{background:linear-gradient(180deg,rgba(121,243,178,.20),rgba(121,243,178,.06));border-color:rgba(121,243,178,.35)}.section{padding:18px;display:grid;gap:14px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(255,255,255,.10);padding-bottom:12px}.section-head p{font-size:13px}.files{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.file{display:flex;align-items:center;gap:12px;padding:13px;border-radius:16px;min-width:0}.icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:12px;background:rgba(141,191,255,.14);border:1px solid rgba(141,191,255,.24);font-size:18px}.file strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file code{font:12px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cbd7ee;word-break:break-all}.meta{min-width:0;display:grid;gap:2px}.note{font-size:12px;color:#95a3bf}.source .icon{background:rgba(121,243,178,.13);border-color:rgba(121,243,178,.24)}.archive .icon{background:rgba(196,116,255,.13);border-color:rgba(196,116,255,.24)}.docs .icon{background:rgba(243,206,121,.13);border-color:rgba(243,206,121,.24)}@media(max-width:760px){body{padding-inline:10px}.hero,.section{border-radius:22px;padding:16px}.quick,.files{grid-template-columns:1fr}.tile{min-height:104px}.section-head{display:grid}}
 </style>
 </head>
 <body>
 <main class="wrap">
-  <section class="card">
-    <div class="eyebrow">Game launcher</div>
-    <h1>Pick a play area</h1>
-    <p>This launcher exposes the original top-down shooter, the weapon test lab, and the shared combat launch mode.</p>
-    <div class="grid">
-      <a class="tile primary" href="top-down-shooter.html"><strong>Play Top-Down Shooter</strong><span>The original top-down shooter game prototype.</span></a>
-      <a class="tile beast" href="weapon-lab.html"><strong>Weapon Test Lab</strong><span>Stone weapon lab with Red Toll visuals, bent-horizon world, combat audio, and stance / individual move modes. Real ES module imports, no runtime patching.</span></a>
-      <a class="tile beast" href="weapon-lab.html?mode=combat"><strong>Stone Wanderer Combat</strong><span>3D top-down action RPG prototype.</span></a>
+  <section class="hero">
+    <div class="eyebrow">Playground launcher</div>
+    <h1>Open any file in this repo</h1>
+    <p>Use this page as a simple table of contents for the playable prototypes, archived experiments, source modules, and design notes in this playground repository.</p>
+    <div class="quick" aria-label="Featured playable pages">
+      <a class="tile primary" href="top-down-shooter.html"><strong>Top-Down Shooter</strong><span>The original top-down shooter game prototype.</span></a>
+      <a class="tile purple" href="weapon-lab.html"><strong>Weapon Test Lab</strong><span>Stone weapon lab with stance cards, individual move tests, combat audio, and bent-world visuals.</span></a>
+      <a class="tile green" href="mace-goblin-sandbox-v2.html"><strong>Mace Goblin Sandbox</strong><span>Standalone sandbox file for the mace goblin prototype.</span></a>
     </div>
-    <p class="note">Older donor pages and the retired iframe wrapper live under <code>archive/</code> for reference only.</p>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Playable pages</h2><p>Root-level HTML files that launch directly in the browser.</p></div>
+    <div class="files">
+      <a class="file" href="top-down-shooter.html"><span class="icon">🎮</span><span class="meta"><strong>Top-Down Shooter</strong><code>top-down-shooter.html</code></span></a>
+      <a class="file" href="weapon-lab.html"><span class="icon">⚔️</span><span class="meta"><strong>Weapon Lab</strong><code>weapon-lab.html</code></span></a>
+      <a class="file" href="weapon-lab.html?mode=combat"><span class="icon">🛡️</span><span class="meta"><strong>Stone Wanderer Combat Mode</strong><code>weapon-lab.html?mode=combat</code></span></a>
+      <a class="file" href="mace-goblin-sandbox-v2.html"><span class="icon">👺</span><span class="meta"><strong>Mace Goblin Sandbox V2</strong><code>mace-goblin-sandbox-v2.html</code></span></a>
+    </div>
+  </section>
+
+  <section class="section archive">
+    <div class="section-head"><h2>Archived experiments</h2><p>Older HTML prototypes kept for reference.</p></div>
+    <div class="files">
+      <a class="file" href="archive/stone-wanderer-individual-move-test.html"><span class="icon">🧪</span><span class="meta"><strong>Stone Wanderer Individual Move Test</strong><code>archive/stone-wanderer-individual-move-test.html</code></span></a>
+      <a class="file" href="archive/sound-foundry-retro-beasts.html"><span class="icon">🔊</span><span class="meta"><strong>Sound Foundry Retro Beasts</strong><code>archive/sound-foundry-retro-beasts.html</code></span></a>
+      <a class="file" href="archive/stone-lab-audio-test.html"><span class="icon">🎚️</span><span class="meta"><strong>Stone Lab Audio Test</strong><code>archive/stone-lab-audio-test.html</code></span></a>
+      <a class="file" href="archive/stone-wanderer-stance-chain-lab-wrapper.html"><span class="icon">🧱</span><span class="meta"><strong>Stance Chain Lab Wrapper</strong><code>archive/stone-wanderer-stance-chain-lab-wrapper.html</code></span></a>
+      <a class="file" href="archive/stone-wanderer-stance-chain-lab-core.html"><span class="icon">🧬</span><span class="meta"><strong>Stance Chain Lab Core</strong><code>archive/stone-wanderer-stance-chain-lab-core.html</code></span></a>
+    </div>
+  </section>
+
+  <section class="section source">
+    <div class="section-head"><h2>Source modules</h2><p>JavaScript modules used by the current lab.</p></div>
+    <div class="files">
+      <a class="file" href="src/lab-modes.js"><span class="icon">📦</span><span class="meta"><strong>Lab Modes</strong><code>src/lab-modes.js</code></span></a>
+      <a class="file" href="src/enemies.js"><span class="icon">📦</span><span class="meta"><strong>Enemies</strong><code>src/enemies.js</code></span></a>
+      <a class="file" href="src/combat-director.js"><span class="icon">📦</span><span class="meta"><strong>Combat Director</strong><code>src/combat-director.js</code></span></a>
+      <a class="file" href="src/combat-audio.js"><span class="icon">📦</span><span class="meta"><strong>Combat Audio</strong><code>src/combat-audio.js</code></span></a>
+      <a class="file" href="src/stance-cards.js"><span class="icon">📦</span><span class="meta"><strong>Stance Cards</strong><code>src/stance-cards.js</code></span></a>
+      <a class="file" href="src/combat-balance.js"><span class="icon">📦</span><span class="meta"><strong>Combat Balance</strong><code>src/combat-balance.js</code></span></a>
+      <a class="file" href="src/enemy-attacks.js"><span class="icon">📦</span><span class="meta"><strong>Enemy Attacks</strong><code>src/enemy-attacks.js</code></span></a>
+      <a class="file" href="src/bent-world.js"><span class="icon">📦</span><span class="meta"><strong>Bent World</strong><code>src/bent-world.js</code></span></a>
+      <a class="file" href="src/settings.js"><span class="icon">📦</span><span class="meta"><strong>Settings</strong><code>src/settings.js</code></span></a>
+      <a class="file" href="src/weapons.js"><span class="icon">📦</span><span class="meta"><strong>Weapons</strong><code>src/weapons.js</code></span></a>
+      <a class="file" href="src/attacks.js"><span class="icon">📦</span><span class="meta"><strong>Attacks</strong><code>src/attacks.js</code></span></a>
+    </div>
+  </section>
+
+  <section class="section docs">
+    <div class="section-head"><h2>Readme and design notes</h2><p>Markdown files may display as raw text depending on your host.</p></div>
+    <div class="files">
+      <a class="file" href="README.md"><span class="icon">📘</span><span class="meta"><strong>Repo README</strong><code>README.md</code></span></a>
+      <a class="file" href="src/README.md"><span class="icon">📘</span><span class="meta"><strong>Source README</strong><code>src/README.md</code></span></a>
+      <a class="file" href="archive/README.md"><span class="icon">📘</span><span class="meta"><strong>Archive README</strong><code>archive/README.md</code></span></a>
+      <a class="file" href="docs/hades_source_library.md"><span class="icon">📜</span><span class="meta"><strong>Hades Source Library</strong><code>docs/hades_source_library.md</code></span></a>
+      <a class="file" href="docs/diablo3_source_library.md"><span class="icon">📜</span><span class="meta"><strong>Diablo III Source Library</strong><code>docs/diablo3_source_library.md</code></span></a>
+    </div>
+    <p class="note">Tip: if a browser downloads a file instead of displaying it, right-click the link and copy the URL to open it in your editor or repository viewer.</p>
   </section>
 </main>
 </body>
