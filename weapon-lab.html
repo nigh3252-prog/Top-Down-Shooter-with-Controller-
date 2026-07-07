@@ -1579,10 +1579,12 @@ function applyEdgeDummyHit(d,hit){
   d.hp-=hit.damage; const typeName=hit.zone.type==='hybrid'?'pierce/blunt':hit.zone.type;
   dummyState.lastHit=`Edge dummy hit: ${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg.`;
   aimState.lastDamage=`${hit.damage} ${typeName} vs edge dummy`; labRecordHit(hit,typeName); updateMainStatusLine();
-  d.knockV.add(hit.motion.clone().multiplyScalar(.12*hit.zone.stagger)); d.wobbleV+=(Math.random()<.5?-1:1)*(.18+hit.zone.stagger*.08);
+  const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0));
+  d.knockV.add(impulse); d.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
   spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label);
-  if(d.hp<=0){labRecordKill(); d.alive=false; d.respawnTimer=1.2; d.root.visible=false;}
-  CombatAudio.onDummyEvent({damage:hit.damage, kill:d.hp<=0}); updateDummyUI();
+  if(d.hp<=0) breakEdgeDummy(d,hit);
+  else CombatAudio.onDummyEvent({damage:hit.damage, kill:false});
+  updateDummyUI();
 }
 
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
@@ -1643,6 +1645,17 @@ function breakDummy(hit){
   labRecordKill();
   dummyState.alive=false; dummyState.respawnTimer=1.0; dummyRoot.visible=false; dummyState.lastHit=`Dummy shattered by ${hit.zone.label} (${hit.zone.type}) for ${hit.damage}. Respawning in 1 second.`; aimState.lastDamage=`shattered dummy with ${hit.zone.label}`; updateMainStatusLine();
   CombatAudio.onDummyEvent({ damage: hit.damage, kill: true });
+  spawnDummyDeathPieces(dummyRoot,hit,getDummyHeightScale());
+}
+function breakEdgeDummy(d,hit){
+  labRecordKill();
+  d.alive=false; d.respawnTimer=1.2; d.root.visible=false; d.hp=0; d.prevZones.clear();
+  dummyState.lastHit=`Edge dummy shattered by ${hit.zone.label} (${hit.zone.type}) for ${hit.damage}. Respawning from the edge.`;
+  aimState.lastDamage=`shattered edge dummy with ${hit.zone.label}`; updateMainStatusLine();
+  CombatAudio.onDummyEvent({ damage: hit.damage, kill: true });
+  spawnDummyDeathPieces(d.root,hit,getDummyHeightScale());
+}
+function spawnDummyDeathPieces(sourceRoot,hit,scale=1){
   const localPieces=[
     {geo:new THREE.BoxGeometry(.78,.42,.38),mat:matDummyWood,pos:new THREE.Vector3(0,1.36,0),s:.25},
     {geo:new THREE.BoxGeometry(.72,.46,.34),mat:matDummyWood,pos:new THREE.Vector3(0,0.95,0),s:.24},
@@ -1651,8 +1664,9 @@ function breakDummy(hit){
     {geo:new THREE.CylinderGeometry(.08,.10,.62,7),mat:matDummyWood,pos:new THREE.Vector3(.35,1.32,0),rot:new THREE.Euler(0,0,Math.PI/2),s:.2},
     {geo:new THREE.CylinderGeometry(.48,.62,.22,8),mat:matDummyDark,pos:new THREE.Vector3(0,.11,0),s:.4}
   ];
-  const rootPos=dummyRoot.position.clone(); const knockLocal=worldRoot.worldToLocal(hit.point.clone()).sub(rootPos).normalize(); const sc=getDummyHeightScale();
-  localPieces.forEach((p,i)=>{const mesh=new THREE.Mesh(p.geo,p.mat); mesh.position.copy(rootPos).add(p.pos.clone().multiplyScalar(sc)); mesh.scale.setScalar(sc); if(p.rot) mesh.rotation.copy(p.rot); mesh.castShadow=mesh.receiveShadow=true; worldRoot.add(mesh); const v=knockLocal.clone().multiplyScalar((.9+Math.random()*1.4)*Math.sqrt(sc)).add(new THREE.Vector3((Math.random()-.5)*1.2,1.1+Math.random()*1.4,(Math.random()-.5)*1.2)); dummyState.deathPieces.push({mesh,vel:v,ang:new THREE.Vector3((Math.random()-.5)*5,(Math.random()-.5)*5,(Math.random()-.5)*5),age:0});});
+  const rootPos=sourceRoot.position.clone();
+  const knockLocal=worldRoot.worldToLocal(hit.point.clone()).sub(rootPos).normalize();
+  localPieces.forEach((p,i)=>{const mesh=new THREE.Mesh(p.geo,p.mat); mesh.position.copy(rootPos).add(p.pos.clone().multiplyScalar(scale)); mesh.scale.setScalar(scale); if(p.rot) mesh.rotation.copy(p.rot); mesh.castShadow=mesh.receiveShadow=true; worldRoot.add(mesh); const v=knockLocal.clone().multiplyScalar((.9+Math.random()*1.4)*Math.sqrt(scale)).add(new THREE.Vector3((Math.random()-.5)*1.2,1.1+Math.random()*1.4,(Math.random()-.5)*1.2)); dummyState.deathPieces.push({mesh,vel:v,ang:new THREE.Vector3((Math.random()-.5)*5,(Math.random()-.5)*5,(Math.random()-.5)*5),age:0});});
 }
 function getDummyMotionBase(dt){
   dummyState.motionT += dt;
@@ -1674,7 +1688,7 @@ function updateEdgeDummyMotion(dt){
   const target=new THREE.Vector3(actorPos.x,0,actorPos.y);
   for(let i=0;i<dummyState.edgeDummies.length;i++){
     const d=dummyState.edgeDummies[i];
-    if(!d.alive){d.respawnTimer-=dt; if(d.respawnTimer<=0){d.root.position.copy(spawnEdgePoint(i)); d.hp=dummyState.maxHp; d.alive=true; d.root.visible=true; d.prevZones.clear();} continue;}
+    if(!d.alive){d.respawnTimer-=dt; if(d.respawnTimer<=0){d.root.position.copy(spawnEdgePoint(i)); d.root.rotation.set(0,0,0); d.root.scale.setScalar(getDummyHeightScale()); d.root.children.forEach(c=>{c.visible=true;}); d.hp=dummyState.maxHp; d.alive=true; d.root.visible=true; d.knock.set(0,0,0); d.knockV.set(0,0,0); d.wobble=0; d.wobbleV=0; d.prevZones.clear();} continue;}
     const dir=target.clone().sub(d.root.position); dir.y=0; const dist=dir.length();
     if(dist>.9){dir.multiplyScalar(1/dist); d.root.position.addScaledVector(dir,dummyState.edgeSpeed*dt);}
     d.knockV.multiplyScalar(Math.pow(.08,dt)); d.root.position.addScaledVector(d.knockV,dt);
