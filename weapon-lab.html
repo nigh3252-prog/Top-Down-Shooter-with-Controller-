@@ -355,6 +355,11 @@
         <option value="orbit">Small orbit</option>
       </select>
     </label>
+    <label class="row">
+      <span>Edge dummies</span>
+      <input id="edgeDummyCount" type="range" min="0" max="10" step="1" value="0" />
+      <span class="readout" id="edgeDummyCountReadout">0</span>
+    </label>
     <div class="combat-meta" id="dummyMeta">Dummy loading…</div>
     <div class="combat-buttons">
       <button class="combat-attack" id="resetDummyBtn" type="button">Reset Dummy<small>100 HP</small></button>
@@ -1421,7 +1426,8 @@ const dummyState = {
   heightScale:2.5, respawnTimer:-1, motionMode:'static', motionT:0,
   placementIndex:0, basePositions:[new THREE.Vector3(0,0,7.2), new THREE.Vector3(6.2,0,2.8), new THREE.Vector3(-6.2,0,2.8)],
   wobble:0, wobbleV:0, knock:new THREE.Vector3(), knockV:new THREE.Vector3(),
-  lastHit:'No hits yet', prevZones:new Map(), deathPieces:[], effects:[]
+  lastHit:'No hits yet', prevZones:new Map(), deathPieces:[], effects:[],
+  edgeCount:0, edgeDummies:[], edgeSpawnSeq:0, edgeSpeed:1.65
 };
 const HIT_TYPE_COLOR = {slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4};
 let dummyRoot=null, dummyBody=null, dummyHead=null, dummyBase=null, dummyHealthFill=null, dummyHealthBillboard=null, dummyHitboxGroup=null;
@@ -1445,7 +1451,7 @@ function createTrainingDummy(){
   dummyHealthBillboard=new THREE.Group(); dummyHealthBillboard.position.set(0,2.42,0); dummyHealthBillboard.add(barBg); barFill.position.z=.006; dummyHealthBillboard.add(barFill); dummyRoot.add(dummyHealthBillboard); dummyHealthFill=barFill;
   dummyHitboxGroup=new THREE.Group(); dummyRoot.add(dummyHitboxGroup);
   getDummyVolumesLocal().forEach(v=>{const h=new THREE.Mesh(new THREE.SphereGeometry(v.r,12,8),new THREE.MeshBasicMaterial({color:0x8dd2ff,wireframe:true,transparent:true,opacity:.28})); h.position.copy(v.c); dummyHitboxGroup.add(h);});
-  resetDummy(false); updateDummyUI();
+  resetDummy(false); updateEdgeDummies(); updateDummyUI();
 }
 function getDummyVolumesLocal(){return [
   {name:'head', c:new THREE.Vector3(0,1.90,0), r:.34, mult:1.18},
@@ -1464,7 +1470,30 @@ function resetDummy(advance=false, clearPieces=true){
 function updateDummyUI(){
   if(dummyHealthFill){const f=clamp(dummyState.hp/dummyState.maxHp,0,1); dummyHealthFill.scale.x=f; dummyHealthFill.position.x=-(1-f)*.5; dummyHealthFill.material.color.setHex(f>.55?0x8dd2ff:(f>.25?0xffd27a:0xff7a66));}
   if(dummyHitboxGroup) dummyHitboxGroup.visible=dummyState.showHitboxes;
-  const el=document.getElementById('dummyMeta'); if(el) el.textContent=`Dummy height ${getDummyHeightScale().toFixed(1)}×. Motion ${dummyState.motionMode}. HP ${Math.max(0,Math.ceil(dummyState.hp))}/${dummyState.maxHp}. ${dummyState.lastHit}`;
+  dummyState.edgeDummies.forEach(d=>{ if(d.hitboxGroup) d.hitboxGroup.visible=dummyState.showHitboxes; if(d.healthFill){const f=clamp(d.hp/dummyState.maxHp,0,1); d.healthFill.scale.x=f; d.healthFill.position.x=-(1-f)*.5; d.healthFill.material.color.setHex(f>.55?0x8dd2ff:(f>.25?0xffd27a:0xff7a66));} });
+  const el=document.getElementById('dummyMeta'); if(el) el.textContent=`Dummy height ${getDummyHeightScale().toFixed(1)}×. Motion ${dummyState.motionMode}. Edge attackers ${dummyState.edgeDummies.length}/10. HP ${Math.max(0,Math.ceil(dummyState.hp))}/${dummyState.maxHp}. ${dummyState.lastHit}`;
+}
+function spawnEdgePoint(i=0){
+  const bounds=4.9*dungeonScale, side=(dummyState.edgeSpawnSeq++ + i)%4, lane=(((i+1)*0.37+dummyState.edgeSpawnSeq*0.19)%1)*2-1;
+  if(side===0) return new THREE.Vector3(lane*bounds,0,-bounds);
+  if(side===1) return new THREE.Vector3(bounds,0,lane*bounds);
+  if(side===2) return new THREE.Vector3(-lane*bounds,0,bounds);
+  return new THREE.Vector3(-bounds,0,-lane*bounds);
+}
+function createEdgeDummy(i){
+  if(!dummyRoot) return null;
+  const root=dummyRoot.clone(true); root.name='Edge Training Dummy'; root.visible=true; root.traverse(o=>{if(o.isMesh&&o.material)o.material=o.material.clone();});
+  const groups=root.children.filter(c=>c.isGroup);
+  const healthBillboard=groups.find(g=>g.children.some(m=>m.isMesh&&m.geometry?.type==='PlaneGeometry'));
+  const healthFill=healthBillboard?.children.find(m=>m.isMesh&&m.geometry?.type==='PlaneGeometry'&&m.position.z>.001) || null;
+  const hitboxGroup=groups.find(g=>g.children.some(m=>m.isMesh&&m.geometry?.type==='SphereGeometry')) || null;
+  root.position.copy(spawnEdgePoint(i)); root.scale.setScalar(getDummyHeightScale()); worldRoot.add(root);
+  return {id:`edge${i}`, root, healthBillboard, healthFill, hitboxGroup, hp:dummyState.maxHp, alive:true, respawnTimer:-1, knock:new THREE.Vector3(), knockV:new THREE.Vector3(), wobble:0, wobbleV:0, prevZones:new Map()};
+}
+function updateEdgeDummies(){
+  while(dummyState.edgeDummies.length>dummyState.edgeCount){const d=dummyState.edgeDummies.pop(); d.root.parent&&d.root.parent.remove(d.root);}
+  while(dummyState.edgeDummies.length<dummyState.edgeCount){const d=createEdgeDummy(dummyState.edgeDummies.length); if(!d) break; dummyState.edgeDummies.push(d);}
+  updateDummyUI();
 }
 function bindDummyUI(){
   const height=document.getElementById('dummyHeight'); const heightOut=document.getElementById('dummyHeightReadout');
@@ -1475,6 +1504,9 @@ function bindDummyUI(){
   const hitbox=document.getElementById('dummyHitboxBtn'); if(hitbox) hitbox.addEventListener('pointerdown',e=>{e.preventDefault(); dummyState.showHitboxes=!dummyState.showHitboxes; updateDummyUI();});
   const labels=document.getElementById('showContactLabels'); if(labels) labels.addEventListener('change',e=>{dummyState.showLabels=e.target.checked;});
   const motion=document.getElementById('dummyMotionMode'); if(motion){dummyState.motionMode=motion.value; motion.addEventListener('change',e=>{dummyState.motionMode=e.target.value; dummyState.motionT=0; updateDummyUI();});}
+  const edgeCount=document.getElementById('edgeDummyCount'); const edgeOut=document.getElementById('edgeDummyCountReadout');
+  const syncEdge=()=>{if(!edgeCount||!edgeOut)return; dummyState.edgeCount=clamp(Math.round(Number(edgeCount.value)||0),0,10); edgeOut.textContent=String(dummyState.edgeCount); updateEdgeDummies();};
+  if(edgeCount){edgeCount.addEventListener('input',syncEdge); syncEdge();}
 }
 function pointSegmentDistance(p,a,b){const ab=tmpA.subVectors(b,a); const len2=ab.lengthSq(); if(len2<1e-8) return p.distanceTo(a); const t=clamp(tmpB.subVectors(p,a).dot(ab)/len2,0,1); return p.distanceTo(tmpV.copy(a).addScaledVector(ab,t));}
 function createZonePoint(frac,x=0,z=0){const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase); return new THREE.Vector3(x,RIG.bladeBase+bladeLen*frac,z);}
@@ -1515,28 +1547,42 @@ function getWeaponHitZones(){
   if(hitboxScale !== 1) zones.forEach(zone => { zone.radius *= hitboxScale; zone.hitboxScale = hitboxScale; });
   return zones;
 }
-function getZoneWorld(zone){
+function getZoneWorld(zone, prevMap=dummyState.prevZones){
   const a=weaponRoot.localToWorld(zone.from.clone()); const b=weaponRoot.localToWorld(zone.to.clone());
-  const prev=dummyState.prevZones.get(zone.id); dummyState.prevZones.set(zone.id,{a:a.clone(),b:b.clone(),mid:a.clone().lerp(b,.5)});
+  const prev=prevMap.get(zone.id); prevMap.set(zone.id,{a:a.clone(),b:b.clone(),mid:a.clone().lerp(b,.5)});
   return {zone,a,b,prev,mid:a.clone().lerp(b,.5)};
 }
-function testZoneAgainstDummy(zw,dt){
-  if(!dummyRoot || !dummyState.alive) return null;
+function testZoneAgainstDummy(zw,dt,targetRoot=dummyRoot,targetScale=getDummyHeightScale()){
+  if(!targetRoot) return null;
   let best=null; const volumes=getDummyVolumesLocal();
-  for(const vol of volumes){const center=dummyRoot.localToWorld(vol.c.clone()); let d=pointSegmentDistance(center,zw.a,zw.b); if(zw.prev){d=Math.min(d,pointSegmentDistance(center,zw.prev.a,zw.prev.b),pointSegmentDistance(center,zw.prev.a,zw.a),pointSegmentDistance(center,zw.prev.b,zw.b),pointSegmentDistance(center,zw.prev.mid,zw.mid));}
-    const threshold=vol.r*getDummyHeightScale()+zw.zone.radius; if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.35) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
+  for(const vol of volumes){const center=targetRoot.localToWorld(vol.c.clone()); let d=pointSegmentDistance(center,zw.a,zw.b); if(zw.prev){d=Math.min(d,pointSegmentDistance(center,zw.prev.a,zw.prev.b),pointSegmentDistance(center,zw.prev.a,zw.a),pointSegmentDistance(center,zw.prev.b,zw.b),pointSegmentDistance(center,zw.prev.mid,zw.mid));}
+    const threshold=vol.r*targetScale+zw.zone.radius; if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.35) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
   return best;
 }
 function detectDummyHits(dt){
-  if(!combatState.attack || !weaponRoot || !dummyState.alive) return;
+  if(!combatState.attack || !weaponRoot) return;
   if(!combatState.hitIds) combatState.hitIds=new Set();
-  let best=null;
-  for(const zone of getWeaponHitZones()){
-    if(combatState.hitIds.has(zone.id)) continue;
-    const cand=testZoneAgainstDummy(getZoneWorld(zone),dt);
-    if(cand && (!best || cand.damage>best.damage)) best=cand;
+  const zones=getWeaponHitZones();
+  if(dummyState.alive){
+    let best=null;
+    for(const zone of zones){const hitId='main:'+zone.id; if(combatState.hitIds.has(hitId)) continue; const cand=testZoneAgainstDummy(getZoneWorld(zone,dummyState.prevZones),dt,dummyRoot,getDummyHeightScale()); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
+    if(best){combatState.hitIds.add(best.hitId); applyDummyHit(best);}
   }
-  if(best){combatState.hitIds.add(best.zone.id); applyDummyHit(best);}
+  for(const d of dummyState.edgeDummies){
+    if(!d.alive) continue;
+    let best=null;
+    for(const zone of zones){const hitId=d.id+':'+zone.id; if(combatState.hitIds.has(hitId)) continue; const cand=testZoneAgainstDummy(getZoneWorld(zone,d.prevZones),dt,d.root,getDummyHeightScale()); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
+    if(best){combatState.hitIds.add(best.hitId); applyEdgeDummyHit(d,best);}
+  }
+}
+function applyEdgeDummyHit(d,hit){
+  d.hp-=hit.damage; const typeName=hit.zone.type==='hybrid'?'pierce/blunt':hit.zone.type;
+  dummyState.lastHit=`Edge dummy hit: ${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg.`;
+  aimState.lastDamage=`${hit.damage} ${typeName} vs edge dummy`; labRecordHit(hit,typeName); updateMainStatusLine();
+  d.knockV.add(hit.motion.clone().multiplyScalar(.12*hit.zone.stagger)); d.wobbleV+=(Math.random()<.5?-1:1)*(.18+hit.zone.stagger*.08);
+  spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label);
+  if(d.hp<=0){labRecordKill(); d.alive=false; d.respawnTimer=1.2; d.root.visible=false;}
+  CombatAudio.onDummyEvent({damage:hit.damage, kill:d.hp<=0}); updateDummyUI();
 }
 
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
@@ -1618,10 +1664,24 @@ function getDummyMotionBase(dt){
   return base;
 }
 function updateDummy(dt){
+  updateEdgeDummyMotion(dt);
   if(dummyRoot && !dummyState.alive && dummyState.respawnTimer>0){ dummyState.respawnTimer-=dt; if(dummyState.respawnTimer<=0) resetDummy(false,false); }
   if(dummyRoot && dummyState.alive){dummyState.knockV.multiplyScalar(Math.pow(.08,dt)); dummyState.knock.addScaledVector(dummyState.knockV,dt); dummyState.knock.multiplyScalar(Math.pow(.25,dt)); dummyState.wobbleV+=(-12*dummyState.wobble-4.2*dummyState.wobbleV)*dt; dummyState.wobble+=dummyState.wobbleV*dt; const base=getDummyMotionBase(dt); dummyRoot.position.copy(base).add(dummyState.knock); dummyRoot.rotation.set(dummyState.wobble*.45 - THREE.MathUtils.degToRad(leanDeg),0,dummyState.wobble); if(dummyHealthBillboard) dummyHealthBillboard.lookAt(camera.position);}
   for(let i=dummyState.deathPieces.length-1;i>=0;i--){const p=dummyState.deathPieces[i]; p.age+=dt; p.vel.y-=5.2*dt; p.mesh.position.addScaledVector(p.vel,dt); p.mesh.rotation.x+=p.ang.x*dt; p.mesh.rotation.y+=p.ang.y*dt; p.mesh.rotation.z+=p.ang.z*dt; if(p.mesh.position.y<.08){p.mesh.position.y=.08; p.vel.y*=-.28; p.vel.x*=.75; p.vel.z*=.75; p.ang.multiplyScalar(.75);} if(p.age>5){p.mesh.parent&&p.mesh.parent.remove(p.mesh); dummyState.deathPieces.splice(i,1);}}
   for(let i=dummyState.effects.length-1;i>=0;i--){const e=dummyState.effects[i]; e.age+=dt; const k=e.age/e.life; if(e.vel) e.mesh.position.addScaledVector(e.vel,dt); if(e.kind==='ring'){e.mesh.scale.setScalar(1+k*1.8); e.mesh.material.opacity=1-k;} else {e.mesh.material.opacity=1-k; e.mesh.lookAt(camera.position);} if(e.age>=e.life){e.mesh.parent&&e.mesh.parent.remove(e.mesh); dummyState.effects.splice(i,1);}}
+}
+function updateEdgeDummyMotion(dt){
+  const target=new THREE.Vector3(actorPos.x,0,actorPos.y);
+  for(let i=0;i<dummyState.edgeDummies.length;i++){
+    const d=dummyState.edgeDummies[i];
+    if(!d.alive){d.respawnTimer-=dt; if(d.respawnTimer<=0){d.root.position.copy(spawnEdgePoint(i)); d.hp=dummyState.maxHp; d.alive=true; d.root.visible=true; d.prevZones.clear();} continue;}
+    const dir=target.clone().sub(d.root.position); dir.y=0; const dist=dir.length();
+    if(dist>.9){dir.multiplyScalar(1/dist); d.root.position.addScaledVector(dir,dummyState.edgeSpeed*dt);}
+    d.knockV.multiplyScalar(Math.pow(.08,dt)); d.root.position.addScaledVector(d.knockV,dt);
+    d.wobbleV+=(-12*d.wobble-4.2*d.wobbleV)*dt; d.wobble+=d.wobbleV*dt;
+    d.root.rotation.set(d.wobble*.45 - THREE.MathUtils.degToRad(leanDeg),Math.atan2(dir.x||0,dir.z||1),d.wobble); d.root.scale.setScalar(getDummyHeightScale());
+    if(d.healthBillboard) d.healthBillboard.lookAt(camera.position);
+  }
 }
 function setArrV(arr,i,v){arr[i*3]=v.x;arr[i*3+1]=v.y;arr[i*3+2]=v.z;}
 function setArrC(arr,i,f){arr[i*3]=combatTrailColor.r*f;arr[i*3+1]=combatTrailColor.g*f;arr[i*3+2]=combatTrailColor.b*f;}
@@ -1983,11 +2043,12 @@ function getDummyAimFacing(){
     if(best && bestD <= aimState.autoRange) return {angle:Math.atan2(best.x-actorPos.x,best.z-actorPos.y), source:'Auto enemy'};
     return null;
   }
-  if(!aimState.autoFace || !dummyRoot || !dummyState || !dummyState.alive) return null;
-  const dx=dummyRoot.position.x-actorPos.x, dz=dummyRoot.position.z-actorPos.y;
-  const dist=Math.hypot(dx,dz);
-  if(dist<0.05 || dist>aimState.autoRange) return null;
-  return {angle:Math.atan2(dx,dz), source:'Auto dummy'};
+  if(!aimState.autoFace || !dummyRoot || !dummyState) return null;
+  let best=null, bestD=Infinity;
+  if(dummyState.alive){const dx=dummyRoot.position.x-actorPos.x, dz=dummyRoot.position.z-actorPos.y; best={dx,dz,label:'Auto dummy'}; bestD=Math.hypot(dx,dz);}
+  for(const d of dummyState.edgeDummies){if(!d.alive) continue; const dx=d.root.position.x-actorPos.x, dz=d.root.position.z-actorPos.y, dist=Math.hypot(dx,dz); if(dist<bestD){best={dx,dz,label:'Auto edge dummy'}; bestD=dist;}}
+  if(!best || bestD<0.05 || bestD>aimState.autoRange) return null;
+  return {angle:Math.atan2(best.dx,best.dz), source:best.label};
 }
 function resolveDesiredFacing(moveVec,isMoving){
   if(aimState.rightAimActive && aimState.gpAim.lengthSq()>0.04){
