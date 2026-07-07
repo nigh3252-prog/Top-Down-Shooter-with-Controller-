@@ -117,9 +117,6 @@
     .combat-chrome{position:fixed;left:max(12px, env(safe-area-inset-left));right:max(12px, env(safe-area-inset-right));top:max(12px, env(safe-area-inset-top));z-index:80;pointer-events:none}
     .combat-chrome-bar{display:flex;gap:8px;align-items:center;pointer-events:auto}
     .combat-runtime-text{padding:8px 11px;border-radius:14px;background:rgba(6,10,17,.58);border:1px solid rgba(255,255,255,.10);color:#eef6ff;font-size:12px;font-weight:850;line-height:1.25;backdrop-filter:blur(10px)}
-    .combat-controls-hint{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;max-width:min(760px,calc(100vw - 24px));pointer-events:none}
-    .combat-controls-hint span{padding:6px 8px;border-radius:999px;background:rgba(6,10,17,.58);border:1px solid rgba(255,255,255,.10);color:rgba(238,246,255,.90);font-size:11px;font-weight:850;line-height:1;backdrop-filter:blur(10px)}
-    body.gamepad-active .combat-controls-hint .mk-only{display:none}
     .combat-menu{display:none;position:fixed;left:max(12px, env(safe-area-inset-left));right:max(12px, env(safe-area-inset-right));top:max(62px, calc(env(safe-area-inset-top) + 62px));z-index:120;max-width:430px;max-height:min(70vh, calc(100vh - 92px));overflow:auto;padding:14px;border:1px solid rgba(171,208,255,.22);border-radius:18px;background:linear-gradient(180deg, rgba(16,24,38,.96), rgba(8,12,21,.90));box-shadow:0 18px 60px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(12px);pointer-events:auto}
     .combat-menu.open{display:grid;gap:12px}
     .combat-menu h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.combat-menu p{margin:0;color:var(--muted);font-size:12px;line-height:1.35}
@@ -380,14 +377,6 @@
     <button class="mini" id="combatMenuBtn" type="button" aria-controls="combatMenu" aria-expanded="false">☰</button>
     <button class="mini" id="combatFullscreenBtn" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">⛶</button>
     <div class="combat-runtime-text" id="combatRuntimeText">Encounter: One Attacker · Stance: —</div>
-  </div>
-  <div class="combat-controls-hint" id="combatControlsHint" aria-label="Combat controls">
-    <span class="mk-only">WASD / arrows: Move</span>
-    <span class="mk-only">Mouse: Aim</span>
-    <span class="mk-only">Left click / J: Attack</span>
-    <span class="mk-only">Q / T: Stance</span>
-    <span class="mk-only">E / X: Weapon</span>
-    <span>☰: Options</span>
   </div>
   <div class="combat-menu" id="combatMenu" role="dialog" aria-label="Combat options">
     <h2>Stone Wanderer Combat</h2>
@@ -1078,8 +1067,8 @@ let speed = 5.0;
 
 const aimState = {
   gpMove:new THREE.Vector2(), gpAim:new THREE.Vector2(), moveVec:new THREE.Vector2(),
-  rightAimActive:false, mouseAimActive:false, autoFace:true, autoRange:18, source:'Idle', gamepadName:'',
-  mouseWorld:new THREE.Vector2(), commitMode:'soft', lastSwing:'none', lastDamage:'', connected:false
+  rightAimActive:false, autoFace:true, autoRange:18, source:'Idle', gamepadName:'',
+  commitMode:'soft', lastSwing:'none', lastDamage:'', connected:false
 };
 const gpPrev = {};
 
@@ -2004,10 +1993,6 @@ function resolveDesiredFacing(moveVec,isMoving){
   if(aimState.rightAimActive && aimState.gpAim.lengthSq()>0.04){
     return {angle:Math.atan2(aimState.gpAim.x, aimState.gpAim.y), source:'Right stick'};
   }
-  if(aimState.mouseAimActive){
-    const dx=aimState.mouseWorld.x-actorPos.x, dz=aimState.mouseWorld.y-actorPos.y;
-    if(Math.hypot(dx,dz)>0.08) return {angle:Math.atan2(dx,dz), source:'Mouse'};
-  }
   const auto=getDummyAimFacing();
   if(auto) return auto;
   if(isMoving && moveVec.lengthSq()>0.01){
@@ -2041,7 +2026,7 @@ function updateMainStatusLine(){
   if(override){ el.textContent=override; return; }
   const swing=combatState.attack ? attackDisplayLabel(combatState.attackKey||'') : (aimState.lastSwing || 'none');
   const damage=aimState.lastDamage ? ` · Hit: ${aimState.lastDamage}` : '';
-  const gp=aimState.connected ? ' · Controller ready' : (aimState.mouseAimActive ? ' · Mouse aim' : '');
+  const gp=aimState.connected ? ' · Controller ready' : '';
   const st=labState.currentStance; const tr=labState.currentTrial;
   const stance=st ? ` · Stance: ${st.name} ${ratingGlyph(tr?.rating||'')}` : '';
   const director = enemySystem?.director?.getDebugState?.();
@@ -2103,33 +2088,13 @@ function updatePadVisuals() {
   document.querySelectorAll('.pad-btn').forEach(btn => btn.classList.toggle('active', !!keyState[btn.dataset.dir]));
 }
 
-const mouseRaycaster = new THREE.Raycaster();
-const mouseGroundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
-const mouseGroundHit = new THREE.Vector3();
-function eventHitsCombatUi(e){ return !!e.target.closest?.('#combatChrome,#combatMenu,#panel,.combat-touch,.combat-pad,.dpad,button,input,select,textarea,a'); }
-function updateMouseAim(e){
-  if(launchMode !== 'combat') return;
-  const rect=renderer.domElement.getBoundingClientRect();
-  const ndc=new THREE.Vector2(((e.clientX-rect.left)/rect.width)*2-1, -(((e.clientY-rect.top)/rect.height)*2-1));
-  mouseRaycaster.setFromCamera(ndc, camera);
-  if(mouseRaycaster.ray.intersectPlane(mouseGroundPlane, mouseGroundHit)){
-    aimState.mouseWorld.set(mouseGroundHit.x, mouseGroundHit.z);
-    aimState.mouseAimActive=true;
-    document.body.classList.remove('gamepad-active');
-  }
-}
-renderer.domElement.addEventListener('pointermove', updateMouseAim);
-renderer.domElement.addEventListener('pointerdown', e => {
-  updateMouseAim(e);
-  if(launchMode === 'combat' && e.button === 0 && !eventHitsCombatUi(e)){ e.preventDefault(); labAction('attack'); }
-});
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if(!e.repeat && !e.target.closest?.('input,select,textarea')) {
     if(k==='j' || k===' ') labAction('attack');
-    if(k==='q' || k==='t') labAction('nextStance');
+    if(k==='t') labAction('nextStance');
     if(k==='c' && launchMode !== 'combat') labAction('randomStance');
-    if(k==='e' || k==='x') labAction('nextWeapon');
+    if(k==='x') labAction('nextWeapon');
     if(k==='[' && launchMode !== 'combat') labAction('rateDown');
     if(k===']' && launchMode !== 'combat') labAction('rateUp');
     if(k==='0') labAction('clearRating');
