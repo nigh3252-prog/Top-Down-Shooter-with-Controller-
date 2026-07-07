@@ -268,6 +268,26 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     return true;
   }
 
+  function resolveEnemySpacing(){
+    for(let pass = 0; pass < 2; pass++){
+      for(let i = 0; i < enemies.length; i++){
+        const a = enemies[i]; if(a.state === 'dead') continue;
+        for(let j = i + 1; j < enemies.length; j++){
+          const b = enemies[j]; if(b.state === 'dead') continue;
+          let dx = b.x - a.x, dz = b.z - a.z;
+          let d = Math.hypot(dx, dz);
+          const minD = Math.max(.05, (a.radius + b.radius) * 2);
+          if(d >= minD) continue;
+          if(d < 1e-4){ const angle = ((a.id * 17 + b.id * 31) % 360) * Math.PI / 180; dx = Math.cos(angle); dz = Math.sin(angle); d = 1; }
+          const push = (minD - d) * .5;
+          const nx = dx / d, nz = dz / d;
+          a.x -= nx * push; a.z -= nz * push;
+          b.x += nx * push; b.z += nz * push;
+        }
+      }
+    }
+  }
+
   function updateEnemy(e, dt, player){
     e.flash = Math.max(0, e.flash - dt); e.stateTime += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.stunned = Math.max(0, e.stunned - dt);
     if(e.state === 'stunned' && e.stunned <= 0){ e.state = 'approach'; e.stateTime = 0; }
@@ -296,6 +316,8 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     if(spawnTimer <= 0 && spawnedThisWave < cap && enemies.length < cap){ spawn(chooseSpawnKind()); spawnTimer = nextSpawnDelay(wave); }
     director.update(dt, { enemies, pressureBudget: director.settings.pressureBudget }); director.markNearEligible(enemies, player); director.assignBattleCircleSlots(enemies, player);
     for(const e of [...enemies]) updateEnemy(e, dt, player);
+    resolveEnemySpacing();
+    for(const e of enemies) e.root.position.set(e.x, 0, e.z);
     updateDeathPieces(dt);
   }
   function setHeightScale(value){ tuning.heightScale = clamp(Number(value) || 1, .5, 4); enemies.forEach(applyEnemyVisual); }
