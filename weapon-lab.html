@@ -214,6 +214,16 @@
       <span>Weapon</span>
       <select id="combatWeaponSelect" aria-label="Combat weapon"></select>
     </label>
+    <label class="row short">
+      <span>Weapon hitbox</span>
+      <select id="weaponHitboxScale" aria-label="Weapon hitbox size">
+        <option value="1">1× normal</option>
+        <option value="2">2× bigger</option>
+        <option value="3">3× bigger</option>
+        <option value="4">4× bigger</option>
+        <option value="5">5× bigger</option>
+      </select>
+    </label>
     <label class="row">
       <span>Puppet size</span>
       <input id="combatScale" type="range" min="0.5" max="5" step="0.1" value="4.0" />
@@ -1364,7 +1374,7 @@ const DEFAULT_COMBAT_SCALE = 4.00;
 const combatState = {
   weapon:'longsword', attack:null, attackKey:null, attackGroup:'vertical', t:0, fired:false,
   pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
-  tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, hideArms:false, loop:false, showDriver:false,
+  tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
   commitYaw:0, lastAttackLabel:'none',
   hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
 };
@@ -1468,6 +1478,7 @@ function bindDummyUI(){
 }
 function pointSegmentDistance(p,a,b){const ab=tmpA.subVectors(b,a); const len2=ab.lengthSq(); if(len2<1e-8) return p.distanceTo(a); const t=clamp(tmpB.subVectors(p,a).dot(ab)/len2,0,1); return p.distanceTo(tmpV.copy(a).addScaledVector(ab,t));}
 function createZonePoint(frac,x=0,z=0){const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase); return new THREE.Vector3(x,RIG.bladeBase+bladeLen*frac,z);}
+function getWeaponHitboxScale(){ return clamp(Number(combatState.weaponHitboxScale) || 1, 1, 5); }
 function getWeaponHitZones(){
   const def=currentWeapon(), kind=def.kind, grp=combatState.attackGroup||'vertical'; const zones=[];
   const add=(id,label,type,from,to,r,damage,stagger=1,x=0,z=0,prefer='any')=>zones.push({id,label,type,from:createZonePoint(from,x,z),to:createZonePoint(to,x,z),radius:r,damage,stagger,prefer});
@@ -1500,6 +1511,8 @@ function getWeaponHitZones(){
     add('guard','Guard / pommel','blunt',-.08,.05,.14,6,.28,0,0,'any');
   }
   zones.sort((a,b)=>{const score=z=>z.prefer===grp?3:(z.prefer==='swing'&&(grp==='vertical'||grp==='horizontal')?2:(z.prefer==='any'?1:0)); return score(b)-score(a) || b.damage-a.damage;});
+  const hitboxScale = getWeaponHitboxScale();
+  if(hitboxScale !== 1) zones.forEach(zone => { zone.radius *= hitboxScale; zone.hitboxScale = hitboxScale; });
   return zones;
 }
 function getZoneWorld(zone){
@@ -1683,7 +1696,7 @@ function updateVariantReadout(){
 }
 function syncCombatStatus(){
   const def=currentWeapon(); const meta=document.getElementById('combatMeta');
-  if(meta){ const att=combatState.attack ? `${combatState.attack.label} (${combatState.attackGroup})` : 'idle'; meta.textContent=`${def.label} — ${def.weightClass}. ${def.profile}. Scale: ${getCombatScale().toFixed(1)}×. Shoulder drop: ${getCombatShoulderDrop().toFixed(2)}. Floor align: ${Math.round(getCombatFloorBlend()*100)}%. Current: ${att}.`; }
+  if(meta){ const att=combatState.attack ? `${combatState.attack.label} (${combatState.attackGroup})` : 'idle'; meta.textContent=`${def.label} — ${def.weightClass}. ${def.profile}. Scale: ${getCombatScale().toFixed(1)}×. Shoulder drop: ${getCombatShoulderDrop().toFixed(2)}. Floor align: ${Math.round(getCombatFloorBlend()*100)}%. Hitbox: ${getWeaponHitboxScale().toFixed(0)}×. Current: ${att}.`; }
 }
 function syncCombatUI(){
   const sel=document.getElementById('combatWeaponSelect'); if(sel && sel.value!==combatState.weapon) sel.value=combatState.weapon;
@@ -1898,6 +1911,8 @@ function bindCombatUI(){
   const floorSlider=StoneSettings.applyValue('combatFloorBlend','combat.floorBlend','100');
   if(floorSlider){ floorSlider.addEventListener('input',syncCombatFloorBlendReadout); syncCombatFloorBlendReadout(); }
   const sel=document.getElementById('combatWeaponSelect'); if(sel){ sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.value=StoneSettings.get('combat.weapon','longsword'); sel.addEventListener('change',e=>{ StoneSettings.set('combat.weapon', e.target.value); selectCombatWeapon(e.target.value); }); }
+  const hitboxScale=StoneSettings.applyValue('weaponHitboxScale','combat.weaponHitboxScale','1');
+  if(hitboxScale){ combatState.weaponHitboxScale=Number(hitboxScale.value)||1; hitboxScale.addEventListener('change',e=>{ combatState.weaponHitboxScale=clamp(Number(e.target.value)||1,1,5); StoneSettings.set('combat.weaponHitboxScale', String(combatState.weaponHitboxScale)); if(dummyState) dummyState.prevZones.clear(); syncCombatStatus(); updateMainStatusLine(); }); }
   const commit=document.getElementById('attackCommitMode'); if(commit){ aimState.commitMode=commit.value; commit.addEventListener('change',e=>{aimState.commitMode=e.target.value; StoneSettings.set('combat.attackCommitMode', e.target.value); updateMainStatusLine();}); }
   const autoFace=document.getElementById('autoFaceToggle'); if(autoFace){ aimState.autoFace=autoFace.checked; autoFace.addEventListener('change',e=>{aimState.autoFace=e.target.checked; StoneSettings.set('combat.autoFace', e.target.checked); updateMainStatusLine();}); }
   document.querySelectorAll('[data-attack]').forEach(btn=>btn.addEventListener('pointerdown',e=>{e.preventDefault(); e.stopPropagation(); triggerCombatAttack(btn.dataset.attack);}));
