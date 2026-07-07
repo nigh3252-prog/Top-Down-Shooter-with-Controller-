@@ -1,4 +1,5 @@
 export const DIRECTOR_MODES = [
+  { id:'encounterFlow', label:'Encounter Flow' },
   { id:'attackChain', label:'Attack Chain' },
   { id:'dodgeTraining', label:'Dodge Training' },
   { id:'chaos', label:'Chaos' },
@@ -23,7 +24,10 @@ export function createCombatDirector(options = {}){
     radius: settings.battleCircleRadius,
     enemyId:null
   }));
-  const modeIds = DIRECTOR_MODES.map(m => m.id);
+  // 'encounterFlow' is a meta-mode owned by the enemy system, which composes the
+  // tactical modes below across an encounter's beats. It never becomes the director's
+  // own state.mode, so it is excluded from setMode/nextMode cycling here.
+  const modeIds = DIRECTOR_MODES.map(m => m.id).filter(id => id !== 'encounterFlow');
   const live = e => e && e.hp > 0 && e.state !== 'dead';
   const distSqTo = (e, p) => { const dx = (p.x ?? 0) - e.x, dz = (p.z ?? 0) - e.z; return dx*dx + dz*dz; };
 
@@ -52,8 +56,9 @@ export function createCombatDirector(options = {}){
     if(state.mode === 'dodgeTraining') return active.length < 1 && state.time - state.lastThreatTime > .75;
     if(state.mode === 'oneAttacker' || state.mode === 'battleCircle' || state.mode === 'wavePacing') return active.length < 1 && state.time - state.lastThreatTime > gap;
     if(state.mode === 'eliteSpotlight'){
-      const bruteAlive = (context.enemies || []).some(e => e.kind === 'brute' && live(e) && e.stunned <= 0);
-      if(enemy.kind !== 'brute' && bruteAlive && active.length === 0 && Math.random() < .72) return false;
+      const isElite = e => e.spotlight || e.kind === 'brute';
+      const eliteAlive = (context.enemies || []).some(e => isElite(e) && live(e) && e.stunned <= 0);
+      if(!isElite(enemy) && eliteAlive && active.length === 0 && Math.random() < .72) return false;
       return active.length < 1 && state.time - state.lastThreatTime > .35;
     }
     if(state.mode === 'pressureBudget' || state.mode === 'nearFar'){

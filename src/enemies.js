@@ -8,7 +8,11 @@ export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
   brute: { radius: .62, height: 3.55, hp: 72, speed: 2.9, stop: 1.85, color: 0xd96b6b },
   maceGoblin: { radius: .38, height: 1.75, hp: 32, speed: 4.55, stop: 1.58, color: 0x70b85b, bellyColor: 0xb6d17b, armorColor: 0x5c3b24, weapon: 'mace', stanceId: 'S02', role: 'light close attacker' },
-  spearGoblin: { radius: .38, height: 1.9, hp: 36, speed: 3.8, stop: 2.55, color: 0x5fae7d, bellyColor: 0xc7d78a, armorColor: 0x3f5a35, weapon: 'spear', stanceId: 'S20', role: 'reach poker' }
+  spearGoblin: { radius: .38, height: 1.9, hp: 36, speed: 3.8, stop: 2.55, color: 0x5fae7d, bellyColor: 0xc7d78a, armorColor: 0x3f5a35, weapon: 'spear', stanceId: 'S20', role: 'reach poker' },
+  // Elite variant: reuses the mace-goblin rig/stance (God of War "Valkyrie" recombination —
+  // new read from the same silhouette) but is bigger, tougher, slower and hits harder. Spawned
+  // only as an encounter's spotlight beat, never in the regular random pool.
+  armoredMaceGoblin: { radius: .46, height: 2.15, hp: 78, speed: 3.25, stop: 1.72, color: 0x6f7f46, bellyColor: 0x9aa86a, armorColor: 0x3a3320, weapon: 'mace', stanceId: 'S02', role: 'armored elite' }
 };
 
 export function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
@@ -16,7 +20,7 @@ export function nextSpawnDelay(wave){ return clamp(2.2 - wave * .07, .95, 2.2); 
 export function spawnCap(wave){ return 7 + wave * 2; }
 
 
-const GOBLIN_KINDS = new Set(['maceGoblin', 'spearGoblin']);
+const GOBLIN_KINDS = new Set(['maceGoblin', 'spearGoblin', 'armoredMaceGoblin']);
 const Ease = {
   linear:t=>t,
   inQuad:t=>t*t,
@@ -57,7 +61,10 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let spawnedThisWave = 0;
   let spawnTimer = 2.0;
   let nextId = 1;
-  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5 };
+  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5, encounterFlow: false, arrivalTime: 1.5, lullTime: 1.6 };
+  // Encounter Flow state: composes the director's tactical modes across one wave's beats.
+  // Beginning (arrival) -> Middle (sustain) -> optional Spotlight -> End (lull), then repeat.
+  const encounter = { phase: 'idle', timer: 0, queue: [], spotlightPending: false, spotlightAt: 0, crowdCap: 6, planned: 0 };
 
   const tmp = new THREE.Vector3();
   const weaponUp = new THREE.Vector3(0, 1, 0);
@@ -71,6 +78,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     brute: materials.brute || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.brute.color, roughness: .72, flatShading: true }),
     maceGoblin: materials.maceGoblin || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.maceGoblin.color, roughness: .78, flatShading: true }),
     spearGoblin: materials.spearGoblin || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.spearGoblin.color, roughness: .78, flatShading: true }),
+    armoredMaceGoblin: materials.armoredMaceGoblin || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.armoredMaceGoblin.color, roughness: .8, metalness: .15, flatShading: true }),
     flash: materials.flash || new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: .9, roughness: .45, flatShading: true }),
     windup: materials.windup || new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0x7a4a00, emissiveIntensity: .7, roughness: .5, flatShading: true }),
     active: materials.active || new THREE.MeshStandardMaterial({ color: 0xff4f4f, emissive: 0xaa1010, emissiveIntensity: .9, roughness: .45, flatShading: true }),
@@ -183,15 +191,72 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   }
 
   function startWave(){
+    if(tuning.encounterFlow){ startEncounterWave(); return; }
     waveKills = 0; spawnedThisWave = 0; spawnTimer = 1.0;
     const count = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
     const firstWaveMix = ['maceGoblin', 'spearGoblin', 'maceGoblin', 'spearGoblin'];
     for(let i = 0; i < count; i++) spawn(firstWaveMix[i % firstWaveMix.length]);
   }
+
+  function clearEnemies(){ enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); }
+
+  // --- Encounter Flow phase machine -----------------------------------------
+  // Begins each wave with a low-pressure, readable "arrival" beat (the door problem:
+  // enemies stream in one-attacker-at-a-time so the player can commit), ramps into a
+  // pressure-budgeted "sustain" middle, spotlights a lone elite partway through, then
+  // ends with a short "lull" so a wave clear reads as a win before the next arrival.
+  const FLOW_MIX = ['maceGoblin', 'spearGoblin', 'maceGoblin', 'spearGoblin'];
+  function startEncounterWave(){
+    waveKills = 0; spawnedThisWave = 0; spawnTimer = 0;
+    const planned = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
+    const openCount = Math.max(1, Math.round(planned * 0.4));
+    const queue = [];
+    for(let i = openCount; i < planned; i++) queue.push(FLOW_MIX[i % FLOW_MIX.length]);
+    encounter.planned = planned;
+    encounter.queue = queue;
+    encounter.spotlightPending = wave >= 2;
+    encounter.spotlightAt = Math.max(1, Math.ceil(planned * 0.5));
+    encounter.crowdCap = Math.max(3, Math.ceil(planned * 0.6)) + (encounter.spotlightPending ? 1 : 0);
+    encounter.phase = 'arrival';
+    encounter.timer = tuning.arrivalTime;
+    director.setMode('oneAttacker');
+    director.settings.pressureBudget = 1.0;
+    for(let i = 0; i < openCount; i++) spawn(FLOW_MIX[i % FLOW_MIX.length]);
+  }
+  function enterSustain(){
+    encounter.phase = 'sustain';
+    director.setMode('pressureBudget');
+    director.settings.pressureBudget = clamp(1.5 + wave * 0.25, 1.5, 3.5);
+    spawnTimer = 0.2;
+  }
+  function spawnSpotlight(){
+    encounter.spotlightPending = false;
+    encounter.phase = 'spotlight';
+    const elite = spawn('armoredMaceGoblin');
+    elite.spotlight = true;
+    director.setMode('eliteSpotlight');
+  }
+  function enterLull(){ encounter.phase = 'lull'; encounter.timer = tuning.lullTime; }
+  function maybeClearEncounterWave(){
+    if(encounter.phase === 'lull' || encounter.phase === 'idle') return;
+    if(encounter.queue.length === 0 && !encounter.spotlightPending && enemies.length === 0) enterLull();
+  }
+  function updateEncounter(dt){
+    if(encounter.phase === 'lull'){ encounter.timer -= dt; if(encounter.timer <= 0){ wave++; startEncounterWave(); } return; }
+    if(encounter.phase === 'arrival'){ encounter.timer -= dt; if(encounter.timer <= 0) enterSustain(); return; }
+    // sustain / spotlight: trigger the elite on kill progress, then drip reinforcements
+    // up to a crowd cap so the queue behaves like a staging line rather than a dump.
+    if(encounter.spotlightPending && waveKills >= encounter.spotlightAt) spawnSpotlight();
+    spawnTimer -= dt;
+    if(spawnTimer <= 0 && encounter.queue.length && enemies.length < encounter.crowdCap){
+      spawn(encounter.queue.shift());
+      spawnTimer = nextSpawnDelay(wave);
+    }
+  }
   function clearDeathPieces(){ deathPieces.forEach(p => { if(p.mesh?.parent) p.mesh.parent.remove(p.mesh); }); deathPieces.length = 0; }
   function reset(){ director.reset(); enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); clearDeathPieces(); wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = ''; startWave(); }
-  function finishWave(){ wave++; director.onWaveClear(); startWave(); }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){ e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18); director.releaseAllForEnemy(e); e.state = e.hp <= 0 ? 'dead' : 'stunned'; e.stateTime = 0; e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65; if(e.hp <= 0){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, knock); e.root.parent && e.root.parent.remove(e.root); if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
+  function finishWave(){ if(tuning.encounterFlow){ enterLull(); return; } wave++; director.onWaveClear(); startWave(); }
+  function damageEnemy(e, amount, knock = { x:0, z:0 }){ e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18); director.releaseAllForEnemy(e); e.state = e.hp <= 0 ? 'dead' : 'stunned'; e.stateTime = 0; e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65; if(e.hp <= 0){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, knock); e.root.parent && e.root.parent.remove(e.root); if(tuning.encounterFlow) maybeClearEncounterWave(); else if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
 
   const dist = (e,p) => Math.hypot(p.x - e.x, p.z - e.z) || 1;
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
@@ -313,9 +378,13 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   }
 
   function update(dt, player){
-    lastPlayer = player; spawnTimer -= dt;
-    const cap = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
-    if(spawnTimer <= 0 && spawnedThisWave < cap && enemies.length < cap){ spawn(chooseSpawnKind()); spawnTimer = nextSpawnDelay(wave); }
+    lastPlayer = player;
+    if(tuning.encounterFlow){ updateEncounter(dt); }
+    else {
+      spawnTimer -= dt;
+      const cap = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
+      if(spawnTimer <= 0 && spawnedThisWave < cap && enemies.length < cap){ spawn(chooseSpawnKind()); spawnTimer = nextSpawnDelay(wave); }
+    }
     director.update(dt, { enemies, pressureBudget: director.settings.pressureBudget }); director.markNearEligible(enemies, player); director.assignBattleCircleSlots(enemies, player);
     for(const e of [...enemies]) updateEnemy(e, dt, player);
     resolveEnemySpacing();
@@ -324,11 +393,14 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   }
   function setHeightScale(value){ tuning.heightScale = clamp(Number(value) || 1, .5, 4); enemies.forEach(applyEnemyVisual); }
   function setSpeedScale(value){ tuning.speedScale = clamp(Number(value) || 1, .25, 1.5); }
-  function setDirectorMode(mode){ director.setMode(mode); }
+  function setDirectorMode(mode){
+    if(mode === 'encounterFlow'){ tuning.encounterFlow = true; clearEnemies(); startEncounterWave(); }
+    else { tuning.encounterFlow = false; director.setMode(mode); }
+  }
   function setPressureBudget(value){ director.settings.pressureBudget = clamp(Number(value) || 1.75, .5, 4); }
   function setCycleOnWaveClear(value){ director.settings.cycleOnWaveClear = !!value; }
   function setWaveSize(value){ tuning.waveSize = clamp(Math.round(Number(value) || 6), 1, 20); }
   function setIdleRangeScale(value){ tuning.idleRangeScale = clamp(Number(value) || 4.5, 1, 6); director.settings.battleCircleRadius = 4.5 * tuning.idleRangeScale; director.getDebugState().slots.forEach(slot => { slot.radius = director.settings.battleCircleRadius; }); }
 
-  return { enemies, group, director, spawn, reset, update, damageEnemy, setGoblinColors, setGoblinRigDebug, setSpawnGoblins, setHeightScale, setSpeedScale, setDirectorMode, setPressureBudget, setCycleOnWaveClear, setWaveSize, setIdleRangeScale, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get waveSize(){ return tuning.waveSize; }, get idleRangeScale(){ return tuning.idleRangeScale; }, get wave(){ return wave; }, get waveKills(){ return waveKills; }, get kills(){ return kills; }, get playerHp(){ return tuning.playerHp; }, get lastPlayerHit(){ return tuning.lastPlayerHit; } };
+  return { enemies, group, director, spawn, reset, update, damageEnemy, setGoblinColors, setGoblinRigDebug, setSpawnGoblins, setHeightScale, setSpeedScale, setDirectorMode, setPressureBudget, setCycleOnWaveClear, setWaveSize, setIdleRangeScale, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get waveSize(){ return tuning.waveSize; }, get idleRangeScale(){ return tuning.idleRangeScale; }, get encounterFlow(){ return tuning.encounterFlow; }, get encounterPhase(){ return tuning.encounterFlow ? encounter.phase : ''; }, get wave(){ return wave; }, get waveKills(){ return waveKills; }, get kills(){ return kills; }, get playerHp(){ return tuning.playerHp; }, get lastPlayerHit(){ return tuning.lastPlayerHit; } };
 }

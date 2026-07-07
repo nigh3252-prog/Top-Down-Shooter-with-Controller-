@@ -2049,7 +2049,8 @@ function updateMainStatusLine(){
   const stanceName = st?.name || '—';
   const runtime=document.getElementById('combatRuntimeText');
   if(runtime) runtime.textContent=`Encounter: ${encounterLabel} · Stance: ${stanceName}`;
-  const enemy = director ? ` · Director: ${director.mode} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
+  const flowPhase = enemySystem?.encounterPhase ? ` · Flow: ${enemySystem.encounterPhase}` : '';
+  const enemy = director ? ` · Director: ${director.mode}${flowPhase} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
   const hp = enemySystem ? ` · HP ${Math.ceil(enemySystem.playerHp)}/100${enemySystem.lastPlayerHit ? ' · '+enemySystem.lastPlayerHit : ''}` : '';
   el.textContent=`□ Attack · △ Stance · ○ Random · ✕ Weapon · Aim: ${aimState.source || 'Idle'} · Last: ${swing}${stance}${damage}${enemy}${hp}${gp}`;
 }
@@ -2187,7 +2188,7 @@ function bindCombatChrome(){
   const syncPlayerSpeed=()=>{ const v=clamp(Number(playerSpeed?.value || speed), 1.5, 18); speed=v; if(playerSpeedOut) playerSpeedOut.textContent=v.toFixed(1); StoneSettings.set('combat.playerSpeed', playerSpeed?.value || String(v)); const labSpeed=document.getElementById('moveSpeed'); if(labSpeed) labSpeed.value=String(v); const labOut=document.getElementById('moveSpeedReadout'); if(labOut) labOut.textContent=v.toFixed(1); };
   const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); StoneSettings.set('combat.enemyHeight', height?.value || String(v)); };
   const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); StoneSettings.set('combat.enemySpeed', speedCtl?.value || String(v)); };
-  if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','oneAttacker'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
+  if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','encounterFlow'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
   const syncPressure=()=>{ const v=clamp(Number(pressureCtl?.value || 1.75), .5, 4); if(pressureOut) pressureOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.00$/,''); enemySystem?.setPressureBudget(v); StoneSettings.set('combat.pressureBudget', pressureCtl?.value || String(v)); };
   const syncWaveSize=()=>{ const v=clamp(Math.round(Number(waveSizeCtl?.value || 6)), 1, 20); if(waveSizeOut) waveSizeOut.textContent=String(v); enemySystem?.setWaveSize(v); StoneSettings.set('combat.waveSize', waveSizeCtl?.value || String(v)); };
   const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 4.5), 1, 6); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(1)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
