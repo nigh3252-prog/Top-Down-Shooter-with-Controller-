@@ -57,7 +57,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let spawnedThisWave = 0;
   let spawnTimer = 2.0;
   let nextId = 1;
-  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 1 };
+  const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5, spacingMode: 'classic' };
 
   const tmp = new THREE.Vector3();
   const weaponUp = new THREE.Vector3(0, 1, 0);
@@ -97,9 +97,9 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function updateSharedEnemyMarkers(e, h){
     e.barBg.position.set(0, h + .32, 0); e.bar.position.y = e.barBg.position.y;
     const band = getCombatBand(e);
-    if(e.tooCloseRing) e.tooCloseRing.scale.setScalar(band.tooCloseRange);
-    if(e.holdRing) e.holdRing.scale.setScalar(band.holdRange);
-    if(e.commitRing) e.commitRing.scale.setScalar(band.commitRange);
+    if(e.tooCloseRing){ e.tooCloseRing.scale.setScalar(band.tooCloseRange); e.tooCloseRing.visible = tuning.spacingMode === 'bands'; }
+    if(e.holdRing){ e.holdRing.scale.setScalar(band.holdRange); e.holdRing.visible = tuning.spacingMode === 'bands'; }
+    if(e.commitRing){ e.commitRing.scale.setScalar(band.commitRange); e.commitRing.visible = tuning.spacingMode === 'bands'; }
     if(e.telegraph){ e.telegraph.position.y = .035; e.telegraph.scale.setScalar(e.attack ? e.attack.range : band.attackRange); e.telegraph.visible = e.state === 'windup' || e.state === 'active'; e.telegraph.material = e.state === 'active' ? matByKind.active : matByKind.windup; }
     if(e.tokenRing) e.tokenRing.visible = !!e.token;
   }
@@ -171,9 +171,9 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     const bar = new THREE.Mesh(new THREE.BoxGeometry(s.radius * 1.7, .065, .045), matByKind.chaser); bar.position.copy(barBg.position); bar.position.z += .012; root.add(barBg, bar);
     const telegraph = new THREE.Mesh(new THREE.RingGeometry(.72, .78, 36), matByKind.windup); telegraph.rotation.x = -Math.PI/2; telegraph.visible = false; root.add(telegraph);
     const tokenRing = new THREE.Mesh(new THREE.TorusGeometry(s.radius * 1.25, .025, 6, 32), matByKind.windup); tokenRing.position.y = .08; tokenRing.visible = false; root.add(tokenRing);
-    const tooCloseRing = new THREE.Mesh(new THREE.RingGeometry(.985, 1.0, 48), bandMaterials.tooClose); tooCloseRing.rotation.x = -Math.PI/2; tooCloseRing.position.y = .022; root.add(tooCloseRing);
-    const holdRing = new THREE.Mesh(new THREE.RingGeometry(.99, 1.0, 56), bandMaterials.hold); holdRing.rotation.x = -Math.PI/2; holdRing.position.y = .026; root.add(holdRing);
-    const commitRing = new THREE.Mesh(new THREE.RingGeometry(.99, 1.0, 48), bandMaterials.commit); commitRing.rotation.x = -Math.PI/2; commitRing.position.y = .03; root.add(commitRing);
+    const tooCloseRing = new THREE.Mesh(new THREE.RingGeometry(.985, 1.0, 48), bandMaterials.tooClose); tooCloseRing.rotation.x = -Math.PI/2; tooCloseRing.position.y = .022; tooCloseRing.visible = false; root.add(tooCloseRing);
+    const holdRing = new THREE.Mesh(new THREE.RingGeometry(.99, 1.0, 56), bandMaterials.hold); holdRing.rotation.x = -Math.PI/2; holdRing.position.y = .026; holdRing.visible = false; root.add(holdRing);
+    const commitRing = new THREE.Mesh(new THREE.RingGeometry(.99, 1.0, 48), bandMaterials.commit); commitRing.rotation.x = -Math.PI/2; commitRing.position.y = .03; commitRing.visible = false; root.add(commitRing);
     return { root, ...visual, barBg, bar, telegraph, tokenRing, tooCloseRing, holdRing, commitRing };
   }
 
@@ -211,7 +211,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function approach(e, p, dt){ const n = norm(p.x - e.x, p.z - e.z); steer(e, n.x, n.z, 1, dt); e.facing = n; }
   function getCombatBand(e){
     const attack = ENEMY_ATTACK_BY_KIND[e.kind] || ENEMY_ATTACK_BY_KIND.chaser;
-    const scale = tuning.idleRangeScale;
+    const scale = clamp(tuning.idleRangeScale / 4.5, .75, 1.75);
     const base = {
       maceGoblin:{ commitRange:2.05, holdRange:2.8, tooCloseRange:2.0, retreatRange:2.4, orbitAmount:.55 },
       spearGoblin:{ commitRange:2.9, holdRange:4.0, tooCloseRange:2.8, retreatRange:3.3, orbitAmount:.45 },
@@ -220,7 +220,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     }[e.kind] || { commitRange:e.stop || 1.8, holdRange:(e.stop || 1.8) + .9, tooCloseRange:e.stop || 1.3, retreatRange:(e.stop || 1.3) + .4, orbitAmount:.5 };
     return { attackRange:attack?.range || base.commitRange, commitRange:base.commitRange, holdRange:base.holdRange * scale, tooCloseRange:base.tooCloseRange * scale, retreatRange:base.retreatRange * scale, orbitAmount:base.orbitAmount };
   }
-  function orbit(e, p, dt, amount=.55, desiredRange=null){
+  function bandOrbit(e, p, dt, amount=.55, desiredRange=null){
     const away = norm(e.x - p.x, e.z - p.z), toward = { x:-away.x, z:-away.z }, side = e.id % 2 ? 1 : -1;
     const tangent = { x:-away.z * side, z:away.x * side }, d = dist(e,p), desired = desiredRange ?? getCombatBand(e).holdRange;
     let radial = 0; if(d < desired - .25) radial = 1; else if(d > desired + .35) radial = -1;
@@ -230,11 +230,16 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function holdCombatBand(e, p, dt, band=getCombatBand(e)){
     const d = dist(e,p); if(d < band.tooCloseRange) { const away = norm(e.x-p.x, e.z-p.z); steer(e, away.x, away.z, .9, dt); e.facing = norm(p.x-e.x, p.z-e.z); return; }
     if(d > band.holdRange + .35) return approach(e, p, dt);
-    orbit(e, p, dt, band.orbitAmount, band.holdRange);
+    bandOrbit(e, p, dt, band.orbitAmount, band.holdRange);
   }
-  function moveToSlot(e, p, dt){ const slots = director.getDebugState().slots; const slot = slots[e.slotIndex]; if(!slot){ holdCombatBand(e,p,dt); return; } const tx = p.x + Math.cos(slot.angle) * slot.radius, tz = p.z + Math.sin(slot.angle) * slot.radius; const d = Math.hypot(tx-e.x, tz-e.z); const n = norm(tx-e.x, tz-e.z); if(d > .6) steer(e, n.x, n.z, .95, dt); else orbit(e,p,dt,.18,slot.radius); e.facing = norm(p.x - e.x, p.z - e.z); }
-  function deniedBehavior(e, p, dt){ const band = getCombatBand(e); if(director.getMode() === 'battleCircle') return moveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < band.holdRange + 1.2 * tuning.idleRangeScale) steer(e, away.x, away.z, .75, dt); else orbit(e,p,dt,band.orbitAmount,band.holdRange + 1.2 * tuning.idleRangeScale); return; } holdCombatBand(e,p,dt,band); }
+  function moveToSlot(e, p, dt){ const slots = director.getDebugState().slots; const slot = slots[e.slotIndex]; if(!slot){ holdCombatBand(e,p,dt); return; } const tx = p.x + Math.cos(slot.angle) * slot.radius, tz = p.z + Math.sin(slot.angle) * slot.radius; const d = Math.hypot(tx-e.x, tz-e.z); const n = norm(tx-e.x, tz-e.z); if(d > .6) steer(e, n.x, n.z, .95, dt); else bandOrbit(e,p,dt,.18,slot.radius); e.facing = norm(p.x - e.x, p.z - e.z); }
+  function deniedBehavior(e, p, dt){ const band = getCombatBand(e); if(director.getMode() === 'battleCircle') return moveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < band.holdRange + 1.2 * tuning.idleRangeScale) steer(e, away.x, away.z, .75, dt); else bandOrbit(e,p,dt,band.orbitAmount,band.holdRange + 1.2 * clamp(tuning.idleRangeScale / 4.5, .75, 1.75)); return; } holdCombatBand(e,p,dt,band); }
   function chooseAttack(e, p){ const a = ENEMY_ATTACK_BY_KIND[e.kind]; const band = getCombatBand(e); return a && dist(e,p) <= band.commitRange ? a : null; }
+  function classicIdleDesired(e){ return (e.kind === 'brute' ? 3.2 : 2.6) * tuning.idleRangeScale; }
+  function classicOrbit(e, p, dt, amount=.55){ const away = norm(e.x - p.x, e.z - p.z); const side = e.id % 2 ? 1 : -1; const tangent = { x:-away.z * side, z:away.x * side }; const d = dist(e,p); const desired = classicIdleDesired(e); const radial = d < desired - .4 ? 1 : (d > desired + 1.1 ? -1 : 0); const dir = norm(tangent.x * .85 - away.x * radial, tangent.z * .85 - away.z * radial); steer(e, dir.x, dir.z, amount, dt); e.facing = norm(p.x - e.x, p.z - e.z); }
+  function classicMoveToSlot(e, p, dt){ const slots = director.getDebugState().slots; const slot = slots[e.slotIndex]; if(!slot){ classicOrbit(e,p,dt); return; } const tx = p.x + Math.cos(slot.angle) * slot.radius, tz = p.z + Math.sin(slot.angle) * slot.radius; const d = Math.hypot(tx-e.x, tz-e.z); const n = norm(tx-e.x, tz-e.z); if(d > .6) steer(e, n.x, n.z, .95, dt); else classicOrbit(e,p,dt,.18); e.facing = norm(p.x - e.x, p.z - e.z); }
+  function classicDeniedBehavior(e, p, dt){ if(director.getMode() === 'battleCircle') return classicMoveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < 5 * tuning.idleRangeScale) steer(e, away.x, away.z, .7, dt); else classicOrbit(e,p,dt,.45); return; } classicOrbit(e,p,dt,e.kind === 'brute' ? .35 : .65); }
+  function chooseClassicAttack(e, p){ const a = ENEMY_ATTACK_BY_KIND[e.kind]; return a && dist(e,p) <= a.range + .65 ? a : null; }
   function prepareGoblinAttack(e){ if(!GOBLIN_KINDS.has(e.kind) || !e.stance?.chain?.length) return; const key = e.stance.chain[e.comboIndex % e.stance.chain.length]; const def = ATTACK_DEFINITIONS[key]; e.comboIndex++; e.visualAttackKey = key; e.visualAttack = def ? poseTools.buildAttack(def) : null; e.visualAttackTime = 0; e.visualAttackContactAt = e.visualAttack?.contactAt || 0; e.visualAttackTotal = e.visualAttack?.total || 0; }
   function startAttack(e, attack){ prepareGoblinAttack(e); e.attack = attack; e.state = 'windup'; e.stateTime = 0; e.windup = attack.windup; e.active = attack.active; e.recovery = attack.recovery; e.hitDone = false; e.facing = norm((lastPlayer.x ?? e.x) - e.x, (lastPlayer.z ?? e.z) - e.z); director.grant(e, attack); }
   let lastPlayer = { x:0, z:0 };
@@ -331,12 +336,20 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     else if(e.state === 'active'){ if(!e.hitDone){ hitPlayer(e, player); e.hitDone = true; } if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; director.release(e); } }
     else if(e.state === 'recovery'){ if(e.stateTime >= e.recovery){ e.cooldown = (e.attack?.cooldown || 1) * e.personality; e.attack = null; e.state = 'approach'; e.stateTime = 0; } }
     else if(e.state !== 'dead'){
-      const band = getCombatBand(e), attack = chooseAttack(e, player), d = dist(e, player);
-      if(d < band.tooCloseRange) holdCombatBand(e, player, dt, band);
-      else if(attack && e.cooldown <= 0 && director.canGrant(e, attack, { enemies, pressureBudget: director.settings.pressureBudget })) startAttack(e, attack);
-      else if(attack && e.cooldown <= 0) deniedBehavior(e, player, dt);
-      else if(director.getMode() === 'battleCircle') moveToSlot(e, player, dt);
-      else holdCombatBand(e, player, dt, band);
+      if(tuning.spacingMode === 'bands'){
+        const band = getCombatBand(e), attack = chooseAttack(e, player), d = dist(e, player);
+        if(d < band.tooCloseRange) holdCombatBand(e, player, dt, band);
+        else if(attack && e.cooldown <= 0 && director.canGrant(e, attack, { enemies, pressureBudget: director.settings.pressureBudget })) startAttack(e, attack);
+        else if(attack && e.cooldown <= 0) deniedBehavior(e, player, dt);
+        else if(director.getMode() === 'battleCircle') moveToSlot(e, player, dt);
+        else holdCombatBand(e, player, dt, band);
+      } else {
+        const attack = chooseClassicAttack(e, player);
+        if(attack && e.cooldown <= 0 && director.canGrant(e, attack, { enemies, pressureBudget: director.settings.pressureBudget })) startAttack(e, attack);
+        else if(attack && e.cooldown <= 0) classicDeniedBehavior(e, player, dt);
+        else if(director.getMode() === 'battleCircle') classicMoveToSlot(e, player, dt);
+        else if(dist(e, player) > e.stop * Math.min(tuning.idleRangeScale, 2.5)) approach(e, player, dt); else classicOrbit(e, player, dt, .4);
+      }
     }
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     applyGoblinPose(e, dt);
@@ -362,7 +375,8 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function setPressureBudget(value){ director.settings.pressureBudget = clamp(Number(value) || 1.75, .5, 4); }
   function setCycleOnWaveClear(value){ director.settings.cycleOnWaveClear = !!value; }
   function setWaveSize(value){ tuning.waveSize = clamp(Math.round(Number(value) || 6), 1, 20); }
-  function setIdleRangeScale(value){ tuning.idleRangeScale = clamp(Number(value) || 1, .75, 1.75); director.settings.battleCircleRadius = 4.5 * tuning.idleRangeScale; director.getDebugState().slots.forEach(slot => { slot.radius = director.settings.battleCircleRadius; }); enemies.forEach(applyEnemyVisual); }
+  function setIdleRangeScale(value){ tuning.idleRangeScale = clamp(Number(value) || 4.5, 1, 6); director.settings.battleCircleRadius = 4.5 * tuning.idleRangeScale; director.getDebugState().slots.forEach(slot => { slot.radius = director.settings.battleCircleRadius; }); enemies.forEach(applyEnemyVisual); }
+  function setEnemySpacingMode(mode){ tuning.spacingMode = mode === 'bands' ? 'bands' : 'classic'; enemies.forEach(applyEnemyVisual); }
 
-  return { enemies, group, director, spawn, reset, update, damageEnemy, setGoblinColors, setGoblinRigDebug, setSpawnGoblins, setHeightScale, setSpeedScale, setDirectorMode, setPressureBudget, setCycleOnWaveClear, setWaveSize, setIdleRangeScale, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get waveSize(){ return tuning.waveSize; }, get idleRangeScale(){ return tuning.idleRangeScale; }, get wave(){ return wave; }, get waveKills(){ return waveKills; }, get kills(){ return kills; }, get playerHp(){ return tuning.playerHp; }, get lastPlayerHit(){ return tuning.lastPlayerHit; } };
+  return { enemies, group, director, spawn, reset, update, damageEnemy, setGoblinColors, setGoblinRigDebug, setSpawnGoblins, setHeightScale, setSpeedScale, setDirectorMode, setPressureBudget, setCycleOnWaveClear, setWaveSize, setIdleRangeScale, setEnemySpacingMode, get heightScale(){ return tuning.heightScale; }, get speedScale(){ return tuning.speedScale; }, get waveSize(){ return tuning.waveSize; }, get idleRangeScale(){ return tuning.idleRangeScale; }, get wave(){ return wave; }, get waveKills(){ return waveKills; }, get kills(){ return kills; }, get playerHp(){ return tuning.playerHp; }, get lastPlayerHit(){ return tuning.lastPlayerHit; } };
 }
