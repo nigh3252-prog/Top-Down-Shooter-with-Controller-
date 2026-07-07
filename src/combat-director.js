@@ -11,7 +11,7 @@ export const DIRECTOR_MODES = [
 ];
 
 export const DEFAULT_DIRECTOR_SETTINGS = {
-  mode:'oneAttacker', pressureBudget:1.75, cycleOnWaveClear:true, nearCount:3,
+  mode:'pressureBudget', pressureBudget:1.75, cycleOnWaveClear:false, nearCount:3,
   battleCircleSlots:8, battleCircleRadius:4.5
 };
 

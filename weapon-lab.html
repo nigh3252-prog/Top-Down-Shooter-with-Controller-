@@ -418,7 +418,7 @@
     </label>
     <label class="row">
       <span>Cycle on clear</span>
-      <input id="combatCycleDirector" type="checkbox" checked />
+      <input id="combatCycleDirector" type="checkbox" />
     </label>
     <label class="row">
       <span>Wave enemies</span>
@@ -427,8 +427,8 @@
     </label>
     <label class="row">
       <span>Idle range</span>
-      <input id="combatIdleRange" type="range" min="1" max="6" step="0.1" value="4.5" />
-      <span class="readout" id="combatIdleRangeReadout">4.5×</span>
+      <input id="combatIdleRange" type="range" min="0.75" max="3" step="0.05" value="1.15" />
+      <span class="readout" id="combatIdleRangeReadout">1.15×</span>
     </label>
   </div>
 </div>
@@ -1387,7 +1387,7 @@ const combatState = {
   pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
   tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
   commitYaw:0, lastAttackLabel:'none',
-  hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
+  hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, prevEnemyZones:new Map(), lastCombatContact:'none'
 };
 const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
 const weaponBaseLocal = new THREE.Vector3(0,RIG.bladeBase,0);
@@ -1526,9 +1526,9 @@ function getWeaponHitZones(){
   if(hitboxScale !== 1) zones.forEach(zone => { zone.radius *= hitboxScale; zone.hitboxScale = hitboxScale; });
   return zones;
 }
-function getZoneWorld(zone){
+function getZoneWorld(zone, prevMap=dummyState.prevZones){
   const a=weaponRoot.localToWorld(zone.from.clone()); const b=weaponRoot.localToWorld(zone.to.clone());
-  const prev=dummyState.prevZones.get(zone.id); dummyState.prevZones.set(zone.id,{a:a.clone(),b:b.clone(),mid:a.clone().lerp(b,.5)});
+  const prev=prevMap.get(zone.id); prevMap.set(zone.id,{a:a.clone(),b:b.clone(),mid:a.clone().lerp(b,.5)});
   return {zone,a,b,prev,mid:a.clone().lerp(b,.5)};
 }
 function testZoneAgainstDummy(zw,dt){
@@ -1550,38 +1550,63 @@ function detectDummyHits(dt){
   if(best){combatState.hitIds.add(best.zone.id); applyDummyHit(best);}
 }
 
+function combatDamageWindowOpen(){
+  if(!combatState.attack) return false;
+  const contact = combatState.attack.contactAt || 0;
+  return combatState.t >= Math.max(0, contact - .035);
+}
+function zoneSweepDistanceToPoint(zw, center){
+  let d = pointSegmentDistance(center, zw.a, zw.b);
+  if(zw.prev) d = Math.min(d, pointSegmentDistance(center, zw.prev.a, zw.prev.b), pointSegmentDistance(center, zw.prev.a, zw.a), pointSegmentDistance(center, zw.prev.b, zw.b), pointSegmentDistance(center, zw.prev.mid, zw.mid));
+  return d;
+}
+function triggerCombatWhiffContactCue(){
+  if(combatState.hitIds?.size) return;
+  combatState.lastCombatContact = 'whiff';
+  combatTrail.flash = Math.max(combatTrail.flash, .18 * combatState.tune.impact);
+}
+function triggerCombatHitImpact(point, damage=1, killed=false){
+  combatState.lastCombatContact = killed ? 'kill' : 'hit';
+  const strength = clamp((damage || 1) / 32, .6, 1.55) * combatState.tune.impact;
+  combatState.hitStop = Math.max(combatState.hitStop, (killed ? .075 : .045) * strength);
+  combatTrail.flash = Math.max(combatTrail.flash, (killed ? 1.25 : .78) * strength);
+  combatState.wobble.vel += (Math.random()<.5?-1:1) * (killed ? 8.2 : 5.6) * strength;
+  if(point) burstCombat(point);
+}
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !weaponRoot || !enemySystem) return;
+  const zones = getWeaponHitZones().map(zone => getZoneWorld(zone, combatState.prevEnemyZones));
+  if(!combatDamageWindowOpen()) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
-  const zones = getWeaponHitZones();
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
     const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
     let best = null;
-    for(const zone of zones){
-      const a = weaponRoot.localToWorld(zone.from.clone());
-      const b = weaponRoot.localToWorld(zone.to.clone());
-      const threshold = e.radius + zone.radius + .38;
+    for(const zw of zones){
+      const threshold = e.radius + zw.zone.radius + .20;
       let bestDist = Infinity, bestCenter = hitSamples[1];
-      for(const center of hitSamples){ const d = pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
+      for(const center of hitSamples){ const d = zoneSweepDistanceToPoint(zw, center); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
+        const speed = zw.prev && dt > 0 ? zw.mid.distanceTo(zw.prev.mid) / dt : (tipSpeed || 0);
+        if(speed < .35) continue;
         const quality = 1 - clamp(bestDist / threshold, 0, 1);
-        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
-        const raw = zone.damage * (.82 + quality * .42) * weaponMult;
-        const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
-        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: bestCenter.clone().lerp(tipScene, .25), motion };
+        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zw.zone.type, zoneId: zw.zone.id });
+        const raw = zw.zone.damage * (.72 + clamp(speed / 18, 0, .75)) * (.86 + quality * .34) * weaponMult;
+        const motion = zw.prev ? zw.mid.clone().sub(zw.prev.mid) : tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
+        const cand = { zone:zw.zone, damage: Math.max(1, Math.round(raw)), point: zw.mid.clone().lerp(bestCenter, .35), motion, speed, quality };
         if(!best || cand.damage > best.damage) best = cand;
       }
     }
     if(best){
       combatState.hitIds.add(e);
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger, stagger: best.zone.stagger });
       const typeName = best.zone.type === 'hybrid' ? 'pierce/blunt' : best.zone.type;
       aimState.lastDamage = killed ? `defeated ${e.kind}` : `${best.damage} ${typeName} vs ${e.kind}`;
-      labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: tipSpeed || 0 }, typeName);
+      labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: best.speed || 0 }, typeName);
       if(killed) labRecordKill();
       spawnHitEffect(best.point, best.zone.type, best.damage, best.zone.label);
+      triggerCombatHitImpact(best.point, best.damage, killed);
       CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
       updateMainStatusLine();
     }
@@ -1593,6 +1618,7 @@ function applyDummyHit(hit){
   dummyState.lastHit=`${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg, speed ${hit.speed.toFixed(1)}.`;
   aimState.lastDamage=`${hit.damage} ${typeName} via ${hit.zone.label}`; labRecordHit(hit,typeName); updateMainStatusLine();
   CombatAudio.onDummyEvent({ damage: hit.damage, kill: false });
+  triggerCombatHitImpact(hit.point, hit.damage, false);
   const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0)); dummyState.knockV.add(impulse); dummyState.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
   spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label);
   if(dummyState.hp<=0) breakDummy(hit); updateDummyUI();
@@ -1686,7 +1712,7 @@ function startCombatAttack(key,group,labEvent=null){
   combatState.lastAttackLabel=att.label; aimState.lastSwing=att.label;
   CombatAudio.onAttackStart({ group: combatState.attackGroup, weapon: currentWeapon().label });
   combatState.activeLabEvent=labEvent; labState.activeEvent=labEvent;
-  combatState.t=0; combatState.fired=false; combatState.hitIds=new Set(); resetCombatTrail(combatState._lastTipScene || null); if(dummyState) dummyState.prevZones.clear();
+  combatState.t=0; combatState.fired=false; combatState.hitIds=new Set(); combatState.prevEnemyZones.clear(); resetCombatTrail(combatState._lastTipScene || null); if(dummyState) dummyState.prevZones.clear();
   syncCombatStatus(); updateMainStatusLine();
 }
 function triggerCombatAttack(name){
@@ -1868,7 +1894,7 @@ function updateCombat(dt,now,sway){
   let adt=dt; if(combatState.hitStop>0){combatState.hitStop-=dt; adt*=.06;}
   if(combatState.attack){
     const timeScale=currentAttackTimeScale(combatState.attack,combatState.t); combatState.t += adt / timeScale;
-    if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; combatState.hitStop=.04*combatState.tune.impact; combatTrail.flash=.9*combatState.tune.impact; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
+    if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; triggerCombatWhiffContactCue();}
     if(combatState.t>=combatState.attack.total){
       labOnAttackComplete();
       if(combatState.pending){
@@ -2049,7 +2075,8 @@ function updateMainStatusLine(){
   const stanceName = st?.name || '—';
   const runtime=document.getElementById('combatRuntimeText');
   if(runtime) runtime.textContent=`Encounter: ${encounterLabel} · Stance: ${stanceName}`;
-  const enemy = director ? ` · Director: ${director.mode} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
+  const contact = combatState.lastCombatContact ? ` · Contact ${combatState.lastCombatContact}` : '';
+  const enemy = director ? ` · Director: ${director.mode} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}${contact}` : '';
   const hp = enemySystem ? ` · HP ${Math.ceil(enemySystem.playerHp)}/100${enemySystem.lastPlayerHit ? ' · '+enemySystem.lastPlayerHit : ''}` : '';
   el.textContent=`□ Attack · △ Stance · ○ Random · ✕ Weapon · Aim: ${aimState.source || 'Idle'} · Last: ${swing}${stance}${damage}${enemy}${hp}${gp}`;
 }
@@ -2183,15 +2210,15 @@ function bindCombatChrome(){
   const height=StoneSettings.applyValue('enemyHeightScale','combat.enemyHeight','2'), heightOut=document.getElementById('enemyHeightScaleReadout');
   const speedCtl=StoneSettings.applyValue('enemySpeedScale','combat.enemySpeed','1'), speedOut=document.getElementById('enemySpeedScaleReadout');
   const directorMode=document.getElementById('combatDirectorMode'), pressureCtl=StoneSettings.applyValue('combatPressureBudget','combat.pressureBudget','1.75'), pressureOut=document.getElementById('combatPressureBudgetReadout'), cycleCtl=document.getElementById('combatCycleDirector');
-  const waveSizeCtl=StoneSettings.applyValue('combatWaveSize','combat.waveSize','6'), waveSizeOut=document.getElementById('combatWaveSizeReadout'), idleRangeCtl=StoneSettings.applyValue('combatIdleRange','combat.idleRange','4.5'), idleRangeOut=document.getElementById('combatIdleRangeReadout');
+  const waveSizeCtl=StoneSettings.applyValue('combatWaveSize','combat.waveSize','6'), waveSizeOut=document.getElementById('combatWaveSizeReadout'), idleRangeCtl=StoneSettings.applyValue('combatIdleRange','combat.idleRange','1.15'), idleRangeOut=document.getElementById('combatIdleRangeReadout');
   const syncPlayerSpeed=()=>{ const v=clamp(Number(playerSpeed?.value || speed), 1.5, 18); speed=v; if(playerSpeedOut) playerSpeedOut.textContent=v.toFixed(1); StoneSettings.set('combat.playerSpeed', playerSpeed?.value || String(v)); const labSpeed=document.getElementById('moveSpeed'); if(labSpeed) labSpeed.value=String(v); const labOut=document.getElementById('moveSpeedReadout'); if(labOut) labOut.textContent=v.toFixed(1); };
   const syncHeight=()=>{ const v=clamp(Number(height?.value || 1), .5, 4); if(heightOut) heightOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setHeightScale(v); StoneSettings.set('combat.enemyHeight', height?.value || String(v)); };
   const syncSpeed=()=>{ const v=clamp(Number(speedCtl?.value || 1), .25, 1.5); if(speedOut) speedOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'×'; enemySystem?.setSpeedScale(v); StoneSettings.set('combat.enemySpeed', speedCtl?.value || String(v)); };
-  if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','oneAttacker'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
+  if(directorMode){ directorMode.innerHTML=DIRECTOR_MODES.map(m=>`<option value="${m.id}">${m.label}</option>`).join(''); directorMode.value=StoneSettings.get('combat.directorMode','pressureBudget'); directorMode.addEventListener('change',e=>{ enemySystem?.setDirectorMode(e.target.value); StoneSettings.set('combat.directorMode', e.target.value); updateMainStatusLine(); }); }
   const syncPressure=()=>{ const v=clamp(Number(pressureCtl?.value || 1.75), .5, 4); if(pressureOut) pressureOut.textContent=v.toFixed(2).replace(/0$/,'').replace(/\.00$/,''); enemySystem?.setPressureBudget(v); StoneSettings.set('combat.pressureBudget', pressureCtl?.value || String(v)); };
   const syncWaveSize=()=>{ const v=clamp(Math.round(Number(waveSizeCtl?.value || 6)), 1, 20); if(waveSizeOut) waveSizeOut.textContent=String(v); enemySystem?.setWaveSize(v); StoneSettings.set('combat.waveSize', waveSizeCtl?.value || String(v)); };
-  const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 4.5), 1, 6); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(1)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
-  if(cycleCtl){ cycleCtl.checked=StoneSettings.get('combat.cycleDirector', true) !== 'false'; cycleCtl.addEventListener('change',e=>{ enemySystem?.setCycleOnWaveClear(e.target.checked); StoneSettings.set('combat.cycleDirector', e.target.checked); }); }
+  const syncIdleRange=()=>{ const v=clamp(Number(idleRangeCtl?.value || 1.15), .75, 3); if(idleRangeOut) idleRangeOut.textContent=v.toFixed(1)+'×'; enemySystem?.setIdleRangeScale(v); StoneSettings.set('combat.idleRange', idleRangeCtl?.value || String(v)); };
+  if(cycleCtl){ cycleCtl.checked=StoneSettings.get('combat.cycleDirector', false) === 'true'; cycleCtl.addEventListener('change',e=>{ enemySystem?.setCycleOnWaveClear(e.target.checked); StoneSettings.set('combat.cycleDirector', e.target.checked); }); }
   playerSpeed?.addEventListener('input',syncPlayerSpeed); height?.addEventListener('input',syncHeight); speedCtl?.addEventListener('input',syncSpeed); pressureCtl?.addEventListener('input',syncPressure); waveSizeCtl?.addEventListener('input',syncWaveSize); idleRangeCtl?.addEventListener('input',syncIdleRange);
   syncPlayerSpeed(); syncHeight(); syncSpeed(); syncPressure(); syncWaveSize(); syncIdleRange(); if(directorMode) enemySystem?.setDirectorMode(directorMode.value); if(cycleCtl) enemySystem?.setCycleOnWaveClear(cycleCtl.checked);
 }
