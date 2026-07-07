@@ -1194,6 +1194,16 @@ function attackDisplayLabel(key){
   return att ? `${att.label} — ${attackIndexLabel(key)}` : key;
 }
 const AUTHORED_STANCES = STANCE_CARDS;
+function authoredStancePoolForWeapon(weaponId = combatState.weapon){
+  const matching = AUTHORED_STANCES.filter(st => Array.isArray(st.preferredWeapons) && st.preferredWeapons.includes(weaponId));
+  return matching.length ? { stances: matching, fallback:false } : { stances: AUTHORED_STANCES, fallback:true };
+}
+function currentAuthoredPool(){ return authoredStancePoolForWeapon(combatState.weapon); }
+function stanceValidForWeapon(stance, weaponId = combatState.weapon){
+  if(!stance || stance.source === 'random') return true;
+  const pool = authoredStancePoolForWeapon(weaponId);
+  return pool.fallback || pool.stances.some(st => st.id === stance.id);
+}
 const labState = {
   sessionId:'S-'+Date.now().toString(36), authoredIndex:0, randomCounter:0,
   currentStance:null, source:'authored', comboIndex:0, comboWindow:.82, comboDeadline:0,
@@ -1219,18 +1229,29 @@ function setCurrentStance(stance,reason='select'){
   labState.currentStance={...stance,chain:[...stance.chain]}; labState.source=stance.source||labState.source; labState.comboIndex=0; labState.comboDeadline=0; labState.activeEvent=null; makeTrial(labState.currentStance,reason); updateLabUI(); updateMainStatusLine();
 }
 function selectAuthoredStance(index=0){
-  labState.authoredIndex=((index%AUTHORED_STANCES.length)+AUTHORED_STANCES.length)%AUTHORED_STANCES.length;
-  const st={...AUTHORED_STANCES[labState.authoredIndex], source:'authored'}; setCurrentStance(st,'authored');
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  labState.authoredIndex=((index%pool.length)+pool.length)%pool.length;
+  const st={...pool[labState.authoredIndex], source:'authored'}; setCurrentStance(st,'authored');
 }
 function nextAuthoredStance(){selectAuthoredStance(labState.authoredIndex+1);}
 function randomStance(){
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  const stance = pool[Math.floor(Math.random()*pool.length)] || AUTHORED_STANCES[0];
   labState.randomCounter++;
-  const chain=[0,1,2].map(()=>EXACT_ATTACK_POOL[Math.floor(Math.random()*EXACT_ATTACK_POOL.length)]);
-  setCurrentStance({id:'R'+String(labState.randomCounter).padStart(4,'0'), name:'Random '+String(labState.randomCounter).padStart(4,'0'), source:'random', chain},'random');
+  setCurrentStance({...stance, id:'R'+String(labState.randomCounter).padStart(4,'0')+'-'+stance.id, name:'Random '+stance.name, source:'random', chain:[...stance.chain]},'random');
+}
+function ensureStanceMatchesWeapon(reason='weapon'){
+  const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
+  if(!stanceValidForWeapon(labState.currentStance, combatState.weapon)){ labState.authoredIndex = 0; setCurrentStance({...pool[0], source:'authored'}, reason); return true; }
+  const idx = pool.findIndex(st => st.id === labState.currentStance?.id); if(idx >= 0) labState.authoredIndex = idx;
+  return false;
 }
 function nextWeaponForLab(){
   const idx=WEAPON_ORDER.indexOf(combatState.weapon); const next=WEAPON_ORDER[(idx+1+WEAPON_ORDER.length)%WEAPON_ORDER.length];
-  selectCombatWeapon(next); makeTrial(labState.currentStance || {...AUTHORED_STANCES[0],source:'authored'}, 'weapon'); updateLabUI(); updateMainStatusLine();
+  const beforeTrialSeq = labState.trialSeq;
+  selectCombatWeapon(next);
+  if(labState.trialSeq === beforeTrialSeq) makeTrial(labState.currentStance || {...currentAuthoredPool().stances[0],source:'authored'}, 'weapon');
+  updateLabUI(); updateMainStatusLine();
 }
 function setLabRating(value){
   if(!labState.currentTrial) return;
@@ -1249,7 +1270,8 @@ function updateLabUI(){
   summarizeTrial(tr);
   const chain=st.chain.map((key,i)=>`<span class="lab-chip">${i+1}. ${attackDisplayLabel(key)}</span>`).join('');
   const nextKey=st.chain[labState.comboIndex%3]; const deadline=labState.comboDeadline ? Math.max(0,labState.comboDeadline-performance.now()/1000) : 0;
-  el.innerHTML=`<strong>${st.name}</strong> <span class="rating-badge">${ratingGlyph(tr.rating)}</span><br>${st.source} · Weapon: <strong>${currentWeapon().label}</strong> · Next: <strong>${attackDisplayLabel(nextKey)}</strong>${deadline?` · Chain window ${deadline.toFixed(1)}s`:''}<div class="lab-chain">${chain}</div><div style="margin-top:6px">Trial ${tr.trialId}: ${tr.attempts||0} attacks · ${tr.hitCount||0} hits · ${tr.whiffCount||0} whiffs · ${tr.totalDamage||0} dmg · ${tr.kills||0} kills · saved rows ${labState.trials.length}</div>`;
+  const poolInfo=currentAuthoredPool(); const weaponFilter=poolInfo.fallback ? `Weapon: ${currentWeapon().label} · No matching stances, showing all` : `Weapon: ${currentWeapon().label} · Stances: ${poolInfo.stances.length} matching`;
+  el.innerHTML=`<strong>${st.name}</strong> <span class="rating-badge">${ratingGlyph(tr.rating)}</span><br>${st.source} · ${weaponFilter} · Next: <strong>${attackDisplayLabel(nextKey)}</strong>${deadline?` · Chain window ${deadline.toFixed(1)}s`:''}<div class="lab-chain">${chain}</div><div style="margin-top:6px">Trial ${tr.trialId}: ${tr.attempts||0} attacks · ${tr.hitCount||0} hits · ${tr.whiffCount||0} whiffs · ${tr.totalDamage||0} dmg · ${tr.kills||0} kills · saved rows ${labState.trials.length}</div>`;
 }
 function makeLabEvent(key,slot){
   const e={slot, attackKey:key, attackLabel:attackDisplayLabel(key), startedAt:new Date().toISOString(), completed:false, damage:0, hitCount:0, kills:0, zones:[], types:[], volumes:[], bestSpeed:0};
@@ -1614,6 +1636,7 @@ function selectCombatWeapon(id){
   combatState.weapon=id;
   combatState.tune=Object.assign({},TUNE_DEFAULTS,WEAPONS[id].tune||{});
   applyCombatWeaponTuning();
+  if(labState?.currentStance) ensureStanceMatchesWeapon('weapon');
   syncCombatUI();
 }
 function applyCombatWeaponTuning(){
