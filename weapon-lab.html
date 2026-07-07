@@ -2045,12 +2045,19 @@ function updateMainStatusLine(){
   const st=labState.currentStance; const tr=labState.currentTrial;
   const stance=st ? ` · Stance: ${st.name} ${ratingGlyph(tr?.rating||'')}` : '';
   const director = enemySystem?.director?.getDebugState?.();
-  const encounterLabel = director ? (DIRECTOR_MODES.find(m => m.id === director.mode)?.label || director.mode) : '—';
+  const flowActive = !!enemySystem?.encounterFlow;
+  const flowPhaseName = enemySystem?.encounterPhase ? enemySystem.encounterPhase.charAt(0).toUpperCase() + enemySystem.encounterPhase.slice(1) : '';
+  const subModeLabel = director ? (DIRECTOR_MODES.find(m => m.id === director.mode)?.label || director.mode) : '—';
+  // Encounter Flow composes several tactical sub-modes across a wave's beats, so the
+  // headline label names the flow itself (with its current beat) rather than whichever
+  // sub-mode happens to be driving gating at this instant — that sub-mode is still visible
+  // in the detailed status line below via subModeLabel.
+  const encounterLabel = flowActive ? `Encounter Flow${flowPhaseName ? ' — ' + flowPhaseName : ''}` : subModeLabel;
   const stanceName = st?.name || '—';
   const runtime=document.getElementById('combatRuntimeText');
   if(runtime) runtime.textContent=`Encounter: ${encounterLabel} · Stance: ${stanceName}`;
-  const flowPhase = enemySystem?.encounterPhase ? ` · Flow: ${enemySystem.encounterPhase}` : '';
-  const enemy = director ? ` · Director: ${director.mode}${flowPhase} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
+  const flowSuffix = flowActive ? ` (flow: ${enemySystem.encounterPhase})` : '';
+  const enemy = director ? ` · Director: ${subModeLabel}${flowSuffix} tokens ${director.activeTokens} cost ${director.activeCost.toFixed(1)}/${director.pressureBudget} · Wave ${enemySystem?.wave || 1} ${enemySystem?.waveKills || 0}/${enemySystem?.waveSize || 6}` : '';
   const hp = enemySystem ? ` · HP ${Math.ceil(enemySystem.playerHp)}/100${enemySystem.lastPlayerHit ? ' · '+enemySystem.lastPlayerHit : ''}` : '';
   el.textContent=`□ Attack · △ Stance · ○ Random · ✕ Weapon · Aim: ${aimState.source || 'Idle'} · Last: ${swing}${stance}${damage}${enemy}${hp}${gp}`;
 }
