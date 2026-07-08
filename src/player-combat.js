@@ -75,7 +75,7 @@ export function installPlayerCombat(api) {
     weapon:'longsword', attack:null, attackKey:null, attackGroup:'vertical', t:0, fired:false,
     pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
     tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
-    commitYaw:0, lastAttackLabel:'none',
+    commitYaw:0, lastAttackLabel:'none', stanceModifier:null, impactScale:1,
     hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
   };
   const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
@@ -153,6 +153,16 @@ export function installPlayerCombat(api) {
     zones.sort((a,b)=>{const score=z=>z.prefer===grp?3:(z.prefer==='swing'&&(grp==='vertical'||grp==='horizontal')?2:(z.prefer==='any'?1:0)); return score(b)-score(a) || b.damage-a.damage;});
     const hitboxScale = getWeaponHitboxScale();
     if(hitboxScale !== 1) zones.forEach(zone => { zone.radius *= hitboxScale; zone.hitboxScale = hitboxScale; });
+    const slotMod = combatState.stanceModifier;
+    if(slotMod){
+      const radiusScale = slotMod.hitboxScale ?? 1;
+      const damageScale = slotMod.damageScale ?? 1;
+      zones.forEach(zone => {
+        zone.radius *= radiusScale;
+        zone.damage = Math.max(1, Math.round(zone.damage * damageScale));
+        zone.stanceSlotKind = slotMod.name;
+      });
+    }
     return zones;
   }
   function getZoneWorld(zone, prevMap){
@@ -208,7 +218,7 @@ export function installPlayerCombat(api) {
     if(ATTACKS[name]) return {key:name,group:ATTACKS[name].group||name};
     return null;
   }
-  function startCombatAttack(key,group,labEvent=null){
+  function startCombatAttack(key,group,labEvent=null,options={}){
     const att=ATTACKS[key]; if(!att) return;
     const aim=hooks.resolveAttackFacing?.();
     if(aim){
@@ -217,6 +227,8 @@ export function installPlayerCombat(api) {
     }
     combatState.attack=att; combatState.attackKey=key; combatState.attackGroup=group||att.group||key; combatState.last=combatState.attackGroup;
     combatState.lastAttackLabel=att.label;
+    combatState.stanceModifier = options.stanceModifier || labEvent?.stanceModifier || null;
+    combatState.impactScale = combatState.stanceModifier?.impactScale ?? 1;
     hooks.onAttackStart?.({ key, group: combatState.attackGroup, label: att.label, weapon: currentWeapon().label, labEvent });
     combatState.activeLabEvent=labEvent;
     combatState.t=0; combatState.fired=false; combatState.hitIds=new Set(); resetCombatTrail(combatState._lastTipScene || null);
@@ -226,7 +238,7 @@ export function installPlayerCombat(api) {
     const picked=chooseAttack(name); if(!picked) return;
     hooks.flashCombatButton?.(picked.group);
     if(!combatState.attack) startCombatAttack(picked.key,picked.group);
-    else { combatState.pending=picked.key; combatState.pendingGroup=picked.group; if(combatState.t>combatState.attack.comboAt){startCombatAttack(picked.key,picked.group); combatState.pending=null; combatState.pendingGroup=null;} }
+    else { combatState.pending=picked.key; combatState.pendingGroup=picked.group; combatState.pendingLabEvent=null; if(combatState.t>combatState.attack.comboAt){startCombatAttack(picked.key,picked.group); combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;} }
   }
   function getAttackPhaseIndex(att,t){if(!att) return -1; for(let i=0;i<att.phases.length;i++){if(t<=att.phases[i].t1) return i;} return att.phases.length-1;}
   function currentAttackTimeScale(att,t){
@@ -234,6 +246,12 @@ export function installPlayerCombat(api) {
     let scale=1 + lengthDelta*.36 + weightDelta*.78;
     const phase=getAttackPhaseIndex(att,t);
     if(phase===0) scale*=tune.windup; else if(phase>=att.phases.length-1) scale*=tune.recovery; else if(t>=att.contactAt) scale*=tune.follow;
+    const slotMod=combatState.stanceModifier;
+    if(slotMod){
+      if(phase===0) scale*=slotMod.windupScale ?? 1;
+      else if(phase>=att.phases.length-1) scale*=slotMod.recoveryScale ?? 1;
+      else if(t>=att.contactAt) scale*=slotMod.followScale ?? 1;
+    }
     const mod=hooks.timeScaleModifier?.(att,t,phase);
     if(mod) scale*=mod;
     return clamp(scale,.32,3.1);
@@ -398,13 +416,17 @@ export function installPlayerCombat(api) {
     if(combatState.attack){
       const timeScale=currentAttackTimeScale(combatState.attack,combatState.t); combatState.t += adt / timeScale;
       if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
-      if(combatState.t>=combatState.attack.total){
+      if(combatState.pending && combatState.t>=combatState.attack.comboAt){
+        hooks.onAttackComplete?.();
+        startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null,{ stanceModifier: combatState.pendingLabEvent?.stanceModifier || null });
+        combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
+      } else if(combatState.t>=combatState.attack.total){
         hooks.onAttackComplete?.();
         if(combatState.pending){
-          startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null);
+          startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null,{ stanceModifier: combatState.pendingLabEvent?.stanceModifier || null });
           combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
         } else {
-          combatState.attack=null; combatState.t=0;
+          combatState.attack=null; combatState.t=0; combatState.stanceModifier=null; combatState.impactScale=1;
           hooks.onAttackChainIdle?.();
           if(combatState.loop) setTimeout(()=>triggerCombatAttack(combatState.last),80);
         }

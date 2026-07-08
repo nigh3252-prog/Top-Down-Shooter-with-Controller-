@@ -952,8 +952,17 @@ function updateLabUI(){
   const poolInfo=currentAuthoredPool(); const weaponFilter=poolInfo.fallback ? `Weapon: ${currentWeapon().label} · No matching stances, showing all` : `Weapon: ${currentWeapon().label} · Stances: ${poolInfo.stances.length} matching`;
   el.innerHTML=`<strong>${st.name}</strong> <span class="rating-badge">${ratingGlyph(tr.rating)}</span><br>${st.source} · ${weaponFilter} · Next: <strong>${attackDisplayLabel(nextKey)}</strong>${deadline?` · Chain window ${deadline.toFixed(1)}s`:''}<div class="lab-chain">${chain}</div><div style="margin-top:6px">Trial ${tr.trialId}: ${tr.attempts||0} attacks · ${tr.hitCount||0} hits · ${tr.whiffCount||0} whiffs · ${tr.totalDamage||0} dmg · ${tr.kills||0} kills · saved rows ${labState.trials.length}</div>`;
 }
+function stanceSlotModifier(slot){
+  const mods=[
+    {name:'light', damageScale:.65, windupScale:.72, followScale:.82, recoveryScale:.70, impactScale:.65, hitboxScale:.85},
+    {name:'regular', damageScale:1.00, windupScale:1.00, followScale:1.00, recoveryScale:.90, impactScale:1.00, hitboxScale:1.00},
+    {name:'finisher', damageScale:1.45, windupScale:1.35, followScale:1.08, recoveryScale:1.05, impactScale:1.45, hitboxScale:1.25},
+  ];
+  return mods[((slot%mods.length)+mods.length)%mods.length];
+}
 function makeLabEvent(key,slot){
-  const e={slot, attackKey:key, attackLabel:attackDisplayLabel(key), startedAt:new Date().toISOString(), completed:false, damage:0, hitCount:0, kills:0, zones:[], types:[], volumes:[], bestSpeed:0};
+  const mod=stanceSlotModifier(slot);
+  const e={slot, slotKind:mod.name, attackKey:key, attackLabel:attackDisplayLabel(key), stanceModifier:mod, startedAt:new Date().toISOString(), completed:false, damage:0, hitCount:0, kills:0, zones:[], types:[], volumes:[], bestSpeed:0};
   if(labState.currentTrial) labState.currentTrial.events.push(e); return e;
 }
 function labRecordHit(hit,typeName){
@@ -968,15 +977,17 @@ function labOnAttackComplete(){
 function canAcceptLabFollowup(){
   if(!combatState.attack) return true;
   if(combatState.pending) return false;
-  return combatState.t >= Math.max(.04, (combatState.attack.contactAt||.1)*.62);
+  const mod = combatState.stanceModifier || combatState.activeLabEvent?.stanceModifier;
+  const gate = mod?.name === 'finisher' ? .52 : .42;
+  return combatState.t >= Math.max(.025, (combatState.attack.contactAt||.1)*gate);
 }
 function queueExactLabAttack(key,slot){
   const att=ATTACKS[key]; if(!att) return false;
-  if(!canAcceptLabFollowup()){const st=document.getElementById('status'); if(st) st.textContent='Too early — wait for the combo timing window.'; return false;}
+  if(!canAcceptLabFollowup()){const st=document.getElementById('status'); if(st) st.textContent='Buffering soon…'; return false;}
   const group=att.group||attackGroupFor(key); const event=makeLabEvent(key,slot);
   flashCombatButton(group);
-  if(!combatState.attack) startCombatAttack(key,group,event);
-  else { combatState.pending=key; combatState.pendingGroup=group; combatState.pendingLabEvent=event; if(combatState.t>combatState.attack.comboAt){labOnAttackComplete(); startCombatAttack(key,group,event); combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;} }
+  if(!combatState.attack) startCombatAttack(key,group,event,{ stanceModifier:event.stanceModifier });
+  else { combatState.pending=key; combatState.pendingGroup=group; combatState.pendingLabEvent=event; if(combatState.t>combatState.attack.comboAt){labOnAttackComplete(); startCombatAttack(key,group,event,{ stanceModifier:event.stanceModifier }); combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;} }
   return true;
 }
 function labAttack(){
