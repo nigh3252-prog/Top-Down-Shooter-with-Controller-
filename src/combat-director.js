@@ -52,8 +52,9 @@ export function createCombatDirector(options = {}){
     if(state.mode === 'dodgeTraining') return active.length < 1 && state.time - state.lastThreatTime > .75;
     if(state.mode === 'oneAttacker' || state.mode === 'battleCircle' || state.mode === 'wavePacing') return active.length < 1 && state.time - state.lastThreatTime > gap;
     if(state.mode === 'eliteSpotlight'){
-      const bruteAlive = (context.enemies || []).some(e => e.kind === 'brute' && live(e) && e.stunned <= 0);
-      if(enemy.kind !== 'brute' && bruteAlive && active.length === 0 && Math.random() < .72) return false;
+      const isElite = e => e.kind === 'brute' || e.kind === 'captain';
+      const bruteAlive = (context.enemies || []).some(e => isElite(e) && live(e) && e.stunned <= 0);
+      if(!isElite(enemy) && bruteAlive && active.length === 0 && Math.random() < .72) return false;
       return active.length < 1 && state.time - state.lastThreatTime > .35;
     }
     if(state.mode === 'pressureBudget' || state.mode === 'nearFar'){

@@ -21,6 +21,17 @@ the core page it patched are retired to `archive/`.
   (aim commit, audio, lab bookkeeping, DOM status, dummy-vs-enemy hit routing)
   are injected through `api.hooks`.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
+- `goblin-rig.js` — `installGoblinRig(THREE)`, the shared articulated goblin
+  model (body/belly/belt/head/ears/eye/mouth + a held stone weapon), its
+  materials, the telegraph/token/health marker update, the attack glow, and the
+  death shatter. Used by both `enemies.js` (weapon-lab combat) and
+  `arena-enemies.js` (combat-arena).
+- `arena-enemies.js` — `createArenaEnemySystem(...)`, the combat-arena enemy
+  system: a port of the "Director Punch" enemy simulation (grunt / dagger / mace
+  / rock / captain) scaled to arena units, rendered with the goblin rig. Enemies
+  seek a tight hold distance and lunge-commit on the active phase, gated by the
+  `combat-director.js` token director; the rock archetype throws a projectile.
+  Drop-in API match for `createCombatEnemySystem`.
 - `feel.js` — the hold-to-charge feel continuum (WIMPY → DEFAULT → HAYMAKER →
   CARTOON keyframes, `createFeelKeys`/`feelAt`/`tierName`/`holdToTier`). Data
   only; `combat-arena.html` maps a hold duration to a tier and applies the

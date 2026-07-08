@@ -140,7 +140,7 @@ import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
-import { createCombatEnemySystem } from './src/enemies.js';
+import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { StoneSettings } from './src/settings.js';
@@ -326,8 +326,7 @@ function cycleWeapon(dir=1){
 }
 
 /* ---------- enemies ---------- */
-const enemySystem = createCombatEnemySystem({ THREE, worldRoot, dungeonScale: ARENA/4.9 });
-enemySystem.setIdleRangeScale(3);
+const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA });
 
 /* ---------- facing ---------- */
 function nearestEnemy(maxDist=Infinity){
