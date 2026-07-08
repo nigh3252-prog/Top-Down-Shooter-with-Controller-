@@ -12,13 +12,19 @@
 import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-director.js';
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
+import { createAttackInterpreter } from './attack-interpreter.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 
+// Single global bump for goblins that wield a real player weapon (vs the rig's
+// static .9). Scaling this up automatically grows the derived attack reach and
+// the stand-off distance (see computeRealReach), so spacing tracks the weapon.
+const GOBLIN_WEAPON_SCALE = 1.55;
+
 // Punch TYPES + goblin skin, distances/speeds pre-scaled by S. hp/score unchanged.
 const ARCHETYPES = {
-  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0 },
+  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
   rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
@@ -36,6 +42,10 @@ const EATK = {
 
 export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18 } = {}){
   const rig = installGoblinRig(THREE);
+  // Shared choreography interpreter — the exact same pose sampler the player uses
+  // (src/attack-interpreter.js), so a grunt swings the real player animation.
+  const interp = createAttackInterpreter(THREE);
+  const poseScratch = interp.P({ hold:[0,1,0], tip:[0,1,0] });
   const clamp = rig.clamp;
   const mats = rig.buildGoblinMaterials(materials);
   const bodyMats = {};
@@ -58,6 +68,31 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   const HOLD    = () => 1.55 * S * rangeK();
   const KEEP_NEAR = () => 1.35 * S * rangeK();
   const KEEP_FAR  = () => 2.4 * S * rangeK();
+
+  /* ---------- real-combat (grunt) pose mapping ---------- */
+  // The goblin rig holds a weapon built with these blade coords (goblin-rig.js RIG).
+  const GRIP_CENTER = -.14, BLADE_TIP = 1.15, ZONE_R = .16;
+  // "Combat space": maps a sampled player pose (hold/tip, ~unit scale) onto the
+  // goblin torso. hold scales by height; the grip sits at a chest anchor; lunge
+  // shifts forward. computeRealReach and applyRealCombatPose share these so the
+  // rendered weapon tip and the derived attack reach stay in lockstep.
+  const G_ANCHOR_Y = .46;   // * height  — grip anchor height (chest/shoulder)
+  const G_ANCHOR_Z = .28;   // * radius  — grip anchor forward of body center
+  const G_HOLD     = .30;   // * height  — pose.hold components -> torso units
+  const G_LUNGE    = .70;   // * radius  — pose.lunge -> forward torso shift
+  const HOLD_FRAC  = .94;   // stand this fraction of reach out (lunge-commit closes the rest)
+  const _UP = new THREE.Vector3(0,1,0), _q = new THREE.Quaternion(), _qr = new THREE.Quaternion();
+  const _tip = new THREE.Vector3(), _holdV = new THREE.Vector3(), _gripOff = new THREE.Vector3();
+
+  // Forward reach (body center -> weapon tip) at the attack's contact pose, in the
+  // same units as enemy positions. Derived entirely from the real animation + the
+  // real weapon length + scale, so spacing is emergent, not hand-authored.
+  function computeRealReach(att, geom, weaponScale){
+    const p = interp.sampleAttack(att, att.contactAt, poseScratch);
+    const holdZ = geom.radius*G_ANCHOR_Z + p.hold.z*(geom.height*G_HOLD) + p.lunge*(geom.radius*G_LUNGE);
+    const tipFwd = p.tip.z * (BLADE_TIP - GRIP_CENTER) * weaponScale;
+    return holdZ + tipFwd + ZONE_R*weaponScale;
+  }
 
   /* ---------- helpers ---------- */
   const dist = (e,p) => Math.hypot((p.x ?? 0) - e.x, (p.z ?? 0) - e.z) || 1;
@@ -85,10 +120,23 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       rockProp.position.set(.3, a.height*.6, .2); visual.weaponRigRoot.add(rockProp);
     }
     root.position.set(x, 0, z); group.add(root);
+    // Real-combat goblin (grunt): wield the real player weapon + a real basic
+    // attack, and derive its reach/spacing from that geometry.
+    let combatAtt = null, realAtk = null, holdDist = HOLD();
+    if(a.useRealCombat){
+      combatAtt = interp.ATTACKS[a.combatAttack];
+      const reach = computeRealReach(combatAtt, { height:a.height, radius:a.radius }, GOBLIN_WEAPON_SCALE);
+      // Keep the tuned EATK timings/damage/knock for balance; only the range is
+      // replaced by the real, geometry-derived reach.
+      realAtk = { ...EATK[a.attack], range: reach };
+      holdDist = reach * HOLD_FRAC;
+      visual.weaponRoot.scale.setScalar(GOBLIN_WEAPON_SCALE);
+    }
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
-      hp:a.hp, maxHp:a.hp, speed:a.speed, stop:HOLD(), score:a.score, poseScale:a.poseScale,
+      hp:a.hp, maxHp:a.hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
+      useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
@@ -110,7 +158,8 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function orbitPlayer(e, p, dt, amount=.55){
     const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
     const tx = (-rz/r)*e.orbitDir, tz = (rx/r)*e.orbitDir;
-    const corr = (HOLD() - r) * .7;
+    const hold = e.useRealCombat ? e.holdDist : HOLD();
+    const corr = (hold - r) * .7;
     steer(e, tx - rx/r*corr, tz - rz/r*corr, amount, dt);
   }
   function keepRange(e, p, dt, desired){
@@ -138,7 +187,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   /* ---------- attacks ---------- */
   function chooseAttack(e, d){
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
-    const a = EATK[e.attackId];
+    const a = e.useRealCombat ? e.realAtk : EATK[e.attackId];
     if(!a) return null;
     return d <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
   }
@@ -228,7 +277,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget })){
         startEnemyAttack(e, att, p);
       } else {
-        const wantRange = EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S;
+        const wantRange = e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S);
         if(d > wantRange + .45*S) seekPlayer(e, p, dt);
         else deniedBehavior(e, p, dt);
         e.x += e.vx*dt; e.z += e.vz*dt;
@@ -272,8 +321,38 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.weaponRigRoot.rotation.x = weaponA * k;
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
+  /* ---------- real-combat rig pose (grunt) ---------- */
+  // Maps the enemy state clock onto the real attack's timeline, samples the exact
+  // player pose (shared interpreter), then drives the goblin rig: torso coil +
+  // the weapon floated at the pose's hold point / tip direction. The rig has no
+  // arms, so — like its static weapon — the weapon simply hangs at the grip.
+  function applyRealCombatPose(e){
+    const att = e.combatAtt;
+    const activeAnim = (att.total - att.contactAt) * .45;   // post-contact swing carried by 'active'
+    let at = -1;                                            // -1 = idle -> IDLE pose
+    if(e.state === 'windup')        at = clamp(e.stateTime/Math.max(e.windup,1e-3),0,1) * att.contactAt;
+    else if(e.state === 'active')   at = att.contactAt + clamp(e.stateTime/Math.max(e.active,1e-3),0,1) * activeAnim;
+    else if(e.state === 'recovery'){ const start = att.contactAt + activeAnim; at = start + clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1) * (att.total - start); }
+    const pose = at >= 0 ? interp.sampleAttack(att, at, poseScratch)
+                         : interp.poseLerp(interp.IDLE, interp.IDLE, 0, poseScratch);
+    const h = e.height, r = e.radius;
+    // torso coil — kept light so the weapon swing (pose.tip) reads without the
+    // torso rotation double-compounding onto it.
+    e.torsoRoot.rotation.set(pose.pitch*.35, pose.twist*.18, pose.lean*.22);
+    e.torsoRoot.position.set(0, e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : -pose.lower*.10, 0);
+    // weapon transform in torso-local space (weaponRigRoot stays identity)
+    _tip.copy(pose.tip).normalize();
+    _q.setFromUnitVectors(_UP, _tip); _qr.setFromAxisAngle(_tip, pose.roll); _q.premultiply(_qr);
+    _holdV.set(pose.hold.x*(h*G_HOLD), h*G_ANCHOR_Y + pose.hold.y*(h*G_HOLD), r*G_ANCHOR_Z + pose.hold.z*(h*G_HOLD) + pose.lunge*(r*G_LUNGE));
+    _gripOff.set(0, GRIP_CENTER, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
+    e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(0,0,0); e.weaponRigRoot.scale.setScalar(1);
+    e.weaponRoot.position.copy(_holdV).sub(_gripOff);
+    e.weaponRoot.quaternion.copy(_q);
+    e.weaponRoot.scale.setScalar(e.weaponScale);
+    e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+  }
   function updateEnemyVisual(e){
-    applyPunchPose(e);
+    if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
     e.root.position.set(e.x, 0, e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.setScalar(flashScale);
     rig.applyGoblinVisual(e, tuning.heightScale, mats);
