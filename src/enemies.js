@@ -205,7 +205,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function prepareGoblinAttack(e){ if(!GOBLIN_KINDS.has(e.kind) || !e.stance?.chain?.length) return; const key = e.stance.chain[e.comboIndex % e.stance.chain.length]; const def = ATTACK_DEFINITIONS[key]; e.comboIndex++; e.visualAttackKey = key; e.visualAttack = def ? poseTools.buildAttack(def) : null; e.visualAttackTime = 0; e.visualAttackContactAt = e.visualAttack?.contactAt || 0; e.visualAttackTotal = e.visualAttack?.total || 0; }
   function startAttack(e, attack){ prepareGoblinAttack(e); e.attack = attack; e.state = 'windup'; e.stateTime = 0; e.windup = attack.windup; e.active = attack.active; e.recovery = attack.recovery; e.hitDone = false; e.facing = norm((lastPlayer.x ?? e.x) - e.x, (lastPlayer.z ?? e.z) - e.z); director.grant(e, attack); }
   let lastPlayer = { x:0, z:0 };
-  function hitPlayer(e, p){ const a = e.attack; const to = norm(p.x-e.x, p.z-e.z); const d = dist(e,p); const dot = to.x * e.facing.x + to.z * e.facing.z; const ang = Math.acos(clamp(dot, -1, 1)); if(d <= a.range + .45 && ang < (a.arc || 1)){ tuning.playerHp = Math.max(0, tuning.playerHp - a.damage); tuning.lastPlayerHit = `${e.kind} ${a.name} hit for ${a.damage}`; } }
+  function hitPlayer(e, p){ if(p.invulnerable) return; const a = e.attack; const to = norm(p.x-e.x, p.z-e.z); const d = dist(e,p); const dot = to.x * e.facing.x + to.z * e.facing.z; const ang = Math.acos(clamp(dot, -1, 1)); if(d <= a.range + .45 && ang < (a.arc || 1)){ tuning.playerHp = Math.max(0, tuning.playerHp - a.damage); tuning.lastPlayerHit = `${e.kind} ${a.name} hit for ${a.damage}`; } }
 
   function applyGoblinPose(e, dt){
     if(!GOBLIN_KINDS.has(e.kind) || !e.weaponRigRoot) return;

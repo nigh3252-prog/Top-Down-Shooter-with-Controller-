@@ -21,6 +21,10 @@ the core page it patched are retired to `archive/`.
   (aim commit, audio, lab bookkeeping, DOM status, dummy-vs-enemy hit routing)
   are injected through `api.hooks`.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
+- `feel.js` — the hold-to-charge feel continuum (WIMPY → DEFAULT → HAYMAKER →
+  CARTOON keyframes, `createFeelKeys`/`feelAt`/`tierName`/`holdToTier`). Data
+  only; `combat-arena.html` maps a hold duration to a tier and applies the
+  resulting multipliers to the player-combat swing timing/damage.
 - `combat-audio.js` — `installCombatAudioDirector()`, the procedural combat audio
   director. `weapon-lab.html` calls its `onAttackStart`/`onDummyEvent` methods
   directly at the point those events happen in its own combat code.
