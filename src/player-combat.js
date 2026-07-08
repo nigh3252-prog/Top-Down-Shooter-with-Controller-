@@ -76,8 +76,12 @@ export function installPlayerCombat(api) {
     pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
     tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
     commitYaw:0, lastAttackLabel:'none', stanceModifier:null, impactScale:1,
+    chainBlendPose:null, chainBlendTime:0, chainBlendDuration:0,
     hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
   };
+  const chainBlendPose = P({hold:[0,1,0],tip:[0,1,0]});
+  const chainBlendWork = P({hold:[0,1,0],tip:[0,1,0]});
+  const chainBlendOut = P({hold:[0,1,0],tip:[0,1,0]});
   const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
   const weaponBaseLocal = new THREE.Vector3(0,RIG.bladeBase,0);
   const weaponTipLocal = new THREE.Vector3(0,RIG.bladeTip,0);
@@ -95,6 +99,13 @@ export function installPlayerCombat(api) {
   let combatLayer = null, weaponRoot = null, driverDebug = null, rightArmA = null, rightArmB = null, leftArmA = null, leftArmB = null, rightHandProxy = null, leftHandProxy = null;
   let weaponParts = {}, activeWeaponKind = 'blade', haveCombatTip = false;
   const prevCombatTip = new THREE.Vector3();
+  function copyCombatPose(src,out){
+    out.hold.copy(src.hold); out.tip.copy(src.tip); out.roll=src.roll;
+    out.twist=src.twist; out.pitch=src.pitch; out.lean=src.lean;
+    out.hipTwist=src.hipTwist; out.hip.copy(src.hip);
+    out.lower=src.lower; out.lunge=src.lunge; out.head.copy(src.head);
+    return out;
+  }
 
   const combatTrail = (()=>{
     const N=24, pos=new Float32Array(N*2*3), col=new Float32Array(N*2*3), idx=[];
@@ -221,6 +232,16 @@ export function installPlayerCombat(api) {
   }
   function startCombatAttack(key,group,labEvent=null,options={}){
     const att=ATTACKS[key]; if(!att) return;
+    if(options.chainBlendFrom && combatState.attack){
+      copyCombatPose(sampleAttack(combatState.attack,combatState.t,chainBlendWork),chainBlendPose);
+      combatState.chainBlendPose=chainBlendPose;
+      combatState.chainBlendTime=0;
+      combatState.chainBlendDuration=options.chainBlendDuration ?? .06;
+    } else if(!options.preserveChainBlend){
+      combatState.chainBlendPose=null;
+      combatState.chainBlendTime=0;
+      combatState.chainBlendDuration=0;
+    }
     const aim=hooks.resolveAttackFacing?.();
     if(aim){
       combatState.commitYaw=aim.angle;
@@ -232,7 +253,10 @@ export function installPlayerCombat(api) {
     combatState.impactScale = combatState.stanceModifier?.impactScale ?? 1;
     hooks.onAttackStart?.({ key, group: combatState.attackGroup, label: att.label, weapon: currentWeapon().label, labEvent });
     combatState.activeLabEvent=labEvent;
-    combatState.t=0; combatState.fired=false; combatState.hitIds=new Set(); resetCombatTrail(combatState._lastTipScene || null);
+    combatState.t=options.startT ?? (options.chainStart ? chainedAttackStartOffset(att,labEvent) : 0);
+    combatState.fired=false; combatState.hitIds=new Set();
+    if(options.preserveTrail){ combatTrail.intensity*=.65; combatTrail.flash*=.65; }
+    else resetCombatTrail(combatState._lastTipScene || null);
     hooks.onAttackReset?.();
   }
   function triggerCombatAttack(name){
@@ -261,12 +285,25 @@ export function installPlayerCombat(api) {
     const e=combatState.activeLabEvent;
     return !!(combatState.pending && e && (e.hitConfirmed || e.hitCount > 0));
   }
+  function stanceCancelBlend(slotKind){
+    if(slotKind==='light') return .18;
+    if(slotKind==='finisher') return .45;
+    return .26;
+  }
   function currentAttackChainTime(att){
     if(!att) return Infinity;
     if(!canFastChainCurrentAttack()) return att.comboAt ?? att.total;
     const contact=att.contactAt || 0;
     const recoveryStart=att.comboAt ?? att.total;
-    return contact + Math.max(.035,(recoveryStart-contact)*.25);
+    const slotKind=combatState.activeLabEvent?.slotKind;
+    return contact + Math.max(.035,(recoveryStart-contact)*stanceCancelBlend(slotKind));
+  }
+  function chainedAttackStartOffset(att,labEvent){
+    if(!att || !labEvent) return 0;
+    const slotKind=labEvent.slotKind || labEvent.stanceModifier?.name;
+    const startRatio=slotKind==='finisher' ? .15 : .25;
+    const cap=slotKind==='finisher' ? .045 : .055;
+    return Math.min((att.contactAt || 0) * startRatio, cap);
   }
   function shapePoseForWeapon(p){
     if(!combatState.attack) return p;
@@ -430,22 +467,32 @@ export function installPlayerCombat(api) {
       if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
       const chainAt=currentAttackChainTime(combatState.attack);
       if(combatState.pending && combatState.t>=chainAt){
+        const pendingEvent=combatState.pendingLabEvent||null;
+        const chainOptions={ stanceModifier: pendingEvent?.stanceModifier || null, chainStart:!!pendingEvent, chainBlendFrom:!!pendingEvent, preserveTrail:!!pendingEvent };
         hooks.onAttackComplete?.();
-        startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null,{ stanceModifier: combatState.pendingLabEvent?.stanceModifier || null });
+        startCombatAttack(combatState.pending,combatState.pendingGroup,pendingEvent,chainOptions);
         combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
       } else if(combatState.t>=combatState.attack.total){
         hooks.onAttackComplete?.();
         if(combatState.pending){
-          startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null,{ stanceModifier: combatState.pendingLabEvent?.stanceModifier || null });
+          const pendingEvent=combatState.pendingLabEvent||null;
+          startCombatAttack(combatState.pending,combatState.pendingGroup,pendingEvent,{ stanceModifier: pendingEvent?.stanceModifier || null, chainStart:!!pendingEvent, chainBlendFrom:!!pendingEvent, preserveTrail:!!pendingEvent });
           combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
         } else {
-          combatState.attack=null; combatState.t=0; combatState.stanceModifier=null; combatState.impactScale=1;
+          combatState.attack=null; combatState.t=0; combatState.stanceModifier=null; combatState.impactScale=1; combatState.chainBlendPose=null; combatState.chainBlendTime=0; combatState.chainBlendDuration=0;
           hooks.onAttackChainIdle?.();
           if(combatState.loop) setTimeout(()=>triggerCombatAttack(combatState.last),80);
         }
       }
     }
-    const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : poseLerp(IDLE,IDLE,0,work);
+    let p = combatState.attack ? sampleAttack(combatState.attack,combatState.t,work) : poseLerp(IDLE,IDLE,0,work);
+    if(combatState.attack && combatState.chainBlendPose && combatState.chainBlendDuration>0){
+      combatState.chainBlendTime += dt;
+      const e=clamp(combatState.chainBlendTime/combatState.chainBlendDuration,0,1);
+      p=poseLerp(combatState.chainBlendPose,p,Ease.outCubic(e),chainBlendOut);
+      if(e>=1){ combatState.chainBlendPose=null; combatState.chainBlendDuration=0; combatState.chainBlendTime=0; }
+    }
+    p = combatState.attack ? shapePoseForWeapon(p) : p;
     applyCombatPoseToWarden(p,dt,now,sway);
     updateCombatSparks(dt);
   }

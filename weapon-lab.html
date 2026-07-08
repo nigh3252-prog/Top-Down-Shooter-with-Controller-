@@ -994,7 +994,7 @@ function queueExactLabAttack(key,slot){
   const group=att.group||attackGroupFor(key); const event=makeLabEvent(key,slot);
   flashCombatButton(group);
   if(!combatState.attack) startCombatAttack(key,group,event,{ stanceModifier:event.stanceModifier });
-  else { combatState.pending=key; combatState.pendingGroup=group; combatState.pendingLabEvent=event; if(combatState.t>combatState.attack.comboAt){labOnAttackComplete(); startCombatAttack(key,group,event,{ stanceModifier:event.stanceModifier }); combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;} }
+  else { combatState.pending=key; combatState.pendingGroup=group; combatState.pendingLabEvent=event; if(combatState.t>combatState.attack.comboAt){labOnAttackComplete(); startCombatAttack(key,group,event,{ stanceModifier:event.stanceModifier, chainStart:true, chainBlendFrom:true, preserveTrail:true }); combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;} }
   return true;
 }
 function labAttack(){
