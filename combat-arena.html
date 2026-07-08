@@ -145,6 +145,7 @@ import { DIRECTOR_MODES } from './src/combat-director.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
+import { installHitFeel, hitStageFromImpact } from './src/hit-feel.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -431,6 +432,7 @@ function triggerDodge(){
 /* ---------- hits: swept weapon zones vs enemies ---------- */
 const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
 const effects = [];
+const HitFeel = installHitFeel({ THREE, scene, camera, overlayParent: document.body, onCameraKick(kick){ shakeVel.x += kick.x; shakeVel.y += kick.y * .18; shakeVel.z += kick.z; } });
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
@@ -458,10 +460,12 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     if(best){
       combatState.hitIds.add(e);
       const stagger = best.zone.stagger * arena.swing.knockMult;
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger });
+      const tier = arena.charge.active ? arena.charge.tier : tierOfSwing();
+      const stage = hitStageFromImpact({ damage:best.damage, stagger, killed:false, tier, attackGroup:combatState.attackGroup });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger }, { stage, dir:best.motion });
       if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
-      onHitFeel(best.point, arena.charge.active ? arena.charge.tier : tierOfSwing());
-      spawnHitEffect(best.point, best.zone.type, best.damage);
+      onHitFeel(best.point, tier);
+      spawnHitEffect(best.point, best.zone.type, best.damage, stage, killed, best.motion, e.kind);
       CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
     }
   }
@@ -474,7 +478,8 @@ function onHitFeel(point, tier){
   shakeVel.y -= .7 * tier;
 }
 const HIT_TYPE_COLOR = { slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4 };
-function spawnHitEffect(point, type, damage){
+function spawnHitEffect(point, type, damage, stage=1, killed=false, motion=null, targetKind='enemy'){
+  HitFeel.trigger({point, dir:motion, type, damage, stage, killed, targetKind});
   const color = HIT_TYPE_COLOR[type] || 0xffffff;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.45,.035,6,24),
     new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false }));
@@ -836,6 +841,7 @@ function frame(){
     watchPlayerState(rawDt);
   }
   updateEffects(rawDt);
+  HitFeel.update(rawDt);
   updateCamera(rawDt);
   updateHud(rawDt);
   renderer.render(scene, camera);

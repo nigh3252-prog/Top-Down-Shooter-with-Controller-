@@ -4,6 +4,7 @@ import { ATTACK_DEFINITIONS } from './attacks.js';
 import { STANCE_CARDS } from './stance-cards.js';
 import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
+import { buildHitReaction } from './hit-feel.js';
 
 export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
@@ -120,7 +121,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     visual.root.position.set(x, 0, z); group.add(visual.root);
     spawnedThisWave++;
     const stance = STANCE_CARDS.find(card => card.id === s.stanceId) || STANCE_CARDS.find(card => card.preferredWeapons?.includes?.(s.weapon)) || STANCE_CARDS[0];
-    const e = { id: nextId++, kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0,
+    const e = { id: nextId++, kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, spin:0, spinVel:0,
       state:'approach', stateTime:0, attack:null, token:null, facing:{x:0,z:1}, windup:0, active:0, recovery:0, hitDone:false, stunned:0, nearEligible:true, slotIndex:-1, deniedTimer:0, cooldown:THREE.MathUtils.randFloat(.2, 1.1), personality:THREE.MathUtils.randFloat(.85, 1.15), weaponId:s.weapon, stance, comboIndex:0, visualAttack:null, visualAttackKey:null, visualAttackTime:0, visualAttackContactAt:0, visualAttackTotal:0, ...visual };
     applyEnemyVisual(e); enemies.push(e); return e;
   }
@@ -134,7 +135,12 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function clearDeathPieces(){ deathPieces.forEach(p => { if(p.mesh?.parent) p.mesh.parent.remove(p.mesh); }); deathPieces.length = 0; }
   function reset(){ director.reset(); enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); clearDeathPieces(); wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = ''; startWave(); }
   function finishWave(){ wave++; director.onWaveClear(); startWave(); }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){ e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18); director.releaseAllForEnemy(e); e.state = e.hp <= 0 ? 'dead' : 'stunned'; e.stateTime = 0; e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65; if(e.hp <= 0){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, knock); e.root.parent && e.root.parent.remove(e.root); if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
+  function applyHitReaction(e, amount, knock, opts = {}){
+    const reaction = buildHitReaction({ stage:opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.kind === 'brute' ? 1.6 : 1 });
+    e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
+    e.stunned = Math.max(e.stunned, reaction.stunned);
+  }
+  function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){ e.hp -= amount; e.flash = .16; applyHitReaction(e, amount, knock, opts); director.releaseAllForEnemy(e); e.state = e.hp <= 0 ? 'dead' : 'stunned'; e.stateTime = 0; e.knockX += (knock.x || 0) * (e.hitStage >= 3 ? .95 : .65); e.knockZ += (knock.z || 0) * (e.hitStage >= 3 ? .95 : .65); if(e.hp <= 0){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, knock); e.root.parent && e.root.parent.remove(e.root); if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
 
   const dist = (e,p) => Math.hypot(p.x - e.x, p.z - e.z) || 1;
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
@@ -210,7 +216,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   }
 
   function updateEnemy(e, dt, player){
-    e.flash = Math.max(0, e.flash - dt); e.stateTime += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.stunned = Math.max(0, e.stunned - dt);
+    e.flash = Math.max(0, e.flash - dt); e.hitT = Math.max(0, (e.hitT || 0) - dt); e.spin = (e.spin || 0) + (e.spinVel || 0) * dt; e.spinVel = (e.spinVel || 0) * Math.pow(.04, dt); e.stateTime += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.stunned = Math.max(0, e.stunned - dt);
     if(e.state === 'stunned' && e.stunned <= 0){ e.state = 'approach'; e.stateTime = 0; }
     else if(updateGoblinAttackState(e, dt, player)){ /* authored goblin attack timing handled above */ }
     else if(e.state === 'windup'){ e.facing = norm(player.x - e.x, player.z - e.z); if(e.stateTime >= e.windup){ e.state = 'active'; e.stateTime = 0; } }
@@ -226,7 +232,12 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     applyGoblinPose(e, dt);
     e.root.position.set(e.x, 0, e.z); e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
-    const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.set(flashScale, flashScale, flashScale); applyEnemyVisual(e);
+    const reactK = e.hitT > 0 && e.hitMax > 0 ? e.hitT / e.hitMax : 0;
+    const flashScale = 1 + Math.max(0, e.flash) * .18;
+    const squash = reactK * (e.squash || 0);
+    e.root.scale.set(flashScale * (1 + squash*.18), flashScale * (1 - squash*.22), flashScale * (1 + squash*.18));
+    e.root.position.y = reactK * (e.lift || 0);
+    applyEnemyVisual(e);
     if(!GOBLIN_KINDS.has(e.kind)) e.body.material = e.flash > 0 ? matByKind.flash : (e.state === 'active' ? matByKind.active : (e.state === 'windup' ? matByKind.windup : matByKind[e.kind]));
     const f = clamp(e.hp / e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f) * e.radius * .85; e.bar.lookAt(tmp.set(player.x, 2, player.z));
   }

@@ -12,6 +12,7 @@
 import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-director.js';
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
+import { buildHitReaction } from './hit-feel.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
@@ -141,7 +142,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
-      knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
+      knockX:0, knockZ:0, flash:0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, spin:0, spinVel:0, bobPhase:Math.random()*6.28,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -242,6 +243,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     if(e.hp <= 0) return;
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
+    e.hitT = Math.max(0, (e.hitT || 0) - dt); e.spin = (e.spin || 0) + (e.spinVel || 0) * dt; e.spinVel = (e.spinVel || 0) * Math.pow(.04, dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
@@ -354,7 +356,11 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function updateEnemyVisual(e){
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
     e.root.position.set(e.x, 0, e.z);
-    const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.setScalar(flashScale);
+    const reactK = e.hitT > 0 && e.hitMax > 0 ? e.hitT / e.hitMax : 0;
+    const flashScale = 1 + Math.max(0, e.flash) * .18;
+    const squash = reactK * (e.squash || 0);
+    e.root.scale.set(flashScale * (1 + squash*.18), flashScale * (1 - squash*.22), flashScale * (1 + squash*.18));
+    e.root.position.y = reactK * (e.lift || 0);
     rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
@@ -381,12 +387,17 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1);
     if(e.root.parent) e.root.parent.remove(e.root);
   }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){
+  function applyHitReaction(e, amount, knock, opts = {}){
+    const reaction = buildHitReaction({ stage:opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.isElite ? 1.7 : 1 });
+    e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
+    e.stunned = Math.max(e.stunned, reaction.stunned);
+  }
+  function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
     if(e.hp <= 0) return false;
-    e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18);
+    e.hp -= amount; e.flash = .16; applyHitReaction(e, amount, knock, opts);
     director.releaseAllForEnemy(e);
     if(e.state === 'windup' || e.state === 'active' || e.state === 'recovery'){ e.state = 'idle'; e.stateTime = 0; }
-    e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65;
+    e.knockX += (knock.x || 0) * (e.hitStage >= 3 ? .95 : .65); e.knockZ += (knock.z || 0) * (e.hitStage >= 3 ? .95 : .65);
     if(e.hp <= 0){
       kills++; waveKills++;
       rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron);

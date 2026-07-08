@@ -78,13 +78,21 @@ export function installGoblinRig(THREE){
   // Goblin body scale + attack/flash glow, then the shared markers.
   function applyGoblinVisual(e, heightScale, mats){
     const h = e.height * heightScale;
-    if(e.bodyRoot) e.bodyRoot.scale.setScalar(heightScale);
+    const reactK = e.hitT > 0 && e.hitMax > 0 ? e.hitT / e.hitMax : 0;
+    const squash = reactK * (e.squash || 0);
+    if(e.bodyRoot){
+      e.bodyRoot.scale.set(heightScale * (1 + squash*.16), heightScale * (1 - squash*.22), heightScale * (1 + squash*.16));
+      e.bodyRoot.position.y = reactK * (e.lift || 0) / Math.max(heightScale, .001);
+      const dirSign = ((e.hitDir?.x || 0) * Math.cos(e.root?.rotation?.y || 0)) - ((e.hitDir?.z || 0) * Math.sin(e.root?.rotation?.y || 0));
+      e.bodyRoot.rotation.z = -dirSign * reactK * (e.lean || 0) * .45 + (e.spin || 0) * reactK * .035;
+    }
+    if(e.headRoot) e.headRoot.rotation.z = reactK > 0 ? (e.bodyRoot?.rotation?.z || 0) * -.45 : 0;
     updateSharedEnemyMarkers(e, h, mats);
     if(e.goblinGlow){
       const attacking = e.state === 'windup' || e.state === 'active';
-      e.goblinGlow.visible = e.flash > 0 || attacking;
-      e.goblinGlow.material.opacity = clamp((e.flash * 2.8) + (e.state === 'active' ? .28 : (e.state === 'windup' ? .16 : 0)), 0, .55);
-      e.goblinGlow.material.color.setHex(e.state === 'active' ? 0xff6b55 : (e.flash > 0 ? 0xffffff : 0xffd36a));
+      e.goblinGlow.visible = e.flash > 0 || attacking || reactK > 0;
+      e.goblinGlow.material.opacity = clamp((e.flash * 2.8) + reactK*.42 + (e.state === 'active' ? .28 : (e.state === 'windup' ? .16 : 0)), 0, .72);
+      e.goblinGlow.material.color.setHex(reactK > 0 ? (e.hitStage >= 3 ? 0xffffff : 0xfff1a8) : (e.state === 'active' ? 0xff6b55 : (e.flash > 0 ? 0xffffff : 0xffd36a)));
       e.goblinGlow.position.y = e.height * .52;
       e.goblinGlow.scale.set(1.2, e.height * 1.1, 1.0);
     }
