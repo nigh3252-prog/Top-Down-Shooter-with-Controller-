@@ -160,6 +160,7 @@ export function installPlayerCombat(api) {
       zones.forEach(zone => {
         zone.radius *= radiusScale;
         zone.damage = Math.max(1, Math.round(zone.damage * damageScale));
+        zone.detectionBonus = slotMod.detectionBonus ?? .10;
         zone.stanceSlotKind = slotMod.name;
       });
     }
@@ -255,6 +256,17 @@ export function installPlayerCombat(api) {
     const mod=hooks.timeScaleModifier?.(att,t,phase);
     if(mod) scale*=mod;
     return clamp(scale,.32,3.1);
+  }
+  function canFastChainCurrentAttack(){
+    const e=combatState.activeLabEvent;
+    return !!(combatState.pending && e && (e.hitConfirmed || e.hitCount > 0));
+  }
+  function currentAttackChainTime(att){
+    if(!att) return Infinity;
+    if(!canFastChainCurrentAttack()) return att.comboAt ?? att.total;
+    const contact=att.contactAt || 0;
+    const recoveryStart=att.comboAt ?? att.total;
+    return contact + Math.max(.035,(recoveryStart-contact)*.25);
   }
   function shapePoseForWeapon(p){
     if(!combatState.attack) return p;
@@ -416,7 +428,8 @@ export function installPlayerCombat(api) {
     if(combatState.attack){
       const timeScale=currentAttackTimeScale(combatState.attack,combatState.t); combatState.t += adt / timeScale;
       if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
-      if(combatState.pending && combatState.t>=combatState.attack.comboAt){
+      const chainAt=currentAttackChainTime(combatState.attack);
+      if(combatState.pending && combatState.t>=chainAt){
         hooks.onAttackComplete?.();
         startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null,{ stanceModifier: combatState.pendingLabEvent?.stanceModifier || null });
         combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;

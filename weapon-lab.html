@@ -954,9 +954,9 @@ function updateLabUI(){
 }
 function stanceSlotModifier(slot){
   const mods=[
-    {name:'light', damageScale:.65, windupScale:.72, followScale:.82, recoveryScale:.70, impactScale:.65, hitboxScale:.85},
-    {name:'regular', damageScale:1.00, windupScale:1.00, followScale:1.00, recoveryScale:.90, impactScale:1.00, hitboxScale:1.00},
-    {name:'finisher', damageScale:1.45, windupScale:1.35, followScale:1.08, recoveryScale:1.05, impactScale:1.45, hitboxScale:1.25},
+    {name:'light', damageScale:.55, windupScale:.62, followScale:.70, recoveryScale:.52, impactScale:.55, hitboxScale:.68, detectionBonus:.08},
+    {name:'regular', damageScale:1.00, windupScale:.88, followScale:.88, recoveryScale:.62, impactScale:1.00, hitboxScale:1.00, detectionBonus:.14},
+    {name:'finisher', damageScale:1.45, windupScale:1.22, followScale:.98, recoveryScale:.82, impactScale:1.45, hitboxScale:1.18, detectionBonus:.18},
   ];
   return mods[((slot%mods.length)+mods.length)%mods.length];
 }
@@ -967,7 +967,7 @@ function makeLabEvent(key,slot){
 }
 function labRecordHit(hit,typeName){
   const e=combatState.activeLabEvent || labState.activeEvent; if(!e) return;
-  e.damage += hit.damage||0; e.hitCount++; e.bestSpeed=Math.max(e.bestSpeed||0, hit.speed||0); e.zones.push(hit.zone.label); e.types.push(typeName); e.volumes.push(hit.volume.name);
+  e.damage += hit.damage||0; e.hitCount++; e.hitConfirmed=true; e.bestSpeed=Math.max(e.bestSpeed||0, hit.speed||0); e.zones.push(hit.zone.label); e.types.push(typeName); e.volumes.push(hit.volume.name);
   if(labState.currentTrial){summarizeTrial(labState.currentTrial); saveLabData(); updateLabUI();}
 }
 function labRecordKill(){ const e=combatState.activeLabEvent || labState.activeEvent; if(e) e.kills=(e.kills||0)+1; }
@@ -977,12 +977,19 @@ function labOnAttackComplete(){
 function canAcceptLabFollowup(){
   if(!combatState.attack) return true;
   if(combatState.pending) return false;
+  const event=combatState.activeLabEvent || labState.activeEvent;
+  if(event && event.slot > 0 && !(event.hitConfirmed || event.hitCount > 0)) return false;
   const mod = combatState.stanceModifier || combatState.activeLabEvent?.stanceModifier;
-  const gate = mod?.name === 'finisher' ? .52 : .42;
+  if(event && !(event.hitConfirmed || event.hitCount > 0)) return false;
+  const gate = mod?.name === 'finisher' ? .46 : .30;
   return combatState.t >= Math.max(.025, (combatState.attack.contactAt||.1)*gate);
 }
 function queueExactLabAttack(key,slot){
   const att=ATTACKS[key]; if(!att) return false;
+  if(slot > 0 && combatState.activeLabEvent && !(combatState.activeLabEvent.hitConfirmed || combatState.activeLabEvent.hitCount > 0)){
+    const st=document.getElementById('status'); if(st) st.textContent='Confirm the hit to continue the stance combo.';
+    return false;
+  }
   if(!canAcceptLabFollowup()){const st=document.getElementById('status'); if(st) st.textContent='Buffering soon…'; return false;}
   const group=att.group||attackGroupFor(key); const event=makeLabEvent(key,slot);
   flashCombatButton(group);
@@ -994,7 +1001,9 @@ function labAttack(){
   if(!labState.currentStance) selectAuthoredStance(labState.authoredIndex||0);
   const now=performance.now()/1000;
   if(!combatState.attack && labState.comboDeadline && now>labState.comboDeadline) labState.comboIndex=0;
-  const slot=labState.comboIndex%3, key=labState.currentStance.chain[slot];
+  let slot=labState.comboIndex%3;
+  if(slot>0 && !combatState.attack){labState.comboIndex=0; slot=0;}
+  const key=labState.currentStance.chain[slot];
   if(queueExactLabAttack(key,slot)){labState.comboIndex=(slot+1)%3; updateLabUI(); updateMainStatusLine();}
 }
 function labAction(action){
@@ -1134,7 +1143,7 @@ function testZoneAgainstDummy(zw,dt,targetRoot=dummyRoot,targetScale=getDummyHei
   if(!targetRoot) return null;
   let best=null; const volumes=getDummyVolumesLocal();
   for(const vol of volumes){const center=targetRoot.localToWorld(vol.c.clone()); let d=pointSegmentDistance(center,zw.a,zw.b); if(zw.prev){d=Math.min(d,pointSegmentDistance(center,zw.prev.a,zw.prev.b),pointSegmentDistance(center,zw.prev.a,zw.a),pointSegmentDistance(center,zw.prev.b,zw.b),pointSegmentDistance(center,zw.prev.mid,zw.mid));}
-    const threshold=vol.r*targetScale+zw.zone.radius; if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.35) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
+    const threshold=vol.r*targetScale+zw.zone.radius+(zw.zone.detectionBonus||.10); if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.28) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
   return best;
 }
 function detectDummyHits(dt){
@@ -1177,7 +1186,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());
       const b = PC.weaponRoot.localToWorld(zone.to.clone());
-      const threshold = e.radius + zone.radius + .38;
+      const threshold = e.radius + zone.radius + .46 + (zone.detectionBonus || .10);
       let bestDist = Infinity, bestCenter = hitSamples[1];
       for(const center of hitSamples){ const d = pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
