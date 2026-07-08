@@ -235,9 +235,34 @@ export function installCombatAudioDirector({ log, controls = {}, settings = null
     }
   }
 
+  // Richer shared hit-feel endpoint. Existing callers can keep using
+  // onAttackStart/onDummyEvent, while the 3D scenes route resolved impacts here so
+  // audio layers line up with the visual/staged reaction event rather than button
+  // input.
+  function onHitFeel({ stage = 1, damage = 0, killed = false, type = '', targetKind = '', whiff = false } = {}) {
+    if (whiff) {
+      AudioDirector.play('swingLight', { damage: 8 });
+      setLog('whiff · air');
+      return;
+    }
+    const dummy = /dummy/i.test(targetKind);
+    const kill = killed || stage >= 3 && damage >= 34;
+    state.surge = clamp(state.surge + (killed ? 0.22 : damage / 620) + (stage - 1) * 0.04, 0, 1);
+    AudioDirector.play(killed ? 'kill' : (stage >= 2 || damage >= 30 ? 'hitHeavy' : 'hitLight'), { damage, kill: killed });
+    // Short material layer: dusty/woody chips for training targets, wet splash for living enemies.
+    if (stage >= 2 || killed) {
+      setTimeout(() => AudioDirector.play(dummy ? 'hitLight' : 'hurt', { damage: Math.max(10, damage * 0.45), kill:false }), 22);
+    }
+    if (stage >= 3 || kill) {
+      setTimeout(() => AudioDirector.play('hitHeavy', { damage: Math.max(42, damage), kill:killed }), 44);
+    }
+    setLog(`${killed ? 'kill' : 'stage ' + stage} · ${dummy ? 'wood/chips' : 'wet/body'} · ${type || 'impact'}`);
+  }
+
   const api = {
     onAttackStart,
     onDummyEvent,
+    onHitFeel,
     playTest(event) {
       if (event === 'hurt') {
         state.damage = clamp(state.damage + 0.18, 0, 1);

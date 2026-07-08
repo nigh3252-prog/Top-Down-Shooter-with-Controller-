@@ -90,6 +90,33 @@ export function installGoblinRig(THREE){
     }
   }
 
+  function applyHitReactionPose(e, heightScale = 1){
+    if(!e?.bodyRoot) return;
+    const t = e.hitMax ? clamp(1 - (e.hitT || 0) / e.hitMax, 0, 1) : 0;
+    const dir = e.hitDir || { x:0, z:1 };
+    const lean = (e.lean || 0) * t;
+    const squash = (e.squash || 0) * t;
+    const lift = (e.lift || 0) * t;
+    if(e.pelvis){
+      e.pelvis.position.y = lift / Math.max(.001, heightScale);
+      e.pelvis.scale.set(1 + squash*.22, Math.max(.72, 1 - squash), 1 + squash*.22);
+      e.pelvis.rotation.z += -dir.x * lean;
+      e.pelvis.rotation.x += dir.z * lean * .55;
+    }
+    if(e.torsoRoot){
+      e.torsoRoot.rotation.x += dir.z * lean * 1.25;
+      e.torsoRoot.rotation.z += -dir.x * lean * 1.35;
+    }
+    if(e.headRoot){
+      e.headRoot.rotation.x += dir.z * lean * 1.6;
+      e.headRoot.rotation.z += -dir.x * lean * 1.7;
+    }
+    if(e.weaponRigRoot){
+      e.weaponRigRoot.rotation.x += Math.sin((e.hitT || 0) * 44) * lean * .55;
+      e.weaponRigRoot.rotation.z += Math.cos((e.hitT || 0) * 37) * lean * .45;
+    }
+  }
+
   // Death shatter — spits the rig parts into free-flying pieces.
   function addDeathPieceFromObject(worldRoot, deathPieces, obj, geo, mat, knock, spread = 1){
     const pieceGeo = geo || obj.geometry?.clone?.() || new THREE.BoxGeometry(.2, .2, .2);
@@ -120,6 +147,7 @@ export function installGoblinRig(THREE){
   return {
     clamp, meshLocalBox, meshLocalIco, buildGoblinMaterials, makeGoblinRig,
     updateSharedEnemyMarkers, applyGoblinVisual,
+    applyHitReactionPose,
     addDeathPieceFromObject, shatterGoblin, updateDeathPieces
   };
 }

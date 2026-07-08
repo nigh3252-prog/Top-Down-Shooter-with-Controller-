@@ -13,6 +13,7 @@ import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-direct
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
+import { buildHitReaction } from './hit-feel.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
@@ -243,6 +244,8 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
+    if(e.hitMax) e.hitT = Math.min(e.hitMax, (e.hitT || 0) + dt);
+    if(e.launchedT > 0){ e.launchedT = Math.max(0, e.launchedT - dt); e.airVy = (e.airVy || 0) - 8.5*dt; e.lift = Math.max(0, (e.lift || 0) + e.airVy*dt); if(e.lift <= .02 && e.airVy < 0){ e.airVy *= -.25; e.lift = .02; } }
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
 
@@ -353,7 +356,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   }
   function updateEnemyVisual(e){
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
+    rig.applyHitReactionPose(e, tuning.heightScale);
     e.root.position.set(e.x, 0, e.z);
+    e.root.rotation.y += (e.spin || 0) * Math.max(0, 1 - (e.hitT || 0)/(e.hitMax || 1));
     const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.setScalar(flashScale);
     rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
@@ -381,15 +386,17 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1);
     if(e.root.parent) e.root.parent.remove(e.root);
   }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){
+  function damageEnemy(e, amount, knock = { x:0, z:0 }, reactionOpts = {}){
     if(e.hp <= 0) return false;
-    e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18);
+    e.hp -= amount; const killed = e.hp <= 0; const reaction = buildHitReaction({ ...reactionOpts, killed, dir:reactionOpts.dir || knock, weight:e.radius/1.0, targetKind:e.kind });
+    e.flash = .12 + reaction.stage*.03; e.stunned = Math.max(e.stunned, reaction.stunned);
     director.releaseAllForEnemy(e);
     if(e.state === 'windup' || e.state === 'active' || e.state === 'recovery'){ e.state = 'idle'; e.stateTime = 0; }
-    e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65;
+    e.hitT = 0; e.hitMax = reaction.hitMax; e.hitStage = reaction.stage; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.airVy = reaction.airVy; e.spin = reaction.spin; e.spinVel = reaction.spinVel; e.launchedT = reaction.launchedT;
+    e.knockX += (reaction.knock.x || knock.x || 0) * .65; e.knockZ += (reaction.knock.z || knock.z || 0) * .65;
     if(e.hp <= 0){
       kills++; waveKills++;
-      rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron);
+      rig.shatterGoblin(worldRoot, deathPieces, e, { x:e.knockX + (knock.x || 0), z:e.knockZ + (knock.z || 0) }, mats.matIron);
       removeEnemy(e);
       return true;
     }

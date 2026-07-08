@@ -477,6 +477,7 @@ import { DIRECTOR_MODES } from './src/combat-director.js';
 import { StoneSettings } from './src/settings.js';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
+import { installHitFeel, hitStageFromImpact } from './src/hit-feel.js';
 
 // Stone Wanderer rig + shared stone materials now live in src/stone-wanderer.js.
 // The weapon/arm builders below still use several of the shared materials.
@@ -591,7 +592,13 @@ const PC = installPlayerCombat({
       syncCombatStatus(); updateMainStatusLine();
     },
     onAttackReset(){ if(dummyState) dummyState.prevZones.clear(); },
-    onAttackComplete(){ labOnAttackComplete(); },
+    onAttackComplete(){
+      labOnAttackComplete();
+      if(!combatState.hitIds || combatState.hitIds.size === 0){
+        const p = new THREE.Vector3(actorPos.x + Math.sin(actorFacing)*1.5, 1.0, actorPos.y + Math.cos(actorFacing)*1.5);
+        HitFeel.trigger({ point:p, dir:{ x:Math.sin(actorFacing), z:Math.cos(actorFacing) }, whiff:true, label:'WHIFF', targetKind:'air' });
+      }
+    },
     onAttackChainIdle(){
       labState.comboDeadline = performance.now()/1000 + labState.comboWindow;
       syncCombatStatus(); updateLabUI();
@@ -1148,9 +1155,9 @@ function applyEdgeDummyHit(d,hit){
   aimState.lastDamage=`${hit.damage} ${typeName} vs edge dummy`; labRecordHit(hit,typeName); updateMainStatusLine();
   const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0));
   d.knockV.add(impulse); d.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
-  spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label);
+  const killed = d.hp<=0; const stage = hitStageFromImpact({ damage:hit.damage, stagger:hit.zone.stagger, killed, tier:hit.speed/12, attackGroup:combatState.attackGroup || combatState.attackKey, comboIndex:labState.comboIndex || 0, targetKind:'edgeDummy' });
+  HitFeel.trigger({ point:hit.point, dir:{ x:hit.motion.x, z:hit.motion.z }, type:hit.zone.type, damage:hit.damage, stage, killed, targetKind:'edgeDummy', label:stage===1?'STAGGER':stage===2?'REEL':'LAUNCH' });
   if(d.hp<=0) breakEdgeDummy(d,hit);
-  else CombatAudio.onDummyEvent({damage:hit.damage, kill:false});
   updateDummyUI();
 }
 
@@ -1180,13 +1187,13 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     }
     if(best){
       combatState.hitIds.add(e);
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger });
+      const stage = hitStageFromImpact({ damage:best.damage, stagger:best.zone.stagger, killed:false, tier:(tipSpeed||0)/12, attackGroup:combatState.attackGroup || combatState.attackKey, comboIndex:labState.comboIndex || 0, targetKind:e.kind });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger }, { stage, dir:{ x:best.motion.x, z:best.motion.z }, targetKind:e.kind });
       const typeName = best.zone.type === 'hybrid' ? 'pierce/blunt' : best.zone.type;
       aimState.lastDamage = killed ? `defeated ${e.kind}` : `${best.damage} ${typeName} vs ${e.kind}`;
       labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: tipSpeed || 0 }, typeName);
       if(killed) labRecordKill();
-      spawnHitEffect(best.point, best.zone.type, best.damage, best.zone.label);
-      CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
+      HitFeel.trigger({ point:best.point, dir:{ x:best.motion.x, z:best.motion.z }, type:best.zone.type, damage:best.damage, stage:killed?3:stage, killed, targetKind:e.kind, label:(killed?3:stage)===1?'STAGGER':(killed?3:stage)===2?'REEL':'LAUNCH' });
       updateMainStatusLine();
     }
   }
@@ -1196,9 +1203,9 @@ function applyDummyHit(hit){
   dummyState.hp-=hit.damage; const typeName=hit.zone.type==='hybrid'?'pierce/blunt':hit.zone.type;
   dummyState.lastHit=`${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg, speed ${hit.speed.toFixed(1)}.`;
   aimState.lastDamage=`${hit.damage} ${typeName} via ${hit.zone.label}`; labRecordHit(hit,typeName); updateMainStatusLine();
-  CombatAudio.onDummyEvent({ damage: hit.damage, kill: false });
   const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0)); dummyState.knockV.add(impulse); dummyState.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
-  spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label);
+  const killed = dummyState.hp<=0; const stage = hitStageFromImpact({ damage:hit.damage, stagger:hit.zone.stagger, killed, tier:hit.speed/12, attackGroup:combatState.attackGroup || combatState.attackKey, comboIndex:labState.comboIndex || 0, targetKind:'dummy' });
+  HitFeel.trigger({ point:hit.point, dir:{ x:hit.motion.x, z:hit.motion.z }, type:hit.zone.type, damage:hit.damage, stage, killed, targetKind:'dummy', label:stage===1?'STAGGER':stage===2?'REEL':'LAUNCH' });
   if(dummyState.hp<=0) breakDummy(hit); updateDummyUI();
 }
 function spawnHitEffect(point,type,damage,label){
@@ -1211,7 +1218,6 @@ function makeDamageSprite(text,color){
 function breakDummy(hit){
   labRecordKill();
   dummyState.alive=false; dummyState.respawnTimer=1.0; dummyRoot.visible=false; dummyState.lastHit=`Dummy shattered by ${hit.zone.label} (${hit.zone.type}) for ${hit.damage}. Respawning in 1 second.`; aimState.lastDamage=`shattered dummy with ${hit.zone.label}`; updateMainStatusLine();
-  CombatAudio.onDummyEvent({ damage: hit.damage, kill: true });
   spawnDummyDeathPieces(dummyRoot,hit,getDummyHeightScale());
 }
 function breakEdgeDummy(d,hit){
@@ -1219,7 +1225,6 @@ function breakEdgeDummy(d,hit){
   d.alive=false; d.respawnTimer=1.2; d.root.visible=false; d.hp=0; d.prevZones.clear();
   dummyState.lastHit=`Edge dummy shattered by ${hit.zone.label} (${hit.zone.type}) for ${hit.damage}. Respawning from the edge.`;
   aimState.lastDamage=`shattered edge dummy with ${hit.zone.label}`; updateMainStatusLine();
-  CombatAudio.onDummyEvent({ damage: hit.damage, kill: true });
   spawnDummyDeathPieces(d.root,hit,getDummyHeightScale());
 }
 function spawnDummyDeathPieces(sourceRoot,hit,scale=1){
@@ -1626,7 +1631,8 @@ window.addEventListener('resize', resize);
 
 const clock = new THREE.Clock();
 function animate() {
-  const dt = Math.min(clock.getDelta(), .033);
+  const rawDt = Math.min(clock.getDelta(), .033);
+  const dt = HitFeel.scaleDt(rawDt);
   pollGamepads();
   const keyboardMove = new THREE.Vector2((keyState.right?1:0) - (keyState.left?1:0), (keyState.down?1:0) - (keyState.up?1:0));
   const move = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove.clone() : (touchMove.lengthSq()>.01 ? touchMove.clone() : keyboardMove);
@@ -1671,7 +1677,8 @@ function animate() {
   updateDummy(dt);
 
   // BENT WORLD: camera scroll-follows the actor, then sky renders under the world.
-  BentWorld.update(dt);
+  BentWorld.update(rawDt);
+  HitFeel.update(rawDt);
   BentWorld.renderFrame();
   requestAnimationFrame(animate);
 }
@@ -1696,6 +1703,11 @@ const CombatAudio = installCombatAudioDirector({
     damageOut: document.getElementById('audioDamageOut'),
     testButtons: document.querySelectorAll('#combatAudioTuning [data-test]')
   }
+});
+const HitFeel = installHitFeel({
+  THREE, scene, camera, overlayParent:document.body,
+  onCameraKick(){ /* weapon lab camera is bent-world controlled; keep kick visual in overlay/effects. */ },
+  onAudioCue: cue => CombatAudio.onHitFeel(cue)
 });
 
 // BENT WORLD: patch every material in the fully-built scene with the cylinder

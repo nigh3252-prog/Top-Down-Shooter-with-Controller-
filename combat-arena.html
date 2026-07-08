@@ -145,6 +145,7 @@ import { DIRECTOR_MODES } from './src/combat-director.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
+import { installHitFeel, hitStageFromImpact } from './src/hit-feel.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -226,6 +227,11 @@ for(let i=0;i<12;i++){
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
 const WEAPONS = cloneWeaponDefinitions();
 const CombatAudio = installCombatAudioDirector({ controls:{} , settings:StoneSettings });
+const HitFeel = installHitFeel({
+  THREE, scene, camera, overlayParent:document.body,
+  onCameraKick({ dir, stage, killed }){ shakeVel.x += dir.x * (1.2 + stage*.7); shakeVel.z += dir.z * (1.2 + stage*.7); shakeVel.y -= .35*stage; },
+  onAudioCue: cue => CombatAudio.onHitFeel(cue)
+});
 
 /* ---------- stone wanderer + player combat ---------- */
 const StoneWanderer = installStoneWanderer({ THREE });
@@ -280,6 +286,12 @@ const PC = installPlayerCombat({
       arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
+    onAttackComplete(){
+      if(!combatState.hitIds || combatState.hitIds.size === 0){
+        const p = new THREE.Vector3(actorPos.x + Math.sin(actorFacing)*2.0, 1.1, actorPos.y + Math.cos(actorFacing)*2.0);
+        HitFeel.trigger({ point:p, dir:{ x:Math.sin(actorFacing), z:Math.cos(actorFacing) }, whiff:true, label:'WHIFF', targetKind:'air' });
+      }
+    },
     onWeaponSelected(){ ensureStanceMatchesWeapon(); },
     onWeaponUISync(){ updatePill(); },
     timeScaleModifier(att, t, phase){
@@ -458,11 +470,12 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     if(best){
       combatState.hitIds.add(e);
       const stagger = best.zone.stagger * arena.swing.knockMult;
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger });
+      const stage = hitStageFromImpact({ damage:best.damage, stagger, killed:false, tier:arena.charge.active ? arena.charge.tier : tierOfSwing(), attackGroup:combatState.attackGroup || combatState.attackKey, comboIndex:arena.chain.comboIndex, targetKind:e.kind });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger }, { stage, dir:{ x:best.motion.x, z:best.motion.z }, targetKind:e.kind });
       if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
+      const finalStage = killed ? 3 : stage;
       onHitFeel(best.point, arena.charge.active ? arena.charge.tier : tierOfSwing());
-      spawnHitEffect(best.point, best.zone.type, best.damage);
-      CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
+      HitFeel.trigger({ point:best.point, dir:{ x:best.motion.x, z:best.motion.z }, type:best.zone.type, damage:best.damage, stage:finalStage, killed, targetKind:e.kind, label:finalStage===1?'STAGGER':finalStage===2?'REEL':'LAUNCH' });
     }
   }
 }
@@ -828,14 +841,16 @@ function frame(){
   pollPad();
   gatherInput();
   if(!isPaused()){
-    updatePlayer(rawDt);
-    enemySystem.update(rawDt, {
+    const simDt = HitFeel.scaleDt(rawDt);
+    updatePlayer(simDt);
+    enemySystem.update(simDt, {
       x: actorPos.x, z: actorPos.y,
       invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
     });
-    watchPlayerState(rawDt);
+    watchPlayerState(simDt);
   }
   updateEffects(rawDt);
+  HitFeel.update(rawDt);
   updateCamera(rawDt);
   updateHud(rawDt);
   renderer.render(scene, camera);

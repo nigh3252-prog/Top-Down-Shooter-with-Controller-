@@ -4,6 +4,7 @@ import { ATTACK_DEFINITIONS } from './attacks.js';
 import { STANCE_CARDS } from './stance-cards.js';
 import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
+import { buildHitReaction } from './hit-feel.js';
 
 export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
@@ -134,7 +135,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function clearDeathPieces(){ deathPieces.forEach(p => { if(p.mesh?.parent) p.mesh.parent.remove(p.mesh); }); deathPieces.length = 0; }
   function reset(){ director.reset(); enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); clearDeathPieces(); wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = ''; startWave(); }
   function finishWave(){ wave++; director.onWaveClear(); startWave(); }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){ e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18); director.releaseAllForEnemy(e); e.state = e.hp <= 0 ? 'dead' : 'stunned'; e.stateTime = 0; e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65; if(e.hp <= 0){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, knock); e.root.parent && e.root.parent.remove(e.root); if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
+  function damageEnemy(e, amount, knock = { x:0, z:0 }, reactionOpts = {}){ e.hp -= amount; const killed = e.hp <= 0; const reaction = buildHitReaction({ ...reactionOpts, killed, dir:reactionOpts.dir || knock, weight:e.radius/.42, targetKind:e.kind }); e.flash = .12 + reaction.stage*.03; e.stunned = Math.max(e.stunned, reaction.stunned); director.releaseAllForEnemy(e); e.state = killed ? 'dead' : 'stunned'; e.stateTime = 0; e.hitT = 0; e.hitMax = reaction.hitMax; e.hitStage = reaction.stage; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.airVy = reaction.airVy; e.spin = reaction.spin; e.spinVel = reaction.spinVel; e.launchedT = reaction.launchedT; e.knockX += (reaction.knock.x || knock.x || 0) * .65; e.knockZ += (reaction.knock.z || knock.z || 0) * .65; if(killed){ kills++; waveKills++; const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1); shatterEnemy(e, { x:e.knockX + (knock.x || 0), z:e.knockZ + (knock.z || 0) }); e.root.parent && e.root.parent.remove(e.root); if(waveKills >= tuning.waveSize) finishWave(); return true; } return false; }
 
   const dist = (e,p) => Math.hypot(p.x - e.x, p.z - e.z) || 1;
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
@@ -163,6 +164,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     tipQ.setFromUnitVectors(weaponUp, p.tip);
     rollQ.setFromAxisAngle(p.tip, p.roll);
     e.weaponRigRoot.quaternion.copy(tipQ).multiply(rollQ);
+    rig.applyHitReactionPose(e, tuning.heightScale);
   }
 
 
@@ -211,7 +213,9 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
 
   function updateEnemy(e, dt, player){
     e.flash = Math.max(0, e.flash - dt); e.stateTime += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.stunned = Math.max(0, e.stunned - dt);
-    if(e.state === 'stunned' && e.stunned <= 0){ e.state = 'approach'; e.stateTime = 0; }
+    if(e.hitMax) e.hitT = Math.min(e.hitMax, (e.hitT || 0) + dt);
+    if(e.launchedT > 0){ e.launchedT = Math.max(0, e.launchedT - dt); e.airVy = (e.airVy || 0) - 8.5*dt; e.lift = Math.max(0, (e.lift || 0) + e.airVy*dt); if(e.lift <= .02 && e.airVy < 0){ e.airVy *= -.28; e.lift = .02; } }
+    if(e.state === 'stunned' && e.stunned <= 0 && e.launchedT <= 0){ e.state = 'approach'; e.stateTime = 0; }
     else if(updateGoblinAttackState(e, dt, player)){ /* authored goblin attack timing handled above */ }
     else if(e.state === 'windup'){ e.facing = norm(player.x - e.x, player.z - e.z); if(e.stateTime >= e.windup){ e.state = 'active'; e.stateTime = 0; } }
     else if(e.state === 'active'){ if(!e.hitDone){ hitPlayer(e, player); e.hitDone = true; } if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; director.release(e); } }
@@ -225,7 +229,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     }
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     applyGoblinPose(e, dt);
-    e.root.position.set(e.x, 0, e.z); e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+    e.root.position.set(e.x, 0, e.z); e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z) + (e.spin || 0) * Math.max(0, 1 - (e.hitT || 0)/(e.hitMax || 1));
     const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.set(flashScale, flashScale, flashScale); applyEnemyVisual(e);
     if(!GOBLIN_KINDS.has(e.kind)) e.body.material = e.flash > 0 ? matByKind.flash : (e.state === 'active' ? matByKind.active : (e.state === 'windup' ? matByKind.windup : matByKind[e.kind]));
     const f = clamp(e.hp / e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f) * e.radius * .85; e.bar.lookAt(tmp.set(player.x, 2, player.z));
