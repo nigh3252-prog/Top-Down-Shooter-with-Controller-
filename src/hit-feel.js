@@ -117,6 +117,22 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
     }
   }
 
+  function bloodSpray(point, dir, stage, bloodColor){
+    const p = v3(point).add(new THREE.Vector3(0, .62, 0)), d = dir3(dir), side = new THREE.Vector3(-d.z, 0, d.x);
+    const count = stage >= 3 ? 120 : (stage === 2 ? 62 : 28);
+    for(let i=0;i<count;i++){
+      const streak = Math.random() > .42;
+      const geo = streak ? new THREE.BoxGeometry(rand(.035,.08), rand(.035,.08), rand(.20,.56)) : new THREE.DodecahedronGeometry(rand(.035,.075), 0);
+      const mat = new THREE.MeshBasicMaterial({ color:Math.random() > .18 ? bloodColor : 0xff4a22, transparent:true, opacity:rand(.78,1), depthWrite:false });
+      const m = new THREE.Mesh(geo, mat); m.position.copy(p).add(side.clone().multiplyScalar(rand(-.14,.14)));
+      m.rotation.set(rand(-1.2,1.2), planarAngle(d) + rand(-.7,.7), rand(-1.2,1.2));
+      const vel = d.clone().multiplyScalar(rand(2.4, stage >= 3 ? 9.6 : 6.4))
+        .add(side.clone().multiplyScalar(rand(-3.8,3.8)))
+        .add(new THREE.Vector3(0, rand(1.8, stage >= 3 ? 6.6 : 4.8), 0));
+      add(m, rand(.26,.82), 'bloodDrop', { vel, gravity:6.6, spin:new THREE.Vector3(rand(-12,12),rand(-12,12),rand(-12,12)), bloodColor });
+    }
+  }
+
   function particleBurst(point, dir, color, stage, type, targetKind){
     const p = v3(point), d = dir3(dir); const dummy = isDummy(targetKind); const count = stage >= 3 ? 86 : 24 + stage*18;
     const side = new THREE.Vector3(-d.z, 0, d.x);
@@ -134,14 +150,14 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   function groundSplat(pos, dir, color, amount = 8, big = false, targetKind = ''){
     if(isDummy(targetKind)) return dummyDebris(pos, dir, amount, big);
     const p0 = v3(pos), d = dir3(dir), side = new THREE.Vector3(-d.z,0,d.x);
-    const count = Math.min(70, Math.max(0, amount));
+    const count = Math.min(110, Math.max(0, amount));
     for(let i=0;i<count;i++){
-      const r = rand(.06, big ? .27 : .16);
+      const r = rand(.08, big ? .45 : .24);
       const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 9), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:rand(.45,.84), depthWrite:false, side:THREE.DoubleSide }));
       mesh.rotation.x = -Math.PI/2;
-      const p = p0.clone().add(d.clone().multiplyScalar(rand(-.12, big ? 1.45 : .75))).add(side.clone().multiplyScalar(rand(big ? -1.1 : -.55, big ? 1.1 : .55)));
+      const p = p0.clone().add(d.clone().multiplyScalar(rand(-.16, big ? 2.4 : 1.05))).add(side.clone().multiplyScalar(rand(big ? -1.5 : -.75, big ? 1.5 : .75)));
       mesh.position.set(p.x, .018 + splats.length * .00002, p.z);
-      mesh.scale.set(rand(.7, big ? 2.8 : 1.7), rand(.35, big ? 1.35 : .9), 1);
+      mesh.scale.set(rand(.9, big ? 4.2 : 2.2), rand(.45, big ? 1.75 : 1.1), 1);
       mesh.rotation.z = rand(0, Math.PI*2); scene.add(mesh); splats.push(mesh);
       if(splats.length > 320) disposeMesh(splats.shift());
     }
@@ -150,8 +166,8 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   function bloodSmear(start, dir, color, power = 1, targetKind = ''){
     if(isDummy(targetKind)) return;
     const s = v3(start), d = dir3(dir), side = new THREE.Vector3(-d.z,0,d.x);
-    for(let i=0;i<6 + power*4;i++){
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(rand(.20,.52)*power, rand(.75,1.75)*power), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:rand(.22,.42), depthWrite:false, side:THREE.DoubleSide }));
+    for(let i=0;i<8 + power*5;i++){
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(rand(.24,.70)*power, rand(.95,2.35)*power), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:rand(.22,.42), depthWrite:false, side:THREE.DoubleSide }));
       mesh.rotation.x = -Math.PI/2; mesh.rotation.z = -planarAngle(d) + rand(-.22,.22);
       const p = s.clone().add(d.clone().multiplyScalar(rand(.2,2.2*power))).add(side.clone().multiplyScalar(rand(-.35,.35)));
       mesh.position.set(p.x, .019 + smears.length*.000025, p.z); scene.add(mesh); smears.push(mesh);
@@ -177,16 +193,24 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
     add(sp, stage >= 3 ? 1.25 : .92, 'label', { vel:dir3(dir).multiplyScalar(.7).add(new THREE.Vector3(0, 1.05 + stage*.22, 0)) });
   }
 
-  function trigger({ point, dir, type = 'slice', damage = 0, label = '', stage = 1, killed = false, whiff = false, targetKind = '', bloodColor = BLOOD_COLOR } = {}){
+  function applyTimeScalePulse(stage, killed = false, multiCount = 1){
+    const m = Math.max(1, multiCount || 1);
+    const s = killed ? 3 : clamp(Math.round(stage || 1), 1, 3);
+    const multiBoost = m > 1 ? Math.min(.09, .025 * (m - 1)) : 0;
+    hitstop = Math.min(.38, Math.max(hitstop, (s === 3 ? .23 : (s === 2 ? .17 : .12)) + multiBoost));
+    slowMo = Math.max(slowMo, (s === 3 ? .26 : (s === 2 ? .18 : .08)) + (m > 1 ? .05 : 0));
+  }
+
+  function trigger({ point, dir, type = 'slice', damage = 0, label = '', stage = 1, killed = false, whiff = false, targetKind = '', bloodColor = BLOOD_COLOR, timeScale = true } = {}){
     const p = v3(point); const d = dir3(dir); const s = killed ? 3 : clamp(Math.round(stage || 1), 1, 3); const color = colorFor(type, s);
     lastImpactPoint = p.clone();
-    if(whiff){ hitstop = Math.max(hitstop, .018); slashBurst(p, d, color, 1); floater(p, d, 'WHIFF', 0xcfefff, 1); shake += .08; onAudioCue?.({ kind:'whiff', stage:1, type, targetKind }); return { stage:1 }; }
-    hitstop = Math.min(.34, Math.max(hitstop, s === 3 ? .23 : (s === 2 ? .17 : .12)));
-    slowMo = Math.max(slowMo, s === 3 ? .26 : (s === 2 ? .18 : .08));
+    if(whiff){ if(timeScale) hitstop = Math.max(hitstop, .018); slashBurst(p, d, color, 1); floater(p, d, 'WHIFF', 0xcfefff, 1); shake += .08; onAudioCue?.({ kind:'whiff', stage:1, type, targetKind }); return { stage:1 }; }
+    if(timeScale) applyTimeScalePulse(s, killed, 1);
     overlayImpact(p);
     shockwave(p, color, s); slashBurst(p, d, color, s); particleBurst(p, d, color, s, type, targetKind);
-    groundSplat(p.clone().add(d.clone().multiplyScalar(.20)), d, bloodColor, s === 3 ? 30 : 7 + s*8, s === 3 || killed, targetKind);
-    if(s >= 2) bloodSmear(p, d, bloodColor, s === 3 ? 1.35 : .75, targetKind);
+    if(!isDummy(targetKind)) bloodSpray(p, d, s, bloodColor);
+    groundSplat(p.clone().add(d.clone().multiplyScalar(.20)), d, bloodColor, s === 3 ? 68 : 14 + s*14, s === 3 || killed, targetKind);
+    if(s >= 2) bloodSmear(p, d, bloodColor, s === 3 ? 1.95 : 1.05, targetKind);
     const hitLabel = killed ? 'SHATTER!' : (s === 1 ? 'STAGGER!' : (s === 2 ? 'REEL!' : 'LAUNCH!'));
     floater(p, d, `${damage ? damage + ' ' : ''}${hitLabel}${label ? '\n' + label : ''}`, s >= 3 ? 0xffffff : 0xfff3a0, s);
     shake += s === 1 ? .58 : (s === 2 ? .92 : 1.45); zoomKick += s === 3 ? .95 : .30 + s*.12; juice = Math.min(1, juice + .26 + s*.22);
@@ -199,7 +223,7 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   function triggerSecondary({ point, dir, label = 'WALL SPLAT!', targetKind = '', bloodColor = BLOOD_COLOR } = {}){
     const p = v3(point), d = dir3(dir);
     shake += .75; zoomKick += .32; camKick.add(d.clone().multiplyScalar(.55));
-    shockwave(p, BLOOD_COLOR, 3); groundSplat(p, d, bloodColor, 24, true, targetKind); bloodSmear(p, d, bloodColor, 1.1, targetKind); floater(p, d, label, 0xffffff, 3);
+    shockwave(p, BLOOD_COLOR, 3); if(!isDummy(targetKind)) bloodSpray(p, d, 3, bloodColor); groundSplat(p, d, bloodColor, 58, true, targetKind); bloodSmear(p, d, bloodColor, 1.7, targetKind); floater(p, d, label, 0xffffff, 3);
     onCameraKick?.({ x:d.x*.55, y:-.55, z:d.z*.55, shake, zoomKick, stage:3, point:p.clone(), targetKind });
     onAudioCue?.({ kind:'wallSplat', stage:3, targetKind });
   }
@@ -212,6 +236,7 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
       if(fx.vel) fx.mesh.position.addScaledVector(fx.vel, dt);
       if(fx.gravity) fx.vel.y -= fx.gravity * dt;
       if(fx.spin?.isVector3){ fx.mesh.rotation.x += fx.spin.x*dt; fx.mesh.rotation.y += fx.spin.y*dt; fx.mesh.rotation.z += fx.spin.z*dt; }
+      if(fx.kind === 'bloodDrop' && !fx.splatted && fx.mesh.position.y <= .045){ fx.splatted = true; groundSplat(fx.mesh.position, fx.vel.clone().setY(0), fx.bloodColor || BLOOD_COLOR, 1, false, ''); }
       if(fx.kind === 'shockwave'){ fx.mesh.scale.setScalar(1 + k * fx.maxScale); fx.mesh.material.opacity = 1 - k; if(camera) fx.mesh.lookAt(camera.position); }
       else if(fx.kind === 'groundWave'){ fx.mesh.scale.setScalar(1 + k * fx.maxScale); fx.mesh.material.opacity = .85 * (1 - k); }
       else if(fx.kind === 'slash'){ fx.mesh.position.addScaledVector(fx.vel, dt); fx.mesh.rotation.z += fx.spin*dt; fx.mesh.material.opacity = 1 - k; }
@@ -224,5 +249,5 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   function scaleDt(rawDt){ return hitstop > 0 ? rawDt * .035 : (slowMo > 0 ? rawDt * .45 : rawDt); }
   function getState(){ return { hitstop, slowMo, shake, zoomKick, juice, camKick:camKick.clone(), lastImpactPoint:lastImpactPoint?.clone?.() || null }; }
 
-  return { trigger, triggerSecondary, update, scaleDt, getState, getJuice:()=>juice, buildReaction:buildHitReaction, hitStageFromImpact };
+  return { trigger, triggerSecondary, triggerTimeScale:applyTimeScalePulse, update, scaleDt, getState, getJuice:()=>juice, buildReaction:buildHitReaction, hitStageFromImpact };
 }

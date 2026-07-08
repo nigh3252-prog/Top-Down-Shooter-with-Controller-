@@ -274,6 +274,7 @@ const PC = installPlayerCombat({
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
+      combatState.hitStopApplied = false;
       if(!arena.charge.active) applySwingFeel(defaultFeel());
       combatState.impactScale = arena.swing.s.impact;
     },
@@ -446,6 +447,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
   const zones = PC.getWeaponHitZones();
+  const hitBatch = { count:0, maxStage:1, killed:false };
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
@@ -474,9 +476,14 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
       const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger }, { stage, dir:best.motion, onSecondaryHit:evt=>HitFeel.triggerSecondary(evt) });
       if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
       onHitFeel(best.point, tier);
-      spawnHitEffect(best.point, best.zone.type, best.damage, stage, killed, best.motion, e.kind);
+      hitBatch.count++; hitBatch.maxStage=Math.max(hitBatch.maxStage, stage); hitBatch.killed = hitBatch.killed || killed;
+      spawnHitEffect(best.point, best.zone.type, best.damage, stage, killed, best.motion, e.kind, false);
       CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
     }
+  }
+  if(hitBatch.count && !combatState.hitStopApplied){
+    combatState.hitStopApplied = true;
+    HitFeel.triggerTimeScale(hitBatch.maxStage, hitBatch.killed, hitBatch.count);
   }
 }
 function tierOfSwing(){ return clamp((arena.swing.s.dmg - 7) / (40 - 7), 0, 1); }
@@ -487,10 +494,10 @@ function onHitFeel(point, tier){
   shakeVel.y -= .7 * tier;
 }
 const HIT_TYPE_COLOR = { slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4 };
-function spawnHitEffect(point, type, damage, stage=1, killed=false, motion=null, targetKind='enemy'){
+function spawnHitEffect(point, type, damage, stage=1, killed=false, motion=null, targetKind='enemy',timeScale=true){
   const dir = motion || new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
   playerRecoilT = Math.max(playerRecoilT, stage>=3 ? .20 : .12); playerRecoilDir.copy(dir).normalize();
-  HitFeel.trigger({point, dir, type, damage, stage, killed, targetKind});
+  HitFeel.trigger({point, dir, type, damage, stage, killed, targetKind, timeScale});
   const color = HIT_TYPE_COLOR[type] || 0xffffff;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.45,.035,6,24),
     new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false }));
