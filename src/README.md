@@ -10,7 +10,32 @@ the core page it patched are retired to `archive/`.
   builders, optional weapon visual update hooks, and `installRedTollGreatsword()`,
   which selects/tunes the Red Toll greatsword visual variant without replacing
   the lab's common rebuild path.
+- `stone-wanderer.js` — `installStoneWanderer({ THREE })`, the Stone Wanderer
+  character rig: procedural stone textures/materials, `makeStoneWanderer()`,
+  head/crown/width tuning, and `getW()` for the live rig handle bag.
+- `player-combat.js` — `installPlayerCombat(api)`, the player combat core:
+  pose model + attack interpreter over `attacks.js` definitions, the attack
+  state machine (`startCombatAttack`/`updateCombat`), two-bone arm IK, weapon
+  rig lifecycle (`selectCombatWeapon`/`rebuildCombatWeaponMesh`), swept
+  hit-zone geometry, and the swing trail/sparks. Page-specific side effects
+  (aim commit, audio, lab bookkeeping, DOM status, dummy-vs-enemy hit routing)
+  are injected through `api.hooks`.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
+- `goblin-rig.js` — `installGoblinRig(THREE)`, the shared articulated goblin
+  model (body/belly/belt/head/ears/eye/mouth + a held stone weapon), its
+  materials, the telegraph/token/health marker update, the attack glow, and the
+  death shatter. Used by both `enemies.js` (weapon-lab combat) and
+  `arena-enemies.js` (combat-arena).
+- `arena-enemies.js` — `createArenaEnemySystem(...)`, the combat-arena enemy
+  system: a port of the "Director Punch" enemy simulation (grunt / dagger / mace
+  / rock / captain) scaled to arena units, rendered with the goblin rig. Enemies
+  seek a tight hold distance and lunge-commit on the active phase, gated by the
+  `combat-director.js` token director; the rock archetype throws a projectile.
+  Drop-in API match for `createCombatEnemySystem`.
+- `feel.js` — the hold-to-charge feel continuum (WIMPY → DEFAULT → HAYMAKER →
+  CARTOON keyframes, `createFeelKeys`/`feelAt`/`tierName`/`holdToTier`). Data
+  only; `combat-arena.html` maps a hold duration to a tier and applies the
+  resulting multipliers to the player-combat swing timing/damage.
 - `combat-audio.js` — `installCombatAudioDirector()`, the procedural combat audio
   director. `weapon-lab.html` calls its `onAttackStart`/`onDummyEvent` methods
   directly at the point those events happen in its own combat code.
@@ -40,7 +65,7 @@ weapon-specific rebuild overrides.
 
 ## Extending this
 
-Next natural seams to pull out, if this keeps growing: the attack/combat
-system (`ATTACK_GROUPS`, `startCombatAttack`, hit detection), the actor rig
-and IK, and the dungeon/prop builder. Follow the same pattern — a small
+The attack/combat system and the actor rig + IK are now extracted
+(`player-combat.js`, `stone-wanderer.js`). The next natural seam, if this
+keeps growing, is the dungeon/prop builder. Follow the same pattern — a small
 `installX(LabAPI)` in a new `src/` file, called once from `weapon-lab.html`.

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>COMBAT ARENA — stone wanderer × encounter director</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touch-action:none;
+    -webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
+  canvas{display:block}
+  /* ---- top bar ---- */
+  #topBar{position:fixed;top:8px;left:8px;right:8px;z-index:30;display:flex;gap:8px;align-items:stretch;pointer-events:none}
+  #topBar button{pointer-events:auto}
+  .tbtn{font-family:inherit;font-size:11px;letter-spacing:.1em;color:#e8a04c;
+    background:rgba(18,36,38,.85);border:1px solid #6e3a24;padding:0 12px;border-radius:6px;min-height:36px}
+  .tbtn:active{background:#2c4a47}
+  #pill{flex:1;min-width:0;background:rgba(14,28,30,.8);border:1px solid #2c4a47;border-radius:6px;
+    padding:4px 10px;overflow:hidden}
+  #pill b{display:block;font-size:11px;letter-spacing:.1em;color:#9fd2c9;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
+  #pill span{display:block;font-size:9.5px;color:#4a6f6a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ---- HUD ---- */
+  #hud{position:fixed;top:52px;left:10px;z-index:10;pointer-events:none}
+  #hpWrap{width:150px;height:9px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
+  #hpFill{height:100%;width:100%;background:linear-gradient(90deg,#e8a04c,#c96a35);transition:width .12s}
+  #stats{margin-top:4px;color:#4a6f6a;font-size:10px;letter-spacing:.08em}
+  #stateLbl{margin-top:3px;color:#e8a04c;font-size:12px;letter-spacing:.14em;text-shadow:0 1px 0 #000}
+  #msg{position:fixed;top:26%;left:0;right:0;text-align:center;z-index:11;pointer-events:none;
+    color:#f0d8b0;font-size:19px;letter-spacing:.24em;text-transform:uppercase;
+    text-shadow:0 2px 8px #000;opacity:0;transition:opacity .18s}
+  #vig{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;transition:opacity .16s;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(190,40,20,.55) 100%)}
+  /* ---- touch controls ---- */
+  #joyBase{position:fixed;width:104px;height:104px;border-radius:50%;border:2px solid rgba(44,74,71,.8);
+    background:rgba(18,36,38,.32);z-index:15;display:none;pointer-events:none}
+  #joyKnob{position:fixed;width:46px;height:46px;border-radius:50%;background:rgba(159,210,201,.5);
+    border:2px solid #2c4a47;z-index:16;display:none;pointer-events:none}
+  .btnrow{position:fixed;bottom:20px;right:14px;display:flex;gap:12px;z-index:20;align-items:flex-end}
+  .pbtn{width:76px;height:76px;border-radius:50%;border:2px solid #2c4a47;color:#9fd2c9;
+    background:rgba(18,36,38,.72);font-family:inherit;font-size:11px;letter-spacing:.1em;
+    display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;box-shadow:0 3px 0 #081112}
+  .pbtn:active,.pbtn.held{background:#2c4a47;transform:translateY(2px);box-shadow:0 1px 0 #081112}
+  #atkBtn{width:88px;height:88px;border-color:#6e3a24;color:#e8a04c}
+  /* ---- panel ---- */
+  #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(78vw,300px);
+    max-height:calc(100vh - 66px);overflow-y:auto;padding:10px 12px 16px;box-sizing:border-box;
+    background:linear-gradient(180deg,rgba(10,20,22,.94),rgba(10,20,22,.85));
+    border:1px solid #2c4a47;border-radius:8px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+  #panel.hidden{display:none}
+  #tabs{display:flex;gap:6px;margin-bottom:10px}
+  #tabs button{flex:1;font-family:inherit;font-size:10px;letter-spacing:.15em;padding:8px 0;
+    color:#4a6f6a;background:transparent;border:1px solid #24403e;border-radius:5px}
+  #tabs button.on{color:#e8a04c;border-color:#6e3a24;background:rgba(110,58,36,.14)}
+  .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:10px 0 7px}
+  .modeGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
+    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:8px 3px;min-height:42px}
+  .modeGrid button.on{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
+  .srow{margin-bottom:11px}
+  .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px}
+  .sval{color:#e8a04c}
+  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0}
+  #panel input[type=range]::-webkit-slider-runnable-track{height:3px;background:#243f3d;border-radius:2px}
+  #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-6px;
+    border-radius:50%;background:#e8a04c;border:2px solid #0d191b;box-shadow:0 0 0 1px #6e3a24}
+  #panel input[type=range]::-moz-range-track{height:3px;background:#243f3d;border-radius:2px}
+  #panel input[type=range]::-moz-range-thumb{width:13px;height:13px;border:2px solid #0d191b;border-radius:50%;background:#e8a04c}
+  #keyRow{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:12px}
+  #keyRow button{font-family:inherit;font-size:8.5px;letter-spacing:.05em;color:#9fd2c9;
+    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:7px 1px}
+  #keyRow button.on{color:#e8a04c;border-color:#6e3a24}
+  .wide{width:100%;font-family:inherit;font-size:10px;letter-spacing:.12em;color:#e8a04c;
+    background:rgba(110,58,36,.16);border:1px solid #6e3a24;border-radius:5px;padding:9px 0;margin-top:6px}
+  .wide:active{background:#2c4a47}
+  .pairRow{display:flex;gap:6px}
+  .pairRow .wide{flex:1}
+  #err{position:fixed;bottom:6px;left:6px;right:6px;z-index:99;color:#ff9070;font-size:10px;
+    background:rgba(20,8,6,.9);border:1px solid #6e3a24;border-radius:5px;padding:6px 8px;display:none;white-space:pre-wrap}
+  #hint{position:fixed;bottom:8px;left:10px;color:#33524e;font-size:9px;letter-spacing:.06em;z-index:8;pointer-events:none;line-height:1.6}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="topBar">
+  <button class="tbtn" id="menuBtn">MENU</button>
+  <div id="pill"><b id="modeName">One Attacker</b><span id="modeSub">—</span></div>
+  <button class="tbtn" id="pauseBtn">II</button>
+  <button class="tbtn" id="fsBtn">⛶</button>
+</div>
+<div id="hud">
+  <div id="hpWrap"><div id="hpFill"></div></div>
+  <div id="stats">WAVE 1 · SCORE 0</div>
+  <div id="stateLbl">GUARD</div>
+</div>
+<div id="msg"></div>
+<div id="vig"></div>
+<div id="joyBase"></div><div id="joyKnob"></div>
+<div class="btnrow">
+  <button class="pbtn" id="dgeBtn">DODGE</button>
+  <button class="pbtn" id="atkBtn">ATK<br>hold=charge</button>
+</div>
+<div id="panel" class="hidden">
+  <div id="tabs">
+    <button id="tabDir" class="on">DIRECTOR</button>
+    <button id="tabFeel">FEEL</button>
+  </div>
+  <div id="dirTab">
+    <div class="ptitle">ENCOUNTER DIRECTOR</div>
+    <div class="modeGrid" id="modeGrid"></div>
+    <div class="ptitle">LOADOUT</div>
+    <div class="pairRow">
+      <button class="wide" id="weaponBtn">WEAPON</button>
+      <button class="wide" id="stanceBtn">STANCE</button>
+    </div>
+    <div class="ptitle">SIM</div>
+    <div id="dirSliders"></div>
+    <button class="wide" id="resetBtn">RESET FIGHT</button>
+  </div>
+  <div id="feelTab" style="display:none">
+    <div class="ptitle">EDITING KEYFRAME</div>
+    <div id="keyRow"></div>
+    <div id="feelSliders"></div>
+    <button class="wide" id="testBtn">TEST THIS TIER</button>
+    <div class="ptitle" style="margin-top:10px">tap = chain the stance combo · hold = charge to cartoon</div>
+  </div>
+</div>
+<div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · X weapon · T stance · M menu</div>
+<div id="err"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { installStoneWanderer } from './src/stone-wanderer.js';
+import { installPlayerCombat } from './src/player-combat.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions } from './src/weapons.js';
+import { STANCE_CARDS } from './src/stance-cards.js';
+import { getWeaponDamageMultiplier } from './src/combat-balance.js';
+import { createArenaEnemySystem } from './src/arena-enemies.js';
+import { DIRECTOR_MODES } from './src/combat-director.js';
+import { installCombatAudioDirector } from './src/combat-audio.js';
+import { StoneSettings } from './src/settings.js';
+import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
+
+/* ============================================================
+   COMBAT ARENA
+   Director Punch's arena loop (waves, encounter director, feel
+   tiers, dodge, mobile controls) driven by the Stone Wanderer
+   with the full weapon + stance-card combat system.
+   ============================================================ */
+
+window.addEventListener('error', e=>{
+  const el = document.getElementById('err');
+  el.style.display='block'; el.textContent = (e.message||'error')+'\n'+(e.filename||'')+':'+(e.lineno||'');
+});
+
+/* ---------- helpers ---------- */
+const clamp = THREE.MathUtils.clamp;
+const lerp = THREE.MathUtils.lerp;
+function wrapPi(a){ return Math.atan2(Math.sin(a), Math.cos(a)); }
+function lerpAngle(a,b,t){ return wrapPi(a + wrapPi(b-a)*clamp(t,0,1)); }
+function norm2(x,z){ const l=Math.hypot(x,z)||1; return {x:x/l, z:z/l}; }
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+/* ---------- arena-scale constants (weapon-lab world units, ~×4 meters) ---- */
+const ARENA = 18;               // playfield radius
+const PLAYER_SPEED = 8.5;
+const CHARGE_MOVE_MULT = .35;
+const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
+const AUTO_FACE_RANGE = 14;
+const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
+const CAM_HEIGHT = 20, CAM_BACK = 17.6;
+
+/* ---------- scene ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.22;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d191b);
+scene.fog = new THREE.Fog(0x0d191b, 34, 78);
+const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .5, 220);
+
+scene.add(new THREE.AmbientLight(0xd8ecff, .5));
+const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffe0b8, 2.6);
+key.position.set(-14, 26, 12);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -30; key.shadow.camera.right = 30;
+key.shadow.camera.top = 30; key.shadow.camera.bottom = -30;
+key.shadow.bias = -0.00025;
+scene.add(key);
+const rim = new THREE.PointLight(0x68bfff, 30, 120, 1.2); rim.position.set(16, 9, -14); scene.add(rim);
+
+const worldRoot = new THREE.Group(); scene.add(worldRoot);
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(ARENA+10, 56),
+  new THREE.MeshStandardMaterial({ color:0x142a2c, roughness:.94, metalness:.02 }));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; worldRoot.add(ground);
+const bound = new THREE.Mesh(new THREE.RingGeometry(ARENA-.2, ARENA+.12, 72),
+  new THREE.MeshBasicMaterial({ color:0x24484a }));
+bound.rotation.x = -Math.PI/2; bound.position.y = .02; worldRoot.add(bound);
+// scatter rocks outside the boundary for readability
+for(let i=0;i<12;i++){
+  const a = rand(0,Math.PI*2), r = rand(ARENA+1.6, ARENA+7.5);
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(.5,1.4),0),
+    new THREE.MeshStandardMaterial({ color:0x1d3436, roughness:.9, flatShading:true }));
+  rock.position.set(Math.cos(a)*r, rand(0,.25), Math.sin(a)*r);
+  rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+  rock.castShadow = rock.receiveShadow = true;
+  worldRoot.add(rock);
+}
+
+/* ---------- weapons / stances / audio ---------- */
+const WEAPON_ORDER = STONE_WEAPON_ORDER;
+const WEAPONS = cloneWeaponDefinitions();
+const CombatAudio = installCombatAudioDirector({ controls:{} , settings:StoneSettings });
+
+/* ---------- stone wanderer + player combat ---------- */
+const StoneWanderer = installStoneWanderer({ THREE });
+const actorRoot = new THREE.Group(); worldRoot.add(actorRoot);
+const actorVisual = new THREE.Group(); actorRoot.add(actorVisual);
+let activeModel = null;
+const actorPos = new THREE.Vector2(0, 4);   // x = world X, y = world Z
+let actorFacing = 0;
+let actorYawCurrent = 0;
+let walkPhase = 0;
+const yawQ = new THREE.Quaternion();
+const Y_AXIS = new THREE.Vector3(0,1,0);
+
+const FEEL = createFeelKeys();
+const defaultFeel = () => feelAt(FEEL, 1/3);
+const arena = {
+  charge: { active:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
+  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1 },
+  chain:  { comboIndex:0, comboWindow:.82, comboDeadline:0 },
+  dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
+  stanceIndex:0, stance:null,
+  invulnT:0, deadT:-1, prevHp:100, prevWave:1,
+  paused:false,
+};
+function applySwingFeel(s){
+  arena.swing.s = s;
+  arena.swing.dmgMult = s.dmg/14;
+  arena.swing.knockMult = s.knock/.55;
+  arena.swing.stun = s.stun;
+  arena.swing.lunge = s.lunge;
+}
+
+const PC = installPlayerCombat({
+  THREE, scene,
+  get WEAPONS(){ return WEAPONS; },
+  get WEAPON_ORDER(){ return WEAPON_ORDER; },
+  materials: StoneWanderer.materials,
+  facet: StoneWanderer.facet,
+  get activeModel(){ return activeModel; },
+  get actorVisual(){ return actorVisual; },
+  get W(){ return StoneWanderer.getW(); },
+  get yawQ(){ return yawQ; },
+  hooks: {
+    resolveAttackFacing(){ return resolveDesiredFacing(); },
+    commitFacing(angle){ actorFacing = angle; },
+    onAttackStart(info){
+      CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
+      if(!arena.charge.active) applySwingFeel(defaultFeel());
+      combatState.impactScale = arena.swing.s.impact;
+    },
+    onAttackChainIdle(){
+      arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
+    },
+    detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
+    onWeaponSelected(){ ensureStanceMatchesWeapon(); },
+    onWeaponUISync(){ updatePill(); },
+    timeScaleModifier(att, t, phase){
+      const s = arena.charge.active ? arena.charge.s : arena.swing.s;
+      if(phase === 0) return s.windup;
+      if(phase >= att.phases.length-1) return s.recover;
+      return s.strike;
+    }
+  }
+});
+const combatState = PC.combatState;
+
+function spawnCharacter(){
+  if(activeModel) actorVisual.remove(activeModel);
+  activeModel = StoneWanderer.makeStoneWanderer();
+  actorVisual.add(activeModel);
+  PC.attachCombatToActiveModel();
+}
+
+/* ---------- stances ---------- */
+function stancePoolForWeapon(weaponId = combatState.weapon){
+  const matching = STANCE_CARDS.filter(st => Array.isArray(st.preferredWeapons) && st.preferredWeapons.includes(weaponId));
+  return matching.length ? matching : STANCE_CARDS;
+}
+function setStance(index){
+  const pool = stancePoolForWeapon();
+  arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
+  arena.stance = pool[arena.stanceIndex];
+  arena.chain.comboIndex = 0;
+  updatePill();
+}
+function cycleStance(){ setStance(arena.stanceIndex + 1); announce(arena.stance ? stancePoolForWeapon()[(arena.stanceIndex)%stancePoolForWeapon().length].name : '', .9); }
+function ensureStanceMatchesWeapon(){
+  const pool = stancePoolForWeapon();
+  const idx = arena.stance ? pool.findIndex(st => st.id === arena.stance.id) : -1;
+  setStance(idx >= 0 ? idx : 0);
+}
+function cycleWeapon(dir=1){
+  const idx = WEAPON_ORDER.indexOf(combatState.weapon);
+  const next = WEAPON_ORDER[(idx + dir + WEAPON_ORDER.length) % WEAPON_ORDER.length];
+  PC.selectCombatWeapon(next);
+  StoneSettings.set('arena.weapon', next);
+  announce(WEAPONS[next].label, .9);
+}
+
+/* ---------- enemies ---------- */
+const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA });
+
+/* ---------- facing ---------- */
+function nearestEnemy(maxDist=Infinity){
+  let best=null, bd=maxDist;
+  for(const e of enemySystem.enemies){
+    const d = Math.hypot(e.x-actorPos.x, e.z-actorPos.y);
+    if(d<bd){ bd=d; best=e; }
+  }
+  return best;
+}
+function resolveDesiredFacing(){
+  const target = nearestEnemy(AUTO_FACE_RANGE);
+  if(target) return { angle: Math.atan2(target.x-actorPos.x, target.z-actorPos.y), source:'auto' };
+  if(Math.hypot(input.mx,input.mz) > .15) return { angle: Math.atan2(input.mx, input.mz), source:'move' };
+  return { angle: actorFacing, source:'idle' };
+}
+function attackCommitWeight(){
+  if(!combatState.attack) return 0;
+  const contact = Math.max(.001, combatState.attack.contactAt || .001);
+  const t = clamp((combatState.t - contact*.18) / Math.max(1e-5, contact*.95 - contact*.18), 0, 1);
+  const base = t*t*(3-2*t);
+  return clamp(.20 + base*.62, 0, 1);
+}
+
+/* ---------- attack flow: tap = stance chain, hold = charge ---------- */
+function nextChainMove(){
+  const now = performance.now()/1000;
+  if(!combatState.attack && arena.chain.comboDeadline && now > arena.chain.comboDeadline) arena.chain.comboIndex = 0;
+  const slot = arena.chain.comboIndex % 3;
+  const key = arena.stance.chain[slot];
+  return { key, slot, att: PC.ATTACKS[key] };
+}
+function chargeCap(att){ return att.phases[0].t1 * .98; }
+function attackDown(){
+  if(arena.deadT >= 0 || arena.dodge.t >= 0 || !arena.stance) return;
+  const move = nextChainMove();
+  if(!move.att) return;
+  if(combatState.attack){
+    // combo follow-up: queue the next chain move at regular strength
+    if(combatState.pending) return;
+    if(combatState.t < Math.max(.04, (combatState.attack.contactAt||.1)*.62)) return;
+    combatState.pending = move.key; combatState.pendingGroup = move.att.group;
+    if(combatState.t > combatState.attack.comboAt){
+      PC.startCombatAttack(move.key, move.att.group);
+      combatState.pending = null; combatState.pendingGroup = null;
+    }
+    arena.chain.comboIndex = (move.slot + 1) % 3;
+    return;
+  }
+  arena.charge.active = true; arena.charge.hold = 0; arena.charge.forceTier = null;
+  arena.charge.tier = 1/3; arena.charge.s = defaultFeel();
+  PC.startCombatAttack(move.key, move.att.group);
+  arena.chain.comboIndex = (move.slot + 1) % 3;
+}
+function releaseCharge(){
+  if(!arena.charge.active) return;
+  applySwingFeel(arena.charge.s);
+  combatState.impactScale = arena.charge.s.impact;
+  arena.charge.active = false; arena.charge.forceTier = null;
+}
+function attackUp(){ releaseCharge(); }
+function beginTestSwing(tier){
+  if(arena.deadT >= 0 || combatState.attack || !arena.stance) return;
+  const move = nextChainMove();
+  if(!move.att) return;
+  arena.charge.active = true; arena.charge.hold = 0; arena.charge.forceTier = tier;
+  arena.charge.tier = tier; arena.charge.s = feelAt(FEEL, tier);
+  PC.startCombatAttack(move.key, move.att.group);
+  arena.chain.comboIndex = (move.slot + 1) % 3;
+}
+function updateCharge(dt){
+  const c = arena.charge;
+  if(!c.active) return;
+  if(!combatState.attack){ c.active = false; return; }
+  c.hold += dt;
+  c.tier = c.forceTier ?? holdToTier(c.hold);
+  c.s = feelAt(FEEL, c.tier);
+  const cap = chargeCap(combatState.attack);
+  if(combatState.t > cap) combatState.t = cap;
+  if(c.forceTier !== null && combatState.t >= cap - 1e-4) releaseCharge();
+}
+
+/* ---------- dodge ---------- */
+function triggerDodge(){
+  const d = arena.dodge;
+  if(arena.deadT >= 0 || d.t >= 0 || d.cool > 0) return;
+  arena.charge.active = false;
+  combatState.attack = null; combatState.t = 0; combatState.pending = null; combatState.pendingGroup = null;
+  const mv = Math.hypot(input.mx, input.mz);
+  let dir;
+  if(mv > .2) dir = norm2(input.mx, input.mz);
+  else {
+    const threat = nearestEnemy();
+    dir = threat ? norm2(actorPos.x-threat.x, actorPos.y-threat.z)
+                 : norm2(Math.sin(actorFacing+Math.PI), Math.cos(actorFacing+Math.PI));
+  }
+  d.t = 0; d.dirX = dir.x; d.dirZ = dir.z; d.cool = DODGE_COOL;
+  arena.invulnT = Math.max(arena.invulnT, DODGE_IFRAMES);
+  CombatAudio.playTest('swingLight');
+}
+
+/* ---------- hits: swept weapon zones vs enemies ---------- */
+const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
+const effects = [];
+function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
+  if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
+  if(!combatState.hitIds) combatState.hitIds = new Set();
+  const zones = PC.getWeaponHitZones();
+  for(const e of [...enemySystem.enemies]){
+    if(combatState.hitIds.has(e)) continue;
+    const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
+    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
+    let best = null;
+    for(const zone of zones){
+      const a = PC.weaponRoot.localToWorld(zone.from.clone());
+      const b = PC.weaponRoot.localToWorld(zone.to.clone());
+      const threshold = e.radius + zone.radius + .38;
+      let bestDist = Infinity, bestCenter = hitSamples[1];
+      for(const center of hitSamples){ const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
+      if(bestDist <= threshold){
+        const quality = 1 - clamp(bestDist / threshold, 0, 1);
+        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: PC.currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
+        const raw = zone.damage * (.82 + quality * .42) * weaponMult * arena.swing.dmgMult;
+        const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
+        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: bestCenter.clone().lerp(tipScene, .25), motion };
+        if(!best || cand.damage > best.damage) best = cand;
+      }
+    }
+    if(best){
+      combatState.hitIds.add(e);
+      const stagger = best.zone.stagger * arena.swing.knockMult;
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger });
+      if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
+      onHitFeel(best.point, arena.charge.active ? arena.charge.tier : tierOfSwing());
+      spawnHitEffect(best.point, best.zone.type, best.damage);
+      CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
+    }
+  }
+}
+function tierOfSwing(){ return clamp((arena.swing.s.dmg - 7) / (40 - 7), 0, 1); }
+function onHitFeel(point, tier){
+  const fx = Math.sin(actorFacing), fz = Math.cos(actorFacing);
+  shakeVel.x += fx * 1.6 * tier + (Math.random()-.5) * .8;
+  shakeVel.z += fz * 1.6 * tier;
+  shakeVel.y -= .7 * tier;
+}
+const HIT_TYPE_COLOR = { slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4 };
+function spawnHitEffect(point, type, damage){
+  const color = HIT_TYPE_COLOR[type] || 0xffffff;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.45,.035,6,24),
+    new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false }));
+  ring.position.copy(point); ring.lookAt(camera.position); scene.add(ring);
+  effects.push({ mesh:ring, age:0, life:.28, kind:'ring' });
+  const sp = makeDamageSprite(String(damage), color);
+  sp.position.copy(point).add(new THREE.Vector3(0,.7,0)); scene.add(sp);
+  effects.push({ mesh:sp, age:0, life:.85, vel:new THREE.Vector3((Math.random()-.5)*.6,1.6,(Math.random()-.5)*.6), kind:'label' });
+}
+function makeDamageSprite(text,color){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=128; const ctx=cv.getContext('2d'); ctx.clearRect(0,0,256,128); ctx.font='900 44px system-ui,Segoe UI,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.fillStyle='#'+color.toString(16).padStart(6,'0'); ctx.strokeText(text,128,64); ctx.fillText(text,128,64); const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace; const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}); const sp=new THREE.Sprite(mat); sp.scale.set(3.4,1.7,1); return sp;
+}
+function updateEffects(rawDt){
+  for(let i=effects.length-1;i>=0;i--){
+    const fx = effects[i]; fx.age += rawDt;
+    if(fx.age >= fx.life){ scene.remove(fx.mesh); fx.mesh.material?.map?.dispose?.(); fx.mesh.material?.dispose?.(); fx.mesh.geometry?.dispose?.(); effects.splice(i,1); continue; }
+    const k = fx.age / fx.life;
+    if(fx.kind === 'ring'){ fx.mesh.scale.setScalar(1 + k*2.2); fx.mesh.material.opacity = 1 - k; }
+    else { fx.mesh.position.addScaledVector(fx.vel, rawDt); fx.mesh.material.opacity = 1 - k*k; }
+  }
+}
+
+/* ---------- player damage / death ---------- */
+function flashVignette(){
+  const v = document.getElementById('vig');
+  v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
+}
+function respawn(){
+  arena.deadT = -1;
+  actorPos.set(0, 4); actorFacing = 0;
+  arena.charge.active = false;
+  combatState.attack = null; combatState.t = 0; combatState.pending = null;
+  arena.chain.comboIndex = 0;
+  enemySystem.reset();
+  arena.prevHp = enemySystem.playerHp;
+  arena.prevWave = enemySystem.wave;
+  announce('WAVE ' + enemySystem.wave);
+}
+function watchPlayerState(dt){
+  const hp = enemySystem.playerHp;
+  if(hp < arena.prevHp && arena.deadT < 0){
+    arena.invulnT = Math.max(arena.invulnT, .8);
+    flashVignette();
+    CombatAudio.playTest('hurt');
+    shakeVel.x += (Math.random()-.5)*1.4; shakeVel.z -= 1.2; shakeVel.y -= .8;
+    if(hp <= 0){ arena.deadT = 0; announce('DOWN', 2); }
+  }
+  arena.prevHp = hp;
+  if(enemySystem.wave !== arena.prevWave){
+    arena.prevWave = enemySystem.wave;
+    announce('WAVE ' + enemySystem.wave);
+  }
+}
+
+/* ---------- input ---------- */
+const input = { mx:0, mz:0 };
+const keys = {};
+addEventListener('keydown', e=>{
+  if(e.repeat) return;
+  keys[e.key.toLowerCase()] = true;
+  if(e.key==='j') attackDown();
+  if(e.key==='k') triggerDodge();
+  if(e.key==='x') cycleWeapon();
+  if(e.key==='t') cycleStance();
+  if(e.key==='p') togglePause();
+  if(e.key==='m') toggleMenu();
+});
+addEventListener('keyup', e=>{
+  keys[e.key.toLowerCase()] = false;
+  if(e.key==='j') attackUp();
+});
+function keyMove(){
+  let x=0,z=0;
+  if(keys['a']||keys['arrowleft'])x-=1;
+  if(keys['d']||keys['arrowright'])x+=1;
+  if(keys['w']||keys['arrowup'])z-=1;
+  if(keys['s']||keys['arrowdown'])z+=1;
+  const l=Math.hypot(x,z);
+  return l>0?{x:x/l,z:z/l}:{x:0,z:0};
+}
+/* touch joystick: left half of screen */
+const joy = { id:null, sx:0, sy:0, x:0, z:0 };
+const joyBase=document.getElementById('joyBase'), joyKnob=document.getElementById('joyKnob');
+addEventListener('pointerdown', e=>{
+  if(e.target.closest('button')||e.target.closest('#panel')) return;
+  if(e.clientX > innerWidth*.55 || joy.id!==null) return;
+  joy.id=e.pointerId; joy.sx=e.clientX; joy.sy=e.clientY;
+  joyBase.style.display='block';
+  joyBase.style.left=(e.clientX-52)+'px'; joyBase.style.top=(e.clientY-52)+'px';
+  joyKnob.style.display='block';
+  joyKnob.style.left=(e.clientX-23)+'px'; joyKnob.style.top=(e.clientY-23)+'px';
+});
+addEventListener('pointermove', e=>{
+  if(e.pointerId!==joy.id) return;
+  let dx=e.clientX-joy.sx, dy=e.clientY-joy.sy;
+  const l=Math.hypot(dx,dy), max=52;
+  if(l>max){ dx*=max/l; dy*=max/l; }
+  joy.x=dx/max; joy.z=dy/max;
+  joyKnob.style.left=(joy.sx+dx-23)+'px'; joyKnob.style.top=(joy.sy+dy-23)+'px';
+});
+function endJoy(e){
+  if(e.pointerId!==joy.id) return;
+  joy.id=null; joy.x=0; joy.z=0;
+  joyBase.style.display='none'; joyKnob.style.display='none';
+}
+addEventListener('pointerup', endJoy);
+addEventListener('pointercancel', endJoy);
+/* touch buttons */
+const atkBtn=document.getElementById('atkBtn'), dgeBtn=document.getElementById('dgeBtn');
+atkBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); atkBtn.classList.add('held'); attackDown(); });
+for(const ev of ['pointerup','pointercancel','pointerleave'])
+  atkBtn.addEventListener(ev, ()=>{ atkBtn.classList.remove('held'); attackUp(); });
+dgeBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); triggerDodge(); });
+/* gamepad */
+const padPrev = {};
+const padMove = { x:0, z:0 };
+function pollPad(){
+  const gp = navigator.getGamepads?.()[0];
+  if(!gp) return;
+  const bd = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const dz = v => Math.abs(v)>.16?v:0;
+  let mx = dz(gp.axes[0]||0), mz = dz(gp.axes[1]||0);
+  if(bd(14))mx-=1; if(bd(15))mx+=1; if(bd(12))mz-=1; if(bd(13))mz+=1;
+  const l=Math.hypot(mx,mz);
+  if(l>1){mx/=l;mz/=l;}
+  padMove.x=mx; padMove.z=mz;
+  const atk = bd(0)||bd(2)||bd(5)||bd(7);
+  const dge = bd(1)||bd(4)||bd(6);
+  const strt = bd(9), sel = bd(8), yb = bd(3);
+  if(atk && !padPrev.atk) attackDown();
+  if(!atk && padPrev.atk) attackUp();
+  if(dge && !padPrev.dge) triggerDodge();
+  if(strt && !padPrev.strt) toggleMenu();
+  if(sel && !padPrev.sel) togglePause();
+  if(yb && !padPrev.yb) cycleStance();
+  padPrev.atk=atk; padPrev.dge=dge; padPrev.strt=strt; padPrev.sel=sel; padPrev.yb=yb;
+}
+function gatherInput(){
+  const k = keyMove();
+  const pm = Math.hypot(padMove.x,padMove.z);
+  const jm = Math.hypot(joy.x,joy.z);
+  if(pm>.08){ input.mx=padMove.x; input.mz=padMove.z; }
+  else if(jm>.08){ input.mx=joy.x; input.mz=joy.z; }
+  else { input.mx=k.x; input.mz=k.z; }
+}
+
+/* ---------- UI ---------- */
+const panel=document.getElementById('panel');
+const pauseBtn=document.getElementById('pauseBtn');
+function toggleMenu(){ panel.classList.toggle('hidden'); }
+function togglePause(){ arena.paused=!arena.paused; pauseBtn.textContent = arena.paused?'▶':'II'; }
+function isPaused(){ return arena.paused || !panel.classList.contains('hidden'); }
+document.getElementById('menuBtn').addEventListener('click', toggleMenu);
+pauseBtn.addEventListener('click', togglePause);
+const fsBtn=document.getElementById('fsBtn');
+function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', ()=>{
+  if(!inFullscreen()){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
+  else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
+});
+document.addEventListener('fullscreenchange', ()=>{ fsBtn.textContent = inFullscreen()?'⤢':'⛶'; });
+document.getElementById('resetBtn').addEventListener('click', ()=>{ respawn(); toggleMenu(); });
+document.getElementById('weaponBtn').addEventListener('click', ()=>cycleWeapon());
+document.getElementById('stanceBtn').addEventListener('click', ()=>cycleStance());
+/* tabs */
+const tabDir=document.getElementById('tabDir'), tabFeel=document.getElementById('tabFeel');
+const dirTab=document.getElementById('dirTab'), feelTab=document.getElementById('feelTab');
+tabDir.addEventListener('click', ()=>{ tabDir.classList.add('on'); tabFeel.classList.remove('on');
+  dirTab.style.display='block'; feelTab.style.display='none'; });
+tabFeel.addEventListener('click', ()=>{ tabFeel.classList.add('on'); tabDir.classList.remove('on');
+  feelTab.style.display='block'; dirTab.style.display='none'; });
+/* director mode grid */
+const modeGrid=document.getElementById('modeGrid');
+const modeName=document.getElementById('modeName'), modeSub=document.getElementById('modeSub');
+function setMode(id){
+  enemySystem.setDirectorMode(id);
+  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===id));
+  updatePill();
+}
+DIRECTOR_MODES.forEach(m=>{
+  const b=document.createElement('button');
+  b.textContent=m.label; b.dataset.id=m.id;
+  b.addEventListener('click', ()=>setMode(m.id));
+  modeGrid.appendChild(b);
+});
+function updatePill(){
+  const mode = enemySystem.director.getMode();
+  modeName.textContent = DIRECTOR_MODES.find(m=>m.id===mode)?.label || mode;
+  modeSub.textContent = `${PC.currentWeapon().label} · ${arena.stance ? arena.stance.name : '—'}`;
+  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===mode));
+}
+/* sim sliders */
+const DIR_SLIDERS = [
+  { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
+  { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
+  { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
+  { label:'ENEMY HEIGHT',    min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
+  { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
+];
+const dirBox=document.getElementById('dirSliders');
+DIR_SLIDERS.forEach(d=>{
+  const row=document.createElement('div'); row.className='srow';
+  const lab=document.createElement('div'); lab.className='slabel';
+  const val=document.createElement('span'); val.className='sval'; val.textContent=d.get();
+  lab.textContent=d.label+' '; lab.appendChild(val);
+  const inp=document.createElement('input'); inp.type='range';
+  inp.min=d.min; inp.max=d.max; inp.step=d.step; inp.value=d.get();
+  inp.addEventListener('input', ()=>{ d.set(parseFloat(inp.value)); val.textContent=inp.value; });
+  row.appendChild(lab); row.appendChild(inp); dirBox.appendChild(row);
+});
+/* feel keyframe editor */
+let selKey='HAYMAKER';
+const keyRow=document.getElementById('keyRow');
+const feelEls={};
+FEEL_KEY_ORDER.forEach(k=>{
+  const b=document.createElement('button'); b.textContent=k; b.dataset.k=k;
+  if(k===selKey) b.classList.add('on');
+  b.addEventListener('click', ()=>{
+    selKey=k;
+    keyRow.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.k===k));
+    syncFeelSliders();
+  });
+  keyRow.appendChild(b);
+});
+const feelBox=document.getElementById('feelSliders');
+FEEL_PARAMS.forEach(pr=>{
+  const row=document.createElement('div'); row.className='srow';
+  const lab=document.createElement('div'); lab.className='slabel';
+  const val=document.createElement('span'); val.className='sval';
+  lab.textContent=pr.label+' '; lab.appendChild(val);
+  const inp=document.createElement('input'); inp.type='range';
+  inp.min=pr.min; inp.max=pr.max; inp.step=(pr.max-pr.min)/60;
+  inp.addEventListener('input', ()=>{
+    FEEL[selKey][pr.k]=parseFloat(inp.value);
+    val.textContent=parseFloat(inp.value).toFixed(2);
+  });
+  row.appendChild(lab); row.appendChild(inp); feelBox.appendChild(row);
+  feelEls[pr.k]={inp,val};
+});
+function syncFeelSliders(){
+  for(const pr of FEEL_PARAMS){
+    feelEls[pr.k].inp.value = FEEL[selKey][pr.k];
+    feelEls[pr.k].val.textContent = Number(FEEL[selKey][pr.k]).toFixed(2);
+  }
+}
+syncFeelSliders();
+document.getElementById('testBtn').addEventListener('click', ()=>{
+  panel.classList.add('hidden');
+  beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3);
+});
+
+/* ---------- HUD ---------- */
+const hpFill=document.getElementById('hpFill'), stats=document.getElementById('stats');
+const stateLbl=document.getElementById('stateLbl');
+const msgEl=document.getElementById('msg');
+let msgT=0;
+function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
+function updateHud(rawDt){
+  hpFill.style.width = clamp(enemySystem.playerHp,0,100)+'%';
+  const tokens = enemySystem.director.getDebugState().activeTokens;
+  stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
+  if(arena.deadT >= 0) stateLbl.textContent = 'DOWN';
+  else if(arena.charge.active) stateLbl.textContent = 'CHARGE — '+tierName(arena.charge.tier);
+  else if(combatState.attack) stateLbl.textContent = (combatState.lastAttackLabel||'SWING').toUpperCase();
+  else stateLbl.textContent = 'GUARD';
+  if(msgT>0){ msgT-=rawDt; if(msgT<=0) msgEl.style.opacity=0; }
+}
+
+/* ---------- camera ---------- */
+const camFollow = new THREE.Vector3(0,0,0);
+function updateCamera(rawDt){
+  camFollow.x += (actorPos.x - camFollow.x)*Math.min(1, rawDt*5);
+  camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*5);
+  shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
+  shake.addScaledVector(shakeVel,rawDt);
+  camera.position.set(camFollow.x+shake.x, CAM_HEIGHT+shake.y, camFollow.z+CAM_BACK+shake.z);
+  camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
+}
+
+/* ---------- main update ---------- */
+function updatePlayer(dt){
+  const d = arena.dodge;
+  if(arena.deadT >= 0){
+    arena.deadT += dt;
+    if(arena.deadT > 2.4) respawn();
+    return;
+  }
+  arena.invulnT = Math.max(0, arena.invulnT - dt);
+  d.cool = Math.max(0, d.cool - dt);
+
+  let spd = PLAYER_SPEED;
+  if(arena.charge.active) spd *= CHARGE_MOVE_MULT;
+  else if(combatState.attack) spd *= PC.combatMovePenalty();
+
+  const isMoving = Math.hypot(input.mx, input.mz) > .01;
+  if(d.t >= 0){
+    d.t += dt;
+    const u = clamp(d.t/DODGE_TIME, 0, 1);
+    const v = DODGE_SPEED * (1 - (1-Math.pow(1-u,3)));
+    actorPos.x += d.dirX*v*dt; actorPos.y += d.dirZ*v*dt;
+    if(d.t > DODGE_TIME) d.t = -1;
+  } else if(isMoving){
+    actorPos.x += input.mx*spd*dt; actorPos.y += input.mz*spd*dt;
+    walkPhase += dt*8;
+  }
+  // root-motion lunge while the strike phase is live
+  if(combatState.attack && !arena.charge.active){
+    const att = combatState.attack;
+    if(combatState.t > att.phases[0].t1 && combatState.t < att.contactAt + .12){
+      const rate = LUNGE_RATE * arena.swing.lunge;
+      actorPos.x += Math.sin(actorFacing)*rate*dt;
+      actorPos.y += Math.cos(actorFacing)*rate*dt;
+    }
+  }
+  const rr = Math.hypot(actorPos.x, actorPos.y);
+  if(rr > ARENA-1.2){ actorPos.x *= (ARENA-1.2)/rr; actorPos.y *= (ARENA-1.2)/rr; }
+
+  // facing: desired blended toward the committed swing yaw
+  let goal;
+  if(d.t >= 0) goal = Math.atan2(d.dirX, d.dirZ);
+  else {
+    const desired = resolveDesiredFacing();
+    goal = combatState.attack
+      ? lerpAngle(desired.angle, combatState.commitYaw ?? desired.angle, attackCommitWeight())
+      : desired.angle;
+  }
+  actorFacing = wrapPi(actorFacing + wrapPi(goal - actorFacing)*Math.min(1, dt*12));
+  const turnMix = 1 - Math.pow(0.0001, dt);
+  actorYawCurrent = Math.atan2(
+    lerp(Math.sin(actorYawCurrent), Math.sin(actorFacing), turnMix),
+    lerp(Math.cos(actorYawCurrent), Math.cos(actorFacing), turnMix)
+  );
+  yawQ.setFromAxisAngle(Y_AXIS, actorYawCurrent);
+
+  actorRoot.position.set(actorPos.x, 0, actorPos.y);
+  actorVisual.quaternion.copy(yawQ);
+  const bob = isMoving && d.t < 0 ? Math.sin(walkPhase)*.035 : 0;
+  const sway = isMoving && d.t < 0 ? Math.sin(walkPhase*.5)*.03 : 0;
+  actorVisual.position.y = 0.02 + bob;
+  // hurt blink
+  actorVisual.visible = !(arena.invulnT > .45 && Math.floor(performance.now()/90)%2===0);
+
+  updateCharge(dt);
+  PC.updateCombat(dt, performance.now()/1000, sway);
+}
+
+const clock = new THREE.Clock();
+function frame(){
+  requestAnimationFrame(frame);
+  const rawDt = Math.min(clock.getDelta(), .05);
+  pollPad();
+  gatherInput();
+  if(!isPaused()){
+    updatePlayer(rawDt);
+    enemySystem.update(rawDt, {
+      x: actorPos.x, z: actorPos.y,
+      invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
+    });
+    watchPlayerState(rawDt);
+  }
+  updateEffects(rawDt);
+  updateCamera(rawDt);
+  updateHud(rawDt);
+  renderer.render(scene, camera);
+}
+
+/* ---------- boot ---------- */
+spawnCharacter();
+PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
+if(!arena.stance) ensureStanceMatchesWeapon();
+setMode(enemySystem.director.getMode());
+enemySystem.reset();
+arena.prevHp = enemySystem.playerHp;
+arena.prevWave = enemySystem.wave;
+announce('WAVE 1');
+updatePill();
+frame();
+
+window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos,
+  attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing };
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
