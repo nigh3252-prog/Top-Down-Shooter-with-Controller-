@@ -10,6 +10,16 @@ the core page it patched are retired to `archive/`.
   builders, optional weapon visual update hooks, and `installRedTollGreatsword()`,
   which selects/tunes the Red Toll greatsword visual variant without replacing
   the lab's common rebuild path.
+- `stone-wanderer.js` — `installStoneWanderer({ THREE })`, the Stone Wanderer
+  character rig: procedural stone textures/materials, `makeStoneWanderer()`,
+  head/crown/width tuning, and `getW()` for the live rig handle bag.
+- `player-combat.js` — `installPlayerCombat(api)`, the player combat core:
+  pose model + attack interpreter over `attacks.js` definitions, the attack
+  state machine (`startCombatAttack`/`updateCombat`), two-bone arm IK, weapon
+  rig lifecycle (`selectCombatWeapon`/`rebuildCombatWeaponMesh`), swept
+  hit-zone geometry, and the swing trail/sparks. Page-specific side effects
+  (aim commit, audio, lab bookkeeping, DOM status, dummy-vs-enemy hit routing)
+  are injected through `api.hooks`.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
 - `combat-audio.js` — `installCombatAudioDirector()`, the procedural combat audio
   director. `weapon-lab.html` calls its `onAttackStart`/`onDummyEvent` methods
@@ -40,7 +50,7 @@ weapon-specific rebuild overrides.
 
 ## Extending this
 
-Next natural seams to pull out, if this keeps growing: the attack/combat
-system (`ATTACK_GROUPS`, `startCombatAttack`, hit detection), the actor rig
-and IK, and the dungeon/prop builder. Follow the same pattern — a small
+The attack/combat system and the actor rig + IK are now extracted
+(`player-combat.js`, `stone-wanderer.js`). The next natural seam, if this
+keeps growing, is the dungeon/prop builder. Follow the same pattern — a small
 `installX(LabAPI)` in a new `src/` file, called once from `weapon-lab.html`.
