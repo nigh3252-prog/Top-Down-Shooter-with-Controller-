@@ -3,6 +3,7 @@ import { ENEMY_ATTACK_BY_KIND } from './enemy-attacks.js';
 import { ATTACK_DEFINITIONS } from './attacks.js';
 import { STANCE_CARDS } from './stance-cards.js';
 import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
+import { installGoblinRig } from './goblin-rig.js';
 
 export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
@@ -59,6 +60,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   let nextId = 1;
   const tuning = { heightScale: 2, speedScale: 1, playerHp: 100, lastPlayerHit: '', waveSize: 6, idleRangeScale: 4.5 };
 
+  const rig = installGoblinRig(THREE);
   const tmp = new THREE.Vector3();
   const weaponUp = new THREE.Vector3(0, 1, 0);
   const tipQ = new THREE.Quaternion();
@@ -71,17 +73,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     brute: materials.brute || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.brute.color, roughness: .72, flatShading: true }),
     maceGoblin: materials.maceGoblin || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.maceGoblin.color, roughness: .78, flatShading: true }),
     spearGoblin: materials.spearGoblin || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.spearGoblin.color, roughness: .78, flatShading: true }),
-    flash: materials.flash || new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: .9, roughness: .45, flatShading: true }),
-    windup: materials.windup || new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0x7a4a00, emissiveIntensity: .7, roughness: .5, flatShading: true }),
-    active: materials.active || new THREE.MeshStandardMaterial({ color: 0xff4f4f, emissive: 0xaa1010, emissiveIntensity: .9, roughness: .45, flatShading: true }),
-    goblinBelly: materials.goblinBelly || new THREE.MeshStandardMaterial({ color: 0xbfd582, roughness: .85, flatShading: true }),
-    goblinArmor: materials.goblinArmor || new THREE.MeshStandardMaterial({ color: 0x543820, roughness: .8, flatShading: true }),
-    goblinEye: materials.goblinEye || new THREE.MeshStandardMaterial({ color: 0xfff1a8, emissive: 0xffc34d, emissiveIntensity: .45, roughness: .4, flatShading: true }),
-    matSilver: materials.matSilver || new THREE.MeshStandardMaterial({ color: 0xb8c4c0, metalness: .15, roughness: .48, flatShading: true }),
-    matBronze: materials.matBronze || new THREE.MeshStandardMaterial({ color: 0xa8793a, metalness: .08, roughness: .55, flatShading: true }),
-    matGlow: materials.matGlow || new THREE.MeshStandardMaterial({ color: 0x8dd2ff, emissive: 0x2c8eff, emissiveIntensity: .35, roughness: .4, flatShading: true }),
-    matLeather: materials.matLeather || new THREE.MeshStandardMaterial({ color: 0x5a3420, roughness: .82, flatShading: true }),
-    matIron: materials.matIron || new THREE.MeshStandardMaterial({ color: 0x788078, metalness: .12, roughness: .5, flatShading: true })
+    ...rig.buildGoblinMaterials(materials)
   };
 
   function setGoblinColors(kind, colors = {}){ const s = ENEMY_STATS[kind]; if(!s) return; if(colors.body != null){ s.color = colors.body; matByKind[kind]?.color?.setHex?.(colors.body); } if(colors.belly != null) s.bellyColor = colors.belly; if(colors.armor != null) s.armorColor = colors.armor; }
@@ -89,68 +81,19 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function setSpawnGoblins(value){ goblinDebug.spawnGoblins = !!value; }
 
   function visualHeight(e){ return e.height * tuning.heightScale; }
-  function updateSharedEnemyMarkers(e, h){
-    e.barBg.position.set(0, h + .32, 0); e.bar.position.y = e.barBg.position.y;
-    if(e.telegraph){ e.telegraph.position.y = .035; e.telegraph.scale.setScalar(e.attack ? e.attack.range : e.stop); e.telegraph.visible = e.state === 'windup' || e.state === 'active'; e.telegraph.material = e.state === 'active' ? matByKind.active : matByKind.windup; }
-    if(e.tokenRing) e.tokenRing.visible = !!e.token;
-  }
   function applyBasicEnemyVisual(e){
     const h = visualHeight(e);
     e.body.position.y = h * .5; e.body.scale.set(1, tuning.heightScale, .92);
     e.eye.position.set(0, h * .62, e.radius * .88);
-    updateSharedEnemyMarkers(e, h);
+    rig.updateSharedEnemyMarkers(e, h, matByKind);
   }
-  function applyGoblinVisual(e){
-    const h = visualHeight(e);
-    if(e.bodyRoot) e.bodyRoot.scale.setScalar(tuning.heightScale);
-    updateSharedEnemyMarkers(e, h);
-    if(e.goblinGlow){
-      const attacking = e.state === 'windup' || e.state === 'active';
-      e.goblinGlow.visible = e.flash > 0 || attacking;
-      e.goblinGlow.material.opacity = clamp((e.flash * 2.8) + (e.state === 'active' ? .28 : (e.state === 'windup' ? .16 : 0)), 0, .55);
-      e.goblinGlow.material.color.setHex(e.state === 'active' ? 0xff6b55 : (e.flash > 0 ? 0xffffff : 0xffd36a));
-      e.goblinGlow.position.y = e.height * .52;
-      e.goblinGlow.scale.set(1.2, e.height * 1.1, 1.0);
-    }
-  }
-  function applyEnemyVisual(e){ GOBLIN_KINDS.has(e.kind) ? applyGoblinVisual(e) : applyBasicEnemyVisual(e); }
+  function applyEnemyVisual(e){ GOBLIN_KINDS.has(e.kind) ? rig.applyGoblinVisual(e, tuning.heightScale, matByKind) : applyBasicEnemyVisual(e); }
 
-  function meshLocalBox(w,h,d,mat,jit=0,pos=[0,0,0]){ const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); m.position.set(pos[0],pos[1],pos[2]); m.castShadow = m.receiveShadow = true; return m; }
-  function meshLocalIco(r,mat,pos=[0,0,0]){ const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r,0), mat); m.position.set(pos[0],pos[1],pos[2]); m.castShadow = m.receiveShadow = true; return m; }
-  function makeGoblinRig(kind, root, s){
-    const pelvis = new THREE.Group(); pelvis.name = 'goblin pelvis'; root.add(pelvis);
-    const torsoRoot = new THREE.Group(); torsoRoot.name = 'goblin torsoRoot'; pelvis.add(torsoRoot);
-    const headRoot = new THREE.Group(); headRoot.name = 'goblin headRoot'; torsoRoot.add(headRoot);
-    const weaponRigRoot = new THREE.Group(); weaponRigRoot.name = 'goblin weaponRigRoot'; torsoRoot.add(weaponRigRoot);
-    const weaponRoot = new THREE.Group(); weaponRoot.name = `${kind} weaponRoot`; weaponRigRoot.add(weaponRoot);
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(s.radius, Math.max(.1, s.height - s.radius * 2), 6, 14), matByKind[kind]);
-    body.position.y = s.height * .5; body.scale.set(1, 1, .9); body.castShadow = body.receiveShadow = true; torsoRoot.add(body);
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(s.radius * .62, 12, 8), new THREE.MeshStandardMaterial({ color:s.bellyColor, roughness:.86, flatShading:true }));
-    belly.scale.set(1,.72,.16); belly.position.set(0, s.height*.44, s.radius*.82); torsoRoot.add(belly);
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(s.radius*1.03, s.radius*1.05, .09, 16), new THREE.MeshStandardMaterial({ color:s.armorColor, roughness:.78, flatShading:true }));
-    belt.position.y = s.height*.38; torsoRoot.add(belt);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(s.radius*.72, 14, 10), matByKind[kind]); head.scale.set(1,.82,.9); head.position.y = s.height*.82; headRoot.add(head);
-    const ears = [];
-    const earGeo = new THREE.ConeGeometry(s.radius*.23, s.radius*.42, 4); [-1,1].forEach(side=>{ const ear = new THREE.Mesh(earGeo, matByKind[kind]); ear.position.set(side*s.radius*.62, s.height*.84, s.radius*.02); ear.rotation.z = -side*Math.PI*.5; ear.rotation.y = side*.25; headRoot.add(ear); ears.push(ear); });
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(s.radius*.78, s.radius*.11, s.radius*.06), matByKind.goblinEye); eye.position.set(0, s.height*.86, s.radius*.58); headRoot.add(eye);
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(s.radius*.42, s.radius*.055, s.radius*.04), matByKind.goblinArmor); mouth.position.set(0, s.height*.77, s.radius*.6); headRoot.add(mouth);
-    const RIG = { bladeBase:.08, bladeTip:1.15, gripCenter:-.14 };
-    const weaponParts = {};
-    const addGrip = (r=.022,len=.40)=>{ const m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), matByKind.matLeather); m.position.y=-.14; m.castShadow=m.receiveShadow=true; weaponRoot.add(m); weaponRoot.add(meshLocalIco(.045, matByKind.matIron, [0,-.37,0])); };
-    const addGuard = (w=.34)=>weaponRoot.add(meshLocalBox(w,.045,.07,matByKind.matBronze,0,[0,RIG.bladeBase,0]));
-    buildStoneWeaponMesh({ THREE, weaponDef:STONE_WEAPONS[s.weapon] || STONE_WEAPONS.mace, weaponRoot, RIG, bladeLen:RIG.bladeTip-RIG.bladeBase, base:RIG.bladeBase, materials:matByKind, helpers:{ addGrip, addGuard, meshLocalBox, meshLocalIco }, weaponParts });
-    weaponRoot.scale.setScalar(.9); weaponRoot.rotation.x = .35; weaponRoot.position.set(.28, s.height*.56, .16);
-    const goblinGlow = new THREE.Mesh(new THREE.SphereGeometry(s.radius * .72, 12, 8), new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:0, depthWrite:false }));
-    goblinGlow.visible = false; torsoRoot.add(goblinGlow);
-    const rigDebug = new THREE.Group(); rigDebug.name = 'goblin invisible puppet rig debug'; rigDebug.visible = goblinDebug.showRig; root.add(rigDebug);
-    const axis = new THREE.Mesh(new THREE.BoxGeometry(.025, s.height, .025), matByKind.windup); axis.position.y = s.height*.5; rigDebug.add(axis);
-    return { bodyRoot:pelvis, pelvis, torsoRoot, headRoot, weaponRigRoot, weaponRoot, weaponParts, RIG, body, belly, belt, head, ears, eye, mouth, goblinGlow, rigDebug };
-  }
   function makeMesh(kind){
     const s = ENEMY_STATS[kind] || ENEMY_STATS.chaser;
     const root = new THREE.Group(); root.name = `${kind} enemy`;
     let visual;
-    if(GOBLIN_KINDS.has(kind)) visual = makeGoblinRig(kind, root, s);
+    if(GOBLIN_KINDS.has(kind)) visual = rig.makeGoblinRig({ kind, root, s, bodyMat: matByKind[kind], mats: matByKind, weaponDef: STONE_WEAPONS[s.weapon], showRig: goblinDebug.showRig });
     else {
       const capsuleLength = Math.max(.1, s.height - s.radius * 2);
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(s.radius, capsuleLength, 5, 12), matByKind[kind]);
@@ -223,39 +166,15 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   }
 
 
-  function addDeathPieceFromObject(obj, geo, mat, knock, spread = 1){
-    const pieceGeo = geo || obj.geometry?.clone?.() || new THREE.BoxGeometry(.2, .2, .2);
-    const pieceMat = mat || obj.material || matByKind.flash;
-    const mesh = new THREE.Mesh(pieceGeo, pieceMat); obj.getWorldPosition(mesh.position); obj.getWorldQuaternion(mesh.quaternion); obj.getWorldScale(mesh.scale); mesh.castShadow = mesh.receiveShadow = true; worldRoot.add(mesh);
-    const dir = new THREE.Vector3(knock.x || 0, 0, knock.z || 0); if(dir.lengthSq() < 1e-5) dir.set((Math.random()-.5), 0, (Math.random()-.5)); dir.normalize();
-    const vel = dir.multiplyScalar((1.2 + Math.random() * 1.8) * spread).add(new THREE.Vector3((Math.random()-.5)*1.2, 1.4 + Math.random()*1.8, (Math.random()-.5)*1.2));
-    deathPieces.push({ mesh, vel, ang:new THREE.Vector3((Math.random()-.5)*5, (Math.random()-.5)*5, (Math.random()-.5)*5), age:0 });
-  }
   function shatterEnemy(e, knock = { x:0, z:0 }){
-    if(GOBLIN_KINDS.has(e.kind)){
-      addDeathPieceFromObject(e.body, null, e.body.material, knock, 1.05);
-      if(e.belly) addDeathPieceFromObject(e.belly, null, e.belly.material, knock, .95);
-      if(e.head) addDeathPieceFromObject(e.head, null, e.head.material, knock, 1.2);
-      (e.ears || []).forEach(ear => addDeathPieceFromObject(ear, null, ear.material, knock, 1.4));
-      if(e.belt) addDeathPieceFromObject(e.belt, null, e.belt.material, knock, 1.0);
-      if(e.weaponRoot) addDeathPieceFromObject(e.weaponRoot, new THREE.BoxGeometry(.08, Math.max(.45, e.RIG?.bladeTip || .9), .08), matByKind.matIron, knock, 1.35);
-      return;
-    }
+    if(GOBLIN_KINDS.has(e.kind)){ rig.shatterGoblin(worldRoot, deathPieces, e, knock, matByKind.matIron); return; }
     const top = new THREE.Object3D(), mid = new THREE.Object3D(), bot = new THREE.Object3D();
     [top, mid, bot].forEach(o => e.body.add(o));
     top.position.set(0, e.height*.18, 0); mid.position.set(0, 0, 0); bot.position.set(0, -e.height*.18, 0);
-    addDeathPieceFromObject(top, new THREE.SphereGeometry(e.radius*.55, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, 1.1);
-    addDeathPieceFromObject(mid, new THREE.BoxGeometry(e.radius*.9, e.height*.24, e.radius*.7), matByKind[e.kind] || matByKind.chaser, knock, 1.0);
-    addDeathPieceFromObject(bot, new THREE.SphereGeometry(e.radius*.48, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, .9);
-    addDeathPieceFromObject(e.eye, null, e.eye.material, knock, 1.35);
-  }
-  function updateDeathPieces(dt){
-    for(let i = deathPieces.length - 1; i >= 0; i--){
-      const p = deathPieces[i]; p.age += dt; p.vel.y -= 5.2 * dt; p.mesh.position.addScaledVector(p.vel, dt);
-      p.mesh.rotation.x += p.ang.x * dt; p.mesh.rotation.y += p.ang.y * dt; p.mesh.rotation.z += p.ang.z * dt;
-      if(p.mesh.position.y < .08){ p.mesh.position.y = .08; p.vel.y *= -.28; p.vel.x *= .75; p.vel.z *= .75; p.ang.multiplyScalar(.75); }
-      if(p.age > 5){ p.mesh.parent && p.mesh.parent.remove(p.mesh); deathPieces.splice(i, 1); }
-    }
+    rig.addDeathPieceFromObject(worldRoot, deathPieces, top, new THREE.SphereGeometry(e.radius*.55, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, 1.1);
+    rig.addDeathPieceFromObject(worldRoot, deathPieces, mid, new THREE.BoxGeometry(e.radius*.9, e.height*.24, e.radius*.7), matByKind[e.kind] || matByKind.chaser, knock, 1.0);
+    rig.addDeathPieceFromObject(worldRoot, deathPieces, bot, new THREE.SphereGeometry(e.radius*.48, 8, 6), matByKind[e.kind] || matByKind.chaser, knock, .9);
+    rig.addDeathPieceFromObject(worldRoot, deathPieces, e.eye, null, e.eye.material, knock, 1.35);
   }
   function updateGoblinAttackState(e, dt, player){
     if(!GOBLIN_KINDS.has(e.kind) || !(e.state === 'windup' || e.state === 'active')) return false;
@@ -320,7 +239,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     for(const e of [...enemies]) updateEnemy(e, dt, player);
     resolveEnemySpacing();
     for(const e of enemies) e.root.position.set(e.x, 0, e.z);
-    updateDeathPieces(dt);
+    rig.updateDeathPieces(dt, deathPieces);
   }
   function setHeightScale(value){ tuning.heightScale = clamp(Number(value) || 1, .5, 4); enemies.forEach(applyEnemyVisual); }
   function setSpeedScale(value){ tuning.speedScale = clamp(Number(value) || 1, .25, 1.5); }
