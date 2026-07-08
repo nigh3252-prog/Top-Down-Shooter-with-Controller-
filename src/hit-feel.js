@@ -11,6 +11,10 @@ export const HIT_TYPE_COLOR = Object.freeze({
   kill: 0xffffff
 });
 
+const BLOOD_COLOR = 0xb7191f;
+const DUST_COLOR = 0xc89a64;
+const WOOD_COLOR = 0x8b5a2b;
+
 export function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
 
 export function hitStageFromImpact({ damage = 0, stagger = 1, killed = false, tier = 0, attackGroup = '' } = {}){
@@ -22,26 +26,39 @@ export function hitStageFromImpact({ damage = 0, stagger = 1, killed = false, ti
 export function buildHitReaction({ stage = 1, killed = false, dir = { x:0, z:1 }, weight = 1 } = {}){
   const s = killed ? 3 : clamp(Math.round(stage || 1), 1, 3);
   const w = Math.max(.35, weight || 1);
+  const knockMul = (s === 1 ? 1.55 : (s === 2 ? 2.45 : 4.35)) / w;
   return {
     hitStage:s,
-    hitT:s === 1 ? .34 : (s === 2 ? .50 : .92),
-    hitMax:s === 1 ? .34 : (s === 2 ? .50 : .92),
-    stunned:s === 1 ? .26 : (s === 2 ? .46 : .78),
-    lean:s === 1 ? .28 : (s === 2 ? .50 : .82),
-    squash:s === 1 ? .16 : (s === 2 ? .26 : .42),
-    lift:s === 3 ? .36 / w : (s === 2 ? .10 / w : .04 / w),
-    spinVel:(s === 3 ? 10.5 : (s === 2 ? 4.3 : 1.8)) * (Math.random() < .5 ? -1 : 1),
+    hitT:s === 1 ? .38 : (s === 2 ? .58 : 1.05),
+    hitMax:s === 1 ? .38 : (s === 2 ? .58 : 1.05),
+    stunned:s === 1 ? .34 : (s === 2 ? .62 : 1.05),
+    lean:s === 1 ? .34 : (s === 2 ? .62 : 1.05),
+    squash:s === 1 ? .22 : (s === 2 ? .32 : .50),
+    lift:s === 3 ? .62 / w : (s === 2 ? .18 / w : .06 / w),
+    airVy:s === 3 ? 4.4 / w : (s === 2 ? 1.15 / w : .35 / w),
+    launchedT:s === 3 ? 1.1 : 0,
+    knockMul,
+    spinVel:(s === 3 ? 13.5 : (s === 2 ? 5.4 : 2.4)) * (Math.random() < .5 ? -1 : 1),
     hitDir:{ x:dir?.x || 0, z:dir?.z || 1 }
   };
 }
 
-export function installHitFeel({ THREE, scene, camera, overlayParent = document.body, onCameraKick = null, effects = null } = {}){
+export function installHitFeel({ THREE, scene, camera, overlayParent = document.body, onCameraKick = null, onAudioCue = null, effects = null } = {}){
   const ownedEffects = effects || [];
+  const splats = [];
+  const smears = [];
   let overlay = null;
   let shake = 0;
   let zoomKick = 0;
   let juice = 0;
+  let hitstop = 0;
+  let slowMo = 0;
+  let lastImpactPoint = null;
+  const camKick = new THREE.Vector3();
 
+  function rand(a,b){ return a + Math.random() * (b-a); }
+  function planarAngle(dir){ return Math.atan2(dir.x, dir.z); }
+  function isDummy(kind){ return kind === 'dummy' || kind === 'edgeDummy'; }
   function ensureOverlay(){
     if(overlay || !overlayParent) return overlay;
     overlay = document.createElement('div');
@@ -66,79 +83,146 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   }
 
   function makeDamageSprite(text, color, scale = 1){
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
-    const ctx = cv.getContext('2d'); ctx.clearRect(0,0,256,128);
-    ctx.font = '900 34px system-ui,Segoe UI,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,.78)'; ctx.fillStyle = '#'+color.toString(16).padStart(6,'0');
-    String(text).split('\n').slice(0,2).forEach((line,i)=>{ const y = 48 + i*34; ctx.strokeText(line,128,y); ctx.fillText(line,128,y); });
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
+    const ctx = cv.getContext('2d'); ctx.clearRect(0,0,512,192);
+    ctx.font = '900 '+Math.round(58*scale)+'px system-ui,Segoe UI,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 12; ctx.strokeStyle = 'rgba(20,16,24,.92)'; ctx.fillStyle = '#'+color.toString(16).padStart(6,'0');
+    String(text).split('\n').slice(0,2).forEach((line,i)=>{ const y = 82 + i*52; ctx.strokeText(line,256,y); ctx.fillText(line,256,y); });
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false });
-    const sp = new THREE.Sprite(mat); sp.scale.set(1.25*scale, .62*scale, 1); return sp;
+    const sp = new THREE.Sprite(mat); sp.scale.set(2.15*scale, .80*scale, 1); return sp;
   }
 
   function add(mesh, life, kind, extra = {}){ scene.add(mesh); ownedEffects.push({ mesh, age:0, life, kind, ...extra }); return mesh; }
+  function disposeMesh(mesh){ mesh.parent?.remove(mesh); mesh.material?.map?.dispose?.(); mesh.material?.dispose?.(); mesh.geometry?.dispose?.(); }
 
   function shockwave(point, color, stage){
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(.22, .018, 6, 48), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.95, blending:THREE.AdditiveBlending, depthWrite:false }));
-    mesh.position.copy(v3(point)); if(camera) mesh.lookAt(camera.position);
-    add(mesh, stage >= 3 ? .44 : .30, 'shockwave', { maxScale:stage >= 3 ? 4.2 : 2.2 + stage*.6 });
+    const p = v3(point);
+    const ground = new THREE.Mesh(new THREE.RingGeometry(.72, .82, 56), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.85, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }));
+    ground.rotation.x = -Math.PI/2; ground.position.set(p.x, .035, p.z);
+    add(ground, stage >= 3 ? .44 : .30, 'groundWave', { maxScale:stage >= 3 ? 4.2 : 2.2 + stage*.6 });
+    const air = new THREE.Mesh(new THREE.TorusGeometry(.22, .018, 6, 48), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.95, blending:THREE.AdditiveBlending, depthWrite:false }));
+    air.position.copy(p); if(camera) air.lookAt(camera.position);
+    add(air, stage >= 3 ? .38 : .26, 'shockwave', { maxScale:stage >= 3 ? 3.2 : 1.7 + stage*.45 });
   }
 
   function slashBurst(point, dir, color, stage){
-    const d = dir3(dir); const base = Math.atan2(d.x, d.z);
-    const count = stage >= 3 ? 9 : 4 + stage * 2;
+    const p = v3(point), d = dir3(dir); const base = planarAngle(d);
+    const count = stage >= 3 ? 10 : 4 + stage * 2;
     for(let i=0;i<count;i++){
-      const geo = new THREE.PlaneGeometry((stage>=3?.95:.62) * (1+Math.random()*.65), .045 + Math.random()*.055);
-      const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.86, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
-      const m = new THREE.Mesh(geo, mat); m.position.copy(v3(point)).add(new THREE.Vector3((Math.random()-.5)*.32, (Math.random()-.5)*.18, (Math.random()-.5)*.32));
-      m.rotation.set((Math.random()-.5)*1.1, base + Math.PI/2 + (Math.random()-.5)*.75, (Math.random()-.5)*1.1);
-      add(m, stage >= 3 ? .28 : .18, 'slash', { vel:d.clone().multiplyScalar(.8 + Math.random()*1.6), spin:(Math.random()-.5)*7 });
+      const geo = new THREE.BoxGeometry(.07 + Math.random()*.08, .055, (stage >= 3 ? 3.4 : 2.1 + stage*.35) * (0.55 + Math.random()*.85));
+      const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.88, blending:THREE.AdditiveBlending, depthWrite:false });
+      const m = new THREE.Mesh(geo, mat); m.position.copy(p).add(d.clone().multiplyScalar(.6 + Math.random()*.8)); m.position.y += rand(.15,.75);
+      m.rotation.set(rand(-.25,.25), base + rand(-.35,.35), rand(-.55,.55));
+      add(m, stage >= 3 ? .28 : .18, 'slash', { vel:d.clone().multiplyScalar(.4 + Math.random()*1.2), spin:(Math.random()-.5)*8 });
     }
   }
 
-  function particleBurst(point, dir, color, stage, type){
-    const d = dir3(dir); const count = stage >= 3 ? 54 : 18 + stage*12;
+  function particleBurst(point, dir, color, stage, type, targetKind){
+    const p = v3(point), d = dir3(dir); const dummy = isDummy(targetKind); const count = stage >= 3 ? 86 : 24 + stage*18;
+    const side = new THREE.Vector3(-d.z, 0, d.x);
     for(let i=0;i<count;i++){
       const spark = type === 'blunt' || type === 'hybrid';
-      const geo = spark ? new THREE.BoxGeometry(.035,.035,.16) : new THREE.SphereGeometry(.035, 6, 4);
-      const mat = new THREE.MeshBasicMaterial({ color:spark?0xffd36a:color, transparent:true, opacity:.95, blending:THREE.AdditiveBlending, depthWrite:false });
-      const m = new THREE.Mesh(geo, mat); m.position.copy(v3(point));
-      const spray = d.clone().multiplyScalar(.7 + Math.random()*(stage>=3?3.8:2.2)).add(new THREE.Vector3((Math.random()-.5)*2.4, Math.random()*1.6 + .25, (Math.random()-.5)*2.4));
-      add(m, .35 + Math.random()*.45, 'particle', { vel:spray, gravity:spark?2.8:4.8, spin:new THREE.Vector3(Math.random()*7,Math.random()*7,Math.random()*7) });
+      const chip = dummy && Math.random() > .28;
+      const geo = chip ? new THREE.BoxGeometry(rand(.04,.10),rand(.025,.07),rand(.10,.24)) : (spark ? new THREE.BoxGeometry(.035,.035,.18) : new THREE.SphereGeometry(.035, 6, 4));
+      const mat = new THREE.MeshBasicMaterial({ color:dummy ? (chip ? WOOD_COLOR : DUST_COLOR) : (spark ? 0xffd36a : color), transparent:true, opacity:.95, blending:dummy ? THREE.NormalBlending : THREE.AdditiveBlending, depthWrite:false });
+      const m = new THREE.Mesh(geo, mat); m.position.copy(p);
+      const spray = d.clone().multiplyScalar(rand(1.2, stage >= 3 ? 7.8 : 4.5)).add(side.clone().multiplyScalar(rand(-2.8, 2.8))).add(new THREE.Vector3(0, rand(1.2, stage >= 3 ? 5.2 : 3.6), 0));
+      add(m, rand(.18,.68), 'particle', { vel:spray, gravity:dummy ? 5.8 : (spark ? 2.8 : 4.8), spin:new THREE.Vector3(rand(-10,10),rand(-10,10),rand(-10,10)) });
+    }
+  }
+
+  function groundSplat(pos, dir, color, amount = 8, big = false, targetKind = ''){
+    if(isDummy(targetKind)) return dummyDebris(pos, dir, amount, big);
+    const p0 = v3(pos), d = dir3(dir), side = new THREE.Vector3(-d.z,0,d.x);
+    const count = Math.min(70, Math.max(0, amount));
+    for(let i=0;i<count;i++){
+      const r = rand(.06, big ? .27 : .16);
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 9), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:rand(.45,.84), depthWrite:false, side:THREE.DoubleSide }));
+      mesh.rotation.x = -Math.PI/2;
+      const p = p0.clone().add(d.clone().multiplyScalar(rand(-.12, big ? 1.45 : .75))).add(side.clone().multiplyScalar(rand(big ? -1.1 : -.55, big ? 1.1 : .55)));
+      mesh.position.set(p.x, .018 + splats.length * .00002, p.z);
+      mesh.scale.set(rand(.7, big ? 2.8 : 1.7), rand(.35, big ? 1.35 : .9), 1);
+      mesh.rotation.z = rand(0, Math.PI*2); scene.add(mesh); splats.push(mesh);
+      if(splats.length > 320) disposeMesh(splats.shift());
+    }
+  }
+
+  function bloodSmear(start, dir, color, power = 1, targetKind = ''){
+    if(isDummy(targetKind)) return;
+    const s = v3(start), d = dir3(dir), side = new THREE.Vector3(-d.z,0,d.x);
+    for(let i=0;i<6 + power*4;i++){
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(rand(.20,.52)*power, rand(.75,1.75)*power), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:rand(.22,.42), depthWrite:false, side:THREE.DoubleSide }));
+      mesh.rotation.x = -Math.PI/2; mesh.rotation.z = -planarAngle(d) + rand(-.22,.22);
+      const p = s.clone().add(d.clone().multiplyScalar(rand(.2,2.2*power))).add(side.clone().multiplyScalar(rand(-.35,.35)));
+      mesh.position.set(p.x, .019 + smears.length*.000025, p.z); scene.add(mesh); smears.push(mesh);
+      if(smears.length > 90) disposeMesh(smears.shift());
+    }
+  }
+
+  function dummyDebris(pos, dir, amount = 8, big = false){
+    const p0 = v3(pos), d = dir3(dir), side = new THREE.Vector3(-d.z,0,d.x);
+    const count = Math.min(50, Math.max(4, Math.round(amount*.8)));
+    for(let i=0;i<count;i++){
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(rand(.025,.08), .012, rand(.05,.16)), new THREE.MeshBasicMaterial({ color:Math.random()>.25?WOOD_COLOR:DUST_COLOR, transparent:true, opacity:rand(.38,.75), depthWrite:false }));
+      mesh.rotation.x = -Math.PI/2; mesh.rotation.z = planarAngle(d)+rand(-.7,.7);
+      const p = p0.clone().add(d.clone().multiplyScalar(rand(.15, big ? 1.6 : .75))).add(side.clone().multiplyScalar(rand(-.7,.7)));
+      mesh.position.set(p.x, .022 + splats.length*.00002, p.z); mesh.scale.setScalar(big ? rand(1.2,2.4) : rand(.7,1.4)); scene.add(mesh); splats.push(mesh);
+      if(splats.length > 320) disposeMesh(splats.shift());
     }
   }
 
   function floater(point, dir, text, color, stage){
-    const sp = makeDamageSprite(text, color, stage >= 3 ? 1.8 : 1.15 + stage*.18);
-    sp.position.copy(v3(point)).add(new THREE.Vector3(0, .45 + stage*.12, 0));
-    add(sp, stage >= 3 ? 1.25 : .92, 'label', { vel:dir3(dir).multiplyScalar(.24).add(new THREE.Vector3((Math.random()-.5)*.2, .85 + stage*.25, (Math.random()-.5)*.2)) });
+    const sp = makeDamageSprite(text, color, stage >= 3 ? 1.25 : .86 + stage*.10);
+    sp.position.copy(v3(point)).add(dir3(dir).multiplyScalar(.72)); sp.position.y += 1.05 + stage*.18;
+    add(sp, stage >= 3 ? 1.25 : .92, 'label', { vel:dir3(dir).multiplyScalar(.7).add(new THREE.Vector3(0, 1.05 + stage*.22, 0)) });
   }
 
-  function trigger({ point, dir, type = 'slice', damage = 0, label = '', stage = 1, killed = false, whiff = false, targetKind = '' } = {}){
+  function trigger({ point, dir, type = 'slice', damage = 0, label = '', stage = 1, killed = false, whiff = false, targetKind = '', bloodColor = BLOOD_COLOR } = {}){
     const p = v3(point); const d = dir3(dir); const s = killed ? 3 : clamp(Math.round(stage || 1), 1, 3); const color = colorFor(type, s);
-    if(whiff){ slashBurst(p, d, color, 1); floater(p, d, 'WHIFF', 0xcfefff, 1); shake += .08; return { stage:1 }; }
+    lastImpactPoint = p.clone();
+    if(whiff){ hitstop = Math.max(hitstop, .018); slashBurst(p, d, color, 1); floater(p, d, 'WHIFF', 0xcfefff, 1); shake += .08; onAudioCue?.({ kind:'whiff', stage:1, type, targetKind }); return { stage:1 }; }
+    hitstop = Math.min(.34, Math.max(hitstop, s === 3 ? .23 : (s === 2 ? .17 : .12)));
+    slowMo = Math.max(slowMo, s === 3 ? .26 : (s === 2 ? .18 : .08));
     overlayImpact(p);
-    shockwave(p, color, s); slashBurst(p, d, color, s); particleBurst(p, d, color, s, type);
+    shockwave(p, color, s); slashBurst(p, d, color, s); particleBurst(p, d, color, s, type, targetKind);
+    groundSplat(p.clone().add(d.clone().multiplyScalar(.20)), d, bloodColor, s === 3 ? 30 : 7 + s*8, s === 3 || killed, targetKind);
+    if(s >= 2) bloodSmear(p, d, bloodColor, s === 3 ? 1.35 : .75, targetKind);
     const hitLabel = killed ? 'SHATTER!' : (s === 1 ? 'STAGGER!' : (s === 2 ? 'REEL!' : 'LAUNCH!'));
     floater(p, d, `${damage ? damage + ' ' : ''}${hitLabel}${label ? '\n' + label : ''}`, s >= 3 ? 0xffffff : 0xfff3a0, s);
     shake += s === 1 ? .58 : (s === 2 ? .92 : 1.45); zoomKick += s === 3 ? .95 : .30 + s*.12; juice = Math.min(1, juice + .26 + s*.22);
-    onCameraKick?.({ x:-d.x*.30*s + (Math.random()-.5)*.35, y:-.7*s, z:-d.z*.30*s, shake, zoomKick, stage:s, targetKind });
-    return { stage:s, shake, zoomKick };
+    camKick.add(d.clone().multiplyScalar(-.30*s));
+    onCameraKick?.({ x:-d.x*.60*s + (Math.random()-.5)*.35, y:-.7*s, z:-d.z*.60*s, shake, zoomKick, stage:s, point:p.clone(), targetKind });
+    onAudioCue?.({ kind:killed?'kill':'hit', stage:s, type, damage, targetKind });
+    return { stage:s, shake, zoomKick, hitstop, slowMo };
+  }
+
+  function triggerSecondary({ point, dir, label = 'WALL SPLAT!', targetKind = '', bloodColor = BLOOD_COLOR } = {}){
+    const p = v3(point), d = dir3(dir);
+    shake += .75; zoomKick += .32; camKick.add(d.clone().multiplyScalar(.55));
+    shockwave(p, BLOOD_COLOR, 3); groundSplat(p, d, bloodColor, 24, true, targetKind); bloodSmear(p, d, bloodColor, 1.1, targetKind); floater(p, d, label, 0xffffff, 3);
+    onCameraKick?.({ x:d.x*.55, y:-.55, z:d.z*.55, shake, zoomKick, stage:3, point:p.clone(), targetKind });
+    onAudioCue?.({ kind:'wallSplat', stage:3, targetKind });
   }
 
   function update(dt){
-    shake = Math.max(0, shake - dt*4.5); zoomKick = Math.max(0, zoomKick - dt*5.2); juice = Math.max(0, juice - dt*2.8);
+    hitstop = Math.max(0, hitstop - dt); slowMo = Math.max(0, slowMo - dt);
+    shake = Math.max(0, shake - dt*4.5); zoomKick = Math.max(0, zoomKick - dt*5.2); juice = Math.max(0, juice - dt*2.8); camKick.multiplyScalar(Math.pow(.06, dt));
     for(let i=ownedEffects.length-1;i>=0;i--){
       const fx = ownedEffects[i]; fx.age += dt; const k = clamp(fx.age / fx.life, 0, 1);
       if(fx.vel) fx.mesh.position.addScaledVector(fx.vel, dt);
       if(fx.gravity) fx.vel.y -= fx.gravity * dt;
       if(fx.spin?.isVector3){ fx.mesh.rotation.x += fx.spin.x*dt; fx.mesh.rotation.y += fx.spin.y*dt; fx.mesh.rotation.z += fx.spin.z*dt; }
       if(fx.kind === 'shockwave'){ fx.mesh.scale.setScalar(1 + k * fx.maxScale); fx.mesh.material.opacity = 1 - k; if(camera) fx.mesh.lookAt(camera.position); }
+      else if(fx.kind === 'groundWave'){ fx.mesh.scale.setScalar(1 + k * fx.maxScale); fx.mesh.material.opacity = .85 * (1 - k); }
       else if(fx.kind === 'slash'){ fx.mesh.position.addScaledVector(fx.vel, dt); fx.mesh.rotation.z += fx.spin*dt; fx.mesh.material.opacity = 1 - k; }
       else if(fx.kind === 'label'){ fx.mesh.material.opacity = 1 - k*k; if(camera) fx.mesh.lookAt(camera.position); }
       else { fx.mesh.material.opacity = 1 - k; }
-      if(fx.age >= fx.life){ fx.mesh.parent?.remove(fx.mesh); fx.mesh.material?.map?.dispose?.(); fx.mesh.material?.dispose?.(); fx.mesh.geometry?.dispose?.(); ownedEffects.splice(i,1); }
+      if(fx.age >= fx.life){ disposeMesh(fx.mesh); ownedEffects.splice(i,1); }
     }
   }
 
-  return { trigger, update, buildReaction:buildHitReaction, hitStageFromImpact };
+  function scaleDt(rawDt){ return hitstop > 0 ? rawDt * .035 : (slowMo > 0 ? rawDt * .45 : rawDt); }
+  function getState(){ return { hitstop, slowMo, shake, zoomKick, juice, camKick:camKick.clone(), lastImpactPoint:lastImpactPoint?.clone?.() || null }; }
+
+  return { trigger, triggerSecondary, update, scaleDt, getState, getJuice:()=>juice, buildReaction:buildHitReaction, hitStageFromImpact };
 }

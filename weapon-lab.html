@@ -539,7 +539,10 @@ const warm = new THREE.PointLight(0xffd8a8, 16, 90, 1.2);
 warm.position.set(-7, 1.5, 6);
 scene.add(warm);
 
-const HitFeel = installHitFeel({ THREE, scene, camera, overlayParent: document.body });
+const hitCamKick = new THREE.Vector3();
+let playerRecoilT = 0;
+let playerRecoilDir = new THREE.Vector3();
+const HitFeel = installHitFeel({ THREE, scene, camera, overlayParent: document.body, onCameraKick(kick){ hitCamKick.add(new THREE.Vector3(kick.x || 0, (kick.y || 0) * .08, kick.z || 0)); } });
 
 const MAT = {
   dark: new THREE.MeshStandardMaterial({ color:0x181b22, roughness:.86, metalness:.05, flatShading:true }),
@@ -594,7 +597,7 @@ const PC = installPlayerCombat({
       syncCombatStatus(); updateMainStatusLine();
     },
     onAttackReset(){ if(dummyState) dummyState.prevZones.clear(); },
-    onAttackComplete(){ labOnAttackComplete(); },
+    onAttackComplete(){ triggerWhiffIfNeeded(); labOnAttackComplete(); },
     onAttackChainIdle(){
       labState.comboDeadline = performance.now()/1000 + labState.comboWindow;
       syncCombatStatus(); updateLabUI();
@@ -1158,6 +1161,13 @@ function applyEdgeDummyHit(d,hit){
   updateDummyUI();
 }
 
+function triggerWhiffIfNeeded(){
+  if(combatState.hitIds && combatState.hitIds.size > 0) return;
+  const dir = new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
+  const point = new THREE.Vector3(actorPos.x, .9, actorPos.y).add(dir.clone().multiplyScalar(1.6));
+  HitFeel.trigger({ point, dir, type:'weak', whiff:true, targetKind:'air' });
+}
+
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
@@ -1185,7 +1195,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     if(best){
       combatState.hitIds.add(e);
       const stage = hitStageFromImpact({ damage:best.damage, stagger:best.zone.stagger, attackGroup:combatState.attackGroup });
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger }, { stage, dir:best.motion });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger }, { stage, dir:best.motion, onSecondaryHit:evt=>HitFeel.triggerSecondary(evt) });
       const typeName = best.zone.type === 'hybrid' ? 'pierce/blunt' : best.zone.type;
       aimState.lastDamage = killed ? `defeated ${e.kind}` : `${best.damage} ${typeName} vs ${e.kind}`;
       labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: tipSpeed || 0 }, typeName);
@@ -1208,7 +1218,9 @@ function applyDummyHit(hit){
   if(killed) breakDummy(hit); updateDummyUI();
 }
 function spawnHitEffect(point,type,damage,label,stage=1,killed=false,motion=null,targetKind='dummy'){
-  HitFeel.trigger({point,dir:motion,type,damage,label,stage,killed,targetKind});
+  const dir = motion || new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
+  playerRecoilT = Math.max(playerRecoilT, stage>=3 ? .20 : .12); playerRecoilDir.copy(dir).normalize();
+  HitFeel.trigger({point,dir,type,damage,label,stage,killed,targetKind});
   const color=HIT_TYPE_COLOR[type]||0xffffff; const ring=new THREE.Mesh(new THREE.TorusGeometry(.18,.012,6,24),new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false})); ring.position.copy(point); ring.lookAt(camera.position); scene.add(ring); dummyState.effects.push({mesh:ring,age:0,life:.28,kind:'ring'});
   if(dummyState.showLabels){const text=`${damage} ${type}${label?`\n${label}`:''}`; const sp=makeDamageSprite(text,color); sp.position.copy(point).add(new THREE.Vector3(0,.26,0)); scene.add(sp); dummyState.effects.push({mesh:sp,age:0,life:.85,vel:new THREE.Vector3((Math.random()-.5)*.25,.55,(Math.random()-.5)*.25),kind:'label'});}
 }
@@ -1633,7 +1645,8 @@ window.addEventListener('resize', resize);
 
 const clock = new THREE.Clock();
 function animate() {
-  const dt = Math.min(clock.getDelta(), .033);
+  const rawDt = Math.min(clock.getDelta(), .033);
+  const dt = HitFeel.scaleDt(rawDt);
   pollGamepads();
   const keyboardMove = new THREE.Vector2((keyState.right?1:0) - (keyState.left?1:0), (keyState.down?1:0) - (keyState.up?1:0));
   const move = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove.clone() : (touchMove.lengthSq()>.01 ? touchMove.clone() : keyboardMove);
@@ -1672,14 +1685,17 @@ function animate() {
 
   const bob = isMoving ? Math.sin(walkPhase) * bobStyle[activeCharacter] : 0;
   const sway = isMoving ? Math.sin(walkPhase * .5) * 0.03 : 0;
-  actorVisual.position.y = 0.02 + bob;
+  playerRecoilT = Math.max(0, playerRecoilT - rawDt);
+  actorVisual.position.set(playerRecoilDir.x * -0.08 * Math.sin(playerRecoilT*30), 0.02 + bob, playerRecoilDir.z * -0.08 * Math.sin(playerRecoilT*30));
   updateCombat(dt, performance.now()/1000, sway);
   if(enemySystem) enemySystem.update(dt, {x: actorPos.x, z: actorPos.y});
   updateDummy(dt);
-  HitFeel.update(dt);
+  HitFeel.update(rawDt);
 
   // BENT WORLD: camera scroll-follows the actor, then sky renders under the world.
-  BentWorld.update(dt);
+  BentWorld.update(rawDt);
+  camera.position.add(hitCamKick);
+  hitCamKick.multiplyScalar(Math.pow(.06, rawDt));
   BentWorld.renderFrame();
   requestAnimationFrame(animate);
 }

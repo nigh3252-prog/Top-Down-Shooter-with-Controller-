@@ -281,6 +281,7 @@ const PC = installPlayerCombat({
       arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
+    onAttackComplete(){ triggerWhiffIfNeeded(); },
     onWeaponSelected(){ ensureStanceMatchesWeapon(); },
     onWeaponUISync(){ updatePill(); },
     timeScaleModifier(att, t, phase){
@@ -431,8 +432,16 @@ function triggerDodge(){
 
 /* ---------- hits: swept weapon zones vs enemies ---------- */
 const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
+let hitFocusT = 0; const hitFocus = new THREE.Vector3(); let playerRecoilT = 0; const playerRecoilDir = new THREE.Vector3();
 const effects = [];
-const HitFeel = installHitFeel({ THREE, scene, camera, overlayParent: document.body, onCameraKick(kick){ shakeVel.x += kick.x; shakeVel.y += kick.y * .18; shakeVel.z += kick.z; } });
+const HitFeel = installHitFeel({ THREE, scene, camera, overlayParent: document.body, onCameraKick(kick){ shakeVel.x += kick.x; shakeVel.y += kick.y * .18; shakeVel.z += kick.z; if(kick.point){ hitFocus.copy(kick.point); hitFocusT = Math.max(hitFocusT, kick.stage >= 3 ? .22 : .12); } } });
+function triggerWhiffIfNeeded(){
+  if(combatState.hitIds && combatState.hitIds.size > 0) return;
+  const dir = new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
+  const point = new THREE.Vector3(actorPos.x, .9, actorPos.y).add(dir.clone().multiplyScalar(1.9));
+  HitFeel.trigger({ point, dir, type:'weak', whiff:true, targetKind:'air' });
+}
+
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
@@ -462,7 +471,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
       const stagger = best.zone.stagger * arena.swing.knockMult;
       const tier = arena.charge.active ? arena.charge.tier : tierOfSwing();
       const stage = hitStageFromImpact({ damage:best.damage, stagger, killed:false, tier, attackGroup:combatState.attackGroup });
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger }, { stage, dir:best.motion });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger }, { stage, dir:best.motion, onSecondaryHit:evt=>HitFeel.triggerSecondary(evt) });
       if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
       onHitFeel(best.point, tier);
       spawnHitEffect(best.point, best.zone.type, best.damage, stage, killed, best.motion, e.kind);
@@ -479,7 +488,9 @@ function onHitFeel(point, tier){
 }
 const HIT_TYPE_COLOR = { slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4 };
 function spawnHitEffect(point, type, damage, stage=1, killed=false, motion=null, targetKind='enemy'){
-  HitFeel.trigger({point, dir:motion, type, damage, stage, killed, targetKind});
+  const dir = motion || new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
+  playerRecoilT = Math.max(playerRecoilT, stage>=3 ? .20 : .12); playerRecoilDir.copy(dir).normalize();
+  HitFeel.trigger({point, dir, type, damage, stage, killed, targetKind});
   const color = HIT_TYPE_COLOR[type] || 0xffffff;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.45,.035,6,24),
     new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false }));
@@ -756,7 +767,9 @@ function updateCamera(rawDt){
   shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
   shake.addScaledVector(shakeVel,rawDt);
   camera.position.set(camFollow.x+shake.x, CAM_HEIGHT+shake.y, camFollow.z+CAM_BACK+shake.z);
-  camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
+  let lookX = camFollow.x+shake.x*.5, lookZ = camFollow.z-1.4+shake.z*.5;
+  if(hitFocusT > 0){ const k = Math.min(.38, hitFocusT * 1.8); lookX = lookX*(1-k) + hitFocus.x*k; lookZ = lookZ*(1-k) + hitFocus.z*k; hitFocusT = Math.max(0, hitFocusT - rawDt); }
+  camera.lookAt(lookX, 1.8, lookZ);
 }
 
 /* ---------- main update ---------- */
@@ -818,7 +831,8 @@ function updatePlayer(dt){
   actorVisual.quaternion.copy(yawQ);
   const bob = isMoving && d.t < 0 ? Math.sin(walkPhase)*.035 : 0;
   const sway = isMoving && d.t < 0 ? Math.sin(walkPhase*.5)*.03 : 0;
-  actorVisual.position.y = 0.02 + bob;
+  playerRecoilT = Math.max(0, playerRecoilT - dt);
+  actorVisual.position.set(playerRecoilDir.x * -0.12 * Math.sin(playerRecoilT*30), 0.02 + bob, playerRecoilDir.z * -0.12 * Math.sin(playerRecoilT*30));
   // hurt blink
   actorVisual.visible = !(arena.invulnT > .45 && Math.floor(performance.now()/90)%2===0);
 
@@ -832,13 +846,14 @@ function frame(){
   const rawDt = Math.min(clock.getDelta(), .05);
   pollPad();
   gatherInput();
+  const simDt = HitFeel.scaleDt(rawDt);
   if(!isPaused()){
-    updatePlayer(rawDt);
-    enemySystem.update(rawDt, {
+    updatePlayer(simDt);
+    enemySystem.update(simDt, {
       x: actorPos.x, z: actorPos.y,
       invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
     });
-    watchPlayerState(rawDt);
+    watchPlayerState(simDt);
   }
   updateEffects(rawDt);
   HitFeel.update(rawDt);
