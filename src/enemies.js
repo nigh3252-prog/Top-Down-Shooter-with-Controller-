@@ -7,10 +7,10 @@ import { installGoblinRig } from './goblin-rig.js';
 import { buildHitReaction } from './hit-feel.js';
 
 export const ENEMY_STATS = {
-  chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
-  brute: { radius: .62, height: 3.55, hp: 72, speed: 2.9, stop: 1.85, color: 0xd96b6b },
-  maceGoblin: { radius: .38, height: 1.75, hp: 32, speed: 4.55, stop: 1.58, color: 0x70b85b, bellyColor: 0xb6d17b, armorColor: 0x5c3b24, weapon: 'mace', stanceId: 'S02', role: 'light close attacker' },
-  spearGoblin: { radius: .38, height: 1.9, hp: 36, speed: 3.8, stop: 2.55, color: 0x5fae7d, bellyColor: 0xc7d78a, armorColor: 0x3f5a35, weapon: 'spear', stanceId: 'S20', role: 'reach poker' }
+  chaser: { radius: .46, height: 3.15, hp: 114, speed: 4.2, stop: 1.35, color: 0xff8f72 },
+  brute: { radius: .62, height: 3.55, hp: 216, speed: 2.9, stop: 1.85, color: 0xd96b6b },
+  maceGoblin: { radius: .38, height: 1.75, hp: 96, speed: 4.55, stop: 1.58, color: 0x70b85b, bellyColor: 0xb6d17b, armorColor: 0x5c3b24, weapon: 'mace', stanceId: 'S02', role: 'light close attacker' },
+  spearGoblin: { radius: .38, height: 1.9, hp: 108, speed: 3.8, stop: 2.55, color: 0x5fae7d, bellyColor: 0xc7d78a, armorColor: 0x3f5a35, weapon: 'spear', stanceId: 'S20', role: 'reach poker' }
 };
 
 export function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
@@ -136,9 +136,9 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function reset(){ director.reset(); enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); clearDeathPieces(); wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = ''; startWave(); }
   function finishWave(){ wave++; director.onWaveClear(); startWave(); }
   function applyHitReaction(e, amount, knock, opts = {}){
-    const reaction = buildHitReaction({ stage:opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.kind === 'brute' ? 1.6 : 1 });
+    const reaction = buildHitReaction({ stage:opts.ragdoll ? 3 : (opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1)), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.kind === 'brute' ? 1.6 : 1 });
     e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
-    e.airVy = Math.max(e.airVy || 0, reaction.airVy || 0); e.launchedT = Math.max(e.launchedT || 0, reaction.launchedT || 0); e.lastKnockMul = reaction.knockMul || 1; e.onSecondaryHit = opts.onSecondaryHit || null;
+    e.airVy = Math.max(e.airVy || 0, (reaction.airVy || 0) * (opts.ragdoll ? 1.35 : 1)); e.launchedT = Math.max(e.launchedT || 0, opts.ragdoll ? 1.45 : (reaction.launchedT || 0)); e.lastKnockMul = reaction.knockMul || 1; e.onSecondaryHit = opts.onSecondaryHit || null;
     e.stunned = Math.max(e.stunned, reaction.stunned);
     return reaction;
   }

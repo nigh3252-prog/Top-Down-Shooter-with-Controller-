@@ -593,6 +593,7 @@ const PC = installPlayerCombat({
     onAttackStart(info){
       aimState.lastSwing = info.label;
       combatState.hitStopApplied = false;
+      combatState.chainSlot = info.labEvent?.slot ?? combatState.chainSlot;
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       labState.activeEvent = info.labEvent;
       syncCombatStatus(); updateMainStatusLine();
@@ -1040,7 +1041,7 @@ function bindLabUI(){document.querySelectorAll('[data-lab-action]').forEach(btn=
 
 /* ---- swept weapon hit test dummy -------------------------------------- */
 const dummyState = {
-  maxHp:100, hp:100, alive:true, showHitboxes:false, showLabels:true,
+  maxHp:300, hp:300, alive:true, showHitboxes:false, showLabels:true,
   heightScale:2.5, respawnTimer:-1, motionMode:'static', motionT:0,
   placementIndex:0, basePositions:[new THREE.Vector3(0,0,7.2), new THREE.Vector3(6.2,0,2.8), new THREE.Vector3(-6.2,0,2.8)],
   wobble:0, wobbleV:0, knock:new THREE.Vector3(), knockV:new THREE.Vector3(),
@@ -1153,15 +1154,16 @@ function applyEdgeDummyHit(d,hit){
   d.hp-=hit.damage; const typeName=hit.zone.type==='hybrid'?'pierce/blunt':hit.zone.type;
   dummyState.lastHit=`Edge dummy hit: ${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg.`;
   aimState.lastDamage=`${hit.damage} ${typeName} vs edge dummy`; labRecordHit(hit,typeName); updateMainStatusLine();
-  const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0));
+  const impulse=hit.motion.clone().multiplyScalar((isComboFinisher()?.34:.14)*hit.zone.stagger).add(new THREE.Vector3(0,isComboFinisher()?.12:.02,0));
   d.knockV.add(impulse); d.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
-  const killed=d.hp<=0; const stage=hitStageFromImpact({damage:hit.damage, stagger:hit.zone.stagger, killed});
+  const killed=d.hp<=0; const ragdoll=isComboFinisher(); const stage=ragdoll ? 3 : hitStageFromImpact({damage:hit.damage, stagger:hit.zone.stagger, killed});
   spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label,stage,killed,hit.motion,'edgeDummy');
   if(killed) breakEdgeDummy(d,hit);
   else CombatAudio.onDummyEvent({damage:hit.damage, kill:false});
   updateDummyUI();
 }
 
+function isComboFinisher(){ return (combatState.activeLabEvent?.slot ?? labState.activeEvent?.slot ?? combatState.chainSlot) === 2; }
 function triggerWhiffIfNeeded(){
   if(combatState.hitIds && combatState.hitIds.size > 0) return;
   const dir = new THREE.Vector3(Math.sin(actorFacing),0,Math.cos(actorFacing));
@@ -1196,8 +1198,9 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     }
     if(best){
       combatState.hitIds.add(e);
-      const stage = hitStageFromImpact({ damage:best.damage, stagger:best.zone.stagger, attackGroup:combatState.attackGroup });
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger }, { stage, dir:best.motion, onSecondaryHit:evt=>HitFeel.triggerSecondary(evt) });
+      const ragdoll = isComboFinisher();
+      const stage = ragdoll ? 3 : hitStageFromImpact({ damage:best.damage, stagger:best.zone.stagger, attackGroup:combatState.attackGroup });
+      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger }, { stage, dir:best.motion, ragdoll, onSecondaryHit:evt=>HitFeel.triggerSecondary(evt) });
       const typeName = best.zone.type === 'hybrid' ? 'pierce/blunt' : best.zone.type;
       aimState.lastDamage = killed ? `defeated ${e.kind}` : `${best.damage} ${typeName} vs ${e.kind}`;
       labRecordHit({ damage: best.damage, zone: best.zone, volume: { name:e.kind }, speed: tipSpeed || 0 }, typeName);
@@ -1219,8 +1222,8 @@ function applyDummyHit(hit){
   dummyState.lastHit=`${hit.zone.label} → ${hit.volume.name}: ${typeName}, ${hit.damage} dmg, speed ${hit.speed.toFixed(1)}.`;
   aimState.lastDamage=`${hit.damage} ${typeName} via ${hit.zone.label}`; labRecordHit(hit,typeName); updateMainStatusLine();
   CombatAudio.onDummyEvent({ damage: hit.damage, kill: false });
-  const impulse=hit.motion.clone().multiplyScalar(.14*hit.zone.stagger).add(new THREE.Vector3(0,.02,0)); dummyState.knockV.add(impulse); dummyState.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
-  const killed=dummyState.hp<=0; const stage=hitStageFromImpact({damage:hit.damage, stagger:hit.zone.stagger, killed});
+  const impulse=hit.motion.clone().multiplyScalar((isComboFinisher()?.34:.14)*hit.zone.stagger).add(new THREE.Vector3(0,isComboFinisher()?.12:.02,0)); dummyState.knockV.add(impulse); dummyState.wobbleV+=(Math.random()<.5?-1:1)*(.22+hit.zone.stagger*.10);
+  const killed=dummyState.hp<=0; const ragdoll=isComboFinisher(); const stage=ragdoll ? 3 : hitStageFromImpact({damage:hit.damage, stagger:hit.zone.stagger, killed});
   spawnHitEffect(hit.point,hit.zone.type,hit.damage,hit.zone.label,stage,killed,hit.motion,'dummy');
   if(killed) breakDummy(hit); updateDummyUI();
 }

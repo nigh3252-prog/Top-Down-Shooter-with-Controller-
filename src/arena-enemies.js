@@ -25,11 +25,11 @@ const GOBLIN_WEAPON_SCALE = 1.55;
 
 // Punch TYPES + goblin skin, distances/speeds pre-scaled by S. hp/score unchanged.
 const ARCHETYPES = {
-  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
-  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
-  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
-  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
-  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
+  grunt:   { hp:135,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
+  dagger:  { hp:102,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
+  mace:    { hp:264,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
+  rock:    { hp:114,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
+  captain: { hp:510, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
 };
 
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
@@ -389,9 +389,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     if(e.root.parent) e.root.parent.remove(e.root);
   }
   function applyHitReaction(e, amount, knock, opts = {}){
-    const reaction = buildHitReaction({ stage:opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.isElite ? 1.7 : 1 });
+    const reaction = buildHitReaction({ stage:opts.ragdoll ? 3 : (opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1)), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.isElite ? 1.7 : 1 });
     e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
-    e.airVy = Math.max(e.airVy || 0, reaction.airVy || 0); e.launchedT = Math.max(e.launchedT || 0, reaction.launchedT || 0); e.lastKnockMul = reaction.knockMul || 1; e.onSecondaryHit = opts.onSecondaryHit || null;
+    e.airVy = Math.max(e.airVy || 0, (reaction.airVy || 0) * (opts.ragdoll ? 1.35 : 1)); e.launchedT = Math.max(e.launchedT || 0, opts.ragdoll ? 1.45 : (reaction.launchedT || 0)); e.lastKnockMul = reaction.knockMul || 1; e.onSecondaryHit = opts.onSecondaryHit || null;
     e.stunned = Math.max(e.stunned, reaction.stunned);
     return reaction;
   }

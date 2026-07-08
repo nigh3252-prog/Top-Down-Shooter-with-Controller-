@@ -221,6 +221,7 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   }
 
   function triggerSecondary({ point, dir, label = 'WALL SPLAT!', targetKind = '', bloodColor = BLOOD_COLOR } = {}){
+    hitstop = 0; slowMo = 0;
     const p = v3(point), d = dir3(dir);
     shake += .75; zoomKick += .32; camKick.add(d.clone().multiplyScalar(.55));
     shockwave(p, BLOOD_COLOR, 3); if(!isDummy(targetKind)) bloodSpray(p, d, 3, bloodColor); groundSplat(p, d, bloodColor, 58, true, targetKind); bloodSmear(p, d, bloodColor, 1.7, targetKind); floater(p, d, label, 0xffffff, 3);
