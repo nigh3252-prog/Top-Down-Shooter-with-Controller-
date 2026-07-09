@@ -90,6 +90,9 @@
   #startBtn{width:100%;font-family:inherit;font-size:13px;letter-spacing:.14em;color:#0d191b;
     background:#e8a04c;border:none;border-radius:7px;padding:15px 0;font-weight:bold}
   #startBtn:active{background:#c9863a}
+  #sgFsBtn{width:100%;font-family:inherit;font-size:11px;letter-spacing:.14em;color:#9fd2c9;
+    background:transparent;border:1px solid #2c4a47;border-radius:7px;padding:12px 0;margin-bottom:10px}
+  #sgFsBtn:active{background:#2c4a47}
 </style>
 <script type="importmap">
 {
@@ -148,7 +151,8 @@
 <div id="startGate">
   <div id="startCard">
     <div class="sgTitle">COMBAT ARENA</div>
-    <div class="sgHint">Enemies stay frozen until you tap start — get your controller connected and go fullscreen first.</div>
+    <div class="sgHint">Enemies stay frozen until you tap start — connect your controller and go fullscreen below.</div>
+    <button id="sgFsBtn">⛶ FULLSCREEN</button>
     <button id="startBtn">TAP TO START</button>
   </div>
 </div>
@@ -679,13 +683,20 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
   startGate.classList.add('hidden');
 });
-const fsBtn=document.getElementById('fsBtn');
+const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
-fsBtn.addEventListener('click', ()=>{
+function toggleFullscreen(){
   if(!inFullscreen()){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
   else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
-});
-document.addEventListener('fullscreenchange', ()=>{ fsBtn.textContent = inFullscreen()?'⤢':'⛶'; });
+}
+fsBtn.addEventListener('click', toggleFullscreen);
+sgFsBtn.addEventListener('click', toggleFullscreen);
+function syncFsButtons(){
+  fsBtn.textContent = inFullscreen()?'⤢':'⛶';
+  sgFsBtn.textContent = inFullscreen()?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
+}
+document.addEventListener('fullscreenchange', syncFsButtons);
+document.addEventListener('webkitfullscreenchange', syncFsButtons);
 document.getElementById('resetBtn').addEventListener('click', ()=>{ respawn(); toggleMenu(); });
 document.getElementById('weaponBtn').addEventListener('click', ()=>cycleWeapon());
 document.getElementById('stanceBtn').addEventListener('click', ()=>cycleStance());
