@@ -23,6 +23,10 @@
   #hud{position:fixed;top:52px;left:10px;z-index:10;pointer-events:none}
   #hpWrap{width:150px;height:9px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
   #hpFill{height:100%;width:100%;background:linear-gradient(90deg,#e8a04c,#c96a35);transition:width .12s}
+  #stWrap{width:150px;height:6px;margin-top:3px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
+  #stFill{height:100%;width:100%;background:linear-gradient(90deg,#7fd0a8,#3f9f7a);transition:width .12s}
+  #stWrap.exhaust{border-color:#ff9070}
+  #stWrap.exhaust #stFill{background:#ff9070}
   #stats{margin-top:4px;color:#4a6f6a;font-size:10px;letter-spacing:.08em}
   #stateLbl{margin-top:3px;color:#e8a04c;font-size:12px;letter-spacing:.14em;text-shadow:0 1px 0 #000}
   #msg{position:fixed;top:26%;left:0;right:0;text-align:center;z-index:11;pointer-events:none;
@@ -41,6 +45,24 @@
     display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;box-shadow:0 3px 0 #081112}
   .pbtn:active,.pbtn.held{background:#2c4a47;transform:translateY(2px);box-shadow:0 1px 0 #081112}
   #atkBtn{width:88px;height:88px;border-color:#6e3a24;color:#e8a04c}
+  /* ---- stance card slots ---- */
+  #cardRow{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:10px;
+    z-index:20;align-items:flex-end}
+  .scard{width:100px;height:66px;display:flex;gap:8px;padding:7px 8px;box-sizing:border-box;
+    text-align:left;font-family:inherit;background:rgba(14,28,30,.88);border:1px solid #2c4a47;
+    border-radius:8px;color:#9fd2c9;box-shadow:0 3px 0 #081112;touch-action:none}
+  .scard:active{transform:translateY(2px);box-shadow:0 1px 0 #081112;background:#2c4a47}
+  .scard .carrows{display:flex;flex-direction:column;justify-content:space-between;
+    color:#e8a04c;font-size:13px;line-height:1}
+  .scard .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .scard .ckey{font-size:8px;color:#4a6f6a;letter-spacing:.12em}
+  .scard .cname{font-size:9.5px;line-height:1.3;letter-spacing:.03em;overflow:hidden}
+  .scard.empty{opacity:.35}
+  #deckSide{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+  #deckCount{color:#4a6f6a;font-size:9px;letter-spacing:.1em}
+  #shuffleBtn{font-family:inherit;font-size:8.5px;letter-spacing:.08em;color:#9fd2c9;
+    background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:6px 8px;touch-action:none}
+  #shuffleBtn:active{background:#2c4a47}
   /* ---- panel ---- */
   #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(78vw,300px);
     max-height:calc(100vh - 66px);overflow-y:auto;padding:10px 12px 16px;box-sizing:border-box;
@@ -52,6 +74,8 @@
     color:#4a6f6a;background:transparent;border:1px solid #24403e;border-radius:5px}
   #tabs button.on{color:#e8a04c;border-color:#6e3a24;background:rgba(110,58,36,.14)}
   .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:10px 0 7px}
+  button.ptitle{display:block;width:100%;text-align:left;background:transparent;border:none;
+    cursor:pointer;font-family:inherit;padding:6px 0;margin:4px 0 3px}
   .modeGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
   .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:8px 3px;min-height:42px}
@@ -90,6 +114,9 @@
   #startBtn{width:100%;font-family:inherit;font-size:13px;letter-spacing:.14em;color:#0d191b;
     background:#e8a04c;border:none;border-radius:7px;padding:15px 0;font-weight:bold}
   #startBtn:active{background:#c9863a}
+  #sgFsBtn{width:100%;font-family:inherit;font-size:11px;letter-spacing:.14em;color:#9fd2c9;
+    background:transparent;border:1px solid #2c4a47;border-radius:7px;padding:12px 0;margin-bottom:10px}
+  #sgFsBtn:active{background:#2c4a47}
 </style>
 <script type="importmap">
 {
@@ -108,6 +135,7 @@
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
+  <div id="stWrap"><div id="stFill"></div></div>
   <div id="stats">WAVE 1 · SCORE 0</div>
   <div id="stateLbl">GUARD</div>
 </div>
@@ -118,37 +146,57 @@
   <button class="pbtn" id="dgeBtn">DODGE</button>
   <button class="pbtn" id="atkBtn">ATK<br>hold=charge</button>
 </div>
+<div id="cardRow">
+  <div id="deckSide"><div id="deckCount">DECK 0</div><button id="shuffleBtn">SHUFFLE [R]</button></div>
+  <button class="scard" id="card0">
+    <span class="carrows"></span>
+    <span class="cbody"><span class="ckey">LB · Q</span><span class="cname">—</span></span>
+  </button>
+  <button class="scard" id="card1">
+    <span class="carrows"></span>
+    <span class="cbody"><span class="ckey">RB · E</span><span class="cname">—</span></span>
+  </button>
+</div>
 <div id="panel" class="hidden">
   <div id="tabs">
     <button id="tabDir" class="on">DIRECTOR</button>
     <button id="tabFeel">FEEL</button>
   </div>
   <div id="dirTab">
-    <div class="ptitle">ENCOUNTER DIRECTOR</div>
-    <div class="modeGrid" id="modeGrid"></div>
-    <div class="ptitle">LOADOUT</div>
-    <div class="pairRow">
-      <button class="wide" id="weaponBtn">WEAPON</button>
-      <button class="wide" id="stanceBtn">STANCE</button>
+    <button class="ptitle sect" data-sect="director" data-label="ENCOUNTER DIRECTOR"></button>
+    <div class="sbody" id="body-director">
+      <div class="modeGrid" id="modeGrid"></div>
     </div>
-    <div class="ptitle">SIM</div>
-    <div id="dirSliders"></div>
+    <button class="ptitle sect" data-sect="loadout" data-label="LOADOUT"></button>
+    <div class="sbody" id="body-loadout">
+      <div class="pairRow">
+        <button class="wide" id="weaponBtn">WEAPON</button>
+        <button class="wide" id="stanceBtn">STANCE</button>
+      </div>
+    </div>
+    <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
+    <div class="sbody" id="body-sim">
+      <div id="dirSliders"></div>
+    </div>
     <button class="wide" id="resetBtn">RESET FIGHT</button>
   </div>
   <div id="feelTab" style="display:none">
-    <div class="ptitle">EDITING KEYFRAME</div>
-    <div id="keyRow"></div>
-    <div id="feelSliders"></div>
+    <button class="ptitle sect" data-sect="keyframe" data-label="EDITING KEYFRAME"></button>
+    <div class="sbody" id="body-keyframe">
+      <div id="keyRow"></div>
+      <div id="feelSliders"></div>
+    </div>
     <button class="wide" id="testBtn">TEST THIS TIER</button>
     <div class="ptitle" style="margin-top:10px">tap = chain the stance combo · hold = charge to cartoon</div>
   </div>
 </div>
-<div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · X weapon · T stance · M menu</div>
+<div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · LB/RB or Q/E play card · Y/R shuffle · X weapon · M menu</div>
 <div id="err"></div>
 <div id="startGate">
   <div id="startCard">
     <div class="sgTitle">COMBAT ARENA</div>
-    <div class="sgHint">Enemies stay frozen until you tap start — get your controller connected and go fullscreen first.</div>
+    <div class="sgHint">Enemies stay frozen until you tap start — connect your controller and go fullscreen below.</div>
+    <button id="sgFsBtn">⛶ FULLSCREEN</button>
     <button id="startBtn">TAP TO START</button>
   </div>
 </div>
@@ -159,6 +207,7 @@ import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
@@ -193,6 +242,9 @@ const PLAYER_SPEED = 8.5;
 const CHARGE_MOVE_MULT = .35;
 const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
 const AUTO_FACE_RANGE = 14;
+/* stamina economy: swings drain it, playing a stance card is the only refill */
+const STAMINA = { max:100, start:100, swingCost:14, chargeCostMult:1.75,
+                  cardGain:40, shuffleTime:2, exhaustFlash:.35 };
 const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
 const CAM_HEIGHT = 20, CAM_BACK = 17.6;
 
@@ -274,8 +326,18 @@ const arena = {
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
-  paused:false, started:false,
+  paused:false, started:false, cycleMode:false,
+  stamina:{ v:STAMINA.start },
 };
+const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
+function hasStamina(cost){ return arena.stamina.v >= cost - 1e-6; }
+function spendStamina(cost){ arena.stamina.v = Math.max(0, arena.stamina.v - cost); }
+function gainStamina(n){ arena.stamina.v = Math.min(STAMINA.max, arena.stamina.v + n); }
+function exhaustFlash(){
+  stWrap.classList.add('exhaust');
+  clearTimeout(exhaustFlash._t);
+  exhaustFlash._t = setTimeout(()=>stWrap.classList.remove('exhaust'), STAMINA.exhaustFlash*1000);
+}
 function applySwingFeel(s){
   arena.swing.s = s;
   arena.swing.dmgMult = s.dmg/14;
@@ -298,6 +360,7 @@ const PC = installPlayerCombat({
     resolveAttackFacing(){ return resolveDesiredFacing(); },
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
+      spendStamina(STAMINA.swingCost);   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
       combatState.impactScale = arena.swing.s.impact * Math.max(.25, HitFeel.tuning.master);
@@ -311,7 +374,7 @@ const PC = installPlayerCombat({
       arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
-    onWeaponSelected(){ ensureStanceMatchesWeapon(); },
+    onWeaponSelected(){ ensureStanceMatchesWeapon(); rebuildDeck(); },
     onWeaponUISync(){ updatePill(); },
     timeScaleModifier(att, t, phase){
       const s = arena.charge.active ? arena.charge.s : arena.swing.s;
@@ -348,11 +411,35 @@ function ensureStanceMatchesWeapon(){
   const idx = arena.stance ? pool.findIndex(st => st.id === arena.stance.id) : -1;
   setStance(idx >= 0 ? idx : 0);
 }
+/* ---------- stance-card deck ---------- */
+function rebuildDeck(){
+  deck.rebuild(stancePoolForWeapon());
+  renderCards();
+}
+function playCard(slot){
+  if(arena.deadT >= 0) return;
+  const card = deck.play(slot);
+  if(!card){ exhaustFlash(); return; }   // empty slot or mid-shuffle
+  const pool = stancePoolForWeapon();
+  const idx = pool.findIndex(st => st.id === card.id);
+  if(idx >= 0) setStance(idx);
+  else { arena.stance = card; arena.chain.comboIndex = 0; updatePill(); }
+  // drop any follow-up queued from the old stance
+  combatState.pending = null; combatState.pendingGroup = null;
+  gainStamina(STAMINA.cardGain);
+  announce(card.name.replace(/^S\d+\s*/,''), .9);
+  renderCards();
+}
+function startDeckShuffle(){
+  if(arena.deadT >= 0) return;
+  if(deck.startShuffle()) renderCards();
+}
 function cycleWeapon(dir=1){
   const idx = WEAPON_ORDER.indexOf(combatState.weapon);
   const next = WEAPON_ORDER[(idx + dir + WEAPON_ORDER.length) % WEAPON_ORDER.length];
   PC.selectCombatWeapon(next);
   StoneSettings.set('arena.weapon', next);
+  respawn();   // weapon swap = full scene reset
   announce(WEAPONS[next].label, .9);
 }
 
@@ -393,6 +480,7 @@ function nextChainMove(){
 function chargeCap(att){ return att.phases[0].t1 * .98; }
 function attackDown(){
   if(arena.deadT >= 0 || arena.dodge.t >= 0 || !arena.stance) return;
+  if(!hasStamina(STAMINA.swingCost)){ exhaustFlash(); return; }   // exhausted: play a card
   const move = nextChainMove();
   if(!move.att) return;
   if(combatState.attack){
@@ -414,12 +502,16 @@ function attackDown(){
 }
 function releaseCharge(){
   if(!arena.charge.active) return;
+  // charge surcharge: tier is only known at release; clamps at 0 so a committed
+  // charge always finishes — the NEXT tap is what gets blocked
+  spendStamina(STAMINA.swingCost * (STAMINA.chargeCostMult - 1) * clamp((arena.charge.tier - 1/3) / (2/3), 0, 1));
   applySwingFeel(arena.charge.s);
   combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
   arena.charge.active = false; arena.charge.forceTier = null;
 }
 function attackUp(){ releaseCharge(); }
 function beginTestSwing(tier){
+  // FEEL-tab debug tool: deliberately not stamina-gated (the swing itself still deducts)
   if(arena.deadT >= 0 || combatState.attack || !arena.stance) return;
   const move = nextChainMove();
   if(!move.att) return;
@@ -552,6 +644,8 @@ function respawn(){
   arena.charge.active = false;
   combatState.attack = null; combatState.t = 0; combatState.pending = null;
   arena.chain.comboIndex = 0;
+  arena.stamina.v = STAMINA.start;
+  rebuildDeck();
   enemySystem.reset();
   arena.prevHp = enemySystem.playerHp;
   arena.prevWave = enemySystem.wave;
@@ -570,7 +664,13 @@ function watchPlayerState(dt){
   arena.prevHp = hp;
   if(enemySystem.wave !== arena.prevWave){
     arena.prevWave = enemySystem.wave;
-    announce('WAVE ' + enemySystem.wave);
+    if(arena.cycleMode){
+      // director already advanced to the next mode via cycleOnWaveClear
+      updatePill();
+      announce('WAVE ' + enemySystem.wave + ' · ' + modeLabel(enemySystem.director.getMode()));
+    } else {
+      announce('WAVE ' + enemySystem.wave);
+    }
   }
 }
 
@@ -582,8 +682,11 @@ addEventListener('keydown', e=>{
   keys[e.key.toLowerCase()] = true;
   if(e.key==='j') attackDown();
   if(e.key==='k') triggerDodge();
+  if(e.key==='q') playCard(0);
+  if(e.key==='e') playCard(1);
+  if(e.key==='r') startDeckShuffle();
   if(e.key==='x') cycleWeapon();
-  if(e.key==='t') cycleStance();
+  if(e.key==='t') cycleStance();   // dev override: bypasses the card deck
   if(e.key==='p') togglePause();
   if(e.key==='m') toggleMenu();
 });
@@ -646,16 +749,20 @@ function pollPad(){
   const l=Math.hypot(mx,mz);
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
-  const atk = bd(0)||bd(2)||bd(5)||bd(7);
-  const dge = bd(1)||bd(4)||bd(6);
+  const atk = bd(0)||bd(2)||bd(7);
+  const dge = bd(1)||bd(6);
+  const lb = bd(4), rb = bd(5);
   const strt = bd(9), sel = bd(8), yb = bd(3);
   if(atk && !padPrev.atk) attackDown();
   if(!atk && padPrev.atk) attackUp();
   if(dge && !padPrev.dge) triggerDodge();
+  if(lb && !padPrev.lb) playCard(0);
+  if(rb && !padPrev.rb) playCard(1);
   if(strt && !padPrev.strt) toggleMenu();
   if(sel && !padPrev.sel) togglePause();
-  if(yb && !padPrev.yb) cycleStance();
-  padPrev.atk=atk; padPrev.dge=dge; padPrev.strt=strt; padPrev.sel=sel; padPrev.yb=yb;
+  if(yb && !padPrev.yb) startDeckShuffle();
+  padPrev.atk=atk; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
+  padPrev.strt=strt; padPrev.sel=sel; padPrev.yb=yb;
 }
 function gatherInput(){
   const k = keyMove();
@@ -679,13 +786,20 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
   startGate.classList.add('hidden');
 });
-const fsBtn=document.getElementById('fsBtn');
+const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
-fsBtn.addEventListener('click', ()=>{
+function toggleFullscreen(){
   if(!inFullscreen()){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
   else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
-});
-document.addEventListener('fullscreenchange', ()=>{ fsBtn.textContent = inFullscreen()?'⤢':'⛶'; });
+}
+fsBtn.addEventListener('click', toggleFullscreen);
+sgFsBtn.addEventListener('click', toggleFullscreen);
+function syncFsButtons(){
+  fsBtn.textContent = inFullscreen()?'⤢':'⛶';
+  sgFsBtn.textContent = inFullscreen()?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
+}
+document.addEventListener('fullscreenchange', syncFsButtons);
+document.addEventListener('webkitfullscreenchange', syncFsButtons);
 document.getElementById('resetBtn').addEventListener('click', ()=>{ respawn(); toggleMenu(); });
 document.getElementById('weaponBtn').addEventListener('click', ()=>cycleWeapon());
 document.getElementById('stanceBtn').addEventListener('click', ()=>cycleStance());
@@ -696,13 +810,30 @@ tabDir.addEventListener('click', ()=>{ tabDir.classList.add('on'); tabFeel.class
   dirTab.style.display='block'; feelTab.style.display='none'; });
 tabFeel.addEventListener('click', ()=>{ tabFeel.classList.add('on'); tabDir.classList.remove('on');
   feelTab.style.display='block'; dirTab.style.display='none'; });
+/* collapsible section headers (same ▸/▾ pattern as the hit-feel tuning panel) */
+document.querySelectorAll('button.sect').forEach(h=>{
+  const body = document.getElementById('body-'+h.dataset.sect);
+  const key = 'arena.section.'+h.dataset.sect;
+  let collapsed = !!StoneSettings.get(key, false);
+  const apply = ()=>{
+    body.style.display = collapsed ? 'none' : 'block';
+    h.textContent = (collapsed ? '▸ ' : '▾ ') + h.dataset.label;
+  };
+  apply();
+  h.addEventListener('click', ()=>{ collapsed = !collapsed; StoneSettings.set(key, collapsed); apply(); });
+});
 /* director mode grid */
 const modeGrid=document.getElementById('modeGrid');
 const modeName=document.getElementById('modeName'), modeSub=document.getElementById('modeSub');
-function setMode(id){
-  enemySystem.setDirectorMode(id);
-  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===id));
+const CYCLE_MODE_ID = 'cycle';
+function modeLabel(id){ return DIRECTOR_MODES.find(m=>m.id===id)?.label || id; }
+function setMode(id, { reset = true } = {}){
+  arena.cycleMode = (id === CYCLE_MODE_ID);
+  enemySystem.setCycleOnWaveClear(arena.cycleMode);
+  if(!arena.cycleMode) enemySystem.setDirectorMode(id);
+  StoneSettings.set('arena.directorMode', id);   // picked mode sticks across reloads
   updatePill();
+  if(reset) respawn();   // switching director mode = full scene reset
 }
 DIRECTOR_MODES.forEach(m=>{
   const b=document.createElement('button');
@@ -710,11 +841,18 @@ DIRECTOR_MODES.forEach(m=>{
   b.addEventListener('click', ()=>setMode(m.id));
   modeGrid.appendChild(b);
 });
+{ // CYCLE pseudo-mode: rotates through the real modes each wave
+  const b=document.createElement('button');
+  b.textContent='Cycle All'; b.dataset.id=CYCLE_MODE_ID;
+  b.addEventListener('click', ()=>setMode(CYCLE_MODE_ID));
+  modeGrid.appendChild(b);
+}
 function updatePill(){
   const mode = enemySystem.director.getMode();
-  modeName.textContent = DIRECTOR_MODES.find(m=>m.id===mode)?.label || mode;
+  modeName.textContent = (arena.cycleMode ? 'CYCLE · ' : '') + modeLabel(mode);
   modeSub.textContent = `${PC.currentWeapon().label} · ${arena.stance ? arena.stance.name : '—'}`;
-  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===mode));
+  const active = arena.cycleMode ? CYCLE_MODE_ID : mode;
+  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
 }
 /* sim sliders */
 const DIR_SLIDERS = [
@@ -779,12 +917,35 @@ document.getElementById('testBtn').addEventListener('click', ()=>{
 
 /* ---------- HUD ---------- */
 const hpFill=document.getElementById('hpFill'), stats=document.getElementById('stats');
+const stWrap=document.getElementById('stWrap'), stFill=document.getElementById('stFill');
 const stateLbl=document.getElementById('stateLbl');
+/* stance card widgets */
+const cardEls=[document.getElementById('card0'), document.getElementById('card1')];
+const deckCountEl=document.getElementById('deckCount');
+function renderCards(){
+  deck.hand.forEach((c,i)=>{
+    const el=cardEls[i];
+    el.classList.toggle('empty', !c);
+    el.querySelector('.cname').textContent = deck.shuffling ? 'SHUFFLING…' : (c ? c.name.replace(/^S\d+\s*/,'') : '—');
+    const ar=el.querySelector('.carrows');
+    ar.textContent='';
+    if(c) for(const key of c.chain){
+      const s=document.createElement('span');
+      s.textContent = moveArrow(PC.ATTACKS[key] || {});
+      ar.appendChild(s);
+    }
+  });
+  deckCountEl.textContent = 'DECK ' + deck.drawCount;
+}
+cardEls.forEach((el,i)=>el.addEventListener('pointerdown', e=>{ e.preventDefault(); playCard(i); }));
+document.getElementById('shuffleBtn').addEventListener('pointerdown', e=>{ e.preventDefault(); startDeckShuffle(); });
 const msgEl=document.getElementById('msg');
 let msgT=0;
 function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
 function updateHud(rawDt){
   hpFill.style.width = clamp(enemySystem.playerHp,0,100)+'%';
+  stFill.style.width = (arena.stamina.v/STAMINA.max*100)+'%';
+  if(deck.shuffling) deckCountEl.textContent = 'SHUFFLE ' + Math.max(0, deck.shuffleT).toFixed(1) + 's';
   const tokens = enemySystem.director.getDebugState().activeTokens;
   stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
   if(arena.deadT >= 0) stateLbl.textContent = 'DOWN';
@@ -887,6 +1048,9 @@ function frame(){
   pollPad();
   gatherInput();
   if(!isPaused()){
+    const wasShuffling = deck.shuffling;
+    deck.update(dt);
+    if(wasShuffling && !deck.shuffling) renderCards();   // countdown done: fresh hand
     updatePlayer(dt, rawDt);
     enemySystem.update(dt, {
       x: actorPos.x, z: actorPos.y,
@@ -906,7 +1070,8 @@ window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, Hi
 spawnCharacter();
 PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
 if(!arena.stance) ensureStanceMatchesWeapon();
-setMode(enemySystem.director.getMode());
+if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
+setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 enemySystem.reset();
 arena.prevHp = enemySystem.playerHp;
 arena.prevWave = enemySystem.wave;
@@ -914,8 +1079,9 @@ announce('WAVE 1');
 updatePill();
 frame();
 
-window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos,
-  attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing };
+window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck,
+  attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing,
+  playCard, startDeckShuffle };
 
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
