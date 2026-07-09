@@ -99,8 +99,8 @@ export function installGoblinRig(THREE){
     const vel = dir.multiplyScalar((1.2 + Math.random() * 1.8) * spread).add(new THREE.Vector3((Math.random()-.5)*1.2, 1.4 + Math.random()*1.8, (Math.random()-.5)*1.2));
     deathPieces.push({ mesh, vel, ang:new THREE.Vector3((Math.random()-.5)*5, (Math.random()-.5)*5, (Math.random()-.5)*5), age:0 });
   }
-  function shatterGoblin(worldRoot, deathPieces, e, knock, ironMat){
-    const add = (obj, geo, mat, spread) => addDeathPieceFromObject(worldRoot, deathPieces, obj, geo, mat, knock, spread);
+  function shatterGoblin(worldRoot, deathPieces, e, knock, ironMat, power = 1){
+    const add = (obj, geo, mat, spread) => addDeathPieceFromObject(worldRoot, deathPieces, obj, geo, mat, knock, spread * power);
     add(e.body, null, e.body.material, 1.05);
     if(e.belly) add(e.belly, null, e.belly.material, .95);
     if(e.head) add(e.head, null, e.head.material, 1.2);

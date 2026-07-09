@@ -393,8 +393,10 @@ export function installPlayerCombat(api) {
     }
     combatState._lastTipScene = tipScene;
   }
-  function updateCombat(dt,now,sway){
-    let adt=dt; if(combatState.hitStop>0){combatState.hitStop-=dt; adt*=.06;}
+  function updateCombat(dt,now,sway,rawDt=dt){
+    // hitStop drains on rawDt: under a global hitstop (hit-feel.js) dt is already
+    // near-frozen, and draining by it would stretch this micro-stop ~28x.
+    let adt=dt; if(combatState.hitStop>0){combatState.hitStop-=rawDt; adt*=.06;}
     if(combatState.attack){
       const timeScale=currentAttackTimeScale(combatState.attack,combatState.t); combatState.t += adt / timeScale;
       if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}

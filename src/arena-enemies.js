@@ -142,6 +142,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
+      yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -203,13 +204,14 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     const ang = Math.atan2(dx,dz), fa = Math.atan2(e.facing.x, e.facing.z);
     if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < e.radius + PLAYER_R + .26){
       e.hitDone = true;
-      hitPlayer(e.attack.damage, e.kind, e.attack.name);
+      hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
     }
   }
-  function hitPlayer(dmg, kind, name){
+  function hitPlayer(dmg, kind, name, dir = null){
     if(lastPlayer.invulnerable) return;
     tuning.playerHp = Math.max(0, tuning.playerHp - dmg);
     tuning.lastPlayerHit = `${kind} ${name} hit for ${dmg}`;
+    tuning.lastPlayerHitDir = dir ? { x:dir.x, z:dir.z } : null;
   }
   const playerDead = () => tuning.playerHp <= 0;
 
@@ -230,7 +232,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       if(pr.dead) continue;
       pr.life -= dt; pr.x += pr.vx*dt; pr.z += pr.vz*dt;
       if(Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
-        hitPlayer(pr.damage, 'rock', 'Rock Throw'); pr.life = 0;
+        hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz)); pr.life = 0;
       }
       if(pr.life <= 0){ pr.dead = true; if(pr.mesh) pr.mesh.visible = false; }
       else if(pr.mesh){ pr.mesh.position.set(pr.x, 1.0*S, pr.z); pr.mesh.rotation.x += dt*9; }
@@ -245,6 +247,16 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.cooldown = Math.max(0, e.cooldown - dt);
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
+    // hit-feel body reaction: vertical pop, hit spin, squash timer
+    if(e.yOff > 0 || e.vyOff !== 0){
+      e.vyOff -= 22*dt;
+      e.yOff = Math.max(0, e.yOff + e.vyOff*dt);
+      if(e.yOff === 0 && e.vyOff < 0) e.vyOff = 0;
+    }
+    e.spin += e.spinVel*dt;
+    e.spinVel *= Math.pow(.06, dt);
+    e.spin *= Math.pow(.02, dt);
+    e.squashT = Math.max(0, e.squashT - dt);
 
     if(e.stunned > 0){
       e.stunned -= dt;
@@ -353,8 +365,12 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   }
   function updateEnemyVisual(e){
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
-    e.root.position.set(e.x, 0, e.z);
-    const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.setScalar(flashScale);
+    e.root.position.set(e.x, e.yOff, e.z);
+    const flashScale = 1 + Math.max(0, e.flash) * .18;
+    // squash-and-stretch rides the flash pop: wide + short at max, easing back
+    const sq = e.squash * (e.squashT / e.squashMax);
+    e.root.scale.set(flashScale * (1 + sq*.45), flashScale * (1 - sq*.36), flashScale * (1 + sq*.45));
+    e.root.rotation.z = e.spin * .12;
     rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
@@ -381,15 +397,27 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1);
     if(e.root.parent) e.root.parent.remove(e.root);
   }
-  function damageEnemy(e, amount, knock = { x:0, z:0 }){
+  function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
     if(e.hp <= 0) return false;
-    e.hp -= amount; e.flash = .12; e.stunned = Math.max(e.stunned, .18);
+    // hit power (~1 average swing, ~2 charged haymaker) drives the body reaction
+    const power = opts.power ?? clamp(amount / 28, .4, 2);
+    const pop = opts.pop ?? 1;
+    e.hp -= amount;
+    e.flash = .12 + power * .08;
+    e.stunned = Math.max(e.stunned, .18 + power * .06);
     director.releaseAllForEnemy(e);
     if(e.state === 'windup' || e.state === 'active' || e.state === 'recovery'){ e.state = 'idle'; e.stateTime = 0; }
     e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65;
+    // squash-and-stretch + spin + vertical pop on heavy hits
+    e.squash = Math.min(1, (.22 + power * .28) * pop);
+    e.squashT = e.squashMax = .18 + power * .10;
+    e.spinVel += (Math.random() < .5 ? -1 : 1) * (1.6 + power * 2.6) * pop;
+    if(power > .95) e.vyOff += (1.4 + power * 1.9) * pop;
     if(e.hp <= 0){
       kills++; waveKills++;
-      rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron);
+      // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
+      // magnitude goes in via the power/spread multiplier)
+      rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron, 1.2 + power * .7);
       removeEnemy(e);
       return true;
     }
@@ -445,6 +473,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     get waveKills(){ return waveKills; },
     get kills(){ return kills; },
     get playerHp(){ return tuning.playerHp; },
-    get lastPlayerHit(){ return tuning.lastPlayerHit; }
+    get lastPlayerHit(){ return tuning.lastPlayerHit; },
+    get lastPlayerHitDir(){ return tuning.lastPlayerHitDir || null; }
   };
 }
