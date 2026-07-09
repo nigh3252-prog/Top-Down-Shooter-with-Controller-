@@ -130,7 +130,7 @@
     <div class="ptitle" style="margin-top:10px">tap = chain the stance combo · hold = charge to cartoon</div>
   </div>
 </div>
-<div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · X weapon · T stance · M menu</div>
+<div id="hint">Dark Souls cam · stick/WASD camera-relative move · ATK [J] hold charges · DODGE [K] · X weapon · T stance · M menu</div>
 <div id="err"></div>
 
 <script type="module">
@@ -173,7 +173,7 @@ const CHARGE_MOVE_MULT = .35;
 const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
 const AUTO_FACE_RANGE = 14;
 const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
-const CAM_HEIGHT = 20, CAM_BACK = 17.6;
+const CAM_HEIGHT = 4.6, CAM_BACK = 8.6, CAM_LOOK_HEIGHT = 2.05, CAM_LOOK_AHEAD = 3.2, CAM_SHOULDER = .72;
 
 /* ---------- scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -189,7 +189,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d191b);
 scene.fog = new THREE.Fog(0x0d191b, 34, 78);
-const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .5, 220);
+const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, .18, 220);
 
 scene.add(new THREE.AmbientLight(0xd8ecff, .5));
 const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi);
@@ -616,9 +616,21 @@ function gatherInput(){
   const k = keyMove();
   const pm = Math.hypot(padMove.x,padMove.z);
   const jm = Math.hypot(joy.x,joy.z);
-  if(pm>.08){ input.mx=padMove.x; input.mz=padMove.z; }
-  else if(jm>.08){ input.mx=joy.x; input.mz=joy.z; }
-  else { input.mx=k.x; input.mz=k.z; }
+  let raw;
+  if(pm>.08) raw = padMove;
+  else if(jm>.08) raw = joy;
+  else raw = k;
+  const m = Math.hypot(raw.x, raw.z);
+  if(m <= .08){ input.mx=0; input.mz=0; return; }
+  // Souls-style camera-relative movement: W/stick-up moves toward the
+  // direction the over-the-shoulder camera is looking, not absolute arena north.
+  const rightX = Math.cos(camYaw), rightZ = -Math.sin(camYaw);
+  const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw);
+  const right = raw.x, forward = -raw.z;
+  input.mx = rightX*right + fwdX*forward;
+  input.mz = rightZ*right + fwdZ*forward;
+  const l = Math.hypot(input.mx,input.mz);
+  if(l>1){ input.mx/=l; input.mz/=l; }
 }
 
 /* ---------- UI ---------- */
@@ -745,13 +757,23 @@ function updateHud(rawDt){
 
 /* ---------- camera ---------- */
 const camFollow = new THREE.Vector3(0,0,0);
+let camYaw = 0;
 function updateCamera(rawDt){
-  camFollow.x += (actorPos.x - camFollow.x)*Math.min(1, rawDt*5);
-  camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*5);
+  camFollow.x += (actorPos.x - camFollow.x)*Math.min(1, rawDt*7.5);
+  camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*7.5);
+  camYaw = lerpAngle(camYaw, actorFacing, Math.min(1, rawDt*4.2));
+  const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw);
+  const rightX = Math.cos(camYaw), rightZ = -Math.sin(camYaw);
   shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
   shake.addScaledVector(shakeVel,rawDt);
-  camera.position.set(camFollow.x+shake.x, CAM_HEIGHT+shake.y, camFollow.z+CAM_BACK+shake.z);
-  camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
+  const px = camFollow.x - fwdX*CAM_BACK + rightX*CAM_SHOULDER + shake.x;
+  const pz = camFollow.z - fwdZ*CAM_BACK + rightZ*CAM_SHOULDER + shake.z;
+  camera.position.set(px, CAM_HEIGHT+shake.y, pz);
+  camera.lookAt(
+    camFollow.x + fwdX*CAM_LOOK_AHEAD + shake.x*.35,
+    CAM_LOOK_HEIGHT + shake.y*.18,
+    camFollow.z + fwdZ*CAM_LOOK_AHEAD + shake.z*.35
+  );
 }
 
 /* ---------- main update ---------- */
