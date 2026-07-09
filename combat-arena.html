@@ -56,10 +56,12 @@
   .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:8px 3px;min-height:42px}
   .modeGrid button.on{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
-  .srow{margin-bottom:11px}
+  .srow{margin-bottom:22px}
   .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px}
   .sval{color:#e8a04c}
-  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0}
+  /* slider sits at 84% width so each row keeps an empty gutter on both sides —
+     a thumb-free strip to grab when scrolling the panel on a phone */
+  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:84%;display:block;margin:6px auto 0;height:24px;background:transparent}
   #panel input[type=range]::-webkit-slider-runnable-track{height:3px;background:#243f3d;border-radius:2px}
   #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-6px;
     border-radius:50%;background:#e8a04c;border:2px solid #0d191b;box-shadow:0 0 0 1px #6e3a24}
@@ -77,6 +79,17 @@
   #err{position:fixed;bottom:6px;left:6px;right:6px;z-index:99;color:#ff9070;font-size:10px;
     background:rgba(20,8,6,.9);border:1px solid #6e3a24;border-radius:5px;padding:6px 8px;display:none;white-space:pre-wrap}
   #hint{position:fixed;bottom:8px;left:10px;color:#33524e;font-size:9px;letter-spacing:.06em;z-index:8;pointer-events:none;line-height:1.6}
+  /* ---- start gate ---- */
+  #startGate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,14,15,.88)}
+  #startGate.hidden{display:none}
+  #startCard{max-width:320px;text-align:center;padding:22px 22px 20px;box-sizing:border-box;
+    background:rgba(14,28,30,.94);border:1px solid #6e3a24;border-radius:10px;box-shadow:0 8px 0 rgba(0,0,0,.3)}
+  #startCard .sgTitle{color:#e8a04c;font-size:15px;letter-spacing:.2em;margin-bottom:10px}
+  #startCard .sgHint{color:#9fd2c9;font-size:11px;line-height:1.6;margin-bottom:18px}
+  #startBtn{width:100%;font-family:inherit;font-size:13px;letter-spacing:.14em;color:#0d191b;
+    background:#e8a04c;border:none;border-radius:7px;padding:15px 0;font-weight:bold}
+  #startBtn:active{background:#c9863a}
 </style>
 <script type="importmap">
 {
@@ -132,6 +145,13 @@
 </div>
 <div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · X weapon · T stance · M menu</div>
 <div id="err"></div>
+<div id="startGate">
+  <div id="startCard">
+    <div class="sgTitle">COMBAT ARENA</div>
+    <div class="sgHint">Enemies stay frozen until you tap start — get your controller connected and go fullscreen first.</div>
+    <button id="startBtn">TAP TO START</button>
+  </div>
+</div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -143,6 +163,7 @@ import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
+import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
 
@@ -227,6 +248,11 @@ const WEAPON_ORDER = STONE_WEAPON_ORDER;
 const WEAPONS = cloneWeaponDefinitions();
 const CombatAudio = installCombatAudioDirector({ controls:{} , settings:StoneSettings });
 
+/* ---------- hit feel (hitstop, camera punch, gore, impact SFX) ---------- */
+// Hidden tuning panel: backtick key or ?tune=1. Master knob at 0 ≈ the old game.
+const HitFeel = installHitFeel({ THREE, scene, camera, settings:StoneSettings, audio:CombatAudio });
+HitFeel.buildTuningPanel();
+
 /* ---------- stone wanderer + player combat ---------- */
 const StoneWanderer = installStoneWanderer({ THREE });
 const actorRoot = new THREE.Group(); worldRoot.add(actorRoot);
@@ -248,7 +274,7 @@ const arena = {
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
-  paused:false,
+  paused:false, started:false,
 };
 function applySwingFeel(s){
   arena.swing.s = s;
@@ -274,7 +300,12 @@ const PC = installPlayerCombat({
     onAttackStart(info){
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
-      combatState.impactScale = arena.swing.s.impact;
+      combatState.impactScale = arena.swing.s.impact * Math.max(.25, HitFeel.tuning.master);
+    },
+    onAttackComplete(){
+      // swung at air: sell the whoosh with a light stop + slash streak
+      if(combatState.fired && (!combatState.hitIds || combatState.hitIds.size === 0) && combatState._lastTipScene)
+        HitFeel.whiff(combatState._lastTipScene, new THREE.Vector3(Math.sin(actorFacing), 0, Math.cos(actorFacing)));
     },
     onAttackChainIdle(){
       arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
@@ -384,7 +415,7 @@ function attackDown(){
 function releaseCharge(){
   if(!arena.charge.active) return;
   applySwingFeel(arena.charge.s);
-  combatState.impactScale = arena.charge.s.impact;
+  combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
   arena.charge.active = false; arena.charge.forceTier = null;
 }
 function attackUp(){ releaseCharge(); }
@@ -457,10 +488,22 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     }
     if(best){
       combatState.hitIds.add(e);
-      const stagger = best.zone.stagger * arena.swing.knockMult;
-      const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * stagger, z: best.motion.z * stagger });
+      const stagger = best.zone.stagger * arena.swing.knockMult * Math.max(0, HitFeel.tuning.knock);
+      const killed = enemySystem.damageEnemy(e, best.damage,
+        { x: best.motion.x * stagger, z: best.motion.z * stagger },
+        { pop: HitFeel.tuning.pop * HitFeel.tuning.master });
       if(!killed) e.stunned = Math.max(e.stunned, arena.swing.stun);
       onHitFeel(best.point, arena.charge.active ? arena.charge.tier : tierOfSwing());
+      HitFeel.impact({
+        point: best.point,
+        dir: new THREE.Vector3(best.motion.x, 0, best.motion.z),
+        damage: best.damage, kill: killed,
+        color: HIT_TYPE_COLOR[best.zone.type] || 0xffffff
+      });
+      // attacker sells it too: slight recoil away from the impact
+      const recoil = .20 * clamp(best.damage / 28, .4, 2) * HitFeel.tuning.master;
+      actorPos.x -= best.motion.x * recoil;
+      actorPos.y -= best.motion.z * recoil;
       spawnHitEffect(best.point, best.zone.type, best.damage);
       CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
     }
@@ -481,6 +524,7 @@ function spawnHitEffect(point, type, damage){
   ring.position.copy(point); ring.lookAt(camera.position); scene.add(ring);
   effects.push({ mesh:ring, age:0, life:.28, kind:'ring' });
   const sp = makeDamageSprite(String(damage), color);
+  sp.scale.multiplyScalar(.75 + clamp(damage/28, .4, 2) * .45);   // big hits read bigger
   sp.position.copy(point).add(new THREE.Vector3(0,.7,0)); scene.add(sp);
   effects.push({ mesh:sp, age:0, life:.85, vel:new THREE.Vector3((Math.random()-.5)*.6,1.6,(Math.random()-.5)*.6), kind:'label' });
 }
@@ -519,6 +563,7 @@ function watchPlayerState(dt){
     arena.invulnT = Math.max(arena.invulnT, .8);
     flashVignette();
     CombatAudio.playTest('hurt');
+    HitFeel.playerHurt({ dir: enemySystem.lastPlayerHitDir, damage: arena.prevHp - hp });
     shakeVel.x += (Math.random()-.5)*1.4; shakeVel.z -= 1.2; shakeVel.y -= .8;
     if(hp <= 0){ arena.deadT = 0; announce('DOWN', 2); }
   }
@@ -626,9 +671,14 @@ const panel=document.getElementById('panel');
 const pauseBtn=document.getElementById('pauseBtn');
 function toggleMenu(){ panel.classList.toggle('hidden'); }
 function togglePause(){ arena.paused=!arena.paused; pauseBtn.textContent = arena.paused?'▶':'II'; }
-function isPaused(){ return arena.paused || !panel.classList.contains('hidden'); }
+function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
 document.getElementById('menuBtn').addEventListener('click', toggleMenu);
 pauseBtn.addEventListener('click', togglePause);
+const startGate=document.getElementById('startGate');
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  arena.started = true;
+  startGate.classList.add('hidden');
+});
 const fsBtn=document.getElementById('fsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
 fsBtn.addEventListener('click', ()=>{
@@ -671,6 +721,7 @@ const DIR_SLIDERS = [
   { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
   { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
+  { label:'ENEMY HEALTH',    min:.25,max:5,   step:.05, get:()=>enemySystem.hpScale,        set:v=>enemySystem.setHpScale(v) },
   { label:'ENEMY HEIGHT',    min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
   { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
 ];
@@ -750,12 +801,17 @@ function updateCamera(rawDt){
   camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*5);
   shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
   shake.addScaledVector(shakeVel,rawDt);
-  camera.position.set(camFollow.x+shake.x, CAM_HEIGHT+shake.y, camFollow.z+CAM_BACK+shake.z);
+  // hit-feel layers: random jitter, directional kick, zoom punch toward the action
+  const j = HitFeel.jitter, kick = HitFeel.camKick, zk = HitFeel.zoomKick;
+  camera.position.set(
+    camFollow.x + shake.x + (Math.random()*2-1)*j + kick.x,
+    CAM_HEIGHT - zk*2.2 + shake.y + (Math.random()*2-1)*j*.4,
+    camFollow.z + CAM_BACK - zk*2.4 + shake.z + (Math.random()*2-1)*j + kick.z);
   camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
 }
 
 /* ---------- main update ---------- */
-function updatePlayer(dt){
+function updatePlayer(dt, rawDt = dt){
   const d = arena.dodge;
   if(arena.deadT >= 0){
     arena.deadT += dt;
@@ -818,18 +874,21 @@ function updatePlayer(dt){
   actorVisual.visible = !(arena.invulnT > .45 && Math.floor(performance.now()/90)%2===0);
 
   updateCharge(dt);
-  PC.updateCombat(dt, performance.now()/1000, sway);
+  PC.updateCombat(dt, performance.now()/1000, sway, rawDt);
 }
 
 const clock = new THREE.Clock();
 function frame(){
   requestAnimationFrame(frame);
   const rawDt = Math.min(clock.getDelta(), .05);
+  // global hitstop/slow-mo: game logic runs on the frozen dt, effects + camera
+  // + HUD keep animating on rawDt so the freeze reads as impact, not lag
+  const dt = HitFeel.update(rawDt);
   pollPad();
   gatherInput();
   if(!isPaused()){
-    updatePlayer(rawDt);
-    enemySystem.update(rawDt, {
+    updatePlayer(dt, rawDt);
+    enemySystem.update(dt, {
       x: actorPos.x, z: actorPos.y,
       invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
     });
@@ -842,6 +901,8 @@ function frame(){
 }
 
 /* ---------- boot ---------- */
+// console/testing handle
+window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel };
 spawnCharacter();
 PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
 if(!arena.stance) ensureStanceMatchesWeapon();

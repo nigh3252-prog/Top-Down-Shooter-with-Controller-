@@ -210,7 +210,28 @@ export function installCombatAudioDirector({ log, controls = {}, settings = null
       setLog(`${event} · ${state.weapon} · beast ${Math.round(beastLevel(ctx) * 100)}%`);
     }
 
-    return { play };
+    // Layered flesh-impact stack (ported from fencer_hit_feel_lab_v3.html):
+    // sine body-thud + square crack + saw grind + wet noise, all pitch-varied so
+    // repeats never sound identical, with a 42 Hz sub-boom on kills/huge hits.
+    function playImpactFeel({ power = 1, kill = false, gain = 1 } = {}) {
+      if (!state.enabled || gain <= 0) return;
+      init();
+      if (AC.state === 'suspended') AC.resume();
+      impact.gain.value = 0.82 + state.grit * 0.2;
+      const pitch = (0.88 + Math.random() * 0.24) * (kill ? 0.72 : 1);
+      const g = gain;
+      tone(impact, 'sine', 74 * pitch, 74 * pitch * 0.42, 0.24 + power * 0.06, (0.18 + power * 0.08) * g);
+      tone(impact, 'square', 245 * pitch, 150 * pitch, 0.065, (0.075 + power * 0.03) * g, 0.005);
+      tone(impact, 'sawtooth', 122 * pitch, 80 * pitch, 0.13, (0.045 + power * 0.02) * g, 0.012);
+      noise(impact, 'lowpass', 650 + power * 300, 180, 0.13 + power * 0.04, (0.15 + power * 0.06) * g, 0.015);
+      noise(impact, 'highpass', 2600, 1400, 0.045, 0.08 * g);
+      if (kill || power > 1.4) {
+        tone(impact, 'sine', 42, 34, 0.45, 0.26 * g, 0.025);
+        noise(impact, 'lowpass', 420, 90, 0.22, 0.22 * g, 0.03);
+      }
+    }
+
+    return { play, playImpactFeel };
   })();
 
   function isHeavyWeapon() {
@@ -235,9 +256,17 @@ export function installCombatAudioDirector({ log, controls = {}, settings = null
     }
   }
 
+  // Call this from the hit-feel system with a normalized hit power (~1 average,
+  // ~2+ charged/kill). Layers on top of onDummyEvent's growl/surge kit.
+  function onImpactFeel({ damage = 0, kill = false, power = null, gain = 1 } = {}) {
+    const p = power ?? clamp(damage / 28, 0.4, 2) + (kill ? 0.9 : 0);
+    AudioDirector.playImpactFeel({ power: p, kill, gain });
+  }
+
   const api = {
     onAttackStart,
     onDummyEvent,
+    onImpactFeel,
     playTest(event) {
       if (event === 'hurt') {
         state.damage = clamp(state.damage + 0.18, 0, 1);
