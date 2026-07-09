@@ -27,7 +27,8 @@ Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode expe
 
 - Soft aim assist is the default. Attacks use movement/facing direction, then nudge toward the best enemy in front.
 - Right stick aiming overrides assist while the stick is actively held.
-- The Aim button cycles Soft / Auto / Manual.
+- The Aim button cycles Soft / Lock / Auto / Manual.
+- Lock mode is a Souls-style experiment: it keeps the nearest target selected, biases the camera toward the player/target pair, rotates attacks into the locked enemy, and shows a gold lock reticle.
 - Soft mode avoids pure nearest-enemy snapping.
 - Auto mode continuously points the player at the closest enemy within a nearby range, while still allowing right-stick override.
 - Manual disables target assist.
@@ -37,7 +38,7 @@ Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode expe
 - Hold left three-dots/View for 1 second to toggle Boys Mode on or off.
 - Boys Mode persists after release: player cannot take damage, and enemies stop near the player instead of attacking.
 - Downed state now has an on-screen Respawn button instead of requiring browser refresh.
-- Keyboard fallback: T cycles aim mode; P or Escape toggles pause.
+- Keyboard fallback: T cycles aim mode; L toggles lock-on; P or Escape toggles pause.
 
 ## Phone UI controls
 
@@ -71,6 +72,7 @@ Keyboard fallback:
 - Q/E: cast left/right tray cards
 - R: shuffle/reload tray
 - T: cycle aim assist mode
+- L: toggle Souls-style lock-on
 - P or Escape: pause menu
 
 ## Source move notes
