@@ -52,6 +52,8 @@
     color:#4a6f6a;background:transparent;border:1px solid #24403e;border-radius:5px}
   #tabs button.on{color:#e8a04c;border-color:#6e3a24;background:rgba(110,58,36,.14)}
   .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:10px 0 7px}
+  button.ptitle{display:block;width:100%;text-align:left;background:transparent;border:none;
+    cursor:pointer;font-family:inherit;padding:6px 0;margin:4px 0 3px}
   .modeGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
   .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:8px 3px;min-height:42px}
@@ -127,21 +129,29 @@
     <button id="tabFeel">FEEL</button>
   </div>
   <div id="dirTab">
-    <div class="ptitle">ENCOUNTER DIRECTOR</div>
-    <div class="modeGrid" id="modeGrid"></div>
-    <div class="ptitle">LOADOUT</div>
-    <div class="pairRow">
-      <button class="wide" id="weaponBtn">WEAPON</button>
-      <button class="wide" id="stanceBtn">STANCE</button>
+    <button class="ptitle sect" data-sect="director" data-label="ENCOUNTER DIRECTOR"></button>
+    <div class="sbody" id="body-director">
+      <div class="modeGrid" id="modeGrid"></div>
     </div>
-    <div class="ptitle">SIM</div>
-    <div id="dirSliders"></div>
+    <button class="ptitle sect" data-sect="loadout" data-label="LOADOUT"></button>
+    <div class="sbody" id="body-loadout">
+      <div class="pairRow">
+        <button class="wide" id="weaponBtn">WEAPON</button>
+        <button class="wide" id="stanceBtn">STANCE</button>
+      </div>
+    </div>
+    <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
+    <div class="sbody" id="body-sim">
+      <div id="dirSliders"></div>
+    </div>
     <button class="wide" id="resetBtn">RESET FIGHT</button>
   </div>
   <div id="feelTab" style="display:none">
-    <div class="ptitle">EDITING KEYFRAME</div>
-    <div id="keyRow"></div>
-    <div id="feelSliders"></div>
+    <button class="ptitle sect" data-sect="keyframe" data-label="EDITING KEYFRAME"></button>
+    <div class="sbody" id="body-keyframe">
+      <div id="keyRow"></div>
+      <div id="feelSliders"></div>
+    </div>
     <button class="wide" id="testBtn">TEST THIS TIER</button>
     <div class="ptitle" style="margin-top:10px">tap = chain the stance combo · hold = charge to cartoon</div>
   </div>
@@ -707,6 +717,18 @@ tabDir.addEventListener('click', ()=>{ tabDir.classList.add('on'); tabFeel.class
   dirTab.style.display='block'; feelTab.style.display='none'; });
 tabFeel.addEventListener('click', ()=>{ tabFeel.classList.add('on'); tabDir.classList.remove('on');
   feelTab.style.display='block'; dirTab.style.display='none'; });
+/* collapsible section headers (same ▸/▾ pattern as the hit-feel tuning panel) */
+document.querySelectorAll('button.sect').forEach(h=>{
+  const body = document.getElementById('body-'+h.dataset.sect);
+  const key = 'arena.section.'+h.dataset.sect;
+  let collapsed = !!StoneSettings.get(key, false);
+  const apply = ()=>{
+    body.style.display = collapsed ? 'none' : 'block';
+    h.textContent = (collapsed ? '▸ ' : '▾ ') + h.dataset.label;
+  };
+  apply();
+  h.addEventListener('click', ()=>{ collapsed = !collapsed; StoneSettings.set(key, collapsed); apply(); });
+});
 /* director mode grid */
 const modeGrid=document.getElementById('modeGrid');
 const modeName=document.getElementById('modeName'), modeSub=document.getElementById('modeSub');
