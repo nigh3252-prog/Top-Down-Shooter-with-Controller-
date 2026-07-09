@@ -76,7 +76,7 @@ export function installPlayerCombat(api) {
     pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
     tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
     commitYaw:0, lastAttackLabel:'none',
-    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
+    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, chargePull:0
   };
   const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
   const weaponBaseLocal = new THREE.Vector3(0,RIG.bladeBase,0);
@@ -245,7 +245,7 @@ export function installPlayerCombat(api) {
     const pre=1-smoothstep(state.attack.contactAt,state.attack.contactAt+.08,state.t);
     const windupBack=1-smoothstep(contactT*.10,contactT*.96,state.t);
     const post=smoothstep(state.attack.contactAt,state.attack.total,state.t);
-    const lengthDelta=tune.length-1, weightDelta=tune.weight-TUNE_DEFAULTS.weight, widthDelta=tune.swingWidth-1, pullTune=tune.pullback ?? TUNE_DEFAULTS.pullback;
+    const lengthDelta=tune.length-1, weightDelta=tune.weight-TUNE_DEFAULTS.weight, widthDelta=tune.swingWidth-1, chargePull=clamp(state.chargePull||0,0,1), pullTune=(tune.pullback ?? TUNE_DEFAULTS.pullback)*(1+chargePull*.85);
     const grp=(state.attack&&state.attack.group)||state.attackGroup||state.last, def=currentWeapon(), isWhip=def.kind==='whip';
     const pathScale=clamp(1+widthDelta*.58+lengthDelta*.18,.42,2.05), reachScale=clamp(1+widthDelta*.34+lengthDelta*.16,.48,1.85);
     const commit=clamp(1+widthDelta*.36+Math.max(-.35,weightDelta)*.46+Math.max(-.45,lengthDelta)*.18,.58,1.85);
