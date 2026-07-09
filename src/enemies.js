@@ -121,7 +121,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     visual.root.position.set(x, 0, z); group.add(visual.root);
     spawnedThisWave++;
     const stance = STANCE_CARDS.find(card => card.id === s.stanceId) || STANCE_CARDS.find(card => card.preferredWeapons?.includes?.(s.weapon)) || STANCE_CARDS[0];
-    const e = { id: nextId++, kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0,
+    const e = { id: nextId++, kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, tumbleX:0, tumbleZ:0, tumbleVelX:0, tumbleVelZ:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0,
       state:'approach', stateTime:0, attack:null, token:null, facing:{x:0,z:1}, windup:0, active:0, recovery:0, hitDone:false, stunned:0, nearEligible:true, slotIndex:-1, deniedTimer:0, cooldown:THREE.MathUtils.randFloat(.2, 1.1), personality:THREE.MathUtils.randFloat(.85, 1.15), weaponId:s.weapon, stance, comboIndex:0, visualAttack:null, visualAttackKey:null, visualAttackTime:0, visualAttackContactAt:0, visualAttackTotal:0, ...visual };
     applyEnemyVisual(e); enemies.push(e); return e;
   }
@@ -138,6 +138,9 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function applyHitReaction(e, amount, knock, opts = {}){
     const reaction = buildHitReaction({ stage:opts.ragdoll ? 3 : (opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1)), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.kind === 'brute' ? 1.6 : 1 });
     e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
+    const tumbleBoost = opts.ragdoll ? 14 : (reaction.hitStage >= 3 ? 9 : (reaction.hitStage === 2 ? 5 : 2.4));
+    e.tumbleVelX += ((opts.dir?.z ?? knock.z) || 1) * tumbleBoost + (Math.random()-.5)*3.5;
+    e.tumbleVelZ += -((opts.dir?.x ?? knock.x) || 0) * tumbleBoost + (Math.random()-.5)*3.5;
     e.airVy = Math.max(e.airVy || 0, (reaction.airVy || 0) * (opts.ragdoll ? 2.15 : 1)); e.launchedT = Math.max(e.launchedT || 0, opts.ragdoll ? 2.1 : (reaction.launchedT || 0)); e.physicsT = Math.max(e.physicsT || 0, opts.ragdoll ? 2.4 : 0); e.lastKnockMul = (reaction.knockMul || 1) * (opts.ragdoll ? 1.65 : 1); e.onSecondaryHit = opts.onSecondaryHit || null;
     e.stunned = Math.max(e.stunned, reaction.stunned);
     return reaction;
@@ -233,12 +236,16 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
       else if(dist(e, player) > e.stop * Math.min(tuning.idleRangeScale, 2.5)) approach(e, player, dt); else orbit(e, player, dt, .4);
     }
     const physicsActive = e.physicsT > 0;
+    e.tumbleX += (e.tumbleVelX || 0) * dt; e.tumbleZ += (e.tumbleVelZ || 0) * dt;
+    const tumbleDamp = physicsActive ? .55 : .08;
+    e.tumbleVelX = (e.tumbleVelX || 0) * Math.pow(tumbleDamp, dt); e.tumbleVelZ = (e.tumbleVelZ || 0) * Math.pow(tumbleDamp, dt);
+    if(!physicsActive && Math.abs(e.tumbleVelX || 0) + Math.abs(e.tumbleVelZ || 0) < .15){ e.tumbleX *= Math.pow(.02, dt); e.tumbleZ *= Math.pow(.02, dt); }
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(physicsActive ? .72 : (e.launchedT > 0 ? .32 : .08), dt); e.knockZ *= Math.pow(physicsActive ? .72 : (e.launchedT > 0 ? .32 : .08), dt);
     if(e.launchedT > 0 || e.airY > 0 || e.airVy > 0 || physicsActive){ e.airVy -= 9.7 * (physicsActive ? .95 : 1) * dt; e.airY += e.airVy * dt; if(e.airY < 0){ e.airY = 0; e.airVy *= physicsActive ? -.58 : (e.launchedT > 0 ? -.36 : 0); if(Math.abs(e.airVy) < 1.05) e.airVy = 0; } }
     const bounds = 4.9 * dungeonScale;
     if((e.launchedT > 0 || e.physicsT > 0) && e.wallSplatT <= 0 && (Math.abs(e.x) > bounds || Math.abs(e.z) > bounds)){ const wallDir = { x: Math.abs(e.x) > bounds ? -Math.sign(e.x) : 0, z: Math.abs(e.z) > bounds ? -Math.sign(e.z) : 0 }; e.x = clamp(e.x, -bounds, bounds); e.z = clamp(e.z, -bounds, bounds); e.knockX *= e.physicsT > 0 ? -.68 : -.42; e.knockZ *= e.physicsT > 0 ? -.68 : -.42; e.wallSplatT = .45; e.onSecondaryHit?.({ point:new THREE.Vector3(e.x,0,e.z), dir:wallDir, targetKind:e.kind, label:'WALL SPLAT!' }); }
     applyGoblinPose(e, dt);
-    e.root.position.set(e.x, 0, e.z); e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+    e.root.position.set(e.x, 0, e.z); e.root.rotation.set(e.tumbleX || 0, Math.atan2(e.facing.x, e.facing.z), e.tumbleZ || 0);
     const reactK = e.hitT > 0 && e.hitMax > 0 ? e.hitT / e.hitMax : 0;
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     const squash = reactK * (e.squash || 0);

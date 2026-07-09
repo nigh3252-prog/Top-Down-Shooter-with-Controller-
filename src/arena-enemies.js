@@ -142,7 +142,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
-      knockX:0, knockZ:0, flash:0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0, bobPhase:Math.random()*6.28,
+      knockX:0, knockZ:0, flash:0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, tumbleX:0, tumbleZ:0, tumbleVelX:0, tumbleVelZ:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0, bobPhase:Math.random()*6.28,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -247,6 +247,10 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.cooldown = Math.max(0, e.cooldown - dt);
     // knock decay (arena hit reaction)
     const physicsActive = e.physicsT > 0;
+    e.tumbleX += (e.tumbleVelX || 0) * dt; e.tumbleZ += (e.tumbleVelZ || 0) * dt;
+    const tumbleDamp = physicsActive ? .55 : .08;
+    e.tumbleVelX = (e.tumbleVelX || 0) * Math.pow(tumbleDamp, dt); e.tumbleVelZ = (e.tumbleVelZ || 0) * Math.pow(tumbleDamp, dt);
+    if(!physicsActive && Math.abs(e.tumbleVelX || 0) + Math.abs(e.tumbleVelZ || 0) < .15){ e.tumbleX *= Math.pow(.02, dt); e.tumbleZ *= Math.pow(.02, dt); }
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(physicsActive ? .72 : (e.launchedT > 0 ? .32 : .08), dt); e.knockZ *= Math.pow(physicsActive ? .72 : (e.launchedT > 0 ? .32 : .08), dt);
     if(e.launchedT > 0 || e.airY > 0 || e.airVy > 0 || physicsActive){ e.airVy -= 9.7*S*(physicsActive ? .95 : .22)*dt; e.airY += e.airVy * dt; if(e.airY < 0){ e.airY = 0; e.airVy *= physicsActive ? -.58 : (e.launchedT > 0 ? -.36 : 0); if(Math.abs(e.airVy) < 1.05) e.airVy = 0; } }
 
@@ -327,6 +331,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.torsoRoot.position.y = e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : 0;
     e.weaponRigRoot.rotation.x = weaponA * k;
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+    e.root.rotation.x = e.tumbleX || 0; e.root.rotation.z = e.tumbleZ || 0;
   }
   /* ---------- real-combat rig pose (grunt) ---------- */
   // Maps the enemy state clock onto the real attack's timeline, samples the exact
@@ -357,6 +362,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.weaponRoot.quaternion.copy(_q);
     e.weaponRoot.scale.setScalar(e.weaponScale);
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+    e.root.rotation.x = e.tumbleX || 0; e.root.rotation.z = e.tumbleZ || 0;
   }
   function updateEnemyVisual(e){
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
@@ -395,6 +401,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function applyHitReaction(e, amount, knock, opts = {}){
     const reaction = buildHitReaction({ stage:opts.ragdoll ? 3 : (opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1)), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.isElite ? 1.7 : 1 });
     e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
+    const tumbleBoost = opts.ragdoll ? 14 : (reaction.hitStage >= 3 ? 9 : (reaction.hitStage === 2 ? 5 : 2.4));
+    e.tumbleVelX += ((opts.dir?.z ?? knock.z) || 1) * tumbleBoost + (Math.random()-.5)*3.5;
+    e.tumbleVelZ += -((opts.dir?.x ?? knock.x) || 0) * tumbleBoost + (Math.random()-.5)*3.5;
     e.airVy = Math.max(e.airVy || 0, (reaction.airVy || 0) * (opts.ragdoll ? 2.15 : 1)); e.launchedT = Math.max(e.launchedT || 0, opts.ragdoll ? 2.1 : (reaction.launchedT || 0)); e.physicsT = Math.max(e.physicsT || 0, opts.ragdoll ? 2.4 : 0); e.lastKnockMul = (reaction.knockMul || 1) * (opts.ragdoll ? 1.65 : 1); e.onSecondaryHit = opts.onSecondaryHit || null;
     e.stunned = Math.max(e.stunned, reaction.stunned);
     return reaction;
