@@ -177,6 +177,68 @@ export function installPlayerCombat(api) {
     }
     return zones;
   }
+  function weaponArcReach(def){
+    const tuneLength=Number(def?.tune?.length ?? def?.baseLength ?? 1) || 1;
+    return clamp(getCombatScale() * tuneLength * 1.65, 2.4, 8.4);
+  }
+  function applyStanceToArc(arc){
+    const globalHitboxScale=getWeaponHitboxScale();
+    if(globalHitboxScale!==1){
+      arc.angle *= clamp(1 + (globalHitboxScale-1)*.18,1,1.72);
+      arc.rangeMax *= clamp(1 + (globalHitboxScale-1)*.10,1,1.40);
+      arc.hitboxScale = globalHitboxScale;
+    }
+    const slotMod=combatState.stanceModifier;
+    if(!slotMod) return arc;
+    const angleScale=slotMod.angleScale ?? 1;
+    const rangeScale=slotMod.rangeScale ?? 1;
+    const damageScale=slotMod.damageScale ?? 1;
+    const staggerScale=slotMod.staggerScale ?? slotMod.impactScale ?? 1;
+    arc.angle *= angleScale;
+    arc.rangeMax *= rangeScale;
+    arc.damage = Math.max(1,Math.round(arc.damage * damageScale));
+    arc.stagger *= staggerScale;
+    arc.detectionBonus = slotMod.detectionBonus ?? arc.detectionBonus ?? .10;
+    arc.stanceSlotKind = slotMod.name;
+    return arc;
+  }
+  function getAttackArcVolumes(){
+    const def=currentWeapon(), kind=def.kind, grp=combatState.attackGroup||'vertical';
+    const reach=weaponArcReach(def), heavy=(def.weightClass||'').includes('Heavy');
+    const arcs=[];
+    const add=(id,label,type,angle,rangeMin,rangeMax,damage,stagger=1,falloff='edge',prefer='any')=>{
+      arcs.push(applyStanceToArc({id,label,type,shape:'cone',angle:THREE.MathUtils.degToRad(angle),rangeMin,rangeMax,damage,stagger,falloff,prefer,detectionBonus:.10}));
+    };
+    if(kind==='spear' && grp==='stab'){
+      add('spearShaftArc','Spear shaft','blunt',30,.35,reach*.60,10,.55,'near','stab');
+      add('spearTipArc','Spear tip','pierce',22,reach*.48,reach*1.08,36,1.22,'sweetFar','stab');
+    } else if((kind==='rapier' || kind==='saber') && grp==='stab'){
+      add(`${kind}TipArc`,`${def.label} point`,'pierce',kind==='rapier'?20:26,.35,reach*1.04,kind==='rapier'?36:22,kind==='rapier'?1.08:.82,'sweetFar','stab');
+      add(`${kind}CloseArc`,`${def.label} close cut`,'weak',34,.15,reach*.48,6,.25,'near','stab');
+    } else if(grp==='stab'){
+      const pierce=kind==='axe' ? 22 : 30;
+      add(`${kind}ThrustArc`,`${def.label} thrust`,'pierce',heavy?28:24,.32,reach*(heavy?.86:1.02),pierce,.9,'sweetFar','stab');
+    } else if(grp==='horizontal'){
+      const angle=kind==='dagger'?92:(heavy?112:104);
+      const type=kind==='hammer'||kind==='mace'?'blunt':(kind==='axe'?'slice':'slice');
+      const dmg=kind==='hammer'?36:(kind==='mace'?31:(kind==='axe'?34:(heavy?31:24)));
+      add(`${kind}SliceArc`,`${def.label} sweep`,type,angle,.12,reach*(heavy?.92:.86),dmg,kind==='hammer'?1.55:(kind==='mace'?1.25:1.0),'edge','swing');
+    } else {
+      const angle=kind==='hammer'||kind==='mace'?52:(kind==='axe'?46:38);
+      const type=kind==='hammer'||kind==='mace'?'blunt':(kind==='rapier'?'pierce':'slice');
+      const dmg=kind==='hammer'?38:(kind==='mace'?31:(kind==='axe'?34:(heavy?31:23)));
+      add(`${kind}ChopArc`,`${def.label} chop`,type,angle,.20,reach,dmg,kind==='hammer'?1.55:(kind==='axe'?1.25:(heavy?1.18:.9)),'edge','swing');
+    }
+    arcs.sort((a,b)=>{const score=z=>z.prefer===grp?3:(z.prefer==='swing'&&(grp==='vertical'||grp==='horizontal')?2:(z.prefer==='any'?1:0)); return score(b)-score(a) || b.damage-a.damage;});
+    return arcs;
+  }
+  function isAttackArcActive(att,t){
+    if(!att) return false;
+    const grp=combatState.attackGroup||att.group||'vertical', contact=att.contactAt||0;
+    const pre=grp==='stab' ? .035 : (grp==='horizontal' ? .055 : .045);
+    const post=grp==='horizontal' ? .155 : (grp==='stab' ? .100 : .120);
+    return t>=contact-pre && t<=contact+post;
+  }
   function getZoneWorld(zone, prevMap){
     const a=weaponRoot.localToWorld(zone.from.clone()); const b=weaponRoot.localToWorld(zone.to.clone());
     const prev=prevMap.get(zone.id); prevMap.set(zone.id,{a:a.clone(),b:b.clone(),mid:a.clone().lerp(b,.5)});
@@ -510,7 +572,7 @@ export function installPlayerCombat(api) {
     get rebuildCombatWeaponMesh(){ return rebuildCombatWeaponMesh; }, set rebuildCombatWeaponMesh(fn){ rebuildCombatWeaponMesh = fn; },
     // helpers
     currentWeapon, tuneNum, getCombatScale, getCombatShoulderDrop, getCombatFloorBlend,
-    combatToWarden, getWeaponHitboxScale, getWeaponHitZones, getZoneWorld, pointSegmentDistance,
+    combatToWarden, getWeaponHitboxScale, getWeaponHitZones, getAttackArcVolumes, isAttackArcActive, getZoneWorld, pointSegmentDistance,
     // lifecycle + machine
     selectCombatWeapon, applyCombatWeaponTuning, attackGroupFor, chooseAttack,
     startCombatAttack, triggerCombatAttack, getAttackPhaseIndex, currentAttackTimeScale,

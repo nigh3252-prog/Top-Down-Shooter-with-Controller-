@@ -609,7 +609,7 @@ const PC = installPlayerCombat({
 const {
   combatState, RIG, BASE_RIG, BASE_BLADE_LEN, TUNE_DEFAULTS, ATTACKS, smoothstep,
   currentWeapon, tuneNum, getCombatScale, getCombatShoulderDrop, getCombatFloorBlend,
-  getWeaponHitboxScale, getWeaponHitZones, getZoneWorld, pointSegmentDistance,
+  getWeaponHitboxScale, getWeaponHitZones, getAttackArcVolumes, isAttackArcActive, getZoneWorld, pointSegmentDistance,
   selectCombatWeapon, applyCombatWeaponTuning, attackGroupFor, startCombatAttack,
   triggerCombatAttack, clearWeaponRoot, updateWeaponDynamicVisual,
   attachCombatToActiveModel, updateCombatArmVisibility, resetCombatTrail,
@@ -954,9 +954,9 @@ function updateLabUI(){
 }
 function stanceSlotModifier(slot){
   const mods=[
-    {name:'light', damageScale:.55, windupScale:.62, followScale:.70, recoveryScale:.52, impactScale:.55, hitboxScale:.68, detectionBonus:.08},
-    {name:'regular', damageScale:1.00, windupScale:.88, followScale:.88, recoveryScale:.62, impactScale:1.00, hitboxScale:1.00, detectionBonus:.14},
-    {name:'finisher', damageScale:1.45, windupScale:1.22, followScale:.98, recoveryScale:.82, impactScale:1.45, hitboxScale:1.18, detectionBonus:.18},
+    {name:'light', damageScale:.55, windupScale:.62, followScale:.70, recoveryScale:.52, impactScale:.55, hitboxScale:.68, rangeScale:.82, angleScale:.78, staggerScale:.60, detectionBonus:.08},
+    {name:'regular', damageScale:1.00, windupScale:.88, followScale:.88, recoveryScale:.62, impactScale:1.00, hitboxScale:1.00, rangeScale:1.00, angleScale:1.00, staggerScale:1.00, detectionBonus:.14},
+    {name:'finisher', damageScale:1.45, windupScale:1.22, followScale:.98, recoveryScale:.82, impactScale:1.45, hitboxScale:1.18, rangeScale:1.10, angleScale:1.14, staggerScale:1.35, detectionBonus:.18},
   ];
   return mods[((slot%mods.length)+mods.length)%mods.length];
 }
@@ -1095,7 +1095,7 @@ function resetDummy(advance=false, clearPieces=true){
   if(advance) dummyState.placementIndex=(dummyState.placementIndex+1)%dummyState.basePositions.length;
   dummyRoot.position.copy(dummyState.basePositions[dummyState.placementIndex]); dummyRoot.rotation.set(0,0,0); dummyRoot.scale.setScalar(getDummyHeightScale()); dummyRoot.visible=true;
   dummyRoot.children.forEach(c=>{c.visible=true;}); if(dummyHitboxGroup) dummyHitboxGroup.visible=dummyState.showHitboxes;
-  dummyState.hp=dummyState.maxHp; dummyState.alive=true; dummyState.respawnTimer=-1; dummyState.motionT=0; dummyState.wobble=0; dummyState.wobbleV=0; dummyState.knock.set(0,0,0); dummyState.knockV.set(0,0,0); dummyState.lastHit='Dummy ready — hit it with the actual weapon path.'; dummyState.prevZones.clear();
+  dummyState.hp=dummyState.maxHp; dummyState.alive=true; dummyState.respawnTimer=-1; dummyState.motionT=0; dummyState.wobble=0; dummyState.wobbleV=0; dummyState.knock.set(0,0,0); dummyState.knockV.set(0,0,0); dummyState.lastHit='Dummy ready — hit it with the attack arc.'; dummyState.prevZones.clear();
   updateDummyUI();
 }
 function updateDummyUI(){
@@ -1146,19 +1146,61 @@ function testZoneAgainstDummy(zw,dt,targetRoot=dummyRoot,targetScale=getDummyHei
     const threshold=vol.r*targetScale+zw.zone.radius+(zw.zone.detectionBonus||.10); if(d<=threshold){const speed=zw.prev&&dt>0?zw.mid.distanceTo(zw.prev.mid)/dt:0; if(speed<.28) continue; const quality=1-clamp(d/threshold,0,1); const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:zw.zone.type,zoneId:zw.zone.id}); const raw=zw.zone.damage*(.70+clamp(speed/18,0,.9))*(.85+quality*.35)*(vol.mult||1)*weaponMult; const hitPoint=zw.mid.clone().lerp(center,.35); const motion=zw.prev?zw.mid.clone().sub(zw.prev.mid):zw.b.clone().sub(zw.a); if(motion.lengthSq()<1e-6) motion.subVectors(center,actorRoot.localToWorld(new THREE.Vector3())); motion.normalize(); const cand={zone:zw.zone,volume:vol,damage:Math.max(1,Math.round(raw)),speed,quality,point:hitPoint,motion,dist:d}; if(!best||cand.damage>best.damage) best=cand; }}
   return best;
 }
+function attackArcBasis(){
+  const yaw=combatState.commitYaw ?? actorRoot.rotation.y ?? 0;
+  const origin=new THREE.Vector3(actorPos.x,0,actorPos.y);
+  return {origin, yaw, forward:new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)), right:new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw))};
+}
+function testPointAgainstAttackArc(point,radius,arc,basis){
+  const dx=point.x-basis.origin.x, dz=point.z-basis.origin.z;
+  const forward=dx*basis.forward.x + dz*basis.forward.z;
+  const side=dx*basis.right.x + dz*basis.right.z;
+  const dist=Math.hypot(forward,side), paddedRadius=radius+(arc.detectionBonus||.10);
+  if(dist < Math.max(0,arc.rangeMin-paddedRadius) || dist > arc.rangeMax+paddedRadius || forward < -paddedRadius) return null;
+  const half=(arc.angle||0)*.5 + Math.atan2(paddedRadius,Math.max(.001,dist));
+  const absAng=Math.abs(Math.atan2(side,Math.max(.001,forward)));
+  if(absAng>half) return null;
+  const angleQ=1-clamp(absAng/Math.max(.001,half),0,1);
+  const rangeQ=arc.falloff==='sweetFar'
+    ? 1-Math.abs(dist-arc.rangeMax*.82)/Math.max(.001,arc.rangeMax*.30)
+    : arc.falloff==='near'
+      ? 1-clamp((dist-arc.rangeMin)/Math.max(.001,arc.rangeMax-arc.rangeMin),0,1)
+      : 1-clamp((dist-arc.rangeMin)/Math.max(.001,arc.rangeMax-arc.rangeMin),0,1)*.45;
+  return {quality:clamp(.45+angleQ*.35+clamp(rangeQ,0,1)*.20,0,1), dist, forward, side};
+}
+function testTargetAgainstAttackArcs(samples,arcs,basis,volumeFallback={name:'body',mult:1,r:0}){
+  let best=null;
+  for(const arc of arcs){
+    for(const sample of samples){
+      const volume=sample.volume||volumeFallback, hit=testPointAgainstAttackArc(sample.point, sample.r ?? volume.r ?? 0, arc, basis);
+      if(!hit) continue;
+      const weaponMult=getWeaponDamageMultiplier({weaponId:combatState.weapon,weaponDef:currentWeapon(),attackKey:combatState.attackKey,attackGroup:combatState.attackGroup,hitType:arc.type,zoneId:arc.id});
+      const raw=arc.damage*(.82+hit.quality*.42)*(volume.mult||1)*weaponMult;
+      const motion=basis.forward.clone();
+      const point=sample.point.clone().addScaledVector(motion,-Math.min(.35,hit.dist*.12));
+      const cand={zone:arc,volume,damage:Math.max(1,Math.round(raw)),speed:0,quality:hit.quality,point,motion,dist:hit.dist};
+      if(!best || cand.damage>best.damage || (cand.damage===best.damage && cand.quality>best.quality)) best=cand;
+    }
+  }
+  return best;
+}
+function dummyArcSamples(targetRoot=dummyRoot,targetScale=getDummyHeightScale()){
+  if(!targetRoot) return [];
+  return getDummyVolumesLocal().map(vol=>({point:targetRoot.localToWorld(vol.c.clone()), r:vol.r*targetScale, volume:vol}));
+}
 function detectDummyHits(dt){
-  if(!combatState.attack || !PC.weaponRoot) return;
+  if(!combatState.attack || !isAttackArcActive(combatState.attack,combatState.t)) return;
   if(!combatState.hitIds) combatState.hitIds=new Set();
-  const zones=getWeaponHitZones();
+  const arcs=getAttackArcVolumes(), basis=attackArcBasis();
   if(dummyState.alive){
     let best=null;
-    for(const zone of zones){const hitId='main:'+zone.id; if(combatState.hitIds.has(hitId)) continue; const cand=testZoneAgainstDummy(getZoneWorld(zone,dummyState.prevZones),dt,dummyRoot,getDummyHeightScale()); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
+    for(const arc of arcs){const hitId='main:'+arc.id; if(combatState.hitIds.has(hitId)) continue; const cand=testTargetAgainstAttackArcs(dummyArcSamples(dummyRoot,getDummyHeightScale()),[arc],basis); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
     if(best){combatState.hitIds.add(best.hitId); applyDummyHit(best);}
   }
   for(const d of dummyState.edgeDummies){
     if(!d.alive) continue;
     let best=null;
-    for(const zone of zones){const hitId=d.id+':'+zone.id; if(combatState.hitIds.has(hitId)) continue; const cand=testZoneAgainstDummy(getZoneWorld(zone,d.prevZones),dt,d.root,getDummyHeightScale()); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
+    for(const arc of arcs){const hitId=d.id+':'+arc.id; if(combatState.hitIds.has(hitId)) continue; const cand=testTargetAgainstAttackArcs(dummyArcSamples(d.root,getDummyHeightScale()),[arc],basis); if(cand && (!best || cand.damage>best.damage)) best={...cand,hitId};}
     if(best){combatState.hitIds.add(best.hitId); applyEdgeDummyHit(d,best);}
   }
 }
@@ -1175,29 +1217,14 @@ function applyEdgeDummyHit(d,hit){
 }
 
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
-  if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
+  if(!combatState.attack || !isAttackArcActive(combatState.attack,combatState.t) || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
-  const zones = getWeaponHitZones();
+  const arcs = getAttackArcVolumes(), basis=attackArcBasis();
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
-    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
-    let best = null;
-    for(const zone of zones){
-      const a = PC.weaponRoot.localToWorld(zone.from.clone());
-      const b = PC.weaponRoot.localToWorld(zone.to.clone());
-      const threshold = e.radius + zone.radius + .46 + (zone.detectionBonus || .10);
-      let bestDist = Infinity, bestCenter = hitSamples[1];
-      for(const center of hitSamples){ const d = pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
-      if(bestDist <= threshold){
-        const quality = 1 - clamp(bestDist / threshold, 0, 1);
-        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
-        const raw = zone.damage * (.82 + quality * .42) * weaponMult;
-        const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
-        const cand = { zone, damage: Math.max(1, Math.round(raw)), point: bestCenter.clone().lerp(tipScene, .25), motion };
-        if(!best || cand.damage > best.damage) best = cand;
-      }
-    }
+    const hitSamples = [.24, .52, .80].map(k => ({point:new THREE.Vector3(e.x, h * k, e.z), r:e.radius, volume:{name:e.kind, mult:1, r:e.radius}}));
+    const best = testTargetAgainstAttackArcs(hitSamples,arcs,basis,{name:e.kind, mult:1, r:e.radius});
     if(best){
       combatState.hitIds.add(e);
       const killed = enemySystem.damageEnemy(e, best.damage, { x: best.motion.x * best.zone.stagger, z: best.motion.z * best.zone.stagger });
