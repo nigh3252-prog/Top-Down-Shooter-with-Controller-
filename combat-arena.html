@@ -288,7 +288,7 @@ const arena = {
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
-  paused:false, started:false,
+  paused:false, started:false, cycleMode:false,
 };
 function applySwingFeel(s){
   arena.swing.s = s;
@@ -367,6 +367,7 @@ function cycleWeapon(dir=1){
   const next = WEAPON_ORDER[(idx + dir + WEAPON_ORDER.length) % WEAPON_ORDER.length];
   PC.selectCombatWeapon(next);
   StoneSettings.set('arena.weapon', next);
+  respawn();   // weapon swap = full scene reset
   announce(WEAPONS[next].label, .9);
 }
 
@@ -584,7 +585,13 @@ function watchPlayerState(dt){
   arena.prevHp = hp;
   if(enemySystem.wave !== arena.prevWave){
     arena.prevWave = enemySystem.wave;
-    announce('WAVE ' + enemySystem.wave);
+    if(arena.cycleMode){
+      // director already advanced to the next mode via cycleOnWaveClear
+      updatePill();
+      announce('WAVE ' + enemySystem.wave + ' · ' + modeLabel(enemySystem.director.getMode()));
+    } else {
+      announce('WAVE ' + enemySystem.wave);
+    }
   }
 }
 
@@ -732,10 +739,15 @@ document.querySelectorAll('button.sect').forEach(h=>{
 /* director mode grid */
 const modeGrid=document.getElementById('modeGrid');
 const modeName=document.getElementById('modeName'), modeSub=document.getElementById('modeSub');
-function setMode(id){
-  enemySystem.setDirectorMode(id);
-  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===id));
+const CYCLE_MODE_ID = 'cycle';
+function modeLabel(id){ return DIRECTOR_MODES.find(m=>m.id===id)?.label || id; }
+function setMode(id, { reset = true } = {}){
+  arena.cycleMode = (id === CYCLE_MODE_ID);
+  enemySystem.setCycleOnWaveClear(arena.cycleMode);
+  if(!arena.cycleMode) enemySystem.setDirectorMode(id);
+  StoneSettings.set('arena.directorMode', id);   // picked mode sticks across reloads
   updatePill();
+  if(reset) respawn();   // switching director mode = full scene reset
 }
 DIRECTOR_MODES.forEach(m=>{
   const b=document.createElement('button');
@@ -743,11 +755,18 @@ DIRECTOR_MODES.forEach(m=>{
   b.addEventListener('click', ()=>setMode(m.id));
   modeGrid.appendChild(b);
 });
+{ // CYCLE pseudo-mode: rotates through the real modes each wave
+  const b=document.createElement('button');
+  b.textContent='Cycle All'; b.dataset.id=CYCLE_MODE_ID;
+  b.addEventListener('click', ()=>setMode(CYCLE_MODE_ID));
+  modeGrid.appendChild(b);
+}
 function updatePill(){
   const mode = enemySystem.director.getMode();
-  modeName.textContent = DIRECTOR_MODES.find(m=>m.id===mode)?.label || mode;
+  modeName.textContent = (arena.cycleMode ? 'CYCLE · ' : '') + modeLabel(mode);
   modeSub.textContent = `${PC.currentWeapon().label} · ${arena.stance ? arena.stance.name : '—'}`;
-  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===mode));
+  const active = arena.cycleMode ? CYCLE_MODE_ID : mode;
+  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
 }
 /* sim sliders */
 const DIR_SLIDERS = [
@@ -939,7 +958,7 @@ window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, Hi
 spawnCharacter();
 PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
 if(!arena.stance) ensureStanceMatchesWeapon();
-setMode(enemySystem.director.getMode());
+setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 enemySystem.reset();
 arena.prevHp = enemySystem.playerHp;
 arena.prevWave = enemySystem.wave;
