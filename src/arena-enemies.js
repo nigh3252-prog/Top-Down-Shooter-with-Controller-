@@ -1,5 +1,5 @@
 // Combat Arena enemy system — a faithful port of the "Director Punch" prototype's
-// enemy simulation (grunt / dagger / mace / rock / captain), scaled to arena world
+// enemy simulation (grunt / dagger / mace / rock / charger / captain), scaled to arena world
 // units and rendered with the shared goblin rig (src/goblin-rig.js). The token
 // encounter director (src/combat-director.js) gates who may attack; enemies seek to
 // a tight hold distance and lunge-commit on the active phase, then a rock thrower
@@ -28,6 +28,7 @@ const ARCHETYPES = {
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
   rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
+  charger: { hp:58,  radius:1.02, height:4.38, speed:3.95, attack:'chargeRush',  score:28, weapon:'spear',      color:0x315fae, bellyColor:0x9cc8ff, armorColor:0x2f2f68, poseScale:1.08, charger:true },
   captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
 };
 
@@ -37,6 +38,7 @@ const EATK = {
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
   rockThrow:    { kind:'ranged', name:'Rock Throw',    range:3.3*S,  tokenCost:.5,   windup:.78, active:.08, recovery:.60, cooldown:2.05, damage:8,  arc:0,   knock:.2*S, projectile:true },
+  chargeRush:   { kind:'melee',  name:'Bull Rush',     range:2.25*S, tokenCost:1.4,  windup:.82, active:.46, recovery:.72, cooldown:2.35, damage:16, arc:.68, knock:.9*S, wantsSolo:true, charge:true },
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
 
@@ -119,6 +121,19 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       rockProp = new THREE.Mesh(new THREE.DodecahedronGeometry(.28, 0), mats.matIron);
       rockProp.position.set(.3, a.height*.6, .2); visual.weaponRigRoot.add(rockProp);
     }
+    let chargeCrest = null, chargeBanner = null;
+    if(a.charger){
+      chargeCrest = new THREE.Mesh(new THREE.ConeGeometry(a.radius*.24, a.height*.24, 4), mats.matGlow);
+      chargeCrest.name = 'charger blue head crest';
+      chargeCrest.position.set(0, a.height*.98, a.radius*.03);
+      chargeCrest.rotation.x = Math.PI*.5;
+      visual.headRoot.add(chargeCrest);
+      chargeBanner = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.55, .11, .08), mats.matGlow);
+      chargeBanner.name = 'charger shoulder stripe';
+      chargeBanner.position.set(0, a.height*.66, a.radius*.88);
+      visual.torsoRoot.add(chargeBanner);
+      visual.weaponRoot.scale.setScalar(1.12);
+    }
     root.position.set(x, 0, z); group.add(root);
     // Real-combat goblin (grunt): wield the real player weapon + a real basic
     // attack, and derive its reach/spacing from that geometry.
@@ -136,13 +151,14 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       hp:a.hp, maxHp:a.hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
+      isCharger:!!a.charger, hangBackDist:3.25*S, chargeVector:{ x:0, z:1 }, chargeSpeedMul:3.15,
       useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
-      root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
+      root, rockProp, chargeCrest, chargeBanner, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
     return e;
@@ -189,12 +205,17 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
     const a = e.useRealCombat ? e.realAtk : EATK[e.attackId];
     if(!a) return null;
+    if(e.isCharger){
+      const chargeMin = 1.65*S, chargeMax = 4.2*S;
+      return d >= chargeMin && d <= chargeMax ? a : null;
+    }
     return d <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
   }
   function startEnemyAttack(e, atk, p){
     e.attack = atk; e.state = 'windup'; e.stateTime = 0;
     e.windup = atk.windup; e.active = atk.active; e.recovery = atk.recovery; e.hitDone = false;
     e.facing = norm(p.x - e.x, p.z - e.z);
+    if(e.isCharger) e.chargeVector = { x:e.facing.x, z:e.facing.z };
     director.grant(e, atk);
   }
   function resolveEnemyMelee(e, p){
@@ -252,16 +273,28 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       e.x += e.vx*dt; e.z += e.vz*dt;
     }
     else if(e.state === 'windup'){
-      e.vx = e.vz = 0;
+      if(e.isCharger && e.stateTime < e.windup*.58){
+        const away = norm(e.x - p.x, e.z - p.z);
+        e.vx = away.x*e.speed*tuning.speedScale*.25;
+        e.vz = away.z*e.speed*tuning.speedScale*.25;
+        e.x += e.vx*dt; e.z += e.vz*dt;
+      } else e.vx = e.vz = 0;
       if(e.stateTime < e.windup*.45) e.facing = norm(p.x - e.x, p.z - e.z);
       if(e.stateTime >= e.windup){
         e.state = 'active'; e.stateTime = 0;
+        if(e.isCharger) e.chargeVector = { x:e.facing.x, z:e.facing.z };
         if(e.attack.projectile){ spawnProjectile(e); e.hitDone = true; }
       }
     }
     else if(e.state === 'active'){
       if(!e.attack.projectile){
-        e.x += e.facing.x*1.9*S*dt; e.z += e.facing.z*1.9*S*dt;   // lunge-commit
+        if(e.isCharger){
+          e.x += e.chargeVector.x*e.speed*tuning.speedScale*e.chargeSpeedMul*dt;
+          e.z += e.chargeVector.z*e.speed*tuning.speedScale*e.chargeSpeedMul*dt;
+          e.facing = e.chargeVector;                              // charge-commit: readable and dodgeable
+        } else {
+          e.x += e.facing.x*1.9*S*dt; e.z += e.facing.z*1.9*S*dt; // lunge-commit
+        }
         if(!e.hitDone) resolveEnemyMelee(e, p);
       }
       if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; }
@@ -277,9 +310,15 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget })){
         startEnemyAttack(e, att, p);
       } else {
-        const wantRange = e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S);
-        if(d > wantRange + .45*S) seekPlayer(e, p, dt);
-        else deniedBehavior(e, p, dt);
+        if(e.isCharger){
+          if(d > e.hangBackDist + .55*S) seekPlayer(e, p, dt);
+          else if(d < e.hangBackDist - .55*S) keepRange(e, p, dt, e.hangBackDist);
+          else orbitPlayer(e, p, dt, .38);
+        } else {
+          const wantRange = e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S);
+          if(d > wantRange + .45*S) seekPlayer(e, p, dt);
+          else deniedBehavior(e, p, dt);
+        }
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
@@ -312,7 +351,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function applyPunchPose(e){
     const k = e.poseScale ?? 1;
     let lean = 0, weaponA = -.4;
-    if(e.state === 'windup'){ const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1)); lean = -.38*pr; weaponA = -.4 - 1.6*pr; }
+    if(e.isCharger && e.state === 'windup'){ const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1)); lean = -.55*pr; weaponA = -1.35 - .65*pr; }
+    else if(e.isCharger && e.state === 'active'){ lean = .58; weaponA = 1.25; }
+    else if(e.state === 'windup'){ const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1)); lean = -.38*pr; weaponA = -.4 - 1.6*pr; }
     else if(e.state === 'active'){ lean = .40; weaponA = .9; }
     else if(e.state === 'recovery'){ const pr = clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1); lean = .40*(1-pr); weaponA = .9 - 1.3*pr; }
     else if(e.stunned > 0){ lean = Math.sin(time*26)*.06; }
@@ -361,7 +402,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   }
 
   /* ---------- waves ---------- */
-  const MIX = ['grunt','dagger','grunt','rock','dagger','grunt','mace','dagger','grunt'];
+  const MIX = ['grunt','dagger','charger','grunt','rock','dagger','grunt','mace','charger','dagger','grunt'];
   function chooseSpawnKind(i){
     if(director.getMode() === 'eliteSpotlight' && i === 0) return 'captain';
     return MIX[i % MIX.length];
