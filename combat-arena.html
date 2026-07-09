@@ -93,7 +93,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs"
   }
 }
 </script>
@@ -181,6 +182,7 @@ import { installCombatAudioDirector } from './src/combat-audio.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
 import { installHitFeel, hitStageFromImpact } from './src/hit-feel.js';
+import { createArenaPhysicsWorld } from './src/physics-world.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -365,7 +367,8 @@ function cycleWeapon(dir=1){
 }
 
 /* ---------- enemies ---------- */
-const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA });
+const PhysicsWorld = await createArenaPhysicsWorld({ THREE, arenaRadius: ARENA });
+const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA, physicsWorld: PhysicsWorld });
 
 /* ---------- facing ---------- */
 function nearestEnemy(maxDist=Infinity){

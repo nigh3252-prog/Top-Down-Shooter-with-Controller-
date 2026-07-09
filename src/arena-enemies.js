@@ -41,7 +41,7 @@ const EATK = {
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
 
-export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18 } = {}){
+export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18, physicsWorld = null } = {}){
   const rig = installGoblinRig(THREE);
   // Shared choreography interpreter — the exact same pose sampler the player uses
   // (src/attack-interpreter.js), so a grunt swings the real player animation.
@@ -142,7 +142,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
-      knockX:0, knockZ:0, flash:0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0, bobPhase:Math.random()*6.28,
+      knockX:0, knockZ:0, flash:0, hitT:0, hitMax:0, hitStage:0, hitDir:{x:0,z:1}, lean:0, squash:0, lift:0, airY:0, airVy:0, launchedT:0, physicsT:0, physicsMode:'animated', physicsBody:null, physicsCollider:null, physicsHeight:0, wallSplatT:0, onSecondaryHit:null, spin:0, spinVel:0, bobPhase:Math.random()*6.28,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -241,6 +241,12 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
+    if(e.physicsMode === 'rigid'){
+      e.physicsT = Math.max(0, (e.physicsT || 0) - dt);
+      e.wallSplatT = Math.max(0, (e.wallSplatT || 0) - dt);
+      physicsWorld?.syncEnemy(e);
+      return;
+    }
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.hitT = Math.max(0, (e.hitT || 0) - dt); e.launchedT = Math.max(0, (e.launchedT || 0) - dt); e.physicsT = Math.max(0, (e.physicsT || 0) - dt); e.wallSplatT = Math.max(0, (e.wallSplatT || 0) - dt); e.spin = (e.spin || 0) + (e.spinVel || 0) * dt; e.spinVel = (e.spinVel || 0) * Math.pow(e.physicsT > 0 ? .42 : .04, dt);
@@ -304,6 +310,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
           const min = a.radius + b.radius;
           if(d >= min) continue;
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
+          if(a.physicsMode === 'rigid' || b.physicsMode === 'rigid') continue;
           const push = (min - d) * .5 / d;
           a.x -= dx*push; a.z -= dz*push; b.x += dx*push; b.z += dz*push;
         }
@@ -359,6 +366,16 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
   function updateEnemyVisual(e){
+    if(e.physicsMode === 'rigid'){
+      physicsWorld?.syncEnemy(e);
+      if(e.telegraph) e.telegraph.visible = false;
+      if(e.tokenRing) e.tokenRing.visible = false;
+      if(e.barBg) e.barBg.visible = false;
+      if(e.bar) e.bar.visible = false;
+      return;
+    }
+    if(e.barBg) e.barBg.visible = true;
+    if(e.bar) e.bar.visible = true;
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
     e.root.position.set(e.x, 0, e.z);
     const reactK = e.hitT > 0 && e.hitMax > 0 ? e.hitT / e.hitMax : 0;
@@ -389,14 +406,27 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function finishWave(){ wave++; director.onWaveClear(); startWave(); }
 
   function removeEnemy(e){
+    physicsWorld?.removeEnemyBody(e);
     const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1);
     if(e.root.parent) e.root.parent.remove(e.root);
+  }
+  function beginRigidPhysics(e, reaction, knock, opts = {}){
+    if(!physicsWorld || e.physicsMode === 'rigid') return;
+    const d = opts.dir || reaction.hitDir || { x:knock.x || 0, z:knock.z || 1 };
+    const force = Math.min(24, 8.5 + (reaction.knockMul || 1) * 3.2);
+    const lift = Math.min(12, 4.6 + (reaction.lift || 0) * 7.5);
+    const torque = opts.ragdoll ? 18 : 12;
+    e.heightScale = tuning.heightScale;
+    e.vx = 0; e.vz = 0; e.knockX = 0; e.knockZ = 0; e.airVy = 0;
+    e.attack = null; e.state = 'ragdoll'; e.stunned = Math.max(e.stunned || 0, 1.2);
+    physicsWorld.createEnemyBody(e, { dir:d, force, lift, torque });
   }
   function applyHitReaction(e, amount, knock, opts = {}){
     const reaction = buildHitReaction({ stage:opts.ragdoll ? 3 : (opts.stage || opts.hitStage || (amount >= 34 ? 3 : amount >= 18 ? 2 : 1)), killed:e.hp <= 0, dir:opts.dir || { x:knock.x || 0, z:knock.z || 1 }, weight:e.isElite ? 1.7 : 1 });
     e.hitStage = reaction.hitStage; e.hitT = reaction.hitT; e.hitMax = reaction.hitMax; e.hitDir = reaction.hitDir; e.lean = reaction.lean; e.squash = reaction.squash; e.lift = reaction.lift; e.spinVel += reaction.spinVel;
     e.airVy = Math.max(e.airVy || 0, (reaction.airVy || 0) * (opts.ragdoll ? 2.15 : 1)); e.launchedT = Math.max(e.launchedT || 0, opts.ragdoll ? 2.1 : (reaction.launchedT || 0)); e.physicsT = Math.max(e.physicsT || 0, opts.ragdoll ? 2.4 : 0); e.lastKnockMul = (reaction.knockMul || 1) * (opts.ragdoll ? 1.65 : 1); e.onSecondaryHit = opts.onSecondaryHit || null;
     e.stunned = Math.max(e.stunned, reaction.stunned);
+    if(opts.ragdoll || reaction.hitStage >= 3) beginRigidPhysics(e, reaction, knock, opts);
     return reaction;
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
@@ -418,6 +448,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function clearDeathPieces(){ deathPieces.forEach(p => p.mesh?.parent && p.mesh.parent.remove(p.mesh)); deathPieces.length = 0; }
   function reset(){
     director.reset();
+    enemies.forEach(e => physicsWorld?.removeEnemyBody(e));
     enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root));
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
     clearDeathPieces();
@@ -428,6 +459,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function update(dt, player){
     lastPlayer = player || lastPlayer;
     time += dt;
+    physicsWorld?.step(dt);
     director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget });
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
