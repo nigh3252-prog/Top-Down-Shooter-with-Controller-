@@ -29,22 +29,30 @@ const DEFAULTS = {
   sound:    1.0,   // layered impact SFX gain (0 = off)
 };
 
-const SLIDERS = [
-  ['master',    'MASTER INTENSITY', 0, 2,   .01],
-  ['hitstop',   'Hitstop',          0, .3,  .005],
-  ['shake',     'Screen Shake',     0, 2,   .01],
-  ['kick',      'Camera Kick',      0, 2,   .01],
-  ['zoom',      'Zoom Punch',       0, 2,   .01],
-  ['knock',     'Knockback',        0, 4,   .05],
-  ['pop',       'Pop + Squash',     0, 2,   .01],
-  ['particles', 'Particles',        0, 150, 1],
-  ['flash',     'Impact Flash',     0, 2,   .01],
-  ['sound',     'Impact Sound',     0, 2,   .01],
-];
-const CHECKS = [
-  ['slowmo',   'Slow-mo aftertaste'],
-  ['gore',     'Blood permanence'],
-  ['floaters', 'Floating text'],
+// Slider/checkbox metadata, grouped into collapsible sections so the panel can
+// be shrunk on a phone. Master intensity always renders outside any section.
+const SLIDER_DEFS = {
+  hitstop:   ['Hitstop',        0, .3,  .005],
+  shake:     ['Screen Shake',   0, 2,   .01],
+  kick:      ['Camera Kick',    0, 2,   .01],
+  zoom:      ['Zoom Punch',     0, 2,   .01],
+  knock:     ['Knockback',      0, 4,   .05],
+  pop:       ['Pop + Squash',   0, 2,   .01],
+  particles: ['Particles',      0, 150, 1],
+  flash:     ['Impact Flash',   0, 2,   .01],
+  sound:     ['Impact Sound',   0, 2,   .01],
+};
+const CHECK_DEFS = {
+  slowmo:   'Slow-mo aftertaste',
+  gore:     'Blood permanence',
+  floaters: 'Floating text',
+};
+const SECTIONS = [
+  { id: 'time',   label: 'TIME & HITSTOP', sliders: ['hitstop'],            checks: ['slowmo'] },
+  { id: 'camera', label: 'CAMERA',         sliders: ['shake', 'kick', 'zoom'] },
+  { id: 'body',   label: 'ENEMY BODY',     sliders: ['knock', 'pop'] },
+  { id: 'vfx',    label: 'VFX & GORE',     sliders: ['particles', 'flash'], checks: ['gore', 'floaters'] },
+  { id: 'audio',  label: 'AUDIO',          sliders: ['sound'] },
 ];
 
 export function installHitFeel({ THREE, scene, camera, settings = null, audio = null } = {}) {
@@ -360,49 +368,92 @@ export function installHitFeel({ THREE, scene, camera, settings = null, audio = 
     if (panel || typeof document === 'undefined') return panel;
     panel = document.createElement('div');
     panel.id = 'hitFeelPanel';
-    panel.style.cssText = 'position:fixed;top:52px;right:8px;z-index:40;width:min(74vw,270px);' +
-      'max-height:calc(100vh - 66px);overflow-y:auto;padding:10px 12px 14px;box-sizing:border-box;' +
+    panel.style.cssText = 'position:fixed;top:52px;right:8px;z-index:40;width:min(78vw,280px);' +
+      'max-height:calc(100vh - 66px);overflow-y:auto;padding:12px 18px 16px;box-sizing:border-box;' +
       'background:linear-gradient(180deg,rgba(10,20,22,.95),rgba(10,20,22,.88));border:1px solid #6e3a24;' +
       'border-radius:8px;font-family:ui-monospace,Menlo,Consolas,monospace;color:#9fd2c9;' +
       '-webkit-overflow-scrolling:touch;touch-action:pan-y;display:none';
     const title = document.createElement('div');
     title.textContent = 'HIT FEEL';
-    title.style.cssText = 'color:#e8a04c;font-size:11px;letter-spacing:.2em;margin-bottom:8px';
+    title.style.cssText = 'color:#e8a04c;font-size:11px;letter-spacing:.2em;margin-bottom:6px';
     panel.appendChild(title);
+    // pure dead-space strip: nothing here to drag, just room to grab-scroll
+    const scrollHint = document.createElement('div');
+    scrollHint.textContent = '⋮ drag here to scroll ⋮';
+    scrollHint.style.cssText = 'text-align:center;font-size:8.5px;letter-spacing:.14em;color:#33524e;padding:4px 0 14px';
+    panel.appendChild(scrollHint);
 
     const rows = {};
-    for (const [key, label, min, max, step] of SLIDERS) {
+    // Sliders render inside an 84%-wide inner wrapper, leaving an 8% dead-space
+    // gutter on each side of every row — a thumb-free strip to grab when
+    // scrolling the panel with a thumb on a phone.
+    function appendSlider(container, key, label, min, max, step, emphasize) {
       const row = document.createElement('div');
-      row.style.cssText = 'margin-bottom:9px';
+      row.style.cssText = 'margin-bottom:20px';
       const lab = document.createElement('div');
-      lab.style.cssText = 'font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px' +
-        (key === 'master' ? ';color:#e8a04c;font-weight:bold' : '');
+      lab.style.cssText = 'font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:4px' +
+        (emphasize ? ';color:#e8a04c;font-weight:bold' : '');
       const name = document.createElement('span'); name.textContent = label;
       const val = document.createElement('span'); val.style.color = '#e8a04c';
       lab.append(name, val);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'padding:6px 8%';
       const input = document.createElement('input');
       input.type = 'range'; input.min = min; input.max = max; input.step = step;
       input.value = tuning[key];
-      input.style.cssText = 'width:100%;accent-color:#e8a04c';
+      input.style.cssText = 'width:100%;display:block;accent-color:#e8a04c';
       const sync = () => { val.textContent = Number(input.value).toFixed(step >= 1 ? 0 : 2); };
       input.addEventListener('input', () => { setTune(key, input.value); sync(); });
       sync();
-      row.append(lab, input);
-      panel.appendChild(row);
+      wrap.appendChild(input);
+      row.append(lab, wrap);
+      container.appendChild(row);
       rows[key] = { input, sync };
     }
-    for (const [key, label] of CHECKS) {
+    function appendCheck(container, key, label) {
       const row = document.createElement('label');
-      row.style.cssText = 'display:flex;gap:7px;align-items:center;font-size:9.5px;letter-spacing:.06em;margin-bottom:7px;cursor:pointer';
+      row.style.cssText = 'display:flex;gap:9px;align-items:center;font-size:9.5px;letter-spacing:.06em;' +
+        'margin-bottom:16px;cursor:pointer;padding:4px 0';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = tuning[key] > 0;
-      input.style.accentColor = '#e8a04c';
+      input.style.cssText = 'accent-color:#e8a04c;width:19px;height:19px';
       input.addEventListener('input', () => setTune(key, input.checked ? 1 : 0));
       row.append(input, document.createTextNode(label));
-      panel.appendChild(row);
+      container.appendChild(row);
       rows[key] = { input, sync: () => { input.checked = tuning[key] > 0; } };
     }
+
+    appendSlider(panel, 'master', 'MASTER INTENSITY', 0, 2, .01, true);
+
+    for (const section of SECTIONS) {
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.style.cssText = 'display:block;width:100%;text-align:left;font-family:inherit;font-size:10px;' +
+        'letter-spacing:.14em;color:#7fb8b0;background:rgba(30,52,52,.4);border:1px solid #24403e;' +
+        'border-radius:5px;padding:9px 10px;margin:6px 0 12px;cursor:pointer';
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:2px 0 0';
+      const collapseKey = 'hitfeel.section.' + section.id;
+      let collapsed = !!settings?.get?.(collapseKey, false);
+      const applyCollapsed = () => {
+        body.style.display = collapsed ? 'none' : 'block';
+        header.textContent = (collapsed ? '▸ ' : '▾ ') + section.label;
+      };
+      applyCollapsed();
+      header.addEventListener('click', () => {
+        collapsed = !collapsed;
+        settings?.set?.(collapseKey, collapsed);
+        applyCollapsed();
+      });
+      panel.append(header, body);
+      for (const key of section.sliders || []) {
+        const [label, min, max, step] = SLIDER_DEFS[key];
+        appendSlider(body, key, label, min, max, step, false);
+      }
+      for (const key of section.checks || []) appendCheck(body, key, CHECK_DEFS[key]);
+    }
+
     const btnCss = 'width:100%;font-family:inherit;font-size:10px;letter-spacing:.12em;color:#e8a04c;' +
       'background:rgba(110,58,36,.16);border:1px solid #6e3a24;border-radius:5px;padding:9px 0;margin-top:6px';
     const testBtn = document.createElement('button');
@@ -419,8 +470,8 @@ export function installHitFeel({ THREE, scene, camera, settings = null, audio = 
     resetBtn.style.cssText = btnCss;
     resetBtn.addEventListener('click', () => {
       for (const k of Object.keys(DEFAULTS)) setTune(k, DEFAULTS[k]);
-      for (const [key] of SLIDERS) { rows[key].input.value = tuning[key]; rows[key].sync(); }
-      for (const [key] of CHECKS) rows[key].sync();
+      for (const key of ['master', ...Object.keys(SLIDER_DEFS)]) { rows[key].input.value = tuning[key]; rows[key].sync(); }
+      for (const key of Object.keys(CHECK_DEFS)) rows[key].sync();
     });
     panel.append(testBtn, resetBtn);
     document.body.appendChild(panel);

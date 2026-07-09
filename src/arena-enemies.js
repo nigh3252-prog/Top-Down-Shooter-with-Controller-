@@ -57,7 +57,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   const enemies = [];
   const projectiles = [];
   const deathPieces = [];
-  const tuning = { playerHp:100, lastPlayerHit:'', heightScale:1, speedScale:1, waveSize:6, idleRangeScale:3 };
+  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let lastPlayer = { x:0, z:0, invulnerable:false };
 
@@ -132,9 +132,10 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       holdDist = reach * HOLD_FRAC;
       visual.weaponRoot.scale.setScalar(GOBLIN_WEAPON_SCALE);
     }
+    const hp = Math.round(a.hp * tuning.hpScale);
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
-      hp:a.hp, maxHp:a.hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
+      hp, maxHp:hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
       useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
@@ -463,10 +464,12 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     setWaveSize:(v)=>{ tuning.waveSize = clamp(Math.round(Number(v) || 6), 1, 20); },
     setSpeedScale:(v)=>{ tuning.speedScale = clamp(Number(v) || 1, .25, 1.5); },
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
+    setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },
+    get hpScale(){ return tuning.hpScale; },
     get waveSize(){ return tuning.waveSize; },
     get idleRangeScale(){ return tuning.idleRangeScale; },
     get wave(){ return wave; },
