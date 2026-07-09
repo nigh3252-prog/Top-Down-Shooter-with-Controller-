@@ -47,11 +47,11 @@ export function installHitFeel({ THREE, scene, camera, overlayParent = document.
   const ownedEffects = effects || [];
   const LEVEL_SCALE = Object.freeze({ off:0, low:.35, medium:.68, high:1 });
   const BLOOD_LEVEL_SCALE = Object.freeze({ off:0, low:.25, medium:.5, high:.5 });
-  const BLOOD_SIZE_SCALE = Object.freeze({ off:0, low:6, medium:24, high:100 });
+  const BLOOD_SIZE_SCALE = Object.freeze({ off:0, low:6, medium:24, high:50 });
   const GROUND_LEVEL_SCALE = Object.freeze({ off:0, low:.55, medium:1.15, high:2.1 });
   const effectMix = {
-    overlay:'high', shockwave:'high', slash:'high', particles:'high',
-    bloodSpray:'high', groundBlood:'high', labels:'high', camera:'high', timeScale:'high',
+    overlay:'off', shockwave:'off', slash:'off', particles:'off',
+    bloodSpray:'off', groundBlood:'off', labels:'off', camera:'off', timeScale:'off',
     ...(effectLevels || {})
   };
   function setEffectLevel(name, level){ if(Object.prototype.hasOwnProperty.call(LEVEL_SCALE, level)) effectMix[name] = level; }
