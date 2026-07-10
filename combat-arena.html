@@ -49,11 +49,13 @@
   .pbtn .btnArrow{font-size:25px;line-height:1;font-weight:700;letter-spacing:0}
   .pbtn .btnLabel{font-size:7px;line-height:1;letter-spacing:.08em}
   #atkBtn{border-color:#6e3a24;color:#e8a04c}
+  #atkArrow{font-size:18px;letter-spacing:2px}
   #heavyBtn{border-color:#5f4a8f;color:#cdb6ff}
   #heavyBtn .btnArrow{color:#cdb6ff}
   /* ---- stance card slots ---- */
-  #cardRow{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:7px;
+  #cardRow{position:fixed;bottom:-6px;left:max(10px,env(safe-area-inset-left));display:flex;gap:7px;
     z-index:20;align-items:flex-end}
+  #handCards{display:flex;gap:7px;align-items:flex-end}
   .scard{position:relative;overflow:hidden;width:58px;height:78px;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:5px;box-sizing:border-box;
     text-align:left;font-family:inherit;background:rgba(14,28,30,.92);border:1px solid #2c4a47;
     border-radius:7px;color:#9fd2c9;box-shadow:0 3px 0 #081112;touch-action:none}
@@ -68,7 +70,14 @@
   .scard.draw-in{animation:cardDrawIn .25s ease-out both}
   @keyframes cardRing{from{transform:scale(.92);opacity:.95}to{transform:scale(1.18);opacity:0}}
   @keyframes cardDrawIn{from{transform:translateY(10px);opacity:.25}to{transform:translateY(0);opacity:1}}
-  #deckSide{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+  #deckSide{display:flex;flex-direction:column;gap:5px;align-items:center;margin-bottom:13px}
+  #drawQueue{display:flex;flex-direction:column;gap:4px;align-items:center}
+  #drawQueue.shift-down{animation:queueShiftDown .22s ease-out both}
+  .queuedCard{display:block;width:27px;height:27px;box-sizing:border-box;border:1px solid rgba(44,74,71,.48);
+    border-radius:4px;background:rgba(14,28,30,.38);opacity:.26;transition:opacity .12s,border-color .12s}
+  .queuedCard.filled{opacity:.82;border-color:#2c4a47;background:linear-gradient(145deg,rgba(36,67,65,.86),rgba(14,28,30,.9))}
+  .queuedCard.filled::after{content:"";display:block;width:13px;height:13px;margin:6px;border:1px solid rgba(159,210,201,.28);border-radius:2px}
+  @keyframes queueShiftDown{from{transform:translateY(-31px);opacity:.45}to{transform:translateY(0);opacity:1}}
   #shuffleBtn{width:30px;height:30px;font-family:inherit;font-size:16px;line-height:1;color:#9fd2c9;
     background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:0;touch-action:none}
   #shuffleBtn:active{background:#2c4a47}
@@ -127,7 +136,7 @@
     background:transparent;border:1px solid #2c4a47;border-radius:7px;padding:12px 0;margin-bottom:10px}
   #sgFsBtn:active{background:#2c4a47}
   @media (max-width:560px){
-    #cardRow{left:max(12px,env(safe-area-inset-left));transform:none}
+    #cardRow{left:max(8px,env(safe-area-inset-left))}
     .scard{width:54px;height:74px}
   }
 </style>
@@ -152,23 +161,30 @@
 <div id="roomTransition"><div class="rtTitle" id="rtTitle">ROOM TRANSITION</div></div>
 <div id="joyBase"></div><div id="joyKnob"></div>
 <div class="btnrow">
+  <button class="pbtn" id="atkBtn" aria-label="Light attack">
+    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">· ·</span><span class="btnLabel">LIGHT</span>
+  </button>
   <button class="pbtn" id="heavyBtn" aria-label="Heavy attack">
     <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span><span class="btnLabel">HEAVY</span>
   </button>
-  <button class="pbtn" id="atkBtn" aria-label="Light attack">
-    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">·</span><span class="btnLabel">LIGHT</span>
-  </button>
 </div>
 <div id="cardRow">
-  <div id="deckSide"><button id="shuffleBtn" aria-label="Shuffle stance cards">↻</button></div>
-  <button class="scard" id="card0">
-    <span class="ckey">LB</span><span class="cicon" aria-hidden="true"></span>
-    <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
-  </button>
-  <button class="scard" id="card1">
-    <span class="ckey">RB</span><span class="cicon" aria-hidden="true"></span>
-    <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
-  </button>
+  <div id="deckSide">
+    <div id="drawQueue" aria-label="Upcoming stance cards">
+      <span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span>
+    </div>
+    <button id="shuffleBtn" aria-label="Shuffle stance cards">↻</button>
+  </div>
+  <div id="handCards">
+    <button class="scard" id="card0">
+      <span class="ckey">LB</span><span class="cicon" aria-hidden="true"></span>
+      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
+    </button>
+    <button class="scard" id="card1">
+      <span class="ckey">RB</span><span class="cicon" aria-hidden="true"></span>
+      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
+    </button>
+  </div>
 </div>
 <div id="panel" class="hidden">
   <div id="tabs">
@@ -1246,13 +1262,15 @@ const stWrap=document.getElementById('stWrap'), stFill=document.getElementById('
 /* stance card widgets */
 const cardEls=[document.getElementById('card0'), document.getElementById('card1')];
 const shuffleBtn=document.getElementById('shuffleBtn');
+const drawQueue=document.getElementById('drawQueue'), queuedCardEls=[...drawQueue.querySelectorAll('.queuedCard')];
 const atkArrow=document.getElementById('atkArrow'), heavyArrow=document.getElementById('heavyArrow');
-const cardAnim = { played:-1, drawn:new Set() };
-function markCardAnimation(slot){ cardAnim.played = slot; cardAnim.drawn.add(slot); }
+const cardAnim = { played:-1, drawn:new Set(), queueShift:false };
+function markCardAnimation(slot){ cardAnim.played = slot; cardAnim.drawn.add(slot); cardAnim.queueShift = true; }
 cardEls.forEach((el,i)=>el.addEventListener('animationend', e=>{
   if(e.animationName === 'cardRing') el.classList.remove('played');
   if(e.animationName === 'cardDrawIn'){ el.classList.remove('draw-in'); cardAnim.drawn.delete(i); }
 }));
+drawQueue.addEventListener('animationend', ()=>drawQueue.classList.remove('shift-down'));
 function renderCards(){
   deck.hand.forEach((c,i)=>{
     const el=cardEls[i];
@@ -1263,6 +1281,20 @@ function renderCards(){
     light.textContent = c ? c.chain.slice(0,2).map(key=>moveArrow(PC.ATTACKS[key] || {})).join(' ') : '· ·';
     heavy.textContent = c ? moveArrow(PC.ATTACKS[c.chain[2]] || {}) : '·';
   });
+  const upcoming = [...deck.upcoming].reverse();
+  const queueOffset = queuedCardEls.length - upcoming.length;
+  queuedCardEls.forEach((el,i)=>{
+    const c = i >= queueOffset ? upcoming[i - queueOffset] : null;
+    el.classList.toggle('filled', !!c);
+    el.dataset.cardId = c?.id || '';
+    el.setAttribute('aria-label', c ? `Upcoming ${c.name.replace(/^S\d+\s*/,'')}` : 'Empty draw slot');
+  });
+  if(cardAnim.queueShift){
+    drawQueue.classList.remove('shift-down');
+    void drawQueue.offsetWidth;
+    drawQueue.classList.add('shift-down');
+    cardAnim.queueShift = false;
+  }
   shuffleBtn.textContent = deck.shuffling ? '…' : '↻';
   cardAnim.played = -1;
 }
@@ -1272,9 +1304,8 @@ const msgEl=document.getElementById('msg');
 let msgT=0;
 function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
 function updateAttackPreviews(){
-  const lightSlot = arena.chain.stage === 'hit1Ready' ? 1 : 0;
-  const lightMove = chainMove(lightSlot), heavyMove = chainMove(2);
-  atkArrow.textContent = moveArrow(lightMove?.att || {});
+  const lightMoves = [chainMove(0), chainMove(1)], heavyMove = chainMove(2);
+  atkArrow.textContent = lightMoves.map(move=>moveArrow(move?.att || {})).join(' ');
   heavyArrow.textContent = moveArrow(heavyMove?.att || {});
   const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher' || !!combatState.attack;
   const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || !!combatState.attack;
