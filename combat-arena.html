@@ -23,8 +23,10 @@
   #hud{position:fixed;top:52px;left:10px;z-index:10;pointer-events:none}
   #hpWrap{width:150px;height:9px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
   #hpFill{height:100%;width:100%;background:linear-gradient(90deg,#e8a04c,#c96a35);transition:width .12s}
-  #stWrap{width:150px;height:6px;margin-top:3px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
-  #stFill{height:100%;width:100%;background:linear-gradient(90deg,#7fd0a8,#3f9f7a);transition:width .12s}
+  #stWrap{position:relative;width:150px;height:6px;margin-top:3px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
+  #stFill,#stPending{position:absolute;top:0;bottom:0;left:0;height:100%;transition:width .12s,left .12s}
+  #stPending{background:rgba(158,184,166,.38)}
+  #stFill{width:100%;background:linear-gradient(90deg,#7fd0a8,#3f9f7a)}
   #stWrap.exhaust{border-color:#ff9070}
   #stWrap.exhaust #stFill{background:#ff9070}
   #stats{margin-top:4px;color:#4a6f6a;font-size:10px;letter-spacing:.08em}
@@ -45,10 +47,11 @@
     display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;box-shadow:0 3px 0 #081112}
   .pbtn:active,.pbtn.held{background:#2c4a47;transform:translateY(2px);box-shadow:0 1px 0 #081112}
   #atkBtn{width:88px;height:88px;border-color:#6e3a24;color:#e8a04c}
+  #heavyBtn{width:88px;height:88px;border-color:#5f4a8f;color:#cdb6ff}
   /* ---- stance card slots ---- */
   #cardRow{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:10px;
     z-index:20;align-items:flex-end}
-  .scard{width:100px;height:66px;display:flex;gap:8px;padding:7px 8px;box-sizing:border-box;
+  .scard{position:relative;overflow:hidden;width:100px;height:66px;display:flex;gap:8px;padding:7px 8px;box-sizing:border-box;
     text-align:left;font-family:inherit;background:rgba(14,28,30,.88);border:1px solid #2c4a47;
     border-radius:8px;color:#9fd2c9;box-shadow:0 3px 0 #081112;touch-action:none}
   .scard:active{transform:translateY(2px);box-shadow:0 1px 0 #081112;background:#2c4a47}
@@ -58,6 +61,10 @@
   .scard .ckey{font-size:8px;color:#4a6f6a;letter-spacing:.12em}
   .scard .cname{font-size:9.5px;line-height:1.3;letter-spacing:.03em;overflow:hidden}
   .scard.empty{opacity:.35}
+  .scard.played::after{content:"";position:absolute;inset:-4px;border:2px solid rgba(255,230,150,.9);border-radius:10px;pointer-events:none;animation:cardRing .35s ease-out forwards}
+  .scard.draw-in{animation:cardDrawIn .25s ease-out both}
+  @keyframes cardRing{from{transform:scale(.92);opacity:.95}to{transform:scale(1.18);opacity:0}}
+  @keyframes cardDrawIn{from{transform:translateY(10px);opacity:.25}to{transform:translateY(0);opacity:1}}
   #deckSide{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
   #deckCount{color:#4a6f6a;font-size:9px;letter-spacing:.1em}
   #shuffleBtn{font-family:inherit;font-size:8.5px;letter-spacing:.08em;color:#9fd2c9;
@@ -135,7 +142,7 @@
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
-  <div id="stWrap"><div id="stFill"></div></div>
+  <div id="stWrap"><div id="stPending"></div><div id="stFill"></div></div>
   <div id="stats">WAVE 1 · SCORE 0</div>
   <div id="stateLbl">GUARD</div>
 </div>
@@ -144,7 +151,8 @@
 <div id="joyBase"></div><div id="joyKnob"></div>
 <div class="btnrow">
   <button class="pbtn" id="dgeBtn">DODGE</button>
-  <button class="pbtn" id="atkBtn">ATK<br>hold=charge</button>
+  <button class="pbtn" id="heavyBtn">HEAVY<br>hold</button>
+  <button class="pbtn" id="atkBtn">ATK</button>
 </div>
 <div id="cardRow">
   <div id="deckSide"><div id="deckCount">DECK 0</div><button id="shuffleBtn">SHUFFLE [R]</button></div>
@@ -187,10 +195,10 @@
       <div id="feelSliders"></div>
     </div>
     <button class="wide" id="testBtn">TEST THIS TIER</button>
-    <div class="ptitle" style="margin-top:10px">tap = chain the stance combo · hold = charge to cartoon</div>
+    <div class="ptitle" style="margin-top:10px">light chains the stance combo · heavy hold charges to cartoon</div>
   </div>
 </div>
-<div id="hint">stick/WASD move · ATK [J] hold charges · DODGE [K] · LB/RB or Q/E play card · Y/R shuffle · X weapon · M menu</div>
+<div id="hint">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DODGE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>
 <div id="err"></div>
 <div id="startGate">
   <div id="startCard">
@@ -205,7 +213,7 @@
 import * as THREE from 'three';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions } from './src/weapons.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
@@ -243,8 +251,9 @@ const CHARGE_MOVE_MULT = .35;
 const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
 const AUTO_FACE_RANGE = 14;
 /* stamina economy: swings drain it, playing a stance card is the only refill */
-const STAMINA = { max:100, start:100, swingCost:14, chargeCostMult:1.75,
-                  cardGain:40, shuffleTime:2, exhaustFlash:.35 };
+const STAMINA = { max:100, start:100, recoverTime:.85, recoverDelay:.08, chargeCostMult:1.75,
+                  costs:{ horizontal:18, vertical:14, stab:10, default:14 }, shuffleTime:2, exhaustFlash:.35 };
+const CHAIN = { comboWindow:.45, finisherWindow:.80, whiffLock:.20, postSecondLightLock:.35 };
 const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
 const CAM_HEIGHT = 20, CAM_BACK = 17.6;
 
@@ -321,18 +330,37 @@ const FEEL = createFeelKeys();
 const defaultFeel = () => feelAt(FEEL, 1/3);
 const arena = {
   charge: { active:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
-  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1 },
-  chain:  { comboIndex:0, comboWindow:.82, comboDeadline:0 },
+  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0 },
+  chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1 },
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
   paused:false, started:false, cycleMode:false,
-  stamina:{ v:STAMINA.start },
+  stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
+function staminaCostForGroup(group){ return STAMINA.costs[group] ?? STAMINA.costs.default; }
 function hasStamina(cost){ return arena.stamina.v >= cost - 1e-6; }
-function spendStamina(cost){ arena.stamina.v = Math.max(0, arena.stamina.v - cost); }
-function gainStamina(n){ arena.stamina.v = Math.min(STAMINA.max, arena.stamina.v + n); }
+function spendStamina(cost){
+  const spent = Math.min(arena.stamina.v, Math.max(0, cost));
+  arena.stamina.v = Math.max(0, arena.stamina.v - spent);
+  return spent;
+}
+function queueRecoverableRefund(amount){
+  const s = arena.stamina, refund = Math.max(0, amount);
+  s.pending = Math.min(STAMINA.max - s.v, s.pending + refund);
+  if(refund > 0) s.recoverDelayT = STAMINA.recoverDelay;
+}
+function fullRefillStamina(){ arena.stamina.v = STAMINA.max; arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
+function wipeRecoverableStamina(){ arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
+function updateStamina(dt){
+  const s = arena.stamina;
+  if(s.pending <= 0) return;
+  if(s.recoverDelayT > 0){ s.recoverDelayT = Math.max(0, s.recoverDelayT - dt); return; }
+  const amount = Math.min(s.pending, STAMINA.max / STAMINA.recoverTime * dt, STAMINA.max - s.v);
+  s.pending -= amount; s.v += amount;
+  if(s.pending < .001) s.pending = 0;
+}
 function exhaustFlash(){
   stWrap.classList.add('exhaust');
   clearTimeout(exhaustFlash._t);
@@ -360,18 +388,26 @@ const PC = installPlayerCombat({
     resolveAttackFacing(){ return resolveDesiredFacing(); },
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
-      spendStamina(STAMINA.swingCost);   // fires exactly once per real swing, combos included
+      if(arena.chain.pendingSlot >= 0){ arena.chain.activeSlot = arena.chain.pendingSlot; arena.chain.pendingSlot = -1; }
+      arena.swing.staminaSpent = spendStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
       combatState.impactScale = arena.swing.s.impact * Math.max(.25, HitFeel.tuning.master);
     },
     onAttackComplete(){
+      const landed = combatState.hitIds && combatState.hitIds.size > 0;
+      const whiffed = combatState.fired && !landed;
       // swung at air: sell the whoosh with a light stop + slash streak
-      if(combatState.fired && (!combatState.hitIds || combatState.hitIds.size === 0) && combatState._lastTipScene)
-        HitFeel.whiff(combatState._lastTipScene, new THREE.Vector3(Math.sin(actorFacing), 0, Math.cos(actorFacing)));
+      if(whiffed){
+        queueRecoverableRefund(arena.swing.staminaSpent);
+        if(combatState._lastTipScene)
+          HitFeel.whiff(combatState._lastTipScene, new THREE.Vector3(Math.sin(actorFacing), 0, Math.cos(actorFacing)));
+      }
+      finishChainMove(landed);
+      arena.swing.staminaSpent = 0;
     },
     onAttackChainIdle(){
-      arena.chain.comboDeadline = performance.now()/1000 + arena.chain.comboWindow;
+      // Explicit light/heavy chain state opens windows from onAttackComplete only.
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
     onWeaponSelected(){ ensureStanceMatchesWeapon(); rebuildDeck(); },
@@ -385,6 +421,11 @@ const PC = installPlayerCombat({
   }
 });
 const combatState = PC.combatState;
+installRedTollGreatsword({
+  WEAPONS, combatState, settings: StoneSettings,
+  applyCombatWeaponTuning: PC.applyCombatWeaponTuning,
+  updateWeaponDynamicVisual: PC.updateWeaponDynamicVisual
+});
 
 function spawnCharacter(){
   if(activeModel) actorVisual.remove(activeModel);
@@ -402,7 +443,7 @@ function setStance(index){
   const pool = stancePoolForWeapon();
   arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
   arena.stance = pool[arena.stanceIndex];
-  arena.chain.comboIndex = 0;
+  resetChainState();
   updatePill();
 }
 function cycleStance(){ setStance(arena.stanceIndex + 1); announce(arena.stance ? stancePoolForWeapon()[(arena.stanceIndex)%stancePoolForWeapon().length].name : '', .9); }
@@ -423,10 +464,12 @@ function playCard(slot){
   const pool = stancePoolForWeapon();
   const idx = pool.findIndex(st => st.id === card.id);
   if(idx >= 0) setStance(idx);
-  else { arena.stance = card; arena.chain.comboIndex = 0; updatePill(); }
+  else { arena.stance = card; resetChainState(); updatePill(); }
   // drop any follow-up queued from the old stance
   combatState.pending = null; combatState.pendingGroup = null;
-  gainStamina(STAMINA.cardGain);
+  combatState.readyLock = 0;
+  fullRefillStamina();
+  markCardAnimation(slot);
   announce(card.name.replace(/^S\d+\s*/,''), .9);
   renderCards();
 }
@@ -469,64 +512,135 @@ function attackCommitWeight(){
   return clamp(.20 + base*.62, 0, 1);
 }
 
-/* ---------- attack flow: tap = stance chain, hold = charge ---------- */
-function nextChainMove(){
-  const now = performance.now()/1000;
-  if(!combatState.attack && arena.chain.comboDeadline && now > arena.chain.comboDeadline) arena.chain.comboIndex = 0;
-  const slot = arena.chain.comboIndex % 3;
-  const key = arena.stance.chain[slot];
-  return { key, slot, att: PC.ATTACKS[key] };
+/* ---------- attack flow: light combo + hold-heavy charge ---------- */
+function resetChainState(){
+  arena.chain.stage = 'idle';
+  arena.chain.comboDeadline = 0;
+  arena.chain.finisherDeadline = 0;
+  arena.chain.inputLockT = 0;
+  arena.chain.lightLockT = 0;
+  arena.chain.activeSlot = -1;
+  arena.chain.pendingSlot = -1;
+  combatState.pending = null; combatState.pendingGroup = null;
+  combatState.readyLock = 0;
 }
+function lockChain(seconds){
+  arena.chain.stage = 'locked';
+  arena.chain.inputLockT = Math.max(arena.chain.inputLockT, seconds);
+  arena.chain.comboDeadline = 0;
+  arena.chain.finisherDeadline = 0;
+  arena.chain.activeSlot = -1;
+  arena.chain.pendingSlot = -1;
+  combatState.pending = null; combatState.pendingGroup = null;
+  combatState.readyLock = 1;
+}
+function updateChainTimers(dt){
+  const c = arena.chain, now = performance.now()/1000;
+  c.inputLockT = Math.max(0, c.inputLockT - dt);
+  c.lightLockT = Math.max(0, c.lightLockT - dt);
+  if(c.stage === 'locked' && c.inputLockT <= 0) resetChainState();
+  if(!combatState.attack && c.stage === 'hit1Ready' && now > c.comboDeadline) lockChain(CHAIN.whiffLock);
+  if(!combatState.attack && c.stage === 'finisher' && now > c.finisherDeadline) resetChainState();
+  const inputLock = CHAIN.whiffLock > 0 ? c.inputLockT / CHAIN.whiffLock : 0;
+  const lightLock = CHAIN.postSecondLightLock > 0 ? c.lightLockT / CHAIN.postSecondLightLock : 0;
+  combatState.readyLock = combatState.attack ? 0 : clamp(Math.max(inputLock, lightLock), 0, 1);
+}
+function chainMove(slot){
+  if(!arena.stance) return null;
+  const key = arena.stance.chain[slot];
+  const att = PC.ATTACKS[key];
+  return att ? { key, slot, att } : null;
+}
+function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && arena.chain.inputLockT <= 0 && !!arena.stance; }
 function chargeCap(att){ return att.phases[0].t1 * .98; }
-function attackDown(){
-  if(arena.deadT >= 0 || arena.dodge.t >= 0 || !arena.stance) return;
-  if(!hasStamina(STAMINA.swingCost)){ exhaustFlash(); return; }   // exhausted: play a card
-  const move = nextChainMove();
-  if(!move.att) return;
+function startChainMove(move, stage){
+  arena.chain.stage = stage;
+  arena.chain.activeSlot = move.slot;
+  PC.startCombatAttack(move.key, move.att.group);
+}
+function queueSecondLight(move){
+  combatState.pending = move.key; combatState.pendingGroup = move.att.group;
+  arena.chain.stage = 'hit2Queued';
+  arena.chain.pendingSlot = 1;
+}
+function finishChainMove(landed){
+  const c = arena.chain, slot = c.activeSlot;
+  combatState.chargePull = 0;
+  if(c.pendingSlot >= 0) return;
+  if(slot === 0){
+    if(landed){
+      c.stage = 'hit1Ready';
+      c.comboDeadline = performance.now()/1000 + CHAIN.comboWindow;
+    } else lockChain(CHAIN.whiffLock);
+  } else if(slot === 1){
+    c.stage = 'finisher';
+    c.finisherDeadline = performance.now()/1000 + CHAIN.finisherWindow;
+    c.lightLockT = Math.max(c.lightLockT, CHAIN.postSecondLightLock);
+  } else if(slot === 2) resetChainState();
+  if(c.stage !== 'locked') c.activeSlot = -1;
+}
+function lightDown(){
+  if(!canUseCombatInput()) return;
+  if(arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher') return;
   if(combatState.attack){
-    // combo follow-up: queue the next chain move at regular strength
-    if(combatState.pending) return;
-    if(combatState.t < Math.max(.04, (combatState.attack.contactAt||.1)*.62)) return;
-    combatState.pending = move.key; combatState.pendingGroup = move.att.group;
-    if(combatState.t > combatState.attack.comboAt){
-      PC.startCombatAttack(move.key, move.att.group);
-      combatState.pending = null; combatState.pendingGroup = null;
-    }
-    arena.chain.comboIndex = (move.slot + 1) % 3;
+    if(arena.chain.stage !== 'hit1' && arena.chain.stage !== 'hit1Ready') return;
+    if(!combatState.hitIds || combatState.hitIds.size <= 0 || combatState.pending) return;
+    const move = chainMove(1);
+    if(!move) return;
+    if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
+    queueSecondLight(move);
     return;
   }
+  const now = performance.now()/1000;
+  const slot = arena.chain.stage === 'hit1Ready' && now <= arena.chain.comboDeadline ? 1 : 0;
+  if(arena.chain.stage === 'hit1Ready' && slot === 0){ lockChain(CHAIN.whiffLock); return; }
+  const move = chainMove(slot);
+  if(!move) return;
+  if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
+  arena.charge.active = false; combatState.chargePull = 0;
+  startChainMove(move, slot === 0 ? 'hit1' : 'hit2');
+}
+function heavyDown(){
+  if(!canUseCombatInput() || combatState.attack) return;
+  const now = performance.now()/1000;
+  if(arena.chain.stage === 'hit1Ready') resetChainState();
+  if(arena.chain.stage === 'finisher' && now > arena.chain.finisherDeadline){ resetChainState(); return; }
+  const move = chainMove(2);
+  if(!move) return;
+  if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
   arena.charge.active = true; arena.charge.hold = 0; arena.charge.forceTier = null;
   arena.charge.tier = 1/3; arena.charge.s = defaultFeel();
-  PC.startCombatAttack(move.key, move.att.group);
-  arena.chain.comboIndex = (move.slot + 1) % 3;
+  startChainMove(move, 'heavy');
 }
 function releaseCharge(){
   if(!arena.charge.active) return;
-  // charge surcharge: tier is only known at release; clamps at 0 so a committed
-  // charge always finishes — the NEXT tap is what gets blocked
-  spendStamina(STAMINA.swingCost * (STAMINA.chargeCostMult - 1) * clamp((arena.charge.tier - 1/3) / (2/3), 0, 1));
+  const base = staminaCostForGroup(combatState.attackGroup);
+  const chargeFrac = clamp((arena.charge.tier - 1/3) / (2/3), 0, 1);
+  arena.swing.staminaSpent += spendStamina(base * (STAMINA.chargeCostMult - 1) * chargeFrac);
   applySwingFeel(arena.charge.s);
   combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
-  arena.charge.active = false; arena.charge.forceTier = null;
+  arena.charge.active = false; arena.charge.forceTier = null; combatState.chargePull = 0;
 }
-function attackUp(){ releaseCharge(); }
+function heavyUp(){ releaseCharge(); }
+function attackDown(){ lightDown(); }
+function attackUp(){ heavyUp(); }
 function beginTestSwing(tier){
   // FEEL-tab debug tool: deliberately not stamina-gated (the swing itself still deducts)
   if(arena.deadT >= 0 || combatState.attack || !arena.stance) return;
-  const move = nextChainMove();
-  if(!move.att) return;
+  const move = chainMove(2);
+  if(!move) return;
   arena.charge.active = true; arena.charge.hold = 0; arena.charge.forceTier = tier;
   arena.charge.tier = tier; arena.charge.s = feelAt(FEEL, tier);
-  PC.startCombatAttack(move.key, move.att.group);
-  arena.chain.comboIndex = (move.slot + 1) % 3;
+  startChainMove(move, 'heavy');
 }
 function updateCharge(dt){
   const c = arena.charge;
-  if(!c.active) return;
-  if(!combatState.attack){ c.active = false; return; }
+  if(!c.active){ combatState.chargePull = 0; return; }
+  if(!combatState.attack){ c.active = false; combatState.chargePull = 0; return; }
   c.hold += dt;
   c.tier = c.forceTier ?? holdToTier(c.hold);
   c.s = feelAt(FEEL, c.tier);
+  combatState.chargePull = clamp((c.tier - 1/3) / (2/3), 0, 1);
   const cap = chargeCap(combatState.attack);
   if(combatState.t > cap) combatState.t = cap;
   if(c.forceTier !== null && combatState.t >= cap - 1e-4) releaseCharge();
@@ -536,8 +650,8 @@ function updateCharge(dt){
 function triggerDodge(){
   const d = arena.dodge;
   if(arena.deadT >= 0 || d.t >= 0 || d.cool > 0) return;
-  arena.charge.active = false;
-  combatState.attack = null; combatState.t = 0; combatState.pending = null; combatState.pendingGroup = null;
+  arena.charge.active = false; combatState.chargePull = 0;
+  combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
   let dir;
   if(mv > .2) dir = norm2(input.mx, input.mz);
@@ -560,13 +674,15 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   const zones = PC.getWeaponHitZones();
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
-    const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
+    const enemyScale = enemySystem.heightScale || 1;
+    const scaledRadius = e.radius * enemyScale;
+    const h = (e.height || e.radius * 2) * enemyScale;
     const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
     let best = null;
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());
       const b = PC.weaponRoot.localToWorld(zone.to.clone());
-      const threshold = e.radius + zone.radius + .38;
+      const threshold = scaledRadius + zone.radius + .38;
       let bestDist = Infinity, bestCenter = hitSamples[1];
       for(const center of hitSamples){ const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
@@ -641,10 +757,9 @@ function flashVignette(){
 function respawn(){
   arena.deadT = -1;
   actorPos.set(0, 4); actorFacing = 0;
-  arena.charge.active = false;
-  combatState.attack = null; combatState.t = 0; combatState.pending = null;
-  arena.chain.comboIndex = 0;
-  arena.stamina.v = STAMINA.start;
+  arena.charge.active = false; combatState.chargePull = 0;
+  combatState.attack = null; combatState.t = 0; resetChainState();
+  fullRefillStamina();
   rebuildDeck();
   enemySystem.reset();
   arena.prevHp = enemySystem.playerHp;
@@ -654,6 +769,7 @@ function respawn(){
 function watchPlayerState(dt){
   const hp = enemySystem.playerHp;
   if(hp < arena.prevHp && arena.deadT < 0){
+    wipeRecoverableStamina();
     arena.invulnT = Math.max(arena.invulnT, .8);
     flashVignette();
     CombatAudio.playTest('hurt');
@@ -680,7 +796,8 @@ const keys = {};
 addEventListener('keydown', e=>{
   if(e.repeat) return;
   keys[e.key.toLowerCase()] = true;
-  if(e.key==='j') attackDown();
+  if(e.key==='j') lightDown();
+  if(e.key==='l') heavyDown();
   if(e.key==='k') triggerDodge();
   if(e.key==='q') playCard(0);
   if(e.key==='e') playCard(1);
@@ -692,7 +809,7 @@ addEventListener('keydown', e=>{
 });
 addEventListener('keyup', e=>{
   keys[e.key.toLowerCase()] = false;
-  if(e.key==='j') attackUp();
+  if(e.key==='l') heavyUp();
 });
 function keyMove(){
   let x=0,z=0;
@@ -731,10 +848,13 @@ function endJoy(e){
 addEventListener('pointerup', endJoy);
 addEventListener('pointercancel', endJoy);
 /* touch buttons */
-const atkBtn=document.getElementById('atkBtn'), dgeBtn=document.getElementById('dgeBtn');
-atkBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); atkBtn.classList.add('held'); attackDown(); });
+const atkBtn=document.getElementById('atkBtn'), heavyBtn=document.getElementById('heavyBtn'), dgeBtn=document.getElementById('dgeBtn');
+atkBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); atkBtn.classList.add('held'); lightDown(); });
 for(const ev of ['pointerup','pointercancel','pointerleave'])
-  atkBtn.addEventListener(ev, ()=>{ atkBtn.classList.remove('held'); attackUp(); });
+  atkBtn.addEventListener(ev, ()=>{ atkBtn.classList.remove('held'); });
+heavyBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); heavyBtn.classList.add('held'); heavyDown(); });
+for(const ev of ['pointerup','pointercancel','pointerleave'])
+  heavyBtn.addEventListener(ev, ()=>{ heavyBtn.classList.remove('held'); heavyUp(); });
 dgeBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); triggerDodge(); });
 /* gamepad */
 const padPrev = {};
@@ -749,20 +869,23 @@ function pollPad(){
   const l=Math.hypot(mx,mz);
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
-  const atk = bd(0)||bd(2)||bd(7);
-  const dge = bd(1)||bd(6);
+  const light = bd(2)||bd(7);
+  const heavy = bd(3);
+  const shuffle = bd(1);
+  const dge = bd(0)||bd(6);
   const lb = bd(4), rb = bd(5);
-  const strt = bd(9), sel = bd(8), yb = bd(3);
-  if(atk && !padPrev.atk) attackDown();
-  if(!atk && padPrev.atk) attackUp();
+  const strt = bd(9), sel = bd(8);
+  if(light && !padPrev.light) lightDown();
+  if(heavy && !padPrev.heavy) heavyDown();
+  if(!heavy && padPrev.heavy) heavyUp();
   if(dge && !padPrev.dge) triggerDodge();
+  if(shuffle && !padPrev.shuffle) startDeckShuffle();
   if(lb && !padPrev.lb) playCard(0);
   if(rb && !padPrev.rb) playCard(1);
   if(strt && !padPrev.strt) toggleMenu();
   if(sel && !padPrev.sel) togglePause();
-  if(yb && !padPrev.yb) startDeckShuffle();
-  padPrev.atk=atk; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
-  padPrev.strt=strt; padPrev.sel=sel; padPrev.yb=yb;
+  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
+  padPrev.strt=strt; padPrev.sel=sel;
 }
 function gatherInput(){
   const k = keyMove();
@@ -860,7 +983,7 @@ const DIR_SLIDERS = [
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
   { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
   { label:'ENEMY HEALTH',    min:.25,max:5,   step:.05, get:()=>enemySystem.hpScale,        set:v=>enemySystem.setHpScale(v) },
-  { label:'ENEMY HEIGHT',    min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
+  { label:'ENEMY SIZE',      min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
   { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
 ];
 const dirBox=document.getElementById('dirSliders');
@@ -917,15 +1040,23 @@ document.getElementById('testBtn').addEventListener('click', ()=>{
 
 /* ---------- HUD ---------- */
 const hpFill=document.getElementById('hpFill'), stats=document.getElementById('stats');
-const stWrap=document.getElementById('stWrap'), stFill=document.getElementById('stFill');
+const stWrap=document.getElementById('stWrap'), stFill=document.getElementById('stFill'), stPending=document.getElementById('stPending');
 const stateLbl=document.getElementById('stateLbl');
 /* stance card widgets */
 const cardEls=[document.getElementById('card0'), document.getElementById('card1')];
 const deckCountEl=document.getElementById('deckCount');
+const cardAnim = { played:-1, drawn:new Set() };
+function markCardAnimation(slot){ cardAnim.played = slot; cardAnim.drawn.add(slot); }
+cardEls.forEach((el,i)=>el.addEventListener('animationend', e=>{
+  if(e.animationName === 'cardRing') el.classList.remove('played');
+  if(e.animationName === 'cardDrawIn'){ el.classList.remove('draw-in'); cardAnim.drawn.delete(i); }
+}));
 function renderCards(){
   deck.hand.forEach((c,i)=>{
     const el=cardEls[i];
     el.classList.toggle('empty', !c);
+    el.classList.toggle('played', cardAnim.played === i);
+    el.classList.toggle('draw-in', cardAnim.drawn.has(i));
     el.querySelector('.cname').textContent = deck.shuffling ? 'SHUFFLING…' : (c ? c.name.replace(/^S\d+\s*/,'') : '—');
     const ar=el.querySelector('.carrows');
     ar.textContent='';
@@ -936,6 +1067,7 @@ function renderCards(){
     }
   });
   deckCountEl.textContent = 'DECK ' + deck.drawCount;
+  cardAnim.played = -1;
 }
 cardEls.forEach((el,i)=>el.addEventListener('pointerdown', e=>{ e.preventDefault(); playCard(i); }));
 document.getElementById('shuffleBtn').addEventListener('pointerdown', e=>{ e.preventDefault(); startDeckShuffle(); });
@@ -944,7 +1076,11 @@ let msgT=0;
 function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
 function updateHud(rawDt){
   hpFill.style.width = clamp(enemySystem.playerHp,0,100)+'%';
-  stFill.style.width = (arena.stamina.v/STAMINA.max*100)+'%';
+  const availPct = clamp(arena.stamina.v / STAMINA.max, 0, 1) * 100;
+  const totalPct = clamp((arena.stamina.v + arena.stamina.pending) / STAMINA.max, 0, 1) * 100;
+  stFill.style.width = availPct + '%';
+  stPending.style.left = availPct + '%';
+  stPending.style.width = Math.max(0, totalPct - availPct) + '%';
   if(deck.shuffling) deckCountEl.textContent = 'SHUFFLE ' + Math.max(0, deck.shuffleT).toFixed(1) + 's';
   const tokens = enemySystem.director.getDebugState().activeTokens;
   stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
@@ -981,6 +1117,8 @@ function updatePlayer(dt, rawDt = dt){
   }
   arena.invulnT = Math.max(0, arena.invulnT - dt);
   d.cool = Math.max(0, d.cool - dt);
+  updateChainTimers(dt);
+  updateStamina(dt);
 
   let spd = PLAYER_SPEED;
   if(arena.charge.active) spd *= CHARGE_MOVE_MULT;
@@ -1050,7 +1188,7 @@ function frame(){
   if(!isPaused()){
     const wasShuffling = deck.shuffling;
     deck.update(dt);
-    if(wasShuffling && !deck.shuffling) renderCards();   // countdown done: fresh hand
+    if(wasShuffling && !deck.shuffling){ cardAnim.drawn.add(0); cardAnim.drawn.add(1); renderCards(); }   // countdown done: fresh hand
     updatePlayer(dt, rawDt);
     enemySystem.update(dt, {
       x: actorPos.x, z: actorPos.y,
@@ -1080,7 +1218,7 @@ updatePill();
 frame();
 
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck,
-  attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing,
+  lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing,
   playCard, startDeckShuffle };
 
 addEventListener('resize', ()=>{

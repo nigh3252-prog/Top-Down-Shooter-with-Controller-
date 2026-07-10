@@ -76,7 +76,7 @@ export function installPlayerCombat(api) {
     pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
     tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
     commitYaw:0, lastAttackLabel:'none',
-    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1
+    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, chargePull:0, readyLock:0
   };
   const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
   const weaponBaseLocal = new THREE.Vector3(0,RIG.bladeBase,0);
@@ -100,9 +100,9 @@ export function installPlayerCombat(api) {
     const N=24, pos=new Float32Array(N*2*3), col=new Float32Array(N*2*3), idx=[];
     for(let i=0;i<N-1;i++){const a=i*2;idx.push(a,a+1,a+2, a+1,a+3,a+2);}
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setIndex(idx);
-    const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,fog:false,side:THREE.DoubleSide}));
+    const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:true,fog:false,side:THREE.DoubleSide}));
     mesh.frustumCulled=false;
-    mesh.renderOrder=30;
+    mesh.renderOrder=0;
     scene.add(mesh);
     return {N,pos,col,mesh,tipH:[],baseH:[],intensity:0,flash:0};
   })();
@@ -245,7 +245,7 @@ export function installPlayerCombat(api) {
     const pre=1-smoothstep(state.attack.contactAt,state.attack.contactAt+.08,state.t);
     const windupBack=1-smoothstep(contactT*.10,contactT*.96,state.t);
     const post=smoothstep(state.attack.contactAt,state.attack.total,state.t);
-    const lengthDelta=tune.length-1, weightDelta=tune.weight-TUNE_DEFAULTS.weight, widthDelta=tune.swingWidth-1, pullTune=tune.pullback ?? TUNE_DEFAULTS.pullback;
+    const lengthDelta=tune.length-1, weightDelta=tune.weight-TUNE_DEFAULTS.weight, widthDelta=tune.swingWidth-1, chargePull=clamp(state.chargePull||0,0,1), pullTune=(tune.pullback ?? TUNE_DEFAULTS.pullback)*(1+chargePull*.85);
     const grp=(state.attack&&state.attack.group)||state.attackGroup||state.last, def=currentWeapon(), isWhip=def.kind==='whip';
     const pathScale=clamp(1+widthDelta*.58+lengthDelta*.18,.42,2.05), reachScale=clamp(1+widthDelta*.34+lengthDelta*.16,.48,1.85);
     const commit=clamp(1+widthDelta*.36+Math.max(-.35,weightDelta)*.46+Math.max(-.45,lengthDelta)*.18,.58,1.85);
@@ -254,7 +254,9 @@ export function installPlayerCombat(api) {
     p.hold.z=IDLE.hold.z+(p.hold.z-IDLE.hold.z)*(reachScale+followPush*.8);
     p.hold.y=IDLE.hold.y+(p.hold.y-IDLE.hold.y)*(1+Math.max(-.35,weightDelta)*.14);
     const sag=Math.max(-.25,weightDelta)*.075+Math.max(0,lengthDelta)*.035; p.hold.y-=Math.max(0,sag)*(.35+.65*Math.sin(Math.PI*frac));
-    const anticipation=pullTune*windupBack*clamp(Math.max(0,lengthDelta)*.28+Math.max(0,weightDelta)*.18+Math.max(0,widthDelta)*.08,0,.55);
+    const weaponAnticipation=pullTune*windupBack*clamp(Math.max(0,lengthDelta)*.28+Math.max(0,weightDelta)*.18+Math.max(0,widthDelta)*.08,0,.55);
+    const chargeAnticipation=windupBack*(chargePull*.18+chargePull*chargePull*.42);
+    const anticipation=weaponAnticipation+chargeAnticipation;
     if(anticipation>0){const sideSign=grp==='horizontal'?Math.sign(p.hold.x||1):1; p.hold.z-=anticipation; p.hold.x+=sideSign*anticipation*.32; p.hold.y+=anticipation*(grp==='vertical'?.42:.22); p.twist+=sideSign*anticipation*.44; p.hipTwist+=sideSign*anticipation*.28; p.lean+=sideSign*anticipation*.18; p.pitch-=anticipation*(grp==='vertical'?.18:.08); p.roll+=sideSign*anticipation*.16; p.tip.z-=anticipation*.72; p.tip.y+=anticipation*(grp==='vertical'?.18:.06);}
     p.hold.z-=pre*Math.max(0,weightDelta)*.06;
     if(grp==='stab') p.hold.z+=Math.max(0,lengthDelta)*.16*smoothstep(.05,state.attack.contactAt,state.t);
@@ -352,6 +354,20 @@ export function installPlayerCombat(api) {
     const sp=combatSparks; if(sp.age>=sp.life){sp.mat.opacity=0; return;} sp.age+=dt; const k=sp.age; for(let i=0;i<sp.N;i++){const v=sp.vel[i]; sp.pos[i*3]+=v.x*dt; sp.pos[i*3+1]+=v.y*dt-2.4*k*dt; sp.pos[i*3+2]+=v.z*dt;} sp.pts.geometry.attributes.position.needsUpdate=true; sp.mat.opacity=Math.max(0,1-sp.age/sp.life);
   }
 
+  function shapeReadyLockPose(p){
+    const k=clamp(combatState.readyLock||0,0,1);
+    if(k<=0) return p;
+    p.hold.x += .06*k;
+    p.hold.y -= .24*k;
+    p.hold.z -= .18*k;
+    p.tip.lerp(tmpV.set(.16,.20,.98).normalize(), .72*k).normalize();
+    p.roll += .42*k;
+    p.pitch += .05*k;
+    p.lean += .08*k;
+    p.lower += .05*k;
+    return p;
+  }
+
   /* ---- per-frame pose + update --------------------------------------------- */
   function applyCombatPoseToWarden(p,dt,now,sway){
     const activeModel=api.activeModel;
@@ -412,7 +428,7 @@ export function installPlayerCombat(api) {
         }
       }
     }
-    const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : poseLerp(IDLE,IDLE,0,work);
+    const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : shapeReadyLockPose(poseLerp(IDLE,IDLE,0,work));
     applyCombatPoseToWarden(p,dt,now,sway);
     updateCombatSparks(dt);
   }

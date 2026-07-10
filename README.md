@@ -7,7 +7,7 @@ A phone/controller-friendly HTML5 top-down action prototype.
 - `index.html` — launcher.
 - `top-down-shooter.html` — the original top-down shooter prototype (notes below).
 - `weapon-lab.html` — the Stone Wanderer weapon test lab: Red Toll greatsword, bent-horizon scrolling world, combat audio, and Stance Cards / Individual Moves modes. A single ES-module page that imports everything from `src/` directly — no runtime HTML patching.
-- `combat-arena.html` — the Combat Arena: an encounter-director goblin arena (waves, 9 director modes plus an auto-rotating Cycle All, HP/score loop) played with the Stone Wanderer's full weapon + stance-card combat. Stance cards work as a One Step From Eden-style deck: two hand slots played with LB/RB (or Q/E), each play switches your 3-move stance, grants stamina, and draws a replacement; using up the deck reshuffles instantly, while a manual shuffle (Y/R) tosses the hand and takes a countdown. Every swing costs stamina and attacks are blocked at zero — playing cards is the only refill. Tap the attack button to chain the active stance's 3-move combo; hold to charge the next swing across the WIMPY→CARTOON feel tiers (scaling windup, damage, knockback, stun, hitstop, lunge). Dodge with i-frames, phone joystick + on-screen buttons, and gamepad support. Shares the rig and combat interpreter with `weapon-lab.html` via `src/stone-wanderer.js` and `src/player-combat.js`.
+- `combat-arena.html` — the Combat Arena: an encounter-director goblin arena (waves, 9 director modes plus an auto-rotating Cycle All, HP/score loop) played with the Stone Wanderer's full weapon + stance-card combat. Stance cards work as a One Step From Eden-style deck: two hand slots played with LB/RB (or Q/E), each play switches your stance, fully refills stamina, and draws a replacement; using up the deck reshuffles instantly, while a manual shuffle (Circle/R) tosses the hand and takes a countdown. Missed swings refund as recoverable gray stamina unless the player gets hit, landed attacks keep their stamina cost, and horizontal/vertical/thrust attacks have different costs. Light attack is a two-hit combo gated on hit 1 connecting, while heavy uses the stance finisher and can be held to charge across the WIMPY→CARTOON feel tiers (scaling windup, damage, knockback, stun, hitstop, lunge). Dodge with i-frames, phone joystick + on-screen buttons, and gamepad support. Shares the rig and combat interpreter with `weapon-lab.html` via `src/stone-wanderer.js` and `src/player-combat.js`.
 - `src/` — real source modules (`stone-wanderer.js`, `player-combat.js`, `weapons.js`, `attacks.js`, `stance-cards.js`, `enemies.js`, `combat-director.js`, `feel.js`, `combat-audio.js`, `lab-modes.js`, `bent-world.js`, …). See `src/README.md` for the module architecture.
 - `archive/` — the retired iframe wrapper, the old string-patched lab core, and donor pages. Kept for reference only; nothing links to them.
 - `docs/` — source-move libraries (Hades, Diablo III) used as design references.
@@ -66,8 +66,8 @@ Keyboard fallback:
 
 - WASD / arrows: move
 - J: light attack
-- K: heavy/special
-- Space: dodge
+- L: heavy/special
+- K: dodge
 - Q/E: cast left/right tray cards
 - R: shuffle/reload tray
 - T: cycle aim assist mode
