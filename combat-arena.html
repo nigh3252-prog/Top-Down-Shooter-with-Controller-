@@ -253,7 +253,7 @@ const AUTO_FACE_RANGE = 14;
 /* stamina economy: swings drain it, playing a stance card is the only refill */
 const STAMINA = { max:100, start:100, recoverTime:.85, recoverDelay:.08, chargeCostMult:1.75,
                   costs:{ horizontal:18, vertical:14, stab:10, default:14 }, shuffleTime:2, exhaustFlash:.35 };
-const CHAIN = { comboWindow:.82, finisherWindow:1.0, whiffLock:.55, postSecondLightLock:.70 };
+const CHAIN = { comboWindow:.45, finisherWindow:.80, whiffLock:.20, postSecondLightLock:.35 };
 const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
 const CAM_HEIGHT = 20, CAM_BACK = 17.6;
 
@@ -330,7 +330,7 @@ const FEEL = createFeelKeys();
 const defaultFeel = () => feelAt(FEEL, 1/3);
 const arena = {
   charge: { active:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
-  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1 },
+  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0 },
   chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1 },
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
@@ -341,11 +341,15 @@ const arena = {
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
 function staminaCostForGroup(group){ return STAMINA.costs[group] ?? STAMINA.costs.default; }
 function hasStamina(cost){ return arena.stamina.v >= cost - 1e-6; }
-function spendRecoverableStamina(cost){
-  const s = arena.stamina, spent = Math.min(s.v, Math.max(0, cost));
-  s.v = Math.max(0, s.v - spent);
-  s.pending = Math.min(STAMINA.max - s.v, s.pending + spent);
-  s.recoverDelayT = STAMINA.recoverDelay;
+function spendStamina(cost){
+  const spent = Math.min(arena.stamina.v, Math.max(0, cost));
+  arena.stamina.v = Math.max(0, arena.stamina.v - spent);
+  return spent;
+}
+function queueRecoverableRefund(amount){
+  const s = arena.stamina, refund = Math.max(0, amount);
+  s.pending = Math.min(STAMINA.max - s.v, s.pending + refund);
+  if(refund > 0) s.recoverDelayT = STAMINA.recoverDelay;
 }
 function fullRefillStamina(){ arena.stamina.v = STAMINA.max; arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
 function wipeRecoverableStamina(){ arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
@@ -385,17 +389,22 @@ const PC = installPlayerCombat({
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
       if(arena.chain.pendingSlot >= 0){ arena.chain.activeSlot = arena.chain.pendingSlot; arena.chain.pendingSlot = -1; }
-      spendRecoverableStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
+      arena.swing.staminaSpent = spendStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
       combatState.impactScale = arena.swing.s.impact * Math.max(.25, HitFeel.tuning.master);
     },
     onAttackComplete(){
       const landed = combatState.hitIds && combatState.hitIds.size > 0;
+      const whiffed = combatState.fired && !landed;
       // swung at air: sell the whoosh with a light stop + slash streak
-      if(combatState.fired && !landed && combatState._lastTipScene)
-        HitFeel.whiff(combatState._lastTipScene, new THREE.Vector3(Math.sin(actorFacing), 0, Math.cos(actorFacing)));
+      if(whiffed){
+        queueRecoverableRefund(arena.swing.staminaSpent);
+        if(combatState._lastTipScene)
+          HitFeel.whiff(combatState._lastTipScene, new THREE.Vector3(Math.sin(actorFacing), 0, Math.cos(actorFacing)));
+      }
       finishChainMove(landed);
+      arena.swing.staminaSpent = 0;
     },
     onAttackChainIdle(){
       // Explicit light/heavy chain state opens windows from onAttackComplete only.
@@ -596,7 +605,7 @@ function releaseCharge(){
   if(!arena.charge.active) return;
   const base = staminaCostForGroup(combatState.attackGroup);
   const chargeFrac = clamp((arena.charge.tier - 1/3) / (2/3), 0, 1);
-  spendRecoverableStamina(base * (STAMINA.chargeCostMult - 1) * chargeFrac);
+  arena.swing.staminaSpent += spendStamina(base * (STAMINA.chargeCostMult - 1) * chargeFrac);
   applySwingFeel(arena.charge.s);
   combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
   arena.charge.active = false; arena.charge.forceTier = null; combatState.chargePull = 0;
