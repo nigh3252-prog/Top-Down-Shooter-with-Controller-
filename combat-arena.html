@@ -47,7 +47,6 @@
   .pbtn.disabled{opacity:.42}
   .pbtn .btnGlyph{font-size:10px;line-height:1;color:#4a6f6a}
   .pbtn .btnArrow{font-size:25px;line-height:1;font-weight:700;letter-spacing:0}
-  .pbtn .btnLabel{font-size:7px;line-height:1;letter-spacing:.08em}
   #atkBtn{border-color:#6e3a24;color:#e8a04c}
   #atkArrow{font-size:18px;letter-spacing:2px}
   #heavyBtn{border-color:#5f4a8f;color:#cdb6ff}
@@ -162,10 +161,10 @@
 <div id="joyBase"></div><div id="joyKnob"></div>
 <div class="btnrow">
   <button class="pbtn" id="atkBtn" aria-label="Light attack">
-    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">· ·</span><span class="btnLabel">LIGHT</span>
+    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">· ·</span>
   </button>
   <button class="pbtn" id="heavyBtn" aria-label="Heavy attack">
-    <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span><span class="btnLabel">HEAVY</span>
+    <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span>
   </button>
 </div>
 <div id="cardRow">
@@ -441,6 +440,7 @@ const PC = installPlayerCombat({
   }
 });
 const combatState = PC.combatState;
+combatState.hideArms = true; // procedural rig still drives the weapon; its puppet arms stay invisible
 installRedTollGreatsword({
   WEAPONS, combatState, settings: StoneSettings,
   applyCombatWeaponTuning: PC.applyCombatWeaponTuning,
