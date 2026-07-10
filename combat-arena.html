@@ -882,7 +882,8 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     const enemyScale = enemySystem.heightScale || 1;
     const scaledRadius = e.radius * enemyScale;
     const h = (e.height || e.radius * 2) * enemyScale;
-    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
+    const targetOffsetY = e.targetYOffset || 0;
+    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, targetOffsetY + h * k, e.z));
     let best = null;
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());

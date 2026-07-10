@@ -13,6 +13,7 @@ import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-direct
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
+import { FUSION_ARCHETYPES, FUSION_ATTACKS, FUSION_ENEMY_IDS, isFusionEnemy } from './fusion-enemies.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
@@ -23,22 +24,24 @@ const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 const GOBLIN_WEAPON_SCALE = 1.55;
 
 // Punch TYPES + goblin skin, distances/speeds pre-scaled by S. hp/score unchanged.
-const ARCHETYPES = {
+const BASE_ARCHETYPES = {
   grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
   rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
   captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
 };
+const ARCHETYPES = { ...BASE_ARCHETYPES, ...FUSION_ARCHETYPES };
 
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
-const EATK = {
+const BASE_EATK = {
   slash:        { kind:'melee',  name:'Slash',         range:.78*S,  tokenCost:1.0,  windup:.58, active:.16, recovery:.50, cooldown:1.45, damage:10, arc:1.1, knock:.5*S },
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
   rockThrow:    { kind:'ranged', name:'Rock Throw',    range:3.3*S,  tokenCost:.5,   windup:.78, active:.08, recovery:.60, cooldown:2.05, damage:8,  arc:0,   knock:.2*S, projectile:true },
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
+const EATK = { ...BASE_EATK, ...FUSION_ATTACKS };
 
 export function createArenaEnemySystem({
   THREE, worldRoot, materials = {}, arenaRadius = 18,
@@ -140,6 +143,9 @@ export function createArenaEnemySystem({
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       hp, maxHp:hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
+      fusion:isFusionEnemy(kind) || !!a.fusion, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
+      pairingTags:a.pairingTags || [], meleeAccessible:true, meleeWindow:null,
+      rootLift:0, targetYOffset:0,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
       useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
@@ -209,6 +215,43 @@ export function createArenaEnemySystem({
     e.facing = norm(p.x - e.x, p.z - e.z);
     director.grant(e, atk);
   }
+
+  function updateFusionAccessibility(e){
+    if(!e.fusion){ e.meleeAccessible = true; e.meleeWindow = null; e.rootLift = 0; e.targetYOffset = 0; return; }
+    const attack = e.attack;
+    const states = attack?.meleeWindow?.states || [];
+    e.meleeAccessible = !states.length || states.includes(e.state);
+    e.meleeWindow = e.meleeAccessible && states.length ? attack.meleeWindow.id : null;
+    // The aerial body leaves the floor during its windup and dive. It returns
+    // to the standard target height for recovery, where melee can connect.
+    e.rootLift = e.kind === 'phx' && attack && (e.state === 'windup' || e.state === 'active') ? 2.1 * tuning.heightScale : 0;
+    e.targetYOffset = e.rootLift;
+  }
+
+  function moveFusion(e, p, dt, d){
+    const desired = e.preferredRange;
+    if(e.role === 'flanker'){
+      if(d > desired + .35) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .8);
+      return;
+    }
+    if(e.role === 'skirmisher' || e.role === 'aerial harasser'){
+      keepRange(e, p, dt, desired); orbitPlayer(e, p, dt, .55);
+      return;
+    }
+    if(e.role === 'area controller' || e.role === 'reach sentinel'){
+      if(d < desired - .5) keepRange(e, p, dt, desired); else orbitPlayer(e, p, dt, .25);
+      return;
+    }
+    if(e.role === 'charger'){
+      if(d > desired) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .35);
+      return;
+    }
+    if(e.role === 'low ambusher'){
+      if(d > desired + .3) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .25);
+      return;
+    }
+    if(d > desired) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .25);
+  }
   function resolveEnemyMelee(e, p){
     const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
     if(d > e.attack.range + PLAYER_R) return;
@@ -260,6 +303,7 @@ export function createArenaEnemySystem({
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
+    updateFusionAccessibility(e);
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     // hit-feel body reaction: vertical pop, hit spin, squash timer
@@ -288,7 +332,10 @@ export function createArenaEnemySystem({
     }
     else if(e.state === 'active'){
       if(!e.attack.projectile){
-        e.x += e.facing.x*1.9*S*dt; e.z += e.facing.z*1.9*S*dt;   // lunge-commit
+        const lungeScale = e.fusion
+          ? ({ pounce:1.05, dart:.72, snatch:.38, chomp:.28, harvest:.18, stomp:.12, charge:1.55, dive:.92, snap:.22, stab:.48 }[e.attack.movement] || .5) * S
+          : 1.9*S;
+        e.x += e.facing.x*lungeScale*dt; e.z += e.facing.z*lungeScale*dt;   // lunge-commit
         if(!e.hitDone) resolveEnemyMelee(e, p);
       }
       if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; }
@@ -304,12 +351,14 @@ export function createArenaEnemySystem({
       if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget })){
         startEnemyAttack(e, att, p);
       } else {
-        const wantRange = e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S);
+        const wantRange = e.fusion ? e.preferredRange : (e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S));
         if(d > wantRange + .45*S) seekPlayer(e, p, dt);
+        else if(e.fusion) moveFusion(e, p, dt, d);
         else deniedBehavior(e, p, dt);
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
+    updateFusionAccessibility(e);
     if(navigation?.resolveMovement){
       const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, e.radius);
       e.x = moved.x; e.z = moved.z;
@@ -391,7 +440,7 @@ export function createArenaEnemySystem({
   }
   function updateEnemyVisual(e){
     if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
-    e.root.position.set(e.x, e.yOff, e.z);
+    e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
     const sq = e.squash * (e.squashT / e.squashMax);
@@ -403,10 +452,11 @@ export function createArenaEnemySystem({
   }
 
   /* ---------- waves ---------- */
-  const MIX = ['grunt','dagger','grunt','rock','dagger','grunt','mace','dagger','grunt'];
+  // First fusion pass is pure-strain only. Goblin archetypes remain in the
+  // module for compatibility and can be restored as a later mixed-pool mode.
+  const MIX = FUSION_ENEMY_IDS;
   function chooseSpawnKind(i){
-    if(director.getMode() === 'eliteSpotlight' && i === 0) return 'captain';
-    return MIX[i % MIX.length];
+    return MIX[(wave - 1 + i) % MIX.length];
   }
   function spawnPos(){
     const roomPoint = navigation?.randomSpawn?.(activeEncounterRoomId, lastPlayer);
