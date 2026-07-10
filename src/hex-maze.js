@@ -32,7 +32,7 @@ export function edgeBetween(level, cell, dir, radius=level.cellRadius*.96){
 
 export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, roomMin=4, roomMax=7 } = {}){
   const rnd = mulberry32(seed);
-  const level = { rows, cols, cellRadius, cells:new Map(), rooms:[], doors:[], buildSteps:[], startRoomId:0, startCellId:null, hexDistance };
+  const level = { rows, cols, cellRadius, cells:new Map(), rooms:[], doors:[], events:[], buildSteps:[], startRoomId:0, startCellId:null, hexDistance };
   for(let r=0;r<rows;r++) for(let q=0;q<cols;q++){
     const p = axialToWorld(q - Math.floor(cols/2), r - Math.floor(rows/2), cellRadius);
     const id = key(q,r);
@@ -47,13 +47,17 @@ export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, ro
   const start = level.cells.get(key(Math.floor(cols/2), Math.floor(rows/2))) || level.cells.values().next().value;
   level.startCellId = start.id;
   const stack = [start]; const visited = new Set([start.id]); start.visitIndex = 0; level.buildSteps.push(start.id);
+  level.events.push({ type:'visitCell', cell:start.id });
   while(stack.length){
     const c = stack[stack.length - 1];
     const options = shuffle([...c.neighbors.entries()].filter(([,id]) => !visited.has(id)), rnd);
     if(!options.length){ stack.pop(); continue; }
     const [dir, nid] = options[0]; const n = level.cells.get(nid);
     connect(level, c, dir, n);
-    visited.add(n.id); n.visitIndex = level.buildSteps.length; level.buildSteps.push(n.id); stack.push(n);
+    level.events.push({ type:'openEdge', cell:c.id, dir, to:n.id, phase:'carve' });
+    visited.add(n.id); n.visitIndex = level.buildSteps.length; level.buildSteps.push(n.id);
+    level.events.push({ type:'visitCell', cell:n.id });
+    stack.push(n);
   }
 
   // Dead-end reduction: link each dead end to the earliest adjacent already-built cell.
@@ -64,7 +68,10 @@ export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, ro
       .map(([dir,nid]) => [dir, level.cells.get(nid)])
       .filter(([,n]) => n && n.visitIndex >= 0)
       .sort((a,b) => a[1].visitIndex - b[1].visitIndex);
-    if(candidates.length) connect(level, c, candidates[0][0], candidates[0][1]);
+    if(candidates.length){
+      connect(level, c, candidates[0][0], candidates[0][1]);
+      level.events.push({ type:'openEdge', cell:c.id, dir:candidates[0][0], to:candidates[0][1].id, phase:'deadEndLoop' });
+    }
   }
 
   const unassigned = new Set(level.cells.keys());
@@ -76,6 +83,7 @@ export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, ro
     while(frontier.length && room.cells.length < target){
       const id = frontier.shift(); const c = level.cells.get(id);
       c.roomId = room.id; room.cells.push(id);
+      level.events.push({ type:'assignRoom', cell:id, room:room.id });
       const next = shuffle([...c.openEdges].map(dir => c.neighbors.get(dir)).filter(nid => unassigned.has(nid)), rnd);
       for(const nid of next){ if(room.cells.length + frontier.length >= target) break; unassigned.delete(nid); frontier.push(nid); }
     }
@@ -89,11 +97,20 @@ export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, ro
       for(const dir of c.openEdges){ const rid = level.cells.get(c.neighbors.get(dir))?.roomId; if(rid !== undefined && rid !== room.id) counts.set(rid, (counts.get(rid)||0)+1); }
     }
     const target = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0];
-    if(target !== undefined){ const dest = level.rooms[target]; for(const id of room.cells){ level.cells.get(id).roomId = dest.id; dest.cells.push(id); } room.cells.length = 0; }
+    if(target !== undefined){ const dest = level.rooms[target]; for(const id of room.cells){ level.cells.get(id).roomId = dest.id; dest.cells.push(id); level.events.push({ type:'assignRoom', cell:id, room:dest.id, phase:'mergeTinyRoom' }); } room.cells.length = 0; }
   }
   const liveRooms = level.rooms.filter(r=>r.cells.length).map((r,i)=>({ ...r, id:i, neighbors:new Set(), doors:[] }));
   const remap = new Map(); level.rooms.forEach(r=>{ if(r.cells.length) remap.set(r.id, liveRooms.findIndex(x=>x.cells===r.cells)); });
   level.rooms = liveRooms; for(const c of level.cells.values()) c.roomId = remap.get(c.roomId);
+  // A combat room is one open arena: remove any closed walls between adjacent cells
+  // after the room partition is finalized so rendering and collision agree.
+  for(const c of level.cells.values()) for(const [dir,nid] of c.neighbors){
+    const n = level.cells.get(nid);
+    if(n && n.roomId === c.roomId && !c.openEdges.has(dir)){
+      connect(level, c, dir, n);
+      level.events.push({ type:'openEdge', cell:c.id, dir, to:n.id, phase:'roomInterior' });
+    }
+  }
 
   const seenDoor = new Set();
   for(const c of level.cells.values()) for(const dir of c.openEdges){
@@ -102,6 +119,7 @@ export function generateHexMaze({ rows=15, cols=15, cellRadius=18, seed=7331, ro
     if(seenDoor.has(pair)) continue; seenDoor.add(pair);
     const door = { id:level.doors.length, roomA:a, roomB:b, cellA:c.id, cellB:n.id, dirFromA:dir, open:false };
     level.doors.push(door); level.rooms[a].neighbors.add(b); level.rooms[b].neighbors.add(a); level.rooms[a].doors.push(door.id); level.rooms[b].doors.push(door.id);
+    level.events.push({ type:'createDoor', door:door.id, cellA:c.id, cellB:n.id, roomA:a, roomB:b });
   }
   level.startRoomId = level.cells.get(level.startCellId).roomId;
   return level;
@@ -124,13 +142,19 @@ export function randomPointInRoom(level, roomId, rnd=Math.random){
   return { x:c.center.x + Math.cos(a)*r, z:c.center.z + Math.sin(a)*r };
 }
 export function resolveRoomMovement(level, from, to, allowedRoomIds, radius=1.1){
-  const cell = nearestCell(level, to.x, to.z, allowedRoomIds);
-  if(!cell) return { ...from };
-  const dx = to.x - cell.center.x, dz = to.z - cell.center.z;
+  const fromCell = nearestCell(level, from.x, from.z, allowedRoomIds);
+  const toCell = nearestCell(level, to.x, to.z, allowedRoomIds);
+  if(!toCell) return { ...from };
+  if(fromCell && fromCell.id !== toCell.id){
+    let dirTo = -1;
+    for(const [dir,nid] of fromCell.neighbors) if(nid === toCell.id){ dirTo = dir; break; }
+    if(dirTo < 0 || !fromCell.openEdges.has(dirTo) || !allowedRoomIds.has(toCell.roomId)) return { ...from };
+  }
+  const dx = to.x - toCell.center.x, dz = to.z - toCell.center.z;
   const max = level.cellRadius * .98 - radius;
   const d = Math.hypot(dx,dz);
   if(d <= max) return { x:to.x, z:to.z };
-  return { x:cell.center.x + dx/d*max, z:cell.center.z + dz/d*max };
+  return { x:toCell.center.x + dx/d*max, z:toCell.center.z + dz/d*max };
 }
 export function doorWorld(level, door){
   const a = level.cells.get(door.cellA), b = level.cells.get(door.cellB);

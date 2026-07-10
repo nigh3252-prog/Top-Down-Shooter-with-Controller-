@@ -244,6 +244,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
+    const prevPos = { x:e.x, z:e.z };
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
@@ -298,7 +299,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
       }
     }
     if(resolveMovement){
-      const p2 = resolveMovement({ x:e.x, z:e.z }, e.radius);
+      const p2 = resolveMovement(prevPos, { x:e.x, z:e.z }, e.radius);
       e.x = p2.x; e.z = p2.z;
     } else {
       const rr = Math.hypot(e.x, e.z);

@@ -220,7 +220,7 @@ import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
-import { generateHexMaze, edgeBetween, roomCenter, resolveRoomMovement, doorWorld } from './src/hex-maze.js';
+import { generateHexMaze, edgeBetween, roomCenter, resolveRoomMovement } from './src/hex-maze.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -309,7 +309,7 @@ function renderMazeRoom(){
     for(const id of mazeLevel.rooms[rid].cells){ mazeRoot.add(makeHexFloor(mazeLevel.cells.get(id), rid===mazeState.activeRoomId ? floorMat : nextFloorMat)); }
   }
   const drawnWalls = new Set();
-  for(const rid of visibleRooms){
+  for(const rid of [mazeState.activeRoomId]){
     for(const id of mazeLevel.rooms[rid].cells){
       const cell = mazeLevel.cells.get(id);
       for(let i=0;i<6;i++){
@@ -326,12 +326,12 @@ function renderMazeRoom(){
   }
   for(const door of mazeLevel.doors){
     if(door.roomA !== mazeState.activeRoomId && door.roomB !== mazeState.activeRoomId) continue;
-    const p = doorWorld(mazeLevel, door); const open = mazeState.openDoors.has(door.id);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.8, 3.2, .7), open ? doorOpenMat : doorLockedMat);
+    const open = mazeState.openDoors.has(door.id);
     const a = mazeLevel.cells.get(door.cellA);
-    const edge = edgeBetween(mazeLevel, a, door.dirFromA, ARENA*.76);
+    const edge = edgeBetween(mazeLevel, a, door.dirFromA, ARENA*.96);
     const m = edgeMid(edge.a, edge.b);
-    mesh.position.set(p.x, 1.6, p.z); mesh.rotation.y = -m.ang;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(m.len*.68, 3.2, .7), open ? doorOpenMat : doorLockedMat);
+    mesh.position.set(m.x, 1.6, m.z); mesh.rotation.y = -m.ang;
     mesh.userData.doorId = door.id; mesh.castShadow = mesh.receiveShadow = true;
     mazeRoot.add(mesh); doorMeshes.set(door.id, mesh);
   }
@@ -342,40 +342,59 @@ function renderMazePreview(canvas, step=Infinity){
   if(!canvas) return;
   const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h); ctx.fillStyle = '#081112'; ctx.fillRect(0,0,w,h);
-  const cells = [...mazeLevel.cells.values()].filter(c => c.visitIndex <= step);
-  if(!cells.length) return;
-  const xs = cells.map(c=>c.center.x), zs = cells.map(c=>c.center.z);
+  const allCells = [...mazeLevel.cells.values()];
+  const xs = allCells.map(c=>c.center.x), zs = allCells.map(c=>c.center.z);
   const minX=Math.min(...xs)-ARENA*1.2, maxX=Math.max(...xs)+ARENA*1.2, minZ=Math.min(...zs)-ARENA*1.2, maxZ=Math.max(...zs)+ARENA*1.2;
   const scale = Math.min(w/(maxX-minX), h/(maxZ-minZ));
   const tx = x => (x-minX)*scale + (w-(maxX-minX)*scale)/2;
   const tz = z => (z-minZ)*scale + (h-(maxZ-minZ)*scale)/2;
-  for(const c of cells){
-    const pts = edgeBetween ? Array.from({length:6}, (_,i)=>edgeBetween(mazeLevel,c,i,ARENA*.88).a) : [];
-    ctx.beginPath(); pts.forEach((pt,i)=> i?ctx.lineTo(tx(pt.x),tz(pt.z)):ctx.moveTo(tx(pt.x),tz(pt.z))); ctx.closePath();
-    ctx.fillStyle = c.roomId === mazeState.activeRoomId ? '#315f5c' : (mazeState.visited.has(c.roomId) ? '#24484a' : '#142a2c'); ctx.fill();
+  const shown = new Set(), open = new Set(), assigned = new Map(), doors = new Set();
+  const limit = Math.min(step, mazeLevel.events.length);
+  for(let i=0; i<limit; i++){
+    const ev = mazeLevel.events[i];
+    if(ev.type === 'visitCell') shown.add(ev.cell);
+    else if(ev.type === 'openEdge') open.add([ev.cell, ev.to].sort().join('|'));
+    else if(ev.type === 'assignRoom') assigned.set(ev.cell, ev.room);
+    else if(ev.type === 'createDoor') doors.add(ev.door);
   }
-  ctx.lineWidth = 1.4; ctx.strokeStyle = '#79c7bc';
-  for(const c of cells){
+  if(step === Infinity){
+    for(const c of allCells) shown.add(c.id);
+    for(const c of allCells) for(const dir of c.openEdges){ const n=c.neighbors.get(dir); if(n) open.add([c.id,n].sort().join('|')); }
+    for(const c of allCells) assigned.set(c.id, c.roomId);
+    for(const d of mazeLevel.doors) doors.add(d.id);
+  }
+  for(const c of allCells){
+    if(!shown.has(c.id)) continue;
+    const pts = Array.from({length:6}, (_,i)=>edgeBetween(mazeLevel,c,i,ARENA*.88).a);
+    ctx.beginPath(); pts.forEach((pt,i)=> i?ctx.lineTo(tx(pt.x),tz(pt.z)):ctx.moveTo(tx(pt.x),tz(pt.z))); ctx.closePath();
+    const rid = assigned.get(c.id);
+    ctx.fillStyle = rid === undefined ? '#142a2c' : (c.roomId === mazeState.activeRoomId ? '#315f5c' : (mazeState.visited.has(c.roomId) ? '#24484a' : '#193638'));
+    ctx.fill();
+  }
+  ctx.lineWidth = 1.4;
+  for(const c of allCells){
+    if(!shown.has(c.id)) continue;
     for(let dir=0; dir<6; dir++){
-      const n = c.neighbors.get(dir) ? mazeLevel.cells.get(c.neighbors.get(dir)) : null;
-      if(n && n.visitIndex > step) continue;
+      const nid = c.neighbors.get(dir), n = nid ? mazeLevel.cells.get(nid) : null;
+      if(n && shown.has(n.id) && open.has([c.id,n.id].sort().join('|'))) continue;
       const edge = edgeBetween(mazeLevel, c, dir, ARENA*.88);
-      if(!c.openEdges.has(dir)){ ctx.strokeStyle = '#79c7bc'; ctx.beginPath(); ctx.moveTo(tx(edge.a.x),tz(edge.a.z)); ctx.lineTo(tx(edge.b.x),tz(edge.b.z)); ctx.stroke(); }
+      ctx.strokeStyle = '#79c7bc'; ctx.beginPath(); ctx.moveTo(tx(edge.a.x),tz(edge.a.z)); ctx.lineTo(tx(edge.b.x),tz(edge.b.z)); ctx.stroke();
     }
   }
   ctx.lineWidth = 3;
-  for(const d of mazeLevel.doors){
-    const a = mazeLevel.cells.get(d.cellA), b = mazeLevel.cells.get(d.cellB); if(a.visitIndex > step || b.visitIndex > step) continue;
-    const p = doorWorld(mazeLevel,d); ctx.strokeStyle = mazeState.openDoors.has(d.id) ? '#7fd0a8' : '#e8a04c';
-    ctx.beginPath(); ctx.arc(tx(p.x), tz(p.z), 2.6, 0, Math.PI*2); ctx.stroke();
+  for(const id of doors){
+    const d = mazeLevel.doors[id]; if(!d) continue;
+    const cell = mazeLevel.cells.get(d.cellA), edge = edgeBetween(mazeLevel, cell, d.dirFromA, ARENA*.88), m = edgeMid(edge.a, edge.b);
+    ctx.strokeStyle = mazeState.openDoors.has(d.id) ? '#7fd0a8' : '#e8a04c';
+    ctx.beginPath(); ctx.arc(tx(m.x), tz(m.z), 2.6, 0, Math.PI*2); ctx.stroke();
   }
 }
 function refreshMazePreviews(){ renderMazePreview(document.getElementById('startMazeCanvas')); renderMazePreview(document.getElementById('menuMazeCanvas')); }
 let mazeBuildPreviewStep = 0;
 setInterval(()=>{
   if(arena?.started) return;
-  mazeBuildPreviewStep = (mazeBuildPreviewStep + 3) % (mazeLevel.buildSteps.length + 50);
-  renderMazePreview(document.getElementById('startMazeCanvas'), Math.min(mazeBuildPreviewStep, mazeLevel.buildSteps.length));
+  mazeBuildPreviewStep = (mazeBuildPreviewStep + 1) % (mazeLevel.events.length + 50);
+  renderMazePreview(document.getElementById('startMazeCanvas'), Math.min(mazeBuildPreviewStep, mazeLevel.events.length));
 }, 90);
 
 
@@ -532,7 +551,7 @@ function cycleWeapon(dir=1){
 const enemySystem = createArenaEnemySystem({
   THREE, worldRoot, arenaRadius: ARENA, level: mazeLevel,
   getActiveRoomId:()=>mazeState.activeRoomId,
-  resolveMovement:(pos, radius=1)=>resolveRoomMovement(mazeLevel, pos, pos, new Set([mazeState.activeRoomId]), radius),
+  resolveMovement:(from, to, radius=1)=>resolveRoomMovement(mazeLevel, from, to, new Set([mazeState.activeRoomId]), radius),
   onRoomCleared:()=>{ mazeState.cleared = true; announce('ROOM CLEAR · STRIKE A DOOR', 1.8); renderMazeRoom(); refreshMazePreviews(); }
 });
 
@@ -1109,6 +1128,7 @@ function updatePlayer(dt, rawDt = dt){
   if(arena.charge.active) spd *= CHARGE_MOVE_MULT;
   else if(combatState.attack) spd *= PC.combatMovePenalty();
 
+  const prevPos = { x:actorPos.x, z:actorPos.y };
   const isMoving = Math.hypot(input.mx, input.mz) > .01;
   if(d.t >= 0){
     d.t += dt;
@@ -1131,7 +1151,7 @@ function updatePlayer(dt, rawDt = dt){
   }
   const allowedRooms = new Set([mazeState.activeRoomId]);
   for(const did of mazeState.openDoors){ const d = mazeLevel.doors[did]; if(d.roomA === mazeState.activeRoomId) allowedRooms.add(d.roomB); if(d.roomB === mazeState.activeRoomId) allowedRooms.add(d.roomA); }
-  const fixed = resolveRoomMovement(mazeLevel, { x:actorPos.x, z:actorPos.y }, { x:actorPos.x, z:actorPos.y }, allowedRooms, 1.2);
+  const fixed = resolveRoomMovement(mazeLevel, prevPos, { x:actorPos.x, z:actorPos.y }, allowedRooms, 1.2);
   actorPos.set(fixed.x, fixed.z);
   const currentCell = mazeLevel.cells.get((()=>{ let best=null, bd=Infinity; for(const rid of allowedRooms) for(const id of mazeLevel.rooms[rid].cells){ const c=mazeLevel.cells.get(id), dd=(c.center.x-actorPos.x)**2+(c.center.z-actorPos.y)**2; if(dd<bd){bd=dd; best=id;} } return best; })());
   if(currentCell && currentCell.roomId !== mazeState.activeRoomId && mazeState.openDoors.size){ enterRoom(currentCell.roomId); }
