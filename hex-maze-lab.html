@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Hex Maze Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#071014;--panel:rgba(8,19,24,.94);--line:#29434a;--text:#e9f6f6;--muted:#91a8ad;--gold:#ffe34f;--cyan:#35e5ef;--red:#ff5d6f}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}.top{position:fixed;z-index:2;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));display:flex;gap:8px;align-items:center;pointer-events:none}.brand{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 12px;box-shadow:0 8px 30px #0009}.brand strong{display:block;letter-spacing:.12em;font-size:12px;color:var(--gold)}.brand span{font-size:11px;color:var(--muted)}button,input{font:inherit}.toggle,.action{pointer-events:auto;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:10px 12px;font-weight:800}.toggle{margin-left:auto}.panel{position:fixed;z-index:3;top:72px;right:max(10px,env(safe-area-inset-right));width:min(340px,calc(100vw - 20px));max-height:calc(100dvh - 86px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 18px 50px #000b}.panel.hidden{display:none}.row{display:grid;grid-template-columns:1fr 92px;gap:10px;align-items:center;margin:8px 0}.row label{font-size:12px;color:var(--muted);font-weight:700}.row input{width:100%;min-width:0;background:#0b171c;border:1px solid var(--line);border-radius:8px;padding:7px;color:var(--text)}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.action{background:#162b31}.step{display:grid;gap:5px;margin:12px 0}.step input{width:100%}.stepInfo,.metrics,.legend,.validation{font-size:11px;line-height:1.45;color:var(--muted)}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px}.metrics b{color:var(--text)}.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.dot::before{content:'';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;background:var(--c)}.validation{margin-top:10px;padding:9px;border-radius:10px;background:#0b171c;border:1px solid var(--line)}.validation.ok{color:#76efb2;border-color:#27684b}.validation.bad{color:#ff98a4;border-color:#793542}@media(max-width:620px){.panel{top:auto;bottom:max(10px,env(safe-area-inset-bottom));max-height:57dvh}.brand span{display:none}.top{align-items:flex-start}}
+</style>
+</head>
+<body>
+<canvas id="maze"></canvas>
+<div class="top"><div class="brand"><strong>HEX MAZE LAB</strong><span>geometry first · rooms second</span></div><button class="toggle" id="toggle">Controls</button></div>
+<section class="panel" id="panel">
+  <div class="row"><label for="seed">Seed</label><input id="seed" value="stone-001"></div>
+  <div class="row"><label for="radius">Radius</label><input id="radius" type="number" min="2" max="9" value="5"></div>
+  <div class="row"><label for="loop">Minimum loop</label><input id="loop" type="number" min="3" max="24" value="6"></div>
+  <div class="buttons"><button class="action" id="generate">Regenerate</button><button class="action" id="random">Random seed</button></div>
+  <div class="step"><label for="steps">Generation step</label><input id="steps" type="range" min="0" value="0"><div class="stepInfo" id="stepInfo"></div></div>
+  <div class="metrics" id="metrics"></div>
+  <div class="legend"><span class="dot" style="--c:var(--red)">original dead end</span><span class="dot" style="--c:var(--cyan)">braid</span><span class="dot" style="--c:var(--gold)">door / room number</span></div>
+  <div class="validation" id="validation"></div>
+</section>
+<script type="module">
+import { createHexMaze } from './src/hex-maze.js';
+import { drawMazeDebug } from './src/hex-maze-renderer.js';
+
+const canvas = document.getElementById('maze'), ctx = canvas.getContext('2d');
+const panel = document.getElementById('panel'), seed = document.getElementById('seed');
+const radius = document.getElementById('radius'), loop = document.getElementById('loop');
+const steps = document.getElementById('steps'), stepInfo = document.getElementById('stepInfo');
+const metrics = document.getElementById('metrics'), validation = document.getElementById('validation');
+let maze;
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw();
+}
+function describeStep(step, index){
+  if(!step) return '';
+  const detail = step.loopLength ? ` · loop ${step.loopLength} cells` : step.cellKeys ? ` · ${step.cellKeys.length} cell${step.cellKeys.length === 1 ? '' : 's'}` : '';
+  return `${index + 1}/${maze.steps.length} · ${step.phase.replaceAll('-', ' ')}${detail}`;
+}
+function draw(){
+  if(!maze) return;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const result = drawMazeDebug(ctx, maze, { width:canvas.width / dpr, height:canvas.height / dpr, stepIndex:Number(steps.value) });
+  stepInfo.textContent = describeStep(result.currentStep, Number(steps.value));
+}
+function generate(){
+  maze = createHexMaze({ seed:seed.value || 'stone-001', radius:Number(radius.value), minLoopLength:Number(loop.value), minRoomSize:4, maxRoomSize:7 });
+  steps.max = maze.steps.length - 1; steps.value = maze.steps.length - 1;
+  metrics.innerHTML = `<span>Cells <b>${maze.cells.size}</b></span><span>Rooms <b>${maze.rooms.length}</b></span><span>Original ends <b>${maze.originalDeadEnds.length}</b></span><span>Braids <b>${maze.braidedEdges.size}</b></span><span>Doors <b>${maze.doors.length}</b></span><span>Seed <b>${maze.seed}</b></span>`;
+  validation.className = `validation ${maze.validation.valid ? 'ok' : 'bad'}`;
+  validation.textContent = maze.validation.valid ? 'PASS · all cells and rooms reachable · no dead ends · doors agree' : `FAIL · ${maze.validation.errors.join(' · ')}`;
+  draw(); window.__hexMazeLab = { maze, regenerate:generate };
+}
+document.getElementById('generate').addEventListener('click', generate);
+document.getElementById('random').addEventListener('click', ()=>{ seed.value = crypto.randomUUID().slice(0, 8); generate(); });
+document.getElementById('toggle').addEventListener('click', ()=>panel.classList.toggle('hidden'));
+steps.addEventListener('input', draw); addEventListener('resize', resize); generate(); resize();
+</script>
+</body>
+</html>
+

@@ -40,7 +40,10 @@ const EATK = {
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
 
-export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18 } = {}){
+export function createArenaEnemySystem({
+  THREE, worldRoot, materials = {}, arenaRadius = 18,
+  navigation = null, roomEncounterMode = false, onEncounterCleared = null,
+} = {}){
   const rig = installGoblinRig(THREE);
   // Shared choreography interpreter — the exact same pose sampler the player uses
   // (src/attack-interpreter.js), so a grunt swings the real player animation.
@@ -59,6 +62,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   const deathPieces = [];
   const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
+  let activeEncounterRoomId = null;
   let lastPlayer = { x:0, z:0, invulnerable:false };
 
   const PLAYER_R = .25 * S;
@@ -156,7 +160,11 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     e.vx = approachN(e.vx, dx*sp*amount, dt, 6);
     e.vz = approachN(e.vz, dz*sp*amount, dt, 6);
   }
-  function seekPlayer(e, p, dt){ const d = norm(p.x - e.x, p.z - e.z); steer(e, d.x, d.z, 1, dt); }
+  function seekPlayer(e, p, dt){
+    const target = navigation?.nextWaypoint?.(e, p, activeEncounterRoomId) || p;
+    const d = norm(target.x - e.x, target.z - e.z);
+    steer(e, d.x, d.z, 1, dt);
+  }
   function orbitPlayer(e, p, dt, amount=.55){
     const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
     const tx = (-rz/r)*e.orbitDir, tz = (rx/r)*e.orbitDir;
@@ -172,7 +180,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function moveToSlot(e, p, dt){
     const slots = director.getDebugState().slots; const slot = slots[e.slotIndex];
     if(!slot){ orbitPlayer(e, p, dt); return; }
-    const tx = p.x + Math.cos(slot.angle)*slot.radius, tz = p.z + Math.sin(slot.angle)*slot.radius;
+    const rawTarget = { x:p.x + Math.cos(slot.angle)*slot.radius, z:p.z + Math.sin(slot.angle)*slot.radius };
+    const target = navigation?.nextWaypoint?.(e, rawTarget, activeEncounterRoomId) || rawTarget;
+    const tx = target.x, tz = target.z;
     const d = norm(tx - e.x, tz - e.z); const dd = Math.hypot(tx - e.x, tz - e.z);
     steer(e, d.x, d.z, clamp(dd, .15, 1), dt);
   }
@@ -202,6 +212,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function resolveEnemyMelee(e, p){
     const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
     if(d > e.attack.range + PLAYER_R) return;
+    if(navigation?.raycastWalls?.({ x:e.x, z:e.z }, { x:p.x, z:p.z })) return;
     const ang = Math.atan2(dx,dz), fa = Math.atan2(e.facing.x, e.facing.z);
     if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < e.radius + PLAYER_R + .26){
       e.hitDone = true;
@@ -231,7 +242,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   function updateProjectiles(dt, p){
     for(const pr of projectiles){
       if(pr.dead) continue;
+      const previous = { x:pr.x, z:pr.z };
       pr.life -= dt; pr.x += pr.vx*dt; pr.z += pr.vz*dt;
+      if(navigation?.raycastWalls?.(previous, { x:pr.x, z:pr.z })) pr.life = 0;
       if(Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
         hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz)); pr.life = 0;
       }
@@ -243,6 +256,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
+    const previous = { x:e.x, z:e.z };
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
@@ -296,8 +310,13 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
-    const rr = Math.hypot(e.x, e.z);
-    if(rr > arenaRadius - CLAMP_MARGIN){ e.x *= (arenaRadius - CLAMP_MARGIN)/rr; e.z *= (arenaRadius - CLAMP_MARGIN)/rr; }
+    if(navigation?.resolveMovement){
+      const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, e.radius);
+      e.x = moved.x; e.z = moved.z;
+    } else {
+      const rr = Math.hypot(e.x, e.z);
+      if(rr > arenaRadius - CLAMP_MARGIN){ e.x *= (arenaRadius - CLAMP_MARGIN)/rr; e.z *= (arenaRadius - CLAMP_MARGIN)/rr; }
+    }
   }
 
   function resolveBodyCollisions(p){
@@ -317,6 +336,12 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
         // only move the enemy — this is what stops a lunge from ending on top of you)
         const e = a; const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz) || .001, min = e.radius + PLAYER_R;
         if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
+      }
+    }
+    if(navigation?.resolveMovement){
+      for(const e of enemies){
+        const projected = navigation.resolveMovement({ x:e.x, z:e.z }, { x:0, z:0 }, e.radius);
+        e.x = projected.x; e.z = projected.z;
       }
     }
   }
@@ -384,6 +409,8 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     return MIX[i % MIX.length];
   }
   function spawnPos(){
+    const roomPoint = navigation?.randomSpawn?.(activeEncounterRoomId, lastPlayer);
+    if(roomPoint) return roomPoint;
     const a = Math.random()*Math.PI*2, r = THREE.MathUtils.randFloat(arenaRadius*.62, arenaRadius - 1.5);
     return { x:(lastPlayer.x ?? 0) + Math.cos(a)*r, z:(lastPlayer.z ?? 0) + Math.sin(a)*r };
   }
@@ -427,13 +454,23 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
 
   /* ---------- lifecycle ---------- */
   function clearDeathPieces(){ deathPieces.forEach(p => p.mesh?.parent && p.mesh.parent.remove(p.mesh)); deathPieces.length = 0; }
-  function reset(){
+  function clearEnemies(){
     director.reset();
     enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root));
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
     clearDeathPieces();
-    wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = '';
+  }
+  function startRoomEncounter(roomId){
+    clearEnemies();
+    activeEncounterRoomId = roomId;
+    waveKills = 0; spawnedThisWave = 0; waveClearT = 0;
     startWave();
+  }
+  function reset(){
+    clearEnemies();
+    wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = '';
+    activeEncounterRoomId = null;
+    if(!roomEncounterMode) startWave();
   }
 
   function update(dt, player){
@@ -450,14 +487,21 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     // wave clear when everything is dead
     if(!enemies.length && !playerDead()){
       waveClearT += dt;
-      if(waveClearT > 1.0) finishWave();
+      if(waveClearT > 1.0){
+        if(roomEncounterMode && activeEncounterRoomId !== null){
+          const clearedRoomId = activeEncounterRoomId;
+          activeEncounterRoomId = null; waveClearT = 0;
+          director.onWaveClear();
+          onEncounterCleared?.(clearedRoomId);
+        } else if(!roomEncounterMode) finishWave();
+      }
     } else waveClearT = 0;
   }
 
-  startWave();
+  if(!roomEncounterMode) startWave();
 
   return {
-    enemies, group, director, update, damageEnemy, reset,
+    enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
     setCycleOnWaveClear:(v)=>{ director.settings.cycleOnWaveClear = !!v; },
@@ -477,6 +521,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     get kills(){ return kills; },
     get playerHp(){ return tuning.playerHp; },
     get lastPlayerHit(){ return tuning.lastPlayerHit; },
-    get lastPlayerHitDir(){ return tuning.lastPlayerHitDir || null; }
+    get lastPlayerHitDir(){ return tuning.lastPlayerHitDir || null; },
+    get activeEncounterRoomId(){ return activeEncounterRoomId; }
   };
 }
