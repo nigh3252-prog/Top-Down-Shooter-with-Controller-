@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHexMaze, validateHexMaze } from '../src/hex-maze.js';
 import { axialToWorld, buildMazeEdges, findCellAtPoint, findPath, raycastWalls, resolveCircleMovement } from '../src/hex-maze-navigation.js';
 import { createRoomEncounterState } from '../src/room-encounters.js';
+import { createRoomTransitionController } from '../src/room-transition.js';
 
 let cellCount = null;
 for(let i = 0; i < 500; i++){
@@ -20,9 +21,13 @@ assert.deepEqual([...first.openEdges].sort(), [...second.openEdges].sort(), 'sam
 assert.deepEqual(first.rooms, second.rooms, 'same seed should segment the same rooms');
 
 const startCell = first.cells.get(first.startCellKey);
-const startPoint = axialToWorld(startCell.q, startCell.r, 4.4);
-assert.equal(findCellAtPoint(first, startPoint, 4.4)?.key, first.startCellKey, 'world lookup should find the start cell');
-const collisionEdges = buildMazeEdges(first, { hexSize:4.4 }).filter(edge => edge.blocked);
+const arenaHexSize = 20;
+const arenaArea = Math.PI * 18 * 18;
+const hexArea = 3 * Math.sqrt(3) / 2 * arenaHexSize * arenaHexSize;
+assert.ok(Math.abs(hexArea - arenaArea) / arenaArea < .03, 'one hex should be approximately one original arena');
+const startPoint = axialToWorld(startCell.q, startCell.r, arenaHexSize);
+assert.equal(findCellAtPoint(first, startPoint, arenaHexSize)?.key, first.startCellKey, 'world lookup should find the start cell');
+const collisionEdges = buildMazeEdges(first, { hexSize:arenaHexSize }).filter(edge => edge.blocked);
 assert.ok(collisionEdges.length > 0, 'maze should expose collision walls');
 const wall = collisionEdges[0];
 const wallMid = { x:(wall.a.x + wall.b.x) / 2, z:(wall.a.z + wall.b.z) / 2 };
@@ -49,6 +54,25 @@ assert.deepEqual([...encounters.sealedRoomIds], [first.startRoomId], 'uncleared 
 encounters.clearRoom();
 assert.equal(encounters.isCleared(first.startRoomId), true, 'cleared room should persist');
 assert.equal(encounters.sealedRoomIds.size, 0, 'cleared room should reopen');
+const startDoor = first.doors.find(door => door.roomA === first.startRoomId || door.roomB === first.startRoomId);
+assert.ok(startDoor, 'starting room should have a door');
+assert.equal(encounters.canOpenDoor(startDoor.edge), true, 'cleared room door should become breakable');
+assert.equal(encounters.openDoor(startDoor.edge), true, 'breakable door should open once');
+assert.equal(encounters.openDoor(startDoor.edge), false, 'opened door should not open twice');
+assert.equal(encounters.isDoorOpened(startDoor.edge), true, 'opened door should persist');
+const closedDoor = buildMazeEdges(first, { hexSize:arenaHexSize, closedDoorEdges:new Set([startDoor.edge]) })
+  .find(edge => edge.edge === startDoor.edge);
+assert.equal(closedDoor.blocked, true, 'closed door edge should participate in collision');
 assert.deepEqual([entered.length, started.length, cleared.length], [1, 1, 1], 'encounter hooks should fire once');
+
+let swaps = 0, completes = 0;
+const transition = createRoomTransitionController({ duration:1, swapAt:.5, onSwap:()=>swaps++, onComplete:()=>completes++ });
+assert.equal(transition.start({ toRoomId:1 }), true, 'room transition should start');
+assert.equal(transition.start({ toRoomId:2 }), false, 'a second transition should not interrupt the first');
+assert.equal(transition.update(.49).swapped, false, 'room should remain loaded before the occluded midpoint');
+assert.equal(transition.update(.02).swapped, true, 'room should swap once behind the transition veil');
+assert.equal(swaps, 1, 'room swap callback should fire once');
+assert.equal(transition.update(.49).completed, true, 'transition should finish at its duration');
+assert.equal(completes, 1, 'room completion callback should fire once');
 
 console.log(`Validated 500 deterministic braided mazes (${cellCount} cells each).`);

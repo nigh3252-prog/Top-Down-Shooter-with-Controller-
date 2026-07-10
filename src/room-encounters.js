@@ -1,5 +1,6 @@
 export function createRoomEncounterState(maze, { onRoomEnter, onEncounterStart, onRoomCleared } = {}){
   const clearedRoomIds = new Set();
+  const openedDoorEdges = new Set();
   let activeRoomId = null;
   let encounterRoomId = null;
 
@@ -24,20 +25,34 @@ export function createRoomEncounterState(maze, { onRoomEnter, onEncounterStart, 
     return firstClear;
   }
 
-  function reset({ preserveCleared = false } = {}){
+  function canOpenDoor(edge, roomId = activeRoomId){
+    if(roomId === null || !clearedRoomIds.has(roomId)) return false;
+    const door = maze.doors.find(candidate => candidate.edge === edge);
+    return !!door && (door.roomA === roomId || door.roomB === roomId) && !openedDoorEdges.has(edge);
+  }
+
+  function openDoor(edge, roomId = activeRoomId){
+    if(!canOpenDoor(edge, roomId)) return false;
+    openedDoorEdges.add(edge);
+    return true;
+  }
+
+  function reset({ preserveCleared = false, preserveDoors = preserveCleared } = {}){
     if(!preserveCleared) clearedRoomIds.clear();
+    if(!preserveDoors) openedDoorEdges.clear();
     activeRoomId = null;
     encounterRoomId = null;
   }
 
   return {
-    enterRoom, clearRoom, reset,
+    enterRoom, clearRoom, canOpenDoor, openDoor, reset,
     isCleared:roomId => clearedRoomIds.has(roomId),
+    isDoorOpened:edge => openedDoorEdges.has(edge),
     get activeRoomId(){ return activeRoomId; },
     get encounterRoomId(){ return encounterRoomId; },
     get sealedRoomIds(){ return encounterRoomId === null ? new Set() : new Set([encounterRoomId]); },
     get clearedRoomIds(){ return new Set(clearedRoomIds); },
+    get openedDoorEdges(){ return new Set(openedDoorEdges); },
     get progress(){ return { cleared:clearedRoomIds.size, total:maze.rooms.length }; },
   };
 }
-

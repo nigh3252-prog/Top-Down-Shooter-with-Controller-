@@ -43,7 +43,11 @@ function edgeEndpoints(cell, directionIndex, hexSize){
   ];
 }
 
-export function buildMazeEdges(maze, { hexSize = 2.6, sealedRoomIds = new Set() } = {}){
+export function buildMazeEdges(maze, {
+  hexSize = 2.6,
+  sealedRoomIds = new Set(),
+  closedDoorEdges = new Set(),
+} = {}){
   const edges = [];
   for(const cell of maze.cells.values()){
     HEX_DIRECTIONS.forEach((direction, directionIndex) => {
@@ -53,12 +57,13 @@ export function buildMazeEdges(maze, { hexSize = 2.6, sealedRoomIds = new Set() 
       const open = !!next && hasOpenEdge(maze, cell.key, nextKey);
       const door = open && cell.roomId !== next.roomId;
       const sealed = door && (sealedRoomIds.has(cell.roomId) || sealedRoomIds.has(next.roomId));
+      const closed = door && closedDoorEdges.has(edgeKey(cell.key, nextKey));
       const [a, b] = edgeEndpoints(cell, directionIndex, hexSize);
       edges.push({
         edge:next ? edgeKey(cell.key, nextKey) : `boundary:${cell.key}:${directionIndex}`,
         a, b, cellA:cell.key, cellB:next?.key ?? null,
         roomA:cell.roomId, roomB:next?.roomId ?? null,
-        boundary:!next, open, door, sealed, blocked:!open || sealed,
+        boundary:!next, open, door, sealed, closed, blocked:!open || sealed || closed,
       });
     });
   }
@@ -171,4 +176,3 @@ export function projectToWalkable(maze, point, { roomId = null, hexSize = 2.6 } 
   const center = axialToWorld(candidates[0].q, candidates[0].r, hexSize);
   return { ...center, cellKey:candidates[0].key };
 }
-

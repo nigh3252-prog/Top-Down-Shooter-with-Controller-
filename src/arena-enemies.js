@@ -491,6 +491,7 @@ export function createArenaEnemySystem({
         if(roomEncounterMode && activeEncounterRoomId !== null){
           const clearedRoomId = activeEncounterRoomId;
           activeEncounterRoomId = null; waveClearT = 0;
+          director.onWaveClear();
           onEncounterCleared?.(clearedRoomId);
         } else if(!roomEncounterMode) finishWave();
       }
@@ -500,7 +501,7 @@ export function createArenaEnemySystem({
   if(!roomEncounterMode) startWave();
 
   return {
-    enemies, group, director, update, damageEnemy, reset, startRoomEncounter,
+    enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
     setCycleOnWaveClear:(v)=>{ director.settings.cycleOnWaveClear = !!v; },

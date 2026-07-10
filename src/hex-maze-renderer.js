@@ -101,41 +101,144 @@ function makeWallMesh(THREE, edge, material, wallHeight, thickness){
   return mesh;
 }
 
-export function createMazeWorld({ THREE, maze, hexSize = 2.6, wallHeight = 1.8, wallThickness = .18 } = {}){
+function splitDoorEdge(edge, doorWidth){
+  const dx = edge.b.x - edge.a.x, dz = edge.b.z - edge.a.z;
+  const length = Math.hypot(dx, dz) || 1;
+  const ux = dx / length, uz = dz / length;
+  const width = Math.min(doorWidth, length * .64);
+  const center = { x:(edge.a.x + edge.b.x) / 2, z:(edge.a.z + edge.b.z) / 2 };
+  const left = { x:center.x - ux * width / 2, z:center.z - uz * width / 2 };
+  const right = { x:center.x + ux * width / 2, z:center.z + uz * width / 2 };
+  return {
+    door:{ ...edge, a:left, b:right, center },
+    wings:[
+      { ...edge, door:false, blocked:true, a:edge.a, b:left, part:'door-wing' },
+      { ...edge, door:false, blocked:true, a:right, b:edge.b, part:'door-wing' },
+    ],
+  };
+}
+
+export function createMazeWorld({
+  THREE, maze, roomId = null, hexSize = 2.6, wallHeight = 1.8,
+  wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(),
+} = {}){
   if(!THREE || !maze) throw new Error('createMazeWorld requires THREE and a maze.');
-  const group = new THREE.Group(); group.name = 'hex maze world';
+  const room = roomId === null ? null : maze.rooms.find(candidate => candidate.id === roomId);
+  if(roomId !== null && !room) throw new Error(`Unknown maze room ${roomId}.`);
+  const activeCellKeys = new Set(room ? room.cellKeys : maze.cells.keys());
+  const activeCells = [...activeCellKeys].map(key => maze.cells.get(key)).filter(Boolean);
+  const group = new THREE.Group(); group.name = room ? `hex maze room ${roomId}` : 'hex maze world';
   const floorGeometry = new THREE.CylinderGeometry(hexSize * .96, hexSize * .96, .12, 6);
   const floorMaterials = maze.rooms.map(room => {
     const color = new THREE.Color().setHSL(((room.id * 67 + 195) % 360) / 360, .32, room.id % 2 ? .20 : .16);
     return new THREE.MeshStandardMaterial({ color, roughness:.95, metalness:.02 });
   });
-  for(const cell of maze.cells.values()){
+  for(const cell of activeCells){
     const floor = new THREE.Mesh(floorGeometry, floorMaterials[cell.roomId]);
     const center = axialToWorld(cell.q, cell.r, hexSize);
     floor.position.set(center.x, -.06, center.z); floor.rotation.y = Math.PI / 6; floor.receiveShadow = true; group.add(floor);
   }
 
   const wallMaterial = new THREE.MeshStandardMaterial({ color:0x253e42, roughness:.88, metalness:.04 });
-  const doorMaterial = new THREE.MeshStandardMaterial({ color:0xd6a63c, emissive:0x4a2c08, roughness:.72 });
+  const sealedDoorMaterial = new THREE.MeshStandardMaterial({ color:0x6e4a25, emissive:0x351407, roughness:.76 });
+  const breakableDoorMaterial = new THREE.MeshStandardMaterial({ color:0xe8a04c, emissive:0x6e2f0b, emissiveIntensity:1.35, roughness:.58 });
   const allEdges = buildMazeEdges(maze, { hexSize });
-  for(const edge of allEdges.filter(candidate => !candidate.open)) group.add(makeWallMesh(THREE, edge, wallMaterial, wallHeight, wallThickness));
+  const runtimeEdges = allEdges.filter(edge => activeCellKeys.has(edge.cellA) || (edge.cellB && activeCellKeys.has(edge.cellB)));
+  for(const edge of runtimeEdges.filter(candidate => !candidate.open && !candidate.door)){
+    group.add(makeWallMesh(THREE, edge, wallMaterial, wallHeight, wallThickness));
+  }
   const doorMeshes = new Map();
-  for(const edge of allEdges.filter(candidate => candidate.door)){
-    const mesh = makeWallMesh(THREE, edge, doorMaterial, wallHeight * .9, wallThickness * 1.35);
-    mesh.visible = false; mesh.userData.edge = edge; doorMeshes.set(edge.edge, mesh); group.add(mesh);
+  const doorTargets = new Map();
+  for(const edge of runtimeEdges.filter(candidate => candidate.door)){
+    const split = splitDoorEdge(edge, doorWidth);
+    for(const wing of split.wings) group.add(makeWallMesh(THREE, wing, wallMaterial, wallHeight, wallThickness));
+    const mesh = makeWallMesh(THREE, split.door, sealedDoorMaterial, wallHeight * .92, wallThickness * 1.7);
+    mesh.userData.edge = split.door;
+    mesh.userData.baseY = mesh.position.y;
+    mesh.userData.openProgress = 0;
+    mesh.userData.state = 'sealed';
+    doorMeshes.set(edge.edge, mesh);
+    doorTargets.set(edge.edge, { ...split.door, mesh, state:'sealed' });
+    group.add(mesh);
   }
   let sealedRoomIds = new Set();
-  const setSealedRooms = roomIds => {
-    sealedRoomIds = new Set(roomIds || []);
-    for(const mesh of doorMeshes.values()){
+  let openedEdges = new Set(openedDoorEdges || []);
+  let activeRoomCleared = false;
+  const setDoorStates = ({ sealedRoomIds:sealed = new Set(), openedDoorEdges:opened = new Set(), roomCleared = false } = {}, { animateOpenedEdge = null } = {}) => {
+    sealedRoomIds = new Set(sealed || []);
+    openedEdges = new Set(opened || []);
+    activeRoomCleared = !!roomCleared;
+    for(const [key, mesh] of doorMeshes){
       const edge = mesh.userData.edge;
-      mesh.visible = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
+      const isSealed = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
+      const isOpened = openedEdges.has(key) && !isSealed;
+      const target = doorTargets.get(key);
+      if(isOpened){
+        target.state = 'open';
+        if(animateOpenedEdge === key){
+          mesh.visible = true;
+          mesh.userData.state = 'opening';
+          mesh.userData.openProgress = 0;
+          mesh.position.y = mesh.userData.baseY;
+          mesh.scale.y = 1;
+        } else {
+          mesh.visible = false;
+          mesh.userData.state = 'open';
+          mesh.userData.openProgress = 1;
+        }
+      } else {
+        const state = activeRoomCleared && !isSealed ? 'breakable' : 'sealed';
+        target.state = state;
+        mesh.userData.state = state;
+        mesh.userData.openProgress = 0;
+        mesh.position.y = mesh.userData.baseY;
+        mesh.scale.y = 1;
+        mesh.material = state === 'breakable' ? breakableDoorMaterial : sealedDoorMaterial;
+        mesh.visible = true;
+      }
     }
   };
+  const update = dt => {
+    for(const mesh of doorMeshes.values()){
+      if(mesh.userData.state !== 'opening') continue;
+      mesh.userData.openProgress = Math.min(1, mesh.userData.openProgress + dt / .38);
+      const p = mesh.userData.openProgress;
+      const eased = p * p * (3 - 2 * p);
+      mesh.position.y = mesh.userData.baseY - eased * wallHeight * .92;
+      if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
+    }
+  };
+  const getCollisionSegments = () => {
+    const segments = [];
+    for(const edge of runtimeEdges){
+      if(edge.door){
+        const split = splitDoorEdge(edge, doorWidth);
+        segments.push(...split.wings);
+        const sealed = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
+        if(sealed || !openedEdges.has(edge.edge)) segments.push({ ...split.door, blocked:true, part:'door' });
+      } else if(edge.blocked) segments.push(edge);
+    }
+    return segments;
+  };
+  const centers = activeCells.map(cell => axialToWorld(cell.q, cell.r, hexSize));
+  const center = centers.reduce((sum, point) => ({ x:sum.x + point.x / centers.length, z:sum.z + point.z / centers.length }), { x:0, z:0 });
+  const dispose = () => {
+    const geometries = new Set(), materials = new Set();
+    group.traverse(object => {
+      if(object.geometry) geometries.add(object.geometry);
+      if(Array.isArray(object.material)) object.material.forEach(material => materials.add(material));
+      else if(object.material) materials.add(object.material);
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    materials.forEach(material => material.dispose());
+  };
+  setDoorStates({ openedDoorEdges:openedEdges, roomCleared:false });
   return {
-    group, doorMeshes, setSealedRooms,
+    group, roomId, activeCellKeys, center, doorMeshes, doorTargets,
+    setDoorStates, update, dispose,
     get sealedRoomIds(){ return new Set(sealedRoomIds); },
-    getCollisionSegments:() => buildMazeEdges(maze, { hexSize, sealedRoomIds }).filter(edge => edge.blocked),
+    get openedDoorEdges(){ return new Set(openedEdges); },
+    getDoorTargets:() => [...doorTargets.values()],
+    getCollisionSegments,
   };
 }
-
