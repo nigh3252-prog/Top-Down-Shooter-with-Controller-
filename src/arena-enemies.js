@@ -38,7 +38,7 @@ const EATK = {
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
   rockThrow:    { kind:'ranged', name:'Rock Throw',    range:3.3*S,  tokenCost:.5,   windup:.78, active:.08, recovery:.60, cooldown:2.05, damage:8,  arc:0,   knock:.2*S, projectile:true },
-  chargeRush:   { kind:'melee',  name:'Bull Rush',     range:2.25*S, tokenCost:1.4,  windup:.82, active:.46, recovery:.72, cooldown:2.35, damage:16, arc:.68, knock:.9*S, wantsSolo:true, charge:true },
+  chargeRush:   { kind:'melee',  name:'Bull Rush',     range:.28*S,  tokenCost:1.4,  windup:.82, active:2.30, recovery:.72, cooldown:2.35, damage:16, arc:.68, knock:.9*S, wantsSolo:true, charge:true },
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
 
