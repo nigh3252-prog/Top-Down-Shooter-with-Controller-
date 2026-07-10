@@ -1,0 +1,43 @@
+export function createRoomEncounterState(maze, { onRoomEnter, onEncounterStart, onRoomCleared } = {}){
+  const clearedRoomIds = new Set();
+  let activeRoomId = null;
+  let encounterRoomId = null;
+
+  function enterRoom(roomId){
+    if(roomId === null || roomId === undefined || roomId === activeRoomId) return false;
+    const previousRoomId = activeRoomId;
+    activeRoomId = roomId;
+    onRoomEnter?.({ roomId, previousRoomId, cleared:clearedRoomIds.has(roomId) });
+    if(!clearedRoomIds.has(roomId)){
+      encounterRoomId = roomId;
+      onEncounterStart?.({ roomId });
+    }
+    return true;
+  }
+
+  function clearRoom(roomId = encounterRoomId){
+    if(roomId === null || roomId === undefined) return false;
+    const firstClear = !clearedRoomIds.has(roomId);
+    clearedRoomIds.add(roomId);
+    if(encounterRoomId === roomId) encounterRoomId = null;
+    if(firstClear) onRoomCleared?.({ roomId });
+    return firstClear;
+  }
+
+  function reset({ preserveCleared = false } = {}){
+    if(!preserveCleared) clearedRoomIds.clear();
+    activeRoomId = null;
+    encounterRoomId = null;
+  }
+
+  return {
+    enterRoom, clearRoom, reset,
+    isCleared:roomId => clearedRoomIds.has(roomId),
+    get activeRoomId(){ return activeRoomId; },
+    get encounterRoomId(){ return encounterRoomId; },
+    get sealedRoomIds(){ return encounterRoomId === null ? new Set() : new Set([encounterRoomId]); },
+    get clearedRoomIds(){ return new Set(clearedRoomIds); },
+    get progress(){ return { cleared:clearedRoomIds.size, total:maze.rooms.length }; },
+  };
+}
+
