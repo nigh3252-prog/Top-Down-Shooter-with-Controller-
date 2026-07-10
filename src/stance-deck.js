@@ -24,6 +24,7 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
 
   return {
     get hand() { return s.hand; },
+    get upcoming() { return s.draw.slice(0, 4); },
     get drawCount() { return s.draw.length; },
     get discardCount() { return s.discard.length; },
     get shuffling() { return s.shuffleT >= 0; },
