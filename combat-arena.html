@@ -213,7 +213,7 @@
 import * as THREE from 'three';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions } from './src/weapons.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
@@ -421,6 +421,11 @@ const PC = installPlayerCombat({
   }
 });
 const combatState = PC.combatState;
+installRedTollGreatsword({
+  WEAPONS, combatState, settings: StoneSettings,
+  applyCombatWeaponTuning: PC.applyCombatWeaponTuning,
+  updateWeaponDynamicVisual: PC.updateWeaponDynamicVisual
+});
 
 function spawnCharacter(){
   if(activeModel) actorVisual.remove(activeModel);
