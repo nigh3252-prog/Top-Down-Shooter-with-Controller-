@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>COMBAT ARENA — stone wanderer × encounter director</title>
+<title>HEX MAZE COMBAT — stone wanderer × encounter director</title>
 <style>
   html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touch-action:none;
     -webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
@@ -36,6 +36,11 @@
     text-shadow:0 2px 8px #000;opacity:0;transition:opacity .18s}
   #vig{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;transition:opacity .16s;
     background:radial-gradient(ellipse at center, transparent 55%, rgba(190,40,20,.55) 100%)}
+  #roomTransition{position:fixed;inset:0;z-index:45;pointer-events:none;opacity:0;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at center,rgba(8,17,19,.88) 0%,rgba(4,9,10,.98) 62%,#020506 100%)}
+  #roomTransition .rtTitle{color:#e8a04c;font-size:14px;letter-spacing:.24em;text-transform:uppercase;
+    text-shadow:0 2px 12px #000;transform:translateY(12px)}
   /* ---- touch controls ---- */
   #joyBase{position:fixed;width:104px;height:104px;border-radius:50%;border:2px solid rgba(44,74,71,.8);
     background:rgba(18,36,38,.32);z-index:15;display:none;pointer-events:none}
@@ -148,6 +153,7 @@
 </div>
 <div id="msg"></div>
 <div id="vig"></div>
+<div id="roomTransition"><div class="rtTitle" id="rtTitle">ROOM TRANSITION</div></div>
 <div id="joyBase"></div><div id="joyKnob"></div>
 <div class="btnrow">
   <button class="pbtn" id="dgeBtn">DODGE</button>
@@ -202,8 +208,8 @@
 <div id="err"></div>
 <div id="startGate">
   <div id="startCard">
-    <div class="sgTitle">COMBAT ARENA</div>
-    <div class="sgHint">Enemies stay frozen until you tap start — connect your controller and go fullscreen below.</div>
+    <div class="sgTitle">HEX MAZE COMBAT</div>
+    <div class="sgHint">Clear the sealed room, reopen its doors, and explore the braided dungeon.</div>
     <button id="sgFsBtn">⛶ FULLSCREEN</button>
     <button id="startBtn">TAP TO START</button>
   </div>
@@ -223,6 +229,11 @@ import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
+import { createHexMaze, createSeededRandom } from './src/hex-maze.js';
+import { createMazeWorld } from './src/hex-maze-renderer.js';
+import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWalls, resolveCircleMovement } from './src/hex-maze-navigation.js';
+import { createRoomEncounterState } from './src/room-encounters.js';
+import { createRoomTransitionController } from './src/room-transition.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -246,6 +257,9 @@ function rand(a,b){ return a + Math.random()*(b-a); }
 
 /* ---------- arena-scale constants (weapon-lab world units, ~×4 meters) ---- */
 const ARENA = 18;               // playfield radius
+const HEX_SIZE = 20;
+const PLAYER_RADIUS = 1.05;
+const MAZE_SEED = new URLSearchParams(location.search).get('seed') || 'arena-001';
 const PLAYER_SPEED = 8.5;
 const CHARGE_MOVE_MULT = .35;
 const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
@@ -282,27 +296,18 @@ key.shadow.mapSize.set(2048, 2048);
 key.shadow.camera.left = -30; key.shadow.camera.right = 30;
 key.shadow.camera.top = 30; key.shadow.camera.bottom = -30;
 key.shadow.bias = -0.00025;
-scene.add(key);
+const keyTarget = new THREE.Object3D(); scene.add(keyTarget);
+key.target = keyTarget; scene.add(key);
 const rim = new THREE.PointLight(0x68bfff, 30, 120, 1.2); rim.position.set(16, 9, -14); scene.add(rim);
 
 const worldRoot = new THREE.Group(); scene.add(worldRoot);
 
-const ground = new THREE.Mesh(new THREE.CircleGeometry(ARENA+10, 56),
-  new THREE.MeshStandardMaterial({ color:0x142a2c, roughness:.94, metalness:.02 }));
-ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; worldRoot.add(ground);
-const bound = new THREE.Mesh(new THREE.RingGeometry(ARENA-.2, ARENA+.12, 72),
-  new THREE.MeshBasicMaterial({ color:0x24484a }));
-bound.rotation.x = -Math.PI/2; bound.position.y = .02; worldRoot.add(bound);
-// scatter rocks outside the boundary for readability
-for(let i=0;i<12;i++){
-  const a = rand(0,Math.PI*2), r = rand(ARENA+1.6, ARENA+7.5);
-  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(.5,1.4),0),
-    new THREE.MeshStandardMaterial({ color:0x1d3436, roughness:.9, flatShading:true }));
-  rock.position.set(Math.cos(a)*r, rand(0,.25), Math.sin(a)*r);
-  rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
-  rock.castShadow = rock.receiveShadow = true;
-  worldRoot.add(rock);
-}
+const dungeon = createHexMaze({ seed:MAZE_SEED, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
+if(!dungeon.validation.valid) throw new Error(`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}`);
+let activeRoomId = dungeon.startRoomId;
+let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });
+worldRoot.add(mazeWorld.group);
+const startPoint = axialToWorld(0, 0, HEX_SIZE);
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -319,7 +324,7 @@ const StoneWanderer = installStoneWanderer({ THREE });
 const actorRoot = new THREE.Group(); worldRoot.add(actorRoot);
 const actorVisual = new THREE.Group(); actorRoot.add(actorVisual);
 let activeModel = null;
-const actorPos = new THREE.Vector2(0, 4);   // x = world X, y = world Z
+const actorPos = new THREE.Vector2(startPoint.x, startPoint.z);   // x = world X, y = world Z
 let actorFacing = 0;
 let actorYawCurrent = 0;
 let walkPhase = 0;
@@ -458,7 +463,7 @@ function rebuildDeck(){
   renderCards();
 }
 function playCard(slot){
-  if(arena.deadT >= 0) return;
+  if(arena.deadT >= 0 || roomTransition?.active) return;
   const card = deck.play(slot);
   if(!card){ exhaustFlash(); return; }   // empty slot or mid-shuffle
   const pool = stancePoolForWeapon();
@@ -474,10 +479,11 @@ function playCard(slot){
   renderCards();
 }
 function startDeckShuffle(){
-  if(arena.deadT >= 0) return;
+  if(arena.deadT >= 0 || roomTransition?.active) return;
   if(deck.startShuffle()) renderCards();
 }
 function cycleWeapon(dir=1){
+  if(roomTransition?.active) return;
   const idx = WEAPON_ORDER.indexOf(combatState.weapon);
   const next = WEAPON_ORDER[(idx + dir + WEAPON_ORDER.length) % WEAPON_ORDER.length];
   PC.selectCombatWeapon(next);
@@ -486,15 +492,168 @@ function cycleWeapon(dir=1){
   announce(WEAPONS[next].label, .9);
 }
 
+/* ---------- maze navigation + room encounters ---------- */
+const encounterRandom = createSeededRandom(`${MAZE_SEED}:encounters`);
+let encounterState = null;
+const transitionOverlay = document.getElementById('roomTransition');
+const transitionTitle = document.getElementById('rtTitle');
+const transitionView = { cameraPush:0 };
+
+function positionRoomLighting(point = mazeWorld.center){
+  key.position.set(point.x - 14, 26, point.z + 12);
+  keyTarget.position.set(point.x, 0, point.z);
+  rim.position.set(point.x + 16, 9, point.z - 14);
+  keyTarget.updateMatrixWorld();
+}
+
+function syncDoorStates({ animateOpenedEdge = null } = {}){
+  if(!encounterState || !mazeWorld) return;
+  mazeWorld.setDoorStates({
+    sealedRoomIds:encounterState.sealedRoomIds,
+    openedDoorEdges:encounterState.openedDoorEdges,
+    roomCleared:encounterState.isCleared(activeRoomId),
+  }, { animateOpenedEdge });
+}
+
+function loadActiveRoom(roomId){
+  if(mazeWorld){
+    mazeWorld.group.parent?.remove(mazeWorld.group);
+    mazeWorld.dispose();
+  }
+  activeRoomId = roomId;
+  mazeWorld = createMazeWorld({
+    THREE, maze:dungeon, roomId, hexSize:HEX_SIZE, wallHeight:3.2,
+    wallThickness:.34, doorWidth:7, openedDoorEdges:encounterState?.openedDoorEdges,
+  });
+  worldRoot.add(mazeWorld.group);
+  positionRoomLighting(mazeWorld.center);
+  syncDoorStates();
+}
+positionRoomLighting(mazeWorld.center);
+
+const mazeNavigation = {
+  resolveMovement(position, delta, radius){
+    return resolveCircleMovement(position, delta, radius, mazeWorld.getCollisionSegments());
+  },
+  raycastWalls(start, end){ return raycastWalls(start, end, mazeWorld.getCollisionSegments()); },
+  randomSpawn(roomId, player){
+    if(roomId === null || roomId === undefined) return null;
+    let fallback = null;
+    for(let attempt=0; attempt<14; attempt++){
+      const point = randomPointInRoom(dungeon, roomId, encounterRandom, HEX_SIZE);
+      fallback = point || fallback;
+      if(point && Math.hypot(point.x - (player?.x ?? 0), point.z - (player?.z ?? 0)) > 4.2) return point;
+    }
+    return fallback;
+  },
+  nextWaypoint(enemy, player, roomId){
+    if(!raycastWalls({ x:enemy.x, z:enemy.z }, { x:player.x, z:player.z }, mazeWorld.getCollisionSegments())) return player;
+    const start = findCellAtPoint(dungeon, { x:enemy.x, z:enemy.z }, HEX_SIZE);
+    const goal = findCellAtPoint(dungeon, { x:player.x, z:player.z }, HEX_SIZE);
+    if(!start || !goal || start.key === goal.key) return player;
+    const room = dungeon.rooms.find(candidate => candidate.id === roomId);
+    const path = findPath(dungeon, start.key, goal.key, { allowedCellKeys:room?.cellKeys });
+    if(path.length < 2) return player;
+    const waypoint = dungeon.cells.get(path[1]);
+    return axialToWorld(waypoint.q, waypoint.r, HEX_SIZE);
+  }
+};
+let roomTransition = null;
+
 /* ---------- enemies ---------- */
-const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA });
+const enemySystem = createArenaEnemySystem({
+  THREE, worldRoot, arenaRadius:ARENA, navigation:mazeNavigation, roomEncounterMode:true,
+  onEncounterCleared(roomId){
+    encounterState?.clearRoom(roomId);
+    syncDoorStates();
+    const progress = encounterState?.progress;
+    announce(progress?.cleared === progress?.total ? 'DUNGEON CLEAR' : `ROOM ${roomId + 1} CLEAR · STRIKE A DOOR`, 1.8);
+  }
+});
+encounterState = createRoomEncounterState(dungeon, {
+  onRoomEnter({ roomId, cleared }){
+    syncDoorStates();
+    if(cleared) announce(`ROOM ${roomId + 1} · CLEARED`, .8);
+  },
+  onEncounterStart({ roomId }){
+    syncDoorStates();
+    enemySystem.startRoomEncounter(roomId);
+    announce(`ROOM ${roomId + 1} · SEAL`, 1.1);
+  }
+});
+
+roomTransition = createRoomTransitionController({
+  duration:.98,
+  swapAt:.48,
+  onSwap(payload){
+    loadActiveRoom(payload.toRoomId);
+    actorPos.set(payload.doorCenter.x + payload.direction.x * 2.4, payload.doorCenter.z + payload.direction.z * 2.4);
+    camFollow.set(actorPos.x, 0, actorPos.y);
+    encounterState.enterRoom(payload.toRoomId);
+    syncDoorStates();
+  },
+  onComplete(payload){
+    transitionOverlay.style.opacity = 0;
+    transitionView.cameraPush = 0;
+    announce(encounterState.isCleared(payload.toRoomId) ? `ROOM ${payload.toRoomId + 1} · QUIET` : `ROOM ${payload.toRoomId + 1}`, 1.0);
+  }
+});
+
+function beginRoomTransition(doorTarget, toRoomId){
+  if(roomTransition.active || !encounterState.isDoorOpened(doorTarget.edge)) return false;
+  const fromKey = doorTarget.roomA === activeRoomId ? doorTarget.cellA : doorTarget.cellB;
+  const toKey = doorTarget.roomA === activeRoomId ? doorTarget.cellB : doorTarget.cellA;
+  const fromCell = dungeon.cells.get(fromKey), toCell = dungeon.cells.get(toKey);
+  if(!fromCell || !toCell) return false;
+  const fromCenter = axialToWorld(fromCell.q, fromCell.r, HEX_SIZE);
+  const toCenter = axialToWorld(toCell.q, toCell.r, HEX_SIZE);
+  const direction = norm2(toCenter.x - fromCenter.x, toCenter.z - fromCenter.z);
+  const payload = {
+    fromRoomId:activeRoomId, toRoomId, direction,
+    doorCenter:{ ...doorTarget.center },
+    start:{ x:actorPos.x, z:actorPos.y },
+    end:{ x:doorTarget.center.x + direction.x * HEX_SIZE * .38, z:doorTarget.center.z + direction.z * HEX_SIZE * .38 },
+  };
+  enemySystem.clearRoomRuntime();
+  clearRoomEffects();
+  arena.charge.active = false;
+  combatState.attack = null;
+  combatState.t = 0;
+  arena.dodge.t = -1;
+  transitionTitle.textContent = `ROOM ${toRoomId + 1}`;
+  return roomTransition.start(payload);
+}
+
+function findTransitionDoor(toRoomId){
+  return mazeWorld.getDoorTargets()
+    .filter(door => door.state === 'open' && (door.roomA === toRoomId || door.roomB === toRoomId))
+    .sort((a, b) => Math.hypot(a.center.x - actorPos.x, a.center.z - actorPos.y) - Math.hypot(b.center.x - actorPos.x, b.center.z - actorPos.y))[0] || null;
+}
+
+function updateRoomTransition(rawDt){
+  const state = roomTransition.update(rawDt);
+  const payload = state.payload;
+  if(payload){
+    const p = state.progress;
+    const eased = p * p * (3 - 2 * p);
+    actorPos.set(lerp(payload.start.x, payload.end.x, eased), lerp(payload.start.z, payload.end.z, eased));
+    actorFacing = Math.atan2(payload.direction.x, payload.direction.z);
+    actorRoot.position.set(actorPos.x, 0, actorPos.y);
+    yawQ.setFromAxisAngle(Y_AXIS, actorFacing);
+    actorVisual.quaternion.copy(yawQ);
+  }
+  transitionView.cameraPush = state.cameraPush;
+  transitionOverlay.style.opacity = state.veil;
+}
 
 /* ---------- facing ---------- */
 function nearestEnemy(maxDist=Infinity){
   let best=null, bd=maxDist;
   for(const e of enemySystem.enemies){
     const d = Math.hypot(e.x-actorPos.x, e.z-actorPos.y);
-    if(d<bd){ bd=d; best=e; }
+    if(d<bd && !mazeNavigation.raycastWalls({ x:actorPos.x, z:actorPos.y }, { x:e.x, z:e.z })){
+      bd=d; best=e;
+    }
   }
   return best;
 }
@@ -580,6 +739,7 @@ function finishChainMove(landed){
   if(c.stage !== 'locked') c.activeSlot = -1;
 }
 function lightDown(){
+  if(roomTransition?.active) return;
   if(!canUseCombatInput()) return;
   if(arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher') return;
   if(combatState.attack){
@@ -601,6 +761,7 @@ function lightDown(){
   startChainMove(move, slot === 0 ? 'hit1' : 'hit2');
 }
 function heavyDown(){
+  if(roomTransition?.active) return;
   if(!canUseCombatInput() || combatState.attack) return;
   const now = performance.now()/1000;
   if(arena.chain.stage === 'hit1Ready') resetChainState();
@@ -649,7 +810,7 @@ function updateCharge(dt){
 /* ---------- dodge ---------- */
 function triggerDodge(){
   const d = arena.dodge;
-  if(arena.deadT >= 0 || d.t >= 0 || d.cool > 0) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0) return;
   arena.charge.active = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
@@ -668,10 +829,39 @@ function triggerDodge(){
 /* ---------- hits: swept weapon zones vs enemies ---------- */
 const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
 const effects = [];
+function detectDoorHits(zones){
+  if(!encounterState.isCleared(activeRoomId)) return;
+  for(const door of mazeWorld.getDoorTargets()){
+    if(door.state !== 'breakable' || combatState.hitIds?.has(door)) continue;
+    let impact = null;
+    for(const zone of zones){
+      const a = PC.weaponRoot.localToWorld(zone.from.clone());
+      const b = PC.weaponRoot.localToWorld(zone.to.clone());
+      const dx = door.b.x - door.a.x, dz = door.b.z - door.a.z;
+      for(const along of [.12,.32,.5,.68,.88]){
+        for(const y of [.65,1.35,2.05]){
+          const sample = new THREE.Vector3(door.a.x + dx * along, y, door.a.z + dz * along);
+          if(PC.pointSegmentDistance(sample, a, b) <= zone.radius + .7){ impact = sample; break; }
+        }
+        if(impact) break;
+      }
+      if(impact) break;
+    }
+    if(!impact || !encounterState.openDoor(door.edge, activeRoomId)) continue;
+    combatState.hitIds.add(door);
+    syncDoorStates({ animateOpenedEdge:door.edge });
+    const direction = new THREE.Vector3(door.center.x - actorPos.x, 0, door.center.z - actorPos.y).normalize();
+    HitFeel.impact({ point:impact, dir:direction, damage:18, kill:false, color:0xe8a04c });
+    onHitFeel(impact, .45);
+    CombatAudio.onDummyEvent({ damage:18, kill:false });
+    announce('PASSAGE OPEN', 1.0);
+  }
+}
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
   const zones = PC.getWeaponHitZones();
+  detectDoorHits(zones);
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const enemyScale = enemySystem.heightScale || 1;
@@ -686,6 +876,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
       let bestDist = Infinity, bestCenter = hitSamples[1];
       for(const center of hitSamples){ const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
+        if(mazeNavigation.raycastWalls({ x:actorPos.x, z:actorPos.y }, { x:bestCenter.x, z:bestCenter.z })) continue;
         const quality = 1 - clamp(bestDist / threshold, 0, 1);
         const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: PC.currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
         const raw = zone.damage * (.82 + quality * .42) * weaponMult * arena.swing.dmgMult;
@@ -748,6 +939,13 @@ function updateEffects(rawDt){
     else { fx.mesh.position.addScaledVector(fx.vel, rawDt); fx.mesh.material.opacity = 1 - k*k; }
   }
 }
+function clearRoomEffects(){
+  for(const fx of effects){
+    scene.remove(fx.mesh);
+    fx.mesh.material?.map?.dispose?.(); fx.mesh.material?.dispose?.(); fx.mesh.geometry?.dispose?.();
+  }
+  effects.length = 0;
+}
 
 /* ---------- player damage / death ---------- */
 function flashVignette(){
@@ -755,16 +953,23 @@ function flashVignette(){
   v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
 }
 function respawn(){
+  roomTransition?.reset();
+  transitionOverlay.style.opacity = 0;
+  transitionView.cameraPush = 0;
   arena.deadT = -1;
-  actorPos.set(0, 4); actorFacing = 0;
+  actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
   arena.charge.active = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   fullRefillStamina();
   rebuildDeck();
+  encounterState.reset();
   enemySystem.reset();
+  clearRoomEffects();
+  loadActiveRoom(dungeon.startRoomId);
+  encounterState.enterRoom(dungeon.startRoomId);
+  syncDoorStates();
   arena.prevHp = enemySystem.playerHp;
   arena.prevWave = enemySystem.wave;
-  announce('WAVE ' + enemySystem.wave);
 }
 function watchPlayerState(dt){
   const hp = enemySystem.playerHp;
@@ -1083,7 +1288,8 @@ function updateHud(rawDt){
   stPending.style.width = Math.max(0, totalPct - availPct) + '%';
   if(deck.shuffling) deckCountEl.textContent = 'SHUFFLE ' + Math.max(0, deck.shuffleT).toFixed(1) + 's';
   const tokens = enemySystem.director.getDebugState().activeTokens;
-  stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
+  const progress = encounterState.progress;
+  stats.textContent = `ROOM ${(encounterState.activeRoomId ?? 0) + 1} · CLEARED ${progress.cleared}/${progress.total} · SCORE ${enemySystem.kills*10}`+(tokens?' · TOKEN LIVE':'');
   if(arena.deadT >= 0) stateLbl.textContent = 'DOWN';
   else if(arena.charge.active) stateLbl.textContent = 'CHARGE — '+tierName(arena.charge.tier);
   else if(combatState.attack) stateLbl.textContent = (combatState.lastAttackLabel||'SWING').toUpperCase();
@@ -1100,10 +1306,14 @@ function updateCamera(rawDt){
   shake.addScaledVector(shakeVel,rawDt);
   // hit-feel layers: random jitter, directional kick, zoom punch toward the action
   const j = HitFeel.jitter, kick = HitFeel.camKick, zk = HitFeel.zoomKick;
+  const doorPush = transitionView.cameraPush;
+  keyTarget.position.set(camFollow.x, 0, camFollow.z);
+  key.position.set(camFollow.x - 14, 26, camFollow.z + 12);
+  rim.position.set(camFollow.x + 16, 9, camFollow.z - 14);
   camera.position.set(
     camFollow.x + shake.x + (Math.random()*2-1)*j + kick.x,
-    CAM_HEIGHT - zk*2.2 + shake.y + (Math.random()*2-1)*j*.4,
-    camFollow.z + CAM_BACK - zk*2.4 + shake.z + (Math.random()*2-1)*j + kick.z);
+    CAM_HEIGHT - doorPush*3.4 - zk*2.2 + shake.y + (Math.random()*2-1)*j*.4,
+    camFollow.z + CAM_BACK - doorPush*5.2 - zk*2.4 + shake.z + (Math.random()*2-1)*j + kick.z);
   camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
 }
 
@@ -1115,6 +1325,7 @@ function updatePlayer(dt, rawDt = dt){
     if(arena.deadT > 2.4) respawn();
     return;
   }
+  const moveStart = { x:actorPos.x, z:actorPos.y };
   arena.invulnT = Math.max(0, arena.invulnT - dt);
   d.cool = Math.max(0, d.cool - dt);
   updateChainTimers(dt);
@@ -1144,8 +1355,13 @@ function updatePlayer(dt, rawDt = dt){
       actorPos.y += Math.cos(actorFacing)*rate*dt;
     }
   }
-  const rr = Math.hypot(actorPos.x, actorPos.y);
-  if(rr > ARENA-1.2){ actorPos.x *= (ARENA-1.2)/rr; actorPos.y *= (ARENA-1.2)/rr; }
+  const resolvedMove = resolveCircleMovement(
+    moveStart,
+    { x:actorPos.x - moveStart.x, z:actorPos.y - moveStart.z },
+    PLAYER_RADIUS,
+    mazeWorld.getCollisionSegments()
+  );
+  actorPos.set(resolvedMove.x, resolvedMove.z);
 
   // facing: desired blended toward the committed swing yaw
   let goal;
@@ -1186,16 +1402,28 @@ function frame(){
   pollPad();
   gatherInput();
   if(!isPaused()){
-    const wasShuffling = deck.shuffling;
-    deck.update(dt);
-    if(wasShuffling && !deck.shuffling){ cardAnim.drawn.add(0); cardAnim.drawn.add(1); renderCards(); }   // countdown done: fresh hand
-    updatePlayer(dt, rawDt);
-    enemySystem.update(dt, {
-      x: actorPos.x, z: actorPos.y,
-      invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
-    });
-    watchPlayerState(rawDt);
+    if(roomTransition.active){
+      updateRoomTransition(rawDt);
+    } else {
+      const wasShuffling = deck.shuffling;
+      deck.update(dt);
+      if(wasShuffling && !deck.shuffling){ cardAnim.drawn.add(0); cardAnim.drawn.add(1); renderCards(); }   // countdown done: fresh hand
+      updatePlayer(dt, rawDt);
+      const activeCell = findCellAtPoint(dungeon, { x:actorPos.x, z:actorPos.y }, HEX_SIZE);
+      if(activeCell && activeCell.roomId !== activeRoomId){
+        const door = findTransitionDoor(activeCell.roomId);
+        if(door) beginRoomTransition(door, activeCell.roomId);
+      }
+      if(!roomTransition.active){
+        enemySystem.update(dt, {
+          x: actorPos.x, z: actorPos.y,
+          invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
+        });
+        watchPlayerState(rawDt);
+      }
+    }
   }
+  mazeWorld.update(rawDt);
   updateEffects(rawDt);
   updateCamera(rawDt);
   updateHud(rawDt);
@@ -1204,20 +1432,19 @@ function frame(){
 
 /* ---------- boot ---------- */
 // console/testing handle
-window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel };
+window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel, dungeon, encounterState,
+  get mazeWorld(){ return mazeWorld; }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; } };
 spawnCharacter();
 PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
 if(!arena.stance) ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
-enemySystem.reset();
-arena.prevHp = enemySystem.playerHp;
-arena.prevWave = enemySystem.wave;
-announce('WAVE 1');
+respawn();
 updatePill();
 frame();
 
-window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck,
+window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
+  get mazeWorld(){ return mazeWorld; }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
   lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing,
   playCard, startDeckShuffle };
 
