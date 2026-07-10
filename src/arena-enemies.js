@@ -57,7 +57,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   const enemies = [];
   const projectiles = [];
   const deathPieces = [];
-  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
+  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let lastPlayer = { x:0, z:0, invulnerable:false };
 

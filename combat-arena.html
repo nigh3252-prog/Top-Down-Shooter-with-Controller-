@@ -462,6 +462,7 @@ function playCard(slot){
   else { arena.stance = card; resetChainState(); updatePill(); }
   // drop any follow-up queued from the old stance
   combatState.pending = null; combatState.pendingGroup = null;
+  combatState.readyLock = 0;
   fullRefillStamina();
   markCardAnimation(slot);
   announce(card.name.replace(/^S\d+\s*/,''), .9);
@@ -516,6 +517,7 @@ function resetChainState(){
   arena.chain.activeSlot = -1;
   arena.chain.pendingSlot = -1;
   combatState.pending = null; combatState.pendingGroup = null;
+  combatState.readyLock = 0;
 }
 function lockChain(seconds){
   arena.chain.stage = 'locked';
@@ -525,6 +527,7 @@ function lockChain(seconds){
   arena.chain.activeSlot = -1;
   arena.chain.pendingSlot = -1;
   combatState.pending = null; combatState.pendingGroup = null;
+  combatState.readyLock = 1;
 }
 function updateChainTimers(dt){
   const c = arena.chain, now = performance.now()/1000;
@@ -533,6 +536,9 @@ function updateChainTimers(dt){
   if(c.stage === 'locked' && c.inputLockT <= 0) resetChainState();
   if(!combatState.attack && c.stage === 'hit1Ready' && now > c.comboDeadline) lockChain(CHAIN.whiffLock);
   if(!combatState.attack && c.stage === 'finisher' && now > c.finisherDeadline) resetChainState();
+  const inputLock = CHAIN.whiffLock > 0 ? c.inputLockT / CHAIN.whiffLock : 0;
+  const lightLock = CHAIN.postSecondLightLock > 0 ? c.lightLockT / CHAIN.postSecondLightLock : 0;
+  combatState.readyLock = combatState.attack ? 0 : clamp(Math.max(inputLock, lightLock), 0, 1);
 }
 function chainMove(slot){
   if(!arena.stance) return null;
@@ -663,13 +669,15 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   const zones = PC.getWeaponHitZones();
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
-    const h = (e.height || e.radius * 2) * (enemySystem.heightScale || 1);
+    const enemyScale = enemySystem.heightScale || 1;
+    const scaledRadius = e.radius * enemyScale;
+    const h = (e.height || e.radius * 2) * enemyScale;
     const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
     let best = null;
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());
       const b = PC.weaponRoot.localToWorld(zone.to.clone());
-      const threshold = e.radius + zone.radius + .38;
+      const threshold = scaledRadius + zone.radius + .38;
       let bestDist = Infinity, bestCenter = hitSamples[1];
       for(const center of hitSamples){ const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
@@ -970,7 +978,7 @@ const DIR_SLIDERS = [
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
   { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
   { label:'ENEMY HEALTH',    min:.25,max:5,   step:.05, get:()=>enemySystem.hpScale,        set:v=>enemySystem.setHpScale(v) },
-  { label:'ENEMY HEIGHT',    min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
+  { label:'ENEMY SIZE',      min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
   { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
 ];
 const dirBox=document.getElementById('dirSliders');
