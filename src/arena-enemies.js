@@ -40,7 +40,7 @@ const EATK = {
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
 
-export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18 } = {}){
+export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arenaRadius = 18, level = null, getActiveRoomId = null, resolveMovement = null, onRoomCleared = null } = {}){
   const rig = installGoblinRig(THREE);
   // Shared choreography interpreter — the exact same pose sampler the player uses
   // (src/attack-interpreter.js), so a grunt swings the real player animation.
@@ -60,6 +60,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
   const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let lastPlayer = { x:0, z:0, invulnerable:false };
+  let roomClearNotified = false;
 
   const PLAYER_R = .25 * S;
   const CLAMP_MARGIN = 1.0;
@@ -296,8 +297,13 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
-    const rr = Math.hypot(e.x, e.z);
-    if(rr > arenaRadius - CLAMP_MARGIN){ e.x *= (arenaRadius - CLAMP_MARGIN)/rr; e.z *= (arenaRadius - CLAMP_MARGIN)/rr; }
+    if(resolveMovement){
+      const p2 = resolveMovement({ x:e.x, z:e.z }, e.radius);
+      e.x = p2.x; e.z = p2.z;
+    } else {
+      const rr = Math.hypot(e.x, e.z);
+      if(rr > arenaRadius - CLAMP_MARGIN){ e.x *= (arenaRadius - CLAMP_MARGIN)/rr; e.z *= (arenaRadius - CLAMP_MARGIN)/rr; }
+    }
   }
 
   function resolveBodyCollisions(p){
@@ -384,11 +390,25 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     return MIX[i % MIX.length];
   }
   function spawnPos(){
+    if(level && getActiveRoomId){
+      const room = level.rooms[getActiveRoomId()];
+      if(room?.cells?.length){
+        for(let tries=0; tries<24; tries++){
+          const id = room.cells[Math.floor(Math.random()*room.cells.length)];
+          const c = level.cells.get(id);
+          const a = Math.random()*Math.PI*2, r = arenaRadius * (.18 + Math.random()*.38);
+          const pos = { x:c.center.x + Math.cos(a)*r, z:c.center.z + Math.sin(a)*r };
+          if(Math.hypot(pos.x - (lastPlayer.x ?? 0), pos.z - (lastPlayer.z ?? 0)) > 6) return pos;
+        }
+        const c = level.cells.get(room.cells[0]);
+        return { x:c.center.x + arenaRadius*.35, z:c.center.z };
+      }
+    }
     const a = Math.random()*Math.PI*2, r = THREE.MathUtils.randFloat(arenaRadius*.62, arenaRadius - 1.5);
     return { x:(lastPlayer.x ?? 0) + Math.cos(a)*r, z:(lastPlayer.z ?? 0) + Math.sin(a)*r };
   }
   function startWave(){
-    waveKills = 0; spawnedThisWave = 0; waveClearT = 0;
+    waveKills = 0; spawnedThisWave = 0; waveClearT = 0; roomClearNotified = false;
     const count = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
     for(let i = 0; i < count; i++){ const pos = spawnPos(); makeEnemy(chooseSpawnKind(i), pos.x, pos.z); spawnedThisWave++; }
   }
@@ -432,7 +452,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root));
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
     clearDeathPieces();
-    wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = '';
+    wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = ''; roomClearNotified = false;
     startWave();
   }
 
@@ -450,7 +470,9 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     // wave clear when everything is dead
     if(!enemies.length && !playerDead()){
       waveClearT += dt;
-      if(waveClearT > 1.0) finishWave();
+      if(onRoomCleared){
+        if(!roomClearNotified && waveClearT > .35){ roomClearNotified = true; onRoomCleared(); }
+      } else if(waveClearT > 1.0) finishWave();
     } else waveClearT = 0;
   }
 
@@ -467,6 +489,7 @@ export function createArenaEnemySystem({ THREE, worldRoot, materials = {}, arena
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
+    startRoomWave:()=>{ enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root)); projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; }); director.reset(); wave++; startWave(); },
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },
     get hpScale(){ return tuning.hpScale; },

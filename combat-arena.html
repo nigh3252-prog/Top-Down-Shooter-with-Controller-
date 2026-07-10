@@ -215,6 +215,7 @@ import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
 import { FEEL_PARAMS, FEEL_KEY_ORDER, createFeelKeys, feelAt, tierName, holdToTier } from './src/feel.js';
+import { generateHexMaze, hexCorners, roomCenter, resolveRoomMovement, doorWorld } from './src/hex-maze.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -237,7 +238,7 @@ function norm2(x,z){ const l=Math.hypot(x,z)||1; return {x:x/l, z:z/l}; }
 function rand(a,b){ return a + Math.random()*(b-a); }
 
 /* ---------- arena-scale constants (weapon-lab world units, ~×4 meters) ---- */
-const ARENA = 18;               // playfield radius
+const ARENA = 18;               // original arena radius; now each maze hex radius
 const PLAYER_SPEED = 8.5;
 const CHARGE_MOVE_MULT = .35;
 const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
@@ -278,22 +279,56 @@ const rim = new THREE.PointLight(0x68bfff, 30, 120, 1.2); rim.position.set(16, 9
 
 const worldRoot = new THREE.Group(); scene.add(worldRoot);
 
-const ground = new THREE.Mesh(new THREE.CircleGeometry(ARENA+10, 56),
-  new THREE.MeshStandardMaterial({ color:0x142a2c, roughness:.94, metalness:.02 }));
-ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; worldRoot.add(ground);
-const bound = new THREE.Mesh(new THREE.RingGeometry(ARENA-.2, ARENA+.12, 72),
-  new THREE.MeshBasicMaterial({ color:0x24484a }));
-bound.rotation.x = -Math.PI/2; bound.position.y = .02; worldRoot.add(bound);
-// scatter rocks outside the boundary for readability
-for(let i=0;i<12;i++){
-  const a = rand(0,Math.PI*2), r = rand(ARENA+1.6, ARENA+7.5);
-  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(.5,1.4),0),
-    new THREE.MeshStandardMaterial({ color:0x1d3436, roughness:.9, flatShading:true }));
-  rock.position.set(Math.cos(a)*r, rand(0,.25), Math.sin(a)*r);
-  rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
-  rock.castShadow = rock.receiveShadow = true;
-  worldRoot.add(rock);
+const mazeLevel = generateHexMaze({ rows:15, cols:15, cellRadius:ARENA, seed:7331 });
+const mazeState = { activeRoomId: mazeLevel.startRoomId, cleared:false, openDoors:new Set(), visited:new Set([mazeLevel.startRoomId]) };
+const mazeRoot = new THREE.Group(); mazeRoot.name = 'Hexagonal room maze'; worldRoot.add(mazeRoot);
+const floorMat = new THREE.MeshStandardMaterial({ color:0x142a2c, roughness:.94, metalness:.02, flatShading:true });
+const nextFloorMat = new THREE.MeshStandardMaterial({ color:0x102225, roughness:.96, metalness:.01, transparent:true, opacity:.48, flatShading:true });
+const wallMat = new THREE.MeshStandardMaterial({ color:0x24484a, roughness:.82, metalness:.02, flatShading:true });
+const doorLockedMat = new THREE.MeshStandardMaterial({ color:0x9a4f2d, emissive:0x301006, roughness:.7, flatShading:true });
+const doorOpenMat = new THREE.MeshStandardMaterial({ color:0x7fd0a8, emissive:0x123328, roughness:.7, flatShading:true });
+const doorMeshes = new Map();
+function makeHexFloor(cell, mat){
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(ARENA*.96, 6), mat);
+  mesh.rotation.x = -Math.PI/2; mesh.rotation.z = Math.PI/6;
+  mesh.position.set(cell.center.x, 0, cell.center.z); mesh.receiveShadow = true;
+  return mesh;
 }
+function edgeMid(a,b){ return { x:(a.x+b.x)/2, z:(a.z+b.z)/2, ang:Math.atan2(b.z-a.z,b.x-a.x), len:Math.hypot(b.x-a.x,b.z-a.z) }; }
+function renderMazeRoom(){
+  mazeRoot.clear(); doorMeshes.clear();
+  const room = mazeLevel.rooms[mazeState.activeRoomId];
+  const visibleRooms = new Set([mazeState.activeRoomId]);
+  for(const nid of room.neighbors) visibleRooms.add(nid);
+  for(const rid of visibleRooms){
+    for(const id of mazeLevel.rooms[rid].cells){ mazeRoot.add(makeHexFloor(mazeLevel.cells.get(id), rid===mazeState.activeRoomId ? floorMat : nextFloorMat)); }
+  }
+  const drawnWalls = new Set();
+  for(const rid of visibleRooms){
+    for(const id of mazeLevel.rooms[rid].cells){
+      const cell = mazeLevel.cells.get(id), corners = hexCorners(cell.center, ARENA*.96);
+      for(let i=0;i<6;i++){
+        const nid = cell.neighbors.get(i); const other = nid ? mazeLevel.cells.get(nid) : null;
+        if(other && visibleRooms.has(other.roomId) && other.roomId === cell.roomId) continue;
+        const key = [cell.id, nid || `edge${i}`].sort().join('|');
+        if(drawnWalls.has(key)) continue; drawnWalls.add(key);
+        const m = edgeMid(corners[i], corners[(i+1)%6]);
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(m.len*.72, 2.25, .42), wallMat);
+        wall.position.set(m.x, 1.05, m.z); wall.rotation.y = -m.ang; wall.castShadow = wall.receiveShadow = true; mazeRoot.add(wall);
+      }
+    }
+  }
+  for(const door of mazeLevel.doors){
+    if(door.roomA !== mazeState.activeRoomId && door.roomB !== mazeState.activeRoomId) continue;
+    const p = doorWorld(mazeLevel, door); const open = mazeState.openDoors.has(door.id);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.8, 3.2, .7), open ? doorOpenMat : doorLockedMat);
+    const a = mazeLevel.cells.get(door.cellA), b = mazeLevel.cells.get(door.cellB);
+    mesh.position.set(p.x, 1.6, p.z); mesh.rotation.y = -Math.atan2(b.center.z-a.center.z, b.center.x-a.center.x) + Math.PI/2;
+    mesh.userData.doorId = door.id; mesh.castShadow = mesh.receiveShadow = true;
+    mazeRoot.add(mesh); doorMeshes.set(door.id, mesh);
+  }
+}
+renderMazeRoom();
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -310,7 +345,8 @@ const StoneWanderer = installStoneWanderer({ THREE });
 const actorRoot = new THREE.Group(); worldRoot.add(actorRoot);
 const actorVisual = new THREE.Group(); actorRoot.add(actorVisual);
 let activeModel = null;
-const actorPos = new THREE.Vector2(0, 4);   // x = world X, y = world Z
+const startRoomCenter = roomCenter(mazeLevel, mazeState.activeRoomId);
+const actorPos = new THREE.Vector2(startRoomCenter.x, startRoomCenter.z);   // x = world X, y = world Z
 let actorFacing = 0;
 let actorYawCurrent = 0;
 let walkPhase = 0;
@@ -444,7 +480,44 @@ function cycleWeapon(dir=1){
 }
 
 /* ---------- enemies ---------- */
-const enemySystem = createArenaEnemySystem({ THREE, worldRoot, arenaRadius: ARENA });
+const enemySystem = createArenaEnemySystem({
+  THREE, worldRoot, arenaRadius: ARENA, level: mazeLevel,
+  getActiveRoomId:()=>mazeState.activeRoomId,
+  resolveMovement:(pos, radius=1)=>resolveRoomMovement(mazeLevel, pos, pos, new Set([mazeState.activeRoomId]), radius),
+  onRoomCleared:()=>{ mazeState.cleared = true; announce('ROOM CLEAR · STRIKE A DOOR', 1.8); renderMazeRoom(); }
+});
+
+
+function enterRoom(roomId){
+  if(roomId === mazeState.activeRoomId) return;
+  mazeState.activeRoomId = roomId;
+  mazeState.cleared = false;
+  mazeState.openDoors.clear();
+  mazeState.visited.add(roomId);
+  renderMazeRoom();
+  const c = roomCenter(mazeLevel, roomId);
+  actorPos.set(c.x, c.z);
+  enemySystem.startRoomWave();
+  arena.prevWave = enemySystem.wave;
+  announce('ROOM ' + (roomId + 1), 1.2);
+}
+function strikeDoors(tipScene, baseScene){
+  if(!mazeState.cleared || !PC.weaponRoot) return false;
+  let opened = false;
+  for(const [id, mesh] of doorMeshes){
+    if(mazeState.openDoors.has(id)) continue;
+    const d = Math.hypot(mesh.position.x - tipScene.x, mesh.position.z - tipScene.z);
+    const d2 = Math.hypot(mesh.position.x - baseScene.x, mesh.position.z - baseScene.z);
+    if(Math.min(d,d2) < 5.6){
+      mazeState.openDoors.add(id); opened = true;
+      const door = mazeLevel.doors[id];
+      const next = door.roomA === mazeState.activeRoomId ? door.roomB : door.roomA;
+      announce('DOOR OPEN · ROOM ' + (next + 1), 1.4);
+    }
+  }
+  if(opened) renderMazeRoom();
+  return opened;
+}
 
 /* ---------- facing ---------- */
 function nearestEnemy(maxDist=Infinity){
@@ -556,6 +629,7 @@ const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
 const effects = [];
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
+  strikeDoors(tipScene, baseScene);
   if(!combatState.hitIds) combatState.hitIds = new Set();
   const zones = PC.getWeaponHitZones();
   for(const e of [...enemySystem.enemies]){
@@ -640,7 +714,8 @@ function flashVignette(){
 }
 function respawn(){
   arena.deadT = -1;
-  actorPos.set(0, 4); actorFacing = 0;
+  mazeState.activeRoomId = mazeLevel.startRoomId; mazeState.cleared = false; mazeState.openDoors.clear(); mazeState.visited = new Set([mazeState.activeRoomId]); renderMazeRoom();
+  const p0 = roomCenter(mazeLevel, mazeState.activeRoomId); actorPos.set(p0.x, p0.z); actorFacing = 0;
   arena.charge.active = false;
   combatState.attack = null; combatState.t = 0; combatState.pending = null;
   arena.chain.comboIndex = 0;
@@ -669,7 +744,7 @@ function watchPlayerState(dt){
       updatePill();
       announce('WAVE ' + enemySystem.wave + ' · ' + modeLabel(enemySystem.director.getMode()));
     } else {
-      announce('WAVE ' + enemySystem.wave);
+      announce(mazeState.cleared ? 'ROOM CLEAR' : 'ROOM ' + (mazeState.activeRoomId+1));
     }
   }
 }
@@ -947,7 +1022,7 @@ function updateHud(rawDt){
   stFill.style.width = (arena.stamina.v/STAMINA.max*100)+'%';
   if(deck.shuffling) deckCountEl.textContent = 'SHUFFLE ' + Math.max(0, deck.shuffleT).toFixed(1) + 's';
   const tokens = enemySystem.director.getDebugState().activeTokens;
-  stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
+  stats.textContent = 'ROOM '+(mazeState.activeRoomId+1)+'/'+mazeLevel.rooms.length+' · SCORE '+(enemySystem.kills*10)+(mazeState.cleared?' · DOORS LIVE':(tokens?' · TOKEN LIVE':''));
   if(arena.deadT >= 0) stateLbl.textContent = 'DOWN';
   else if(arena.charge.active) stateLbl.textContent = 'CHARGE — '+tierName(arena.charge.tier);
   else if(combatState.attack) stateLbl.textContent = (combatState.lastAttackLabel||'SWING').toUpperCase();
@@ -1006,8 +1081,12 @@ function updatePlayer(dt, rawDt = dt){
       actorPos.y += Math.cos(actorFacing)*rate*dt;
     }
   }
-  const rr = Math.hypot(actorPos.x, actorPos.y);
-  if(rr > ARENA-1.2){ actorPos.x *= (ARENA-1.2)/rr; actorPos.y *= (ARENA-1.2)/rr; }
+  const allowedRooms = new Set([mazeState.activeRoomId]);
+  for(const did of mazeState.openDoors){ const d = mazeLevel.doors[did]; if(d.roomA === mazeState.activeRoomId) allowedRooms.add(d.roomB); if(d.roomB === mazeState.activeRoomId) allowedRooms.add(d.roomA); }
+  const fixed = resolveRoomMovement(mazeLevel, { x:actorPos.x, z:actorPos.y }, { x:actorPos.x, z:actorPos.y }, allowedRooms, 1.2);
+  actorPos.set(fixed.x, fixed.z);
+  const currentCell = mazeLevel.cells.get((()=>{ let best=null, bd=Infinity; for(const rid of allowedRooms) for(const id of mazeLevel.rooms[rid].cells){ const c=mazeLevel.cells.get(id), dd=(c.center.x-actorPos.x)**2+(c.center.z-actorPos.y)**2; if(dd<bd){bd=dd; best=id;} } return best; })());
+  if(currentCell && currentCell.roomId !== mazeState.activeRoomId && mazeState.openDoors.size){ enterRoom(currentCell.roomId); }
 
   // facing: desired blended toward the committed swing yaw
   let goal;
