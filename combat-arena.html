@@ -9,18 +9,13 @@
     -webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
   canvas{display:block}
   /* ---- top bar ---- */
-  #topBar{position:fixed;top:8px;left:8px;right:8px;z-index:30;display:flex;gap:8px;align-items:stretch;pointer-events:none}
+  #topBar{position:fixed;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));z-index:30;display:flex;gap:8px;align-items:stretch;pointer-events:none}
   #topBar button{pointer-events:auto}
   .tbtn{font-family:inherit;font-size:11px;letter-spacing:.1em;color:#e8a04c;
     background:rgba(18,36,38,.85);border:1px solid #6e3a24;padding:0 12px;border-radius:6px;min-height:36px}
   .tbtn:active{background:#2c4a47}
-  #pill{flex:1;min-width:0;background:rgba(14,28,30,.8);border:1px solid #2c4a47;border-radius:6px;
-    padding:4px 10px;overflow:hidden}
-  #pill b{display:block;font-size:11px;letter-spacing:.1em;color:#9fd2c9;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
-  #pill span{display:block;font-size:9.5px;color:#4a6f6a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* ---- HUD ---- */
-  #hud{position:fixed;top:52px;left:10px;z-index:10;pointer-events:none}
+  #hud{position:fixed;top:52px;left:max(10px,env(safe-area-inset-left));z-index:10;pointer-events:none}
   #hpWrap{width:150px;height:9px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
   #hpFill{height:100%;width:100%;background:linear-gradient(90deg,#e8a04c,#c96a35);transition:width .12s}
   #stWrap{position:relative;width:150px;height:6px;margin-top:3px;background:#122224;border:1px solid #2c4a47;border-radius:3px;overflow:hidden}
@@ -29,8 +24,6 @@
   #stFill{width:100%;background:linear-gradient(90deg,#7fd0a8,#3f9f7a)}
   #stWrap.exhaust{border-color:#ff9070}
   #stWrap.exhaust #stFill{background:#ff9070}
-  #stats{margin-top:4px;color:#4a6f6a;font-size:10px;letter-spacing:.08em}
-  #stateLbl{margin-top:3px;color:#e8a04c;font-size:12px;letter-spacing:.14em;text-shadow:0 1px 0 #000}
   #msg{position:fixed;top:26%;left:0;right:0;text-align:center;z-index:11;pointer-events:none;
     color:#f0d8b0;font-size:19px;letter-spacing:.24em;text-transform:uppercase;
     text-shadow:0 2px 8px #000;opacity:0;transition:opacity .18s}
@@ -41,34 +34,38 @@
     background:rgba(18,36,38,.32);z-index:15;display:none;pointer-events:none}
   #joyKnob{position:fixed;width:46px;height:46px;border-radius:50%;background:rgba(159,210,201,.5);
     border:2px solid #2c4a47;z-index:16;display:none;pointer-events:none}
-  .btnrow{position:fixed;bottom:20px;right:14px;display:flex;gap:12px;z-index:20;align-items:flex-end}
-  .pbtn{width:76px;height:76px;border-radius:50%;border:2px solid #2c4a47;color:#9fd2c9;
+  .btnrow{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));right:max(12px,env(safe-area-inset-right));display:flex;gap:8px;z-index:20;align-items:flex-end}
+  .pbtn{width:58px;height:58px;border-radius:50%;border:2px solid #2c4a47;color:#9fd2c9;
     background:rgba(18,36,38,.72);font-family:inherit;font-size:11px;letter-spacing:.1em;
-    display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;box-shadow:0 3px 0 #081112}
+    display:flex;flex-direction:column;gap:1px;align-items:center;justify-content:center;text-align:center;touch-action:none;box-shadow:0 3px 0 #081112}
   .pbtn:active,.pbtn.held{background:#2c4a47;transform:translateY(2px);box-shadow:0 1px 0 #081112}
-  #atkBtn{width:88px;height:88px;border-color:#6e3a24;color:#e8a04c}
-  #heavyBtn{width:88px;height:88px;border-color:#5f4a8f;color:#cdb6ff}
+  .pbtn.disabled{opacity:.42}
+  .pbtn .btnGlyph{font-size:10px;line-height:1;color:#4a6f6a}
+  .pbtn .btnArrow{font-size:25px;line-height:1;font-weight:700;letter-spacing:0}
+  .pbtn .btnLabel{font-size:7px;line-height:1;letter-spacing:.08em}
+  #atkBtn{border-color:#6e3a24;color:#e8a04c}
+  #heavyBtn{border-color:#5f4a8f;color:#cdb6ff}
+  #heavyBtn .btnArrow{color:#cdb6ff}
   /* ---- stance card slots ---- */
-  #cardRow{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:10px;
+  #cardRow{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:7px;
     z-index:20;align-items:flex-end}
-  .scard{position:relative;overflow:hidden;width:100px;height:66px;display:flex;gap:8px;padding:7px 8px;box-sizing:border-box;
-    text-align:left;font-family:inherit;background:rgba(14,28,30,.88);border:1px solid #2c4a47;
-    border-radius:8px;color:#9fd2c9;box-shadow:0 3px 0 #081112;touch-action:none}
+  .scard{position:relative;overflow:hidden;width:58px;height:78px;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:5px;box-sizing:border-box;
+    text-align:left;font-family:inherit;background:rgba(14,28,30,.92);border:1px solid #2c4a47;
+    border-radius:7px;color:#9fd2c9;box-shadow:0 3px 0 #081112;touch-action:none}
   .scard:active{transform:translateY(2px);box-shadow:0 1px 0 #081112;background:#2c4a47}
-  .scard .carrows{display:flex;flex-direction:column;justify-content:space-between;
-    color:#e8a04c;font-size:13px;line-height:1}
-  .scard .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-  .scard .ckey{font-size:8px;color:#4a6f6a;letter-spacing:.12em}
-  .scard .cname{font-size:9.5px;line-height:1.3;letter-spacing:.03em;overflow:hidden}
+  .scard .ckey{font-size:8px;color:#4a6f6a;letter-spacing:.12em;text-align:center}
+  .scard .cicon{flex:1;min-height:18px;border:1px solid rgba(44,74,71,.45);border-radius:3px;background:rgba(18,36,38,.35)}
+  .scard .crows{display:flex;flex-direction:column;gap:2px;color:#e8a04c;font-size:11px;line-height:1.05}
+  .scard .crow{display:flex;gap:3px;align-items:center;white-space:nowrap}
+  .scard .crow b{font-size:8px;color:#9fd2c9}
   .scard.empty{opacity:.35}
   .scard.played::after{content:"";position:absolute;inset:-4px;border:2px solid rgba(255,230,150,.9);border-radius:10px;pointer-events:none;animation:cardRing .35s ease-out forwards}
   .scard.draw-in{animation:cardDrawIn .25s ease-out both}
   @keyframes cardRing{from{transform:scale(.92);opacity:.95}to{transform:scale(1.18);opacity:0}}
   @keyframes cardDrawIn{from{transform:translateY(10px);opacity:.25}to{transform:translateY(0);opacity:1}}
   #deckSide{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
-  #deckCount{color:#4a6f6a;font-size:9px;letter-spacing:.1em}
-  #shuffleBtn{font-family:inherit;font-size:8.5px;letter-spacing:.08em;color:#9fd2c9;
-    background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:6px 8px;touch-action:none}
+  #shuffleBtn{width:30px;height:30px;font-family:inherit;font-size:16px;line-height:1;color:#9fd2c9;
+    background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:0;touch-action:none}
   #shuffleBtn:active{background:#2c4a47}
   /* ---- panel ---- */
   #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(78vw,300px);
@@ -109,7 +106,7 @@
   .pairRow .wide{flex:1}
   #err{position:fixed;bottom:6px;left:6px;right:6px;z-index:99;color:#ff9070;font-size:10px;
     background:rgba(20,8,6,.9);border:1px solid #6e3a24;border-radius:5px;padding:6px 8px;display:none;white-space:pre-wrap}
-  #hint{position:fixed;bottom:8px;left:10px;color:#33524e;font-size:9px;letter-spacing:.06em;z-index:8;pointer-events:none;line-height:1.6}
+  #hint{display:none}
   /* ---- start gate ---- */
   #startGate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
     background:rgba(6,14,15,.88)}
@@ -124,6 +121,10 @@
   #sgFsBtn{width:100%;font-family:inherit;font-size:11px;letter-spacing:.14em;color:#9fd2c9;
     background:transparent;border:1px solid #2c4a47;border-radius:7px;padding:12px 0;margin-bottom:10px}
   #sgFsBtn:active{background:#2c4a47}
+  @media (max-width:560px){
+    #cardRow{left:max(12px,env(safe-area-inset-left));transform:none}
+    .scard{width:54px;height:74px}
+  }
 </style>
 <script type="importmap">
 {
@@ -136,33 +137,31 @@
 <body>
 <div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
-  <div id="pill"><b id="modeName">One Attacker</b><span id="modeSub">—</span></div>
-  <button class="tbtn" id="pauseBtn">II</button>
-  <button class="tbtn" id="fsBtn">⛶</button>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
   <div id="stWrap"><div id="stPending"></div><div id="stFill"></div></div>
-  <div id="stats">WAVE 1 · SCORE 0</div>
-  <div id="stateLbl">GUARD</div>
 </div>
 <div id="msg"></div>
 <div id="vig"></div>
 <div id="joyBase"></div><div id="joyKnob"></div>
 <div class="btnrow">
-  <button class="pbtn" id="dgeBtn">DODGE</button>
-  <button class="pbtn" id="heavyBtn">HEAVY<br>hold</button>
-  <button class="pbtn" id="atkBtn">ATK</button>
+  <button class="pbtn" id="heavyBtn" aria-label="Heavy attack">
+    <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span><span class="btnLabel">HEAVY</span>
+  </button>
+  <button class="pbtn" id="atkBtn" aria-label="Light attack">
+    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">·</span><span class="btnLabel">LIGHT</span>
+  </button>
 </div>
 <div id="cardRow">
-  <div id="deckSide"><div id="deckCount">DECK 0</div><button id="shuffleBtn">SHUFFLE [R]</button></div>
+  <div id="deckSide"><button id="shuffleBtn" aria-label="Shuffle stance cards">↻</button></div>
   <button class="scard" id="card0">
-    <span class="carrows"></span>
-    <span class="cbody"><span class="ckey">LB · Q</span><span class="cname">—</span></span>
+    <span class="ckey">LB</span><span class="cicon" aria-hidden="true"></span>
+    <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
   </button>
   <button class="scard" id="card1">
-    <span class="carrows"></span>
-    <span class="cbody"><span class="ckey">RB · E</span><span class="cname">—</span></span>
+    <span class="ckey">RB</span><span class="cicon" aria-hidden="true"></span>
+    <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
   </button>
 </div>
 <div id="panel" class="hidden">
@@ -411,7 +410,7 @@ const PC = installPlayerCombat({
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
     onWeaponSelected(){ ensureStanceMatchesWeapon(); rebuildDeck(); },
-    onWeaponUISync(){ updatePill(); },
+    onWeaponUISync(){ updateModePanel(); },
     timeScaleModifier(att, t, phase){
       const s = arena.charge.active ? arena.charge.s : arena.swing.s;
       if(phase === 0) return s.windup;
@@ -444,7 +443,7 @@ function setStance(index){
   arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
   arena.stance = pool[arena.stanceIndex];
   resetChainState();
-  updatePill();
+  updateModePanel();
 }
 function cycleStance(){ setStance(arena.stanceIndex + 1); announce(arena.stance ? stancePoolForWeapon()[(arena.stanceIndex)%stancePoolForWeapon().length].name : '', .9); }
 function ensureStanceMatchesWeapon(){
@@ -464,7 +463,7 @@ function playCard(slot){
   const pool = stancePoolForWeapon();
   const idx = pool.findIndex(st => st.id === card.id);
   if(idx >= 0) setStance(idx);
-  else { arena.stance = card; resetChainState(); updatePill(); }
+  else { arena.stance = card; resetChainState(); updateModePanel(); }
   // drop any follow-up queued from the old stance
   combatState.pending = null; combatState.pendingGroup = null;
   combatState.readyLock = 0;
@@ -782,7 +781,7 @@ function watchPlayerState(dt){
     arena.prevWave = enemySystem.wave;
     if(arena.cycleMode){
       // director already advanced to the next mode via cycleOnWaveClear
-      updatePill();
+      updateModePanel();
       announce('WAVE ' + enemySystem.wave + ' · ' + modeLabel(enemySystem.director.getMode()));
     } else {
       announce('WAVE ' + enemySystem.wave);
@@ -804,7 +803,7 @@ addEventListener('keydown', e=>{
   if(e.key==='r') startDeckShuffle();
   if(e.key==='x') cycleWeapon();
   if(e.key==='t') cycleStance();   // dev override: bypasses the card deck
-  if(e.key==='p') togglePause();
+  if(e.key==='p') toggleMenu();
   if(e.key==='m') toggleMenu();
 });
 addEventListener('keyup', e=>{
@@ -848,14 +847,13 @@ function endJoy(e){
 addEventListener('pointerup', endJoy);
 addEventListener('pointercancel', endJoy);
 /* touch buttons */
-const atkBtn=document.getElementById('atkBtn'), heavyBtn=document.getElementById('heavyBtn'), dgeBtn=document.getElementById('dgeBtn');
+const atkBtn=document.getElementById('atkBtn'), heavyBtn=document.getElementById('heavyBtn');
 atkBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); atkBtn.classList.add('held'); lightDown(); });
 for(const ev of ['pointerup','pointercancel','pointerleave'])
   atkBtn.addEventListener(ev, ()=>{ atkBtn.classList.remove('held'); });
 heavyBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); heavyBtn.classList.add('held'); heavyDown(); });
 for(const ev of ['pointerup','pointercancel','pointerleave'])
   heavyBtn.addEventListener(ev, ()=>{ heavyBtn.classList.remove('held'); heavyUp(); });
-dgeBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); triggerDodge(); });
 /* gamepad */
 const padPrev = {};
 const padMove = { x:0, z:0 };
@@ -883,7 +881,7 @@ function pollPad(){
   if(lb && !padPrev.lb) playCard(0);
   if(rb && !padPrev.rb) playCard(1);
   if(strt && !padPrev.strt) toggleMenu();
-  if(sel && !padPrev.sel) togglePause();
+  if(sel && !padPrev.sel) toggleMenu();
   padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
   padPrev.strt=strt; padPrev.sel=sel;
 }
@@ -898,27 +896,29 @@ function gatherInput(){
 
 /* ---------- UI ---------- */
 const panel=document.getElementById('panel');
-const pauseBtn=document.getElementById('pauseBtn');
-function toggleMenu(){ panel.classList.toggle('hidden'); }
-function togglePause(){ arena.paused=!arena.paused; pauseBtn.textContent = arena.paused?'▶':'II'; }
+const menuBtn=document.getElementById('menuBtn');
+function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
+function toggleMenu(){
+  const opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !opening);
+  arena.paused = opening;
+  syncMenuButton();
+}
 function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
-document.getElementById('menuBtn').addEventListener('click', toggleMenu);
-pauseBtn.addEventListener('click', togglePause);
+menuBtn.addEventListener('click', toggleMenu);
 const startGate=document.getElementById('startGate');
 document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
   startGate.classList.add('hidden');
 });
-const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
+const sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
 function toggleFullscreen(){
   if(!inFullscreen()){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
   else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
 }
-fsBtn.addEventListener('click', toggleFullscreen);
 sgFsBtn.addEventListener('click', toggleFullscreen);
 function syncFsButtons(){
-  fsBtn.textContent = inFullscreen()?'⤢':'⛶';
   sgFsBtn.textContent = inFullscreen()?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
 }
 document.addEventListener('fullscreenchange', syncFsButtons);
@@ -947,7 +947,6 @@ document.querySelectorAll('button.sect').forEach(h=>{
 });
 /* director mode grid */
 const modeGrid=document.getElementById('modeGrid');
-const modeName=document.getElementById('modeName'), modeSub=document.getElementById('modeSub');
 const CYCLE_MODE_ID = 'cycle';
 function modeLabel(id){ return DIRECTOR_MODES.find(m=>m.id===id)?.label || id; }
 function setMode(id, { reset = true } = {}){
@@ -955,7 +954,7 @@ function setMode(id, { reset = true } = {}){
   enemySystem.setCycleOnWaveClear(arena.cycleMode);
   if(!arena.cycleMode) enemySystem.setDirectorMode(id);
   StoneSettings.set('arena.directorMode', id);   // picked mode sticks across reloads
-  updatePill();
+  updateModePanel();
   if(reset) respawn();   // switching director mode = full scene reset
 }
 DIRECTOR_MODES.forEach(m=>{
@@ -970,10 +969,8 @@ DIRECTOR_MODES.forEach(m=>{
   b.addEventListener('click', ()=>setMode(CYCLE_MODE_ID));
   modeGrid.appendChild(b);
 }
-function updatePill(){
+function updateModePanel(){
   const mode = enemySystem.director.getMode();
-  modeName.textContent = (arena.cycleMode ? 'CYCLE · ' : '') + modeLabel(mode);
-  modeSub.textContent = `${PC.currentWeapon().label} · ${arena.stance ? arena.stance.name : '—'}`;
   const active = arena.cycleMode ? CYCLE_MODE_ID : mode;
   modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
 }
@@ -1039,12 +1036,12 @@ document.getElementById('testBtn').addEventListener('click', ()=>{
 });
 
 /* ---------- HUD ---------- */
-const hpFill=document.getElementById('hpFill'), stats=document.getElementById('stats');
+const hpFill=document.getElementById('hpFill');
 const stWrap=document.getElementById('stWrap'), stFill=document.getElementById('stFill'), stPending=document.getElementById('stPending');
-const stateLbl=document.getElementById('stateLbl');
 /* stance card widgets */
 const cardEls=[document.getElementById('card0'), document.getElementById('card1')];
-const deckCountEl=document.getElementById('deckCount');
+const shuffleBtn=document.getElementById('shuffleBtn');
+const atkArrow=document.getElementById('atkArrow'), heavyArrow=document.getElementById('heavyArrow');
 const cardAnim = { played:-1, drawn:new Set() };
 function markCardAnimation(slot){ cardAnim.played = slot; cardAnim.drawn.add(slot); }
 cardEls.forEach((el,i)=>el.addEventListener('animationend', e=>{
@@ -1057,16 +1054,11 @@ function renderCards(){
     el.classList.toggle('empty', !c);
     el.classList.toggle('played', cardAnim.played === i);
     el.classList.toggle('draw-in', cardAnim.drawn.has(i));
-    el.querySelector('.cname').textContent = deck.shuffling ? 'SHUFFLING…' : (c ? c.name.replace(/^S\d+\s*/,'') : '—');
-    const ar=el.querySelector('.carrows');
-    ar.textContent='';
-    if(c) for(const key of c.chain){
-      const s=document.createElement('span');
-      s.textContent = moveArrow(PC.ATTACKS[key] || {});
-      ar.appendChild(s);
-    }
+    const light = el.querySelector('.cardLight'), heavy = el.querySelector('.cardHeavy');
+    light.textContent = c ? c.chain.slice(0,2).map(key=>moveArrow(PC.ATTACKS[key] || {})).join(' ') : '· ·';
+    heavy.textContent = c ? moveArrow(PC.ATTACKS[c.chain[2]] || {}) : '·';
   });
-  deckCountEl.textContent = 'DECK ' + deck.drawCount;
+  shuffleBtn.textContent = deck.shuffling ? '…' : '↻';
   cardAnim.played = -1;
 }
 cardEls.forEach((el,i)=>el.addEventListener('pointerdown', e=>{ e.preventDefault(); playCard(i); }));
@@ -1074,6 +1066,16 @@ document.getElementById('shuffleBtn').addEventListener('pointerdown', e=>{ e.pre
 const msgEl=document.getElementById('msg');
 let msgT=0;
 function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
+function updateAttackPreviews(){
+  const lightSlot = arena.chain.stage === 'hit1Ready' ? 1 : 0;
+  const lightMove = chainMove(lightSlot), heavyMove = chainMove(2);
+  atkArrow.textContent = moveArrow(lightMove?.att || {});
+  heavyArrow.textContent = moveArrow(heavyMove?.att || {});
+  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher' || !!combatState.attack;
+  const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || !!combatState.attack;
+  atkBtn.classList.toggle('disabled', lightDisabled);
+  heavyBtn.classList.toggle('disabled', heavyDisabled);
+}
 function updateHud(rawDt){
   hpFill.style.width = clamp(enemySystem.playerHp,0,100)+'%';
   const availPct = clamp(arena.stamina.v / STAMINA.max, 0, 1) * 100;
@@ -1081,13 +1083,8 @@ function updateHud(rawDt){
   stFill.style.width = availPct + '%';
   stPending.style.left = availPct + '%';
   stPending.style.width = Math.max(0, totalPct - availPct) + '%';
-  if(deck.shuffling) deckCountEl.textContent = 'SHUFFLE ' + Math.max(0, deck.shuffleT).toFixed(1) + 's';
-  const tokens = enemySystem.director.getDebugState().activeTokens;
-  stats.textContent = 'WAVE '+enemySystem.wave+' · SCORE '+(enemySystem.kills*10)+(tokens?' · TOKEN LIVE':'');
-  if(arena.deadT >= 0) stateLbl.textContent = 'DOWN';
-  else if(arena.charge.active) stateLbl.textContent = 'CHARGE — '+tierName(arena.charge.tier);
-  else if(combatState.attack) stateLbl.textContent = (combatState.lastAttackLabel||'SWING').toUpperCase();
-  else stateLbl.textContent = 'GUARD';
+  shuffleBtn.textContent = deck.shuffling ? Math.max(0, deck.shuffleT).toFixed(1) : '↻';
+  updateAttackPreviews();
   if(msgT>0){ msgT-=rawDt; if(msgT<=0) msgEl.style.opacity=0; }
 }
 
@@ -1214,7 +1211,7 @@ enemySystem.reset();
 arena.prevHp = enemySystem.playerHp;
 arena.prevWave = enemySystem.wave;
 announce('WAVE 1');
-updatePill();
+updateModePanel();
 frame();
 
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck,
