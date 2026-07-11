@@ -14,6 +14,7 @@ import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
 import { FUSION_ARCHETYPES, FUSION_ATTACKS, FUSION_ENEMY_IDS, isFusionEnemy } from './fusion-enemies.js';
+import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
@@ -48,6 +49,7 @@ export function createArenaEnemySystem({
   navigation = null, roomEncounterMode = false, onEncounterCleared = null,
 } = {}){
   const rig = installGoblinRig(THREE);
+  const fusionRig = installFusionEnemyRig(THREE);
   // Shared choreography interpreter — the exact same pose sampler the player uses
   // (src/attack-interpreter.js), so a grunt swings the real player animation.
   const interp = createAttackInterpreter(THREE);
@@ -113,7 +115,14 @@ export function createArenaEnemySystem({
     const s = { radius:a.radius, height:a.height, bellyColor:a.bellyColor, armorColor:a.armorColor, weapon:a.weapon };
     const root = new THREE.Group(); root.name = `${kind} arena enemy`;
     const weaponDef = a.weapon ? STONE_WEAPONS[a.weapon] : STONE_WEAPONS.mace;
-    const visual = rig.makeGoblinRig({ kind, root, s, bodyMat:bodyMats[kind], mats, weaponDef, showRig:false });
+    let visual;
+    if(a.fusion){
+      const fusionVisual = fusionRig.create(kind);
+      root.add(fusionVisual.model.group);
+      visual = { fusionVisual };
+    } else {
+      visual = rig.makeGoblinRig({ kind, root, s, bodyMat:bodyMats[kind], mats, weaponDef, showRig:false });
+    }
     // markers (health bar + telegraph ring + token ring), matching the enemies.js layout
     const barBg = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.7, .055, .035), mats.flash); barBg.position.set(0, a.height + .32, 0);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.7, .065, .045), barMat); bar.position.copy(barBg.position); bar.position.z += .012; root.add(barBg, bar);
@@ -438,15 +447,20 @@ export function createArenaEnemySystem({
     e.weaponRoot.scale.setScalar(e.weaponScale);
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
-  function updateEnemyVisual(e){
-    if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
+  function updateEnemyVisual(e, dt){
+    if(e.fusion){
+      e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+      fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale);
+    } else if(e.useRealCombat) applyRealCombatPose(e);
+    else applyPunchPose(e);
     e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
     const sq = e.squash * (e.squashT / e.squashMax);
     e.root.scale.set(flashScale * (1 + sq*.45), flashScale * (1 - sq*.36), flashScale * (1 + sq*.45));
     e.root.rotation.z = e.spin * .12;
-    rig.applyGoblinVisual(e, tuning.heightScale, mats);
+    if(e.fusion) rig.updateSharedEnemyMarkers(e, e.height * tuning.heightScale, mats);
+    else rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
   }
@@ -495,7 +509,13 @@ export function createArenaEnemySystem({
       kills++; waveKills++;
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
-      rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron, 1.2 + power * .7);
+      if(e.fusion){
+        fusionRig.shatterMeshes(e.fusionVisual).forEach((mesh, i) => {
+          rig.addDeathPieceFromObject(worldRoot, deathPieces, mesh, null, mesh.material, knock, (1 + i*.025) * (1.05 + power*.35));
+        });
+      } else {
+        rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron, 1.2 + power * .7);
+      }
       removeEnemy(e);
       return true;
     }
@@ -506,7 +526,10 @@ export function createArenaEnemySystem({
   function clearDeathPieces(){ deathPieces.forEach(p => p.mesh?.parent && p.mesh.parent.remove(p.mesh)); deathPieces.length = 0; }
   function clearEnemies(){
     director.reset();
-    enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root));
+    enemies.splice(0).forEach(e => {
+      if(e.fusion) fusionRig.dispose(e.fusionVisual);
+      if(e.root.parent) e.root.parent.remove(e.root);
+    });
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
     clearDeathPieces();
   }
@@ -532,7 +555,7 @@ export function createArenaEnemySystem({
     for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
     resolveBodyCollisions(lastPlayer);
     updateProjectiles(dt, lastPlayer);
-    for(const e of enemies) updateEnemyVisual(e);
+    for(const e of enemies) updateEnemyVisual(e, dt);
     rig.updateDeathPieces(dt, deathPieces);
     // wave clear when everything is dead
     if(!enemies.length && !playerDead()){
