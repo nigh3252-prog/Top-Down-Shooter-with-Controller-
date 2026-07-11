@@ -153,6 +153,9 @@ export function createArenaEnemySystem({
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       hp, maxHp:hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       fusion:isFusionEnemy(kind) || !!a.fusion, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
+      visualScale:a.visualScale || 1, targetScale:a.targetScale || 1, currentTargetScale:a.targetScale || 1,
+      collisionScale:a.collisionScale || 1, separationScale:a.separationScale || a.collisionScale || 1,
+      attackOriginForward:a.attackOriginForward || 0, headCollisionRadius:a.headCollisionRadius || 0,
       pairingTags:a.pairingTags || [], meleeAccessible:true, meleeWindow:null,
       rootLift:0, targetYOffset:0,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
@@ -163,6 +166,7 @@ export function createArenaEnemySystem({
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
       yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
+      visualGroundSpeed:0, maxGroundSpeed:a.speed*tuning.speedScale,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -175,13 +179,28 @@ export function createArenaEnemySystem({
     e.vx = approachN(e.vx, dx*sp*amount, dt, 6);
     e.vz = approachN(e.vz, dz*sp*amount, dt, 6);
   }
-  const collisionRadius = e => e.radius * tuning.heightScale * (e.fusion ? 1.12 : 1);
+  const collisionRadius = e => e.radius * tuning.heightScale * (e.collisionScale || 1);
+  const separationRadius = e => e.radius * tuning.heightScale * (e.separationScale || e.collisionScale || 1);
+  function pointForward(e, distance){
+    return { x:e.x + e.facing.x*distance, z:e.z + e.facing.z*distance };
+  }
+  function attackOrigin(e){
+    return e.attackOriginForward > 0 ? pointForward(e, e.attackOriginForward * tuning.heightScale) : { x:e.x, z:e.z };
+  }
+  function playerCollisionCircles(e){
+    const circles = [{ x:e.x, z:e.z, radius:collisionRadius(e) }];
+    if(e.headCollisionRadius > 0){
+      const head = pointForward(e, e.attackOriginForward * tuning.heightScale * .82);
+      circles.push({ ...head, radius:e.headCollisionRadius * tuning.heightScale });
+    }
+    return circles;
+  }
   function applySeparationSteering(e, dt){
     let sx = 0, sz = 0;
     for(const other of enemies){
       if(other === e || other.hp <= 0) continue;
       let dx = e.x - other.x, dz = e.z - other.z, d = Math.hypot(dx,dz);
-      const comfort = collisionRadius(e) + collisionRadius(other) + .7;
+      const comfort = separationRadius(e) + separationRadius(other) + .7;
       if(d >= comfort) continue;
       if(d < 1e-4){ const a = ((e.id*19 + other.id*37) % 360) * Math.PI/180; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
       const pressure = 1 - d/comfort;
@@ -230,11 +249,13 @@ export function createArenaEnemySystem({
   }
 
   /* ---------- attacks ---------- */
-  function chooseAttack(e, d){
+  function chooseAttack(e, d, p){
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
     const a = e.useRealCombat ? e.realAtk : EATK[e.attackId];
     if(!a) return null;
-    return d <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
+    const origin = attackOrigin(e);
+    const threatDistance = e.attackOriginForward > 0 ? Math.hypot(p.x - origin.x, p.z - origin.z) : d;
+    return threatDistance <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
   }
   function startEnemyAttack(e, atk, p){
     e.attack = atk; e.state = 'windup'; e.stateTime = 0;
@@ -244,11 +265,13 @@ export function createArenaEnemySystem({
   }
 
   function updateFusionAccessibility(e){
+    e.currentTargetScale = e.targetScale || 1;
     if(!e.fusion){ e.meleeAccessible = true; e.meleeWindow = null; e.rootLift = 0; e.targetYOffset = 0; return; }
     const attack = e.attack;
     const states = attack?.meleeWindow?.states || [];
     e.meleeAccessible = !states.length || states.includes(e.state);
     e.meleeWindow = e.meleeAccessible && states.length ? attack.meleeWindow.id : null;
+    if(e.meleeWindow && attack.meleeWindow.targetHeight === 'standard') e.currentTargetScale = 1;
     // The aerial body leaves the floor during its windup and dive. It returns
     // to the standard target height for recovery, where melee can connect.
     e.rootLift = e.kind === 'phx' && attack && (e.state === 'windup' || e.state === 'active') ? 2.1 * tuning.heightScale : 0;
@@ -280,11 +303,13 @@ export function createArenaEnemySystem({
     if(d > desired) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .25);
   }
   function resolveEnemyMelee(e, p){
-    const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
+    const origin = attackOrigin(e);
+    const dx = p.x - origin.x, dz = p.z - origin.z, d = Math.hypot(dx,dz);
     if(d > e.attack.range + PLAYER_R) return;
-    if(navigation?.raycastWalls?.({ x:e.x, z:e.z }, { x:p.x, z:p.z })) return;
+    if(navigation?.raycastWalls?.(origin, { x:p.x, z:p.z })) return;
     const ang = Math.atan2(dx,dz), fa = Math.atan2(e.facing.x, e.facing.z);
-    if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < e.radius + PLAYER_R + .26){
+    const closeRadius = (e.headCollisionRadius > 0 ? e.headCollisionRadius*tuning.heightScale : collisionRadius(e)) + PLAYER_R + .26;
+    if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < closeRadius){
       e.hitDone = true;
       hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
     }
@@ -374,7 +399,7 @@ export function createArenaEnemySystem({
     else {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
       e.facing = norm(dx,dz);
-      const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d) : null;
+      const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d, p) : null;
       if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
         startEnemyAttack(e, att, p);
       } else {
@@ -388,7 +413,7 @@ export function createArenaEnemySystem({
     }
     updateFusionAccessibility(e);
     if(navigation?.resolveMovement){
-      const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, e.radius);
+      const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, collisionRadius(e));
       e.x = moved.x; e.z = moved.z;
     } else {
       const rr = Math.hypot(e.x, e.z);
@@ -404,7 +429,7 @@ export function createArenaEnemySystem({
         for(let j = i+1; j < enemies.length; j++){
           const b = enemies[j]; if(b.hp <= 0) continue;
           let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx,dz);
-          const min = collisionRadius(a) + collisionRadius(b) + .22;
+          const min = separationRadius(a) + separationRadius(b) + .22;
           if(d >= min) continue;
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
           const push = (min - d) * .5 / d;
@@ -412,9 +437,12 @@ export function createArenaEnemySystem({
         }
         // keep enemies out of the player's body (the arena owns player pos, so we
         // only move the enemy — this is what stops a lunge from ending on top of you)
-        const e = a; let dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz), min = collisionRadius(e) + PLAYER_R;
-        if(d < 1e-4){ const ang = (e.id * 47 % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
-        if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
+        const e = a;
+        for(const circle of playerCollisionCircles(e)){
+          let dx = circle.x - p.x, dz = circle.z - p.z, d = Math.hypot(dx,dz), min = circle.radius + PLAYER_R;
+          if(d < 1e-4){ const ang = (e.id * 47 % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
+          if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
+        }
       }
     }
     if(navigation?.resolveMovement){
@@ -472,7 +500,7 @@ export function createArenaEnemySystem({
   function updateEnemyVisual(e, dt){
     if(e.fusion){
       e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
-      fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale);
+      fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale * e.visualScale);
     } else if(e.useRealCombat) applyRealCombatPose(e);
     else applyPunchPose(e);
     e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
@@ -481,18 +509,21 @@ export function createArenaEnemySystem({
     const sq = e.squash * (e.squashT / e.squashMax);
     e.root.scale.set(flashScale * (1 + sq*.45), flashScale * (1 - sq*.36), flashScale * (1 + sq*.45));
     e.root.rotation.z = e.spin * .12;
-    if(e.fusion) rig.updateSharedEnemyMarkers(e, e.height * tuning.heightScale, mats);
+    if(e.fusion) rig.updateSharedEnemyMarkers(e, e.height * tuning.heightScale * e.targetScale, mats);
     else rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
   }
 
   /* ---------- waves ---------- */
-  // First fusion pass is pure-strain only. Goblin archetypes remain in the
-  // module for compatibility and can be restored as a later mixed-pool mode.
+  // Pure strains remain the default; the picker can switch the wave to the
+  // retained goblin roster or focus on one pure strain.
   const MIX = FUSION_ENEMY_IDS;
+  const GOBLIN_MIX = Object.keys(BASE_ARCHETYPES);
   function chooseSpawnKind(i){
-    return tuning.spawnKind === 'mixed' ? MIX[(wave - 1 + i) % MIX.length] : tuning.spawnKind;
+    if(tuning.spawnKind === 'mixed') return MIX[(wave - 1 + i) % MIX.length];
+    if(tuning.spawnKind === 'goblins') return GOBLIN_MIX[(wave - 1 + i) % GOBLIN_MIX.length];
+    return tuning.spawnKind;
   }
   function spawnPos(){
     const roomPoint = navigation?.randomSpawn?.(activeEncounterRoomId, lastPlayer);
@@ -574,8 +605,13 @@ export function createArenaEnemySystem({
     director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
+    for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
     for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
     resolveBodyCollisions(lastPlayer);
+    for(const e of enemies){
+      e.maxGroundSpeed = Math.max(.1, e.speed * tuning.speedScale);
+      e.visualGroundSpeed = Math.min(e.maxGroundSpeed, Math.hypot(e.x - e._visualStartX, e.z - e._visualStartZ) / Math.max(dt, .001));
+    }
     updateProjectiles(dt, lastPlayer);
     for(const e of enemies) updateEnemyVisual(e, dt);
     rig.updateDeathPieces(dt, deathPieces);
@@ -606,7 +642,7 @@ export function createArenaEnemySystem({
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
-    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
+    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || kind === 'goblins' || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },

@@ -19,7 +19,7 @@ addEventListener('unhandledrejection', event => window.__fusionErrors.push(event
 <script type="module">
 import * as THREE from 'three';
 import { installFusionEnemyRig } from '../src/fusion-enemy-rig.js';
-import { FUSION_ENEMY_IDS } from '../src/fusion-enemies.js';
+import { FUSION_ARCHETYPES, FUSION_ENEMY_IDS } from '../src/fusion-enemies.js';
 import { createArenaEnemySystem } from '../src/arena-enemies.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -32,11 +32,11 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x172329);
 scene.add(new THREE.HemisphereLight(0xe8f4ff, 0x303820, 1.2));
 const key = new THREE.DirectionalLight(0xffe4bb, 1.6); key.position.set(8,14,10); scene.add(key);
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(34,18), new THREE.MeshStandardMaterial({ color:0x627267, roughness:1 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(48,28), new THREE.MeshStandardMaterial({ color:0x627267, roughness:1 }));
 ground.rotation.x = -Math.PI/2; scene.add(ground);
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, .1, 100);
-camera.position.set(0,11,20); camera.lookAt(0,2,0);
+camera.position.set(0,18,32); camera.lookAt(0,4,0);
 const fusion = installFusionEnemyRig(THREE);
 const handles = [];
 const errors = [];
@@ -44,8 +44,8 @@ FUSION_ENEMY_IDS.forEach((kind, i) => {
   try {
     const handle = fusion.create(kind);
     const mount = new THREE.Group();
-    mount.position.x = (i%5-2)*5.2;
-    mount.position.z = (Math.floor(i/5)-.5)*7;
+    mount.position.x = (i%5-2)*7.5;
+    mount.position.z = (Math.floor(i/5)-.5)*10;
     mount.add(handle.model.group);
     scene.add(mount);
     handle.mount = mount;
@@ -59,7 +59,9 @@ const clock = new THREE.Clock();
 function frame(){
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05), time = clock.elapsedTime;
-  handles.forEach(handle => fusion.update(handle, { state:'idle', vx:.2, vz:0 }, dt, time, 1));
+  handles.forEach(handle => fusion.update(handle, {
+    state:'idle', visualGroundSpeed:1, maxGroundSpeed:4, speed:4
+  }, dt, time, FUSION_ARCHETYPES[handle.kind].visualScale));
   if(typeof enemySystem !== 'undefined') enemySystem.update(dt, { x:0, z:0, invulnerable:true });
   renderer.render(scene,camera);
 }

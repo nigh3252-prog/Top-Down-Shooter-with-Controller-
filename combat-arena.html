@@ -889,10 +889,17 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const enemyScale = enemySystem.heightScale || 1;
-    const scaledRadius = e.radius * enemyScale;
-    const h = (e.height || e.radius * 2) * enemyScale;
+    const scaledRadius = e.radius * enemyScale * (e.collisionScale || 1);
+    const h = (e.height || e.radius * 2) * enemyScale * (e.currentTargetScale || e.targetScale || 1);
     const targetOffsetY = e.targetYOffset || 0;
-    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, targetOffsetY + h * k, e.z));
+    const targetOrigins = [{ x:e.x, z:e.z }];
+    if(e.attackOriginForward > 0){
+      targetOrigins.push({
+        x:e.x + e.facing.x * e.attackOriginForward * enemyScale,
+        z:e.z + e.facing.z * e.attackOriginForward * enemyScale
+      });
+    }
+    const hitSamples = targetOrigins.flatMap(origin => [.24, .52, .80].map(k => new THREE.Vector3(origin.x, targetOffsetY + h * k, origin.z)));
     let best = null;
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());
@@ -1209,6 +1216,7 @@ function updateModePanel(){
 const spawnSelect=document.getElementById('spawnSelect');
 [
   { id:'mixed', label:'Mixed Pure Strains' },
+  { id:'goblins', label:'Goblins Only' },
   ...FUSION_ENEMY_OPTIONS
 ].forEach(({id,label})=>{
   const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);

@@ -46,7 +46,7 @@ function CH(){ return {
   body:{ lift:0, pitch:0, roll:0, yaw:0, shiver:0 },
   head:{ yaw:0, pitch:0, roll:0, shiver:0 },
   jaw:{ open:0 },
-  limbs:{ mv:0, spdMul:1, crouch:0, thrust:0, stabRaise:0, stabJab:0, splay:0 },
+  limbs:{ mv:0, speed:0, phase:0, spdMul:1, crouch:0, thrust:0, stabRaise:0, stabJab:0, splay:0 },
   spine:{ coil:0, ring:0, spdMul:1 },
   wings:{ spread:0, beat:0 },      // native on Phoenix; others translate
   tool:{ reach:0, grip:0, stow:0 },// native on Mother Courage; others translate
@@ -60,6 +60,8 @@ function leggedView(ch,opt){
   const tf=opt.tool===false?0:1, wf=opt.wings===false?0:1;
   return {
     mv:ch.limbs.mv,
+    speed:ch.limbs.speed,
+    phase:ch.limbs.phase,
     spdMul:ch.limbs.spdMul*ch.spine.spdMul,
     crouch:clamp(ch.limbs.crouch+ch.spine.ring*.6+ch.tool.stow*.2*tf,0,1),
     thrust:ch.limbs.thrust,
@@ -95,7 +97,7 @@ function lionChassis(pal){
     const L=chain([1.15,1.05,.3],[.3-cfg[2]*.04,.2,.16],pal.b,i*37);
     L.root.position.set(cfg[0],-.7-cfg[2]*.2,cfg[1]); L.rear=!!cfg[2];
     const paw=box(.5,.22,.6,pal.c); paw.position.set(0,.08,.12); L.tip.add(paw);
-    L.phase=[0,.5,.75,.25][i]; body.add(L.root); legs.push(L);
+    L.walkPhase=[0,.5,.75,.25][i]; L.trotPhase=[0,.5,.5,0][i]; body.add(L.root); legs.push(L);
   });
   const tail=chain([.9,.8,.5],[.12,.09,.14],pal.a,99);
   tail.root.position.set(0,.5,-2); tail.root.rotation.x=2.2; body.add(tail.root);
@@ -103,12 +105,13 @@ function lionChassis(pal){
     apply(ch,dt,t){
       const F=leggedView(ch);
       bodyPose(body,2.5,ch,t,this.liftScale);
-      body.position.y+=Math.sin(t*1.6)*.05+F.mv*Math.abs(Math.sin(t*6))*.14+F.beat*Math.sin(t*14)*.08;
-      body.rotation.x+=F.mv*Math.sin(t*12)*.02;
-      body.rotation.z+=F.mv*Math.sin(t*6)*.03;
+      body.position.y+=Math.sin(t*1.6)*.05+F.mv*Math.abs(Math.sin(F.phase))*.14+F.beat*Math.sin(t*14)*.08;
+      body.rotation.x+=F.mv*Math.sin(F.phase*2)*.02;
+      body.rotation.z+=F.mv*Math.sin(F.phase)*.03;
       body.rotation.y+=F.yawWind;
       legs.forEach(L=>{
-        const ph=t*6*F.spdMul+L.phase*Math.PI*2;
+        const trot=clamp((F.speed-.45)/.45,0,1);
+        const ph=F.phase*F.spdMul+lerp(L.walkPhase,L.trotPhase,trot)*Math.PI*2;
         const swing=F.mv*Math.sin(ph)*.6, lift=F.mv*Math.max(0,Math.cos(ph));
         let hip=swing-lift*.4+(L.rear?.3:-.05);
         let knee=(L.rear?-1:1)*(lift*.9+.15);
@@ -265,11 +268,11 @@ function toothyChassis(pal){
     apply(ch,dt,t){
       const F=leggedView(ch);
       bodyPose(body,2.1,ch,t,this.liftScale);
-      body.position.y+=Math.sin(t*1.8)*.04+F.mv*Math.abs(Math.sin(t*7))*.16;
-      body.rotation.z+=F.mv*Math.sin(t*7)*.045;
+      body.position.y+=Math.sin(t*1.8)*.04+F.mv*Math.abs(Math.sin(F.phase))*.16;
+      body.rotation.z+=F.mv*Math.sin(F.phase)*.045;
       body.rotation.y+=F.yawWind;
       legs.forEach(L=>{
-        const ph=t*7*F.spdMul+L.phase*Math.PI*2;
+        const ph=F.phase*F.spdMul+L.phase*Math.PI*2;
         const swing=F.mv*Math.sin(ph)*.55, lift=F.mv*Math.max(0,Math.cos(ph));
         let hip=swing-lift*.35, knee=lift;
         if(L.rear){ hip=lerp(hip,.7,F.crouch); knee=lerp(knee,1.2,F.crouch);
@@ -355,12 +358,12 @@ function stiltChassis(pal){
     apply(ch,dt,t){
       const F=leggedView(ch);
       bodyPose(body,7.2,ch,t,this.liftScale);
-      body.position.y+=-F.crouch*2.6+Math.sin(t*.9)*.08+F.mv*Math.sin(t*3.4)*.22;
+      body.position.y+=-F.crouch*2.6+Math.sin(t*.9)*.08+F.mv*Math.sin(F.phase)*.22;
       body.rotation.x+=Math.sin(t*.6)*.015+F.mv*.04+F.crouch*.08;
-      body.rotation.z+=F.mv*Math.sin(t*1.7)*.05-F.stabRaise*.1;
+      body.rotation.z+=F.mv*Math.sin(F.phase*.5)*.05-F.stabRaise*.1;
       body.rotation.y+=F.yawWind;
       legs.forEach(L=>{
-        const ph=t*3.4*F.spdMul+L.phase*Math.PI*2;
+        const ph=F.phase*F.spdMul+L.phase*Math.PI*2;
         const swing=F.mv*Math.sin(ph)*.42, lift=F.mv*Math.max(0,Math.cos(ph));
         let hip=swing-lift*.5, knee=lift*1.1+.12;
         hip-=F.crouch*.5; knee+=F.crouch*1.5;
@@ -384,19 +387,20 @@ function antelopeChassis(pal){
   [[-.55,1.2,0],[.55,1.2,0],[-.6,-1.3,1],[.6,-1.3,1]].forEach((cfg,i)=>{
     const L=chain([1.1,1.1,.35],[.16,.12,.08],pal.b,i*41);
     L.root.position.set(cfg[0],-.5,cfg[1]); L.rear=!!cfg[2];
-    L.phase=[0,.5,.55,.05][i]; body.add(L.root); legs.push(L);
+    L.walkPhase=[0,.5,.75,.25][i]; L.gallopPhase=[0,.08,.5,.58][i]; body.add(L.root); legs.push(L);
   });
   const tail=chain([.6,.5],[.08,.04],pal.a,88); tail.root.position.set(0,.4,-1.9); tail.root.rotation.x=2.4; body.add(tail.root);
   return { group, body, socket, restY:2, headScale:.9, liftScale:1, strideScale:1.2,
     apply(ch,dt,t){
       const F=leggedView(ch);
-      const gallop=Math.sin(t*10*F.spdMul);
+      const gallopBlend=clamp((F.speed-.55)/.35,0,1);
+      const gallop=Math.sin(F.phase*F.spdMul);
       bodyPose(body,2,ch,t,this.liftScale);
       body.position.y+=Math.sin(t*2.4)*.05+F.mv*Math.abs(gallop)*.3;
       body.rotation.x+=F.mv*gallop*.12;
       body.rotation.y+=F.yawWind;
       legs.forEach(L=>{
-        const ph=t*10*F.spdMul+L.phase*Math.PI*2;
+        const ph=F.phase*F.spdMul+lerp(L.walkPhase,L.gallopPhase,gallopBlend)*Math.PI*2;
         const swing=F.mv*Math.sin(ph)*(L.rear?.8:.7), lift=F.mv*Math.max(0,Math.cos(ph))*1.1;
         let hip=swing-lift*.4+(L.rear?.25:-.1);
         let knee=(L.rear?-1:1)*(lift*.9+.15);
@@ -499,10 +503,10 @@ function crocChassis(pal){
     apply(ch,dt,t){
       const F=leggedView(ch);
       bodyPose(body,1.15,ch,t,this.liftScale);
-      body.position.y+=Math.sin(t*1.5)*.03+F.mv*Math.abs(Math.sin(t*5))*.06;
-      body.rotation.y+=F.mv*Math.sin(t*5)*.08+F.yawWind;
+      body.position.y+=Math.sin(t*1.5)*.03+F.mv*Math.abs(Math.sin(F.phase))*.06;
+      body.rotation.y+=F.mv*Math.sin(F.phase)*.08+F.yawWind;
       legs.forEach(L=>{
-        const ph=t*5*F.spdMul+L.phase*Math.PI*2;
+        const ph=F.phase*F.spdMul+L.phase*Math.PI*2;
         L.root.rotation.x=F.mv*Math.sin(ph)*.55;
         let splay=L.side*-.9-F.mv*Math.max(0,Math.cos(ph))*.3*L.side;
         let knee=L.side*(.8+F.mv*Math.max(0,Math.cos(ph))*.5);
@@ -951,7 +955,7 @@ function assemble(bodyDef,headDef){
       obj.castShadow = true;
       obj.receiveShadow = true;
     });
-    return { kind, model, baseScale, floorOffset, moveBlend:0 };
+    return { kind, model, baseScale, floorOffset, moveBlend:0, gaitPhase:0, gaitSpeed:0 };
   }
 
   function attackElapsed(e){
@@ -964,9 +968,17 @@ function assemble(bodyDef,headDef){
   function update(handle, e, dt, time, heightScale=1){
     const { model } = handle;
     const ch = CH();
-    const moving = e.state === 'idle' && Math.hypot(e.vx || 0, e.vz || 0) > .08;
-    handle.moveBlend = lerp(handle.moveBlend, moving ? 1 : 0, 1 - Math.pow(.002, dt));
+    const rawSpeed = e.state === 'idle' ? (e.visualGroundSpeed ?? Math.hypot(e.vx || 0, e.vz || 0)) : 0;
+    const maxSpeed = Math.max(.1, e.maxGroundSpeed || e.speed || rawSpeed || 1);
+    const speedRatio = clamp(rawSpeed / maxSpeed, 0, 1);
+    const moveTarget = clamp(speedRatio * 1.6, 0, 1);
+    handle.moveBlend = lerp(handle.moveBlend, moveTarget, 1 - Math.pow(.002, dt));
+    handle.gaitSpeed = lerp(handle.gaitSpeed, rawSpeed, 1 - Math.pow(.01, dt));
+    const strideWorld = Math.max(.65, 2.1 * model.chassis.strideScale * handle.baseScale * heightScale);
+    if(rawSpeed > .025) handle.gaitPhase += handle.gaitSpeed * dt / strideWorld * Math.PI * 2;
     ch.limbs.mv = handle.moveBlend;
+    ch.limbs.speed = speedRatio;
+    ch.limbs.phase = handle.gaitPhase;
 
     if(e.attack && (e.state === 'windup' || e.state === 'active' || e.state === 'recovery')){
       const key = model.bodyDef.anims[0];

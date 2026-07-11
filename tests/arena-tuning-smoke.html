@@ -12,6 +12,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { createArenaEnemySystem } from '../src/arena-enemies.js';
+import { FUSION_ATTACKS } from '../src/fusion-enemies.js';
 
 function makeSystem({ aggression, count = 1, kind = 'phx' }){
   const worldRoot = new THREE.Group();
@@ -49,6 +50,32 @@ const high = makeSystem({ aggression:3 });
 const lowAttacks = countAttacks(low, 20);
 const highAttacks = countAttacks(high, 20);
 
+const goblins = makeSystem({ aggression:1, count:10, kind:'goblins' });
+const goblinKinds = ['grunt','dagger','mace','rock','captain'];
+
+function gaitAdvance(speedScale){
+  const system = makeSystem({ aggression:1, kind:'lion' });
+  system.setSpeedScale(speedScale);
+  const enemy = system.enemies[0];
+  enemy.x = 0; enemy.z = 12; enemy.cooldown = 999;
+  const start = enemy.fusionVisual.gaitPhase;
+  for(let t = 0; t < 3; t += 1/60) system.update(1/60, { x:0, z:0, invulnerable:true });
+  return enemy.fusionVisual.gaitPhase - start;
+}
+const slowGait = gaitAdvance(.25);
+const fastGait = gaitAdvance(1);
+
+const croc = makeSystem({ aggression:1, kind:'croc' });
+const crocEnemy = croc.enemies[0];
+crocEnemy.x = 0; crocEnemy.z = 4.2; crocEnemy.facing = { x:0, z:-1 }; crocEnemy.cooldown = 0;
+croc.update(1/60, { x:0, z:0, invulnerable:true });
+
+const sun = makeSystem({ aggression:1, kind:'sun' }).enemies[0];
+const stiltSystem = makeSystem({ aggression:1, kind:'stilt' });
+const stilt = stiltSystem.enemies[0];
+stilt.attack = FUSION_ATTACKS.stiltStomp; stilt.state = 'recovery'; stilt.stateTime = 0; stilt.recovery = 1;
+stiltSystem.update(1/60, { x:0, z:0, invulnerable:true });
+
 const spacing = makeSystem({ aggression:3, count:6, kind:'lion' });
 spacing.enemies.forEach((enemy, i) => { enemy.x = (i%2)*.03; enemy.z = 3 + Math.floor(i/2)*.03; });
 for(let t = 0; t < 2; t += 1/60) spacing.update(1/60, { x:0, z:0, invulnerable:true });
@@ -61,7 +88,12 @@ for(let i = 0; i < spacing.enemies.length; i++){
 
 const result = {
   allSingleKind:spacing.enemies.every(enemy => enemy.kind === 'lion'),
+  goblinsOnly:goblins.enemies.every(enemy => goblinKinds.includes(enemy.kind)),
   aggression:{ low:lowAttacks, high:highAttacks, increased:highAttacks > lowAttacks },
+  gait:{ slow:Number(slowGait.toFixed(3)), fast:Number(fastGait.toFixed(3)), speedSynced:fastGait > slowGait*1.7 },
+  scale:{ sun:sun.visualScale, croc:crocEnemy.visualScale, stilt:stilt.visualScale },
+  stiltSoftCounter:stilt.meleeAccessible && stilt.currentTargetScale === 1,
+  crocMouthAttack:crocEnemy.state === 'windup' && Math.hypot(crocEnemy.x,crocEnemy.z) > 3.5,
   spacing:{ minDistance:Number(minDistance.toFixed(3)), separated:minDistance > 3 }
 };
 document.getElementById('status').textContent = JSON.stringify(result);

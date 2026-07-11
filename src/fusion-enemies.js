@@ -1,7 +1,6 @@
-// Pure-strain enemy definitions for the first combat-area pass.
-// These definitions intentionally share the arena's standard goblin-sized
-// gameplay envelope. Visual scale, collision, and target height can diverge
-// later when large variants are introduced.
+// Pure-strain enemy definitions for the first combat-area pass. Rendering,
+// targeting, navigation, and crowd spacing have separate scales because a
+// tall narrow enemy and a long low enemy should not share one circle.
 
 const STANDARD_RADIUS = .94;
 const STANDARD_HEIGHT = 4.15;
@@ -20,6 +19,8 @@ const standard = ({ color, bellyColor, armorColor, weapon, ...extra }) => ({
   fusion: true,
   visualScale: 1,
   targetScale: 1,
+  collisionScale: 1.12,
+  separationScale: 1.12,
   ...extra
 });
 
@@ -33,20 +34,20 @@ export const FUSION_ATTACKS = {
   stiltStomp: { kind:'melee', name:'Stomp', range:3.0, tokenCost:1.55, windup:1.0, active:.22, recovery:1.0, cooldown:2.0, damage:17, arc:.95, knock:1.35, wantsSolo:true, movement:'stomp', meleeWindow:{ id:'crouch', states:['recovery'], targetHeight:'standard' } },
   antCharge: { kind:'melee', name:'Charge', range:4.0, tokenCost:1.5, windup:.58, active:.5, recovery:.88, cooldown:1.9, damage:16, arc:.5, knock:2.8, movement:'charge', wantsSolo:true },
   phoenixDive: { kind:'melee', name:'Talon Dive', range:4.1, tokenCost:1.55, windup:.72, active:.34, recovery:.82, cooldown:1.95, damage:16, arc:.72, knock:2.4, movement:'dive', meleeWindow:{ id:'landed', states:['recovery'], targetHeight:'standard' }, airborne:true },
-  crocSnap: { kind:'melee', name:'Snap Bite', range:2.3, tokenCost:1.0, windup:.62, active:.18, recovery:.86, cooldown:1.65, damage:15, arc:.72, knock:1.0, movement:'snap', meleeWindow:{ id:'rear-up', states:['windup','recovery'], targetHeight:'standard' } }
+  crocSnap: { kind:'melee', name:'Snap Bite', range:1.2, tokenCost:1.0, windup:.62, active:.18, recovery:.86, cooldown:1.65, damage:15, arc:.72, knock:1.0, movement:'snap', meleeWindow:{ id:'rear-up', states:['windup','recovery'], targetHeight:'standard' } }
 };
 
 export const FUSION_ARCHETYPES = {
   lion: standard({ role:'mobile bruiser', preferredRange:2.7, color:0xc99d52, bellyColor:0xe6c36c, armorColor:0x4a3020, weapon:'greatsword', attack:'lionPounce', speed:4.0, hp:62, score:22, pairingTags:['mobile','committed'] }),
   spid: standard({ role:'flanker', preferredRange:2.4, color:0x453a54, bellyColor:0xd8c2a0, armorColor:0x2e2838, weapon:'dagger', attack:'spidLegStab', speed:4.55, hp:46, score:20, poseScale:.9, pairingTags:['mobile','close'] }),
-  sun: standard({ role:'skirmisher', preferredRange:3.4, color:0x352c48, bellyColor:0xffc93c, armorColor:0x2a2436, weapon:'spear', attack:'sunDart', speed:3.8, hp:48, score:24, pairingTags:['mobile','soft-counter'] }),
+  sun: standard({ role:'skirmisher', preferredRange:3.4, visualScale:.5, targetScale:.5, collisionScale:.65, separationScale:.82, color:0x352c48, bellyColor:0xffc93c, armorColor:0x2a2436, weapon:'spear', attack:'sunDart', speed:3.8, hp:48, score:24, pairingTags:['mobile','soft-counter'] }),
   grab: standard({ role:'disruptor', preferredRange:2.0, color:0x5c4a72, bellyColor:0xd8c2a0, armorColor:0x3a3048, weapon:'mace', attack:'grabSnatch', speed:3.7, hp:58, score:25, pairingTags:['close','control'] }),
   tooth: standard({ role:'frontliner', preferredRange:1.9, color:0x8a3a2e, bellyColor:0xd8c2a0, armorColor:0x5a4a58, weapon:'mace', attack:'toothyChomp', speed:2.9, hp:82, score:28, poseScale:1.05, pairingTags:['anchor','close'] }),
   mother: standard({ role:'area controller', preferredRange:3.0, color:0x6a705c, bellyColor:0x8a8a72, armorColor:0x3a4034, weapon:'warhammer', attack:'motherHarvest', speed:2.25, hp:96, score:34, poseScale:1.08, pairingTags:['anchor','control'] }),
-  stilt: standard({ role:'reach sentinel', preferredRange:3.2, color:0x4a5568, bellyColor:0x5a687e, armorColor:0x2a3038, weapon:'spear', attack:'stiltStomp', speed:2.75, hp:76, score:32, poseScale:1.08, pairingTags:['anchor','soft-counter'] }),
+  stilt: standard({ role:'reach sentinel', preferredRange:3.2, visualScale:2, targetScale:2, collisionScale:1.08, separationScale:1.2, color:0x4a5568, bellyColor:0x5a687e, armorColor:0x2a3038, weapon:'spear', attack:'stiltStomp', speed:2.75, hp:76, score:32, poseScale:1.08, pairingTags:['anchor','soft-counter'] }),
   ant: standard({ role:'charger', preferredRange:4.0, color:0xb8a284, bellyColor:0xe8dcc4, armorColor:0x6e5a44, weapon:'longsword', attack:'antCharge', speed:4.8, hp:54, score:30, pairingTags:['committed','mobile'] }),
   phx: standard({ role:'aerial harasser', preferredRange:3.5, color:0xd8b04a, bellyColor:0xf2d98a, armorColor:0xb85c2e, weapon:'spear', attack:'phoenixDive', speed:3.4, hp:58, score:36, poseScale:1.02, pairingTags:['aerial','soft-counter'] }),
-  croc: standard({ role:'low ambusher', preferredRange:2.0, color:0x9e2b2b, bellyColor:0xe8d8a8, armorColor:0x6e1e1e, weapon:'mace', attack:'crocSnap', speed:3.15, hp:72, score:30, poseScale:1.02, pairingTags:['low','soft-counter'] })
+  croc: standard({ role:'low ambusher', preferredRange:4.2, visualScale:.5, targetScale:.5, collisionScale:.62, separationScale:1.05, attackOriginForward:1.9, headCollisionRadius:.55, color:0x9e2b2b, bellyColor:0xe8d8a8, armorColor:0x6e1e1e, weapon:'mace', attack:'crocSnap', speed:3.15, hp:72, score:30, poseScale:1.02, pairingTags:['low','soft-counter'] })
 };
 
 export const FUSION_ENEMY_IDS = Object.keys(FUSION_ARCHETYPES);
