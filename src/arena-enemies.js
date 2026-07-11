@@ -19,18 +19,17 @@ import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 
-// Single global bump for goblins that wield a real player weapon (vs the rig's
-// static .9). Scaling this up automatically grows the derived attack reach and
-// the stand-off distance (see computeRealReach), so spacing tracks the weapon.
-const GOBLIN_WEAPON_SCALE = 1.55;
+// Goblin weapons are built at their final readable size by goblin-weapons.js.
+// Real attack reach is derived from each weapon's own rig metadata.
+const GOBLIN_WEAPON_SCALE = 1;
 
 // Punch TYPES + goblin skin, distances/speeds pre-scaled by S. hp/score unchanged.
 const BASE_ARCHETYPES = {
-  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
-  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
-  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
-  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
-  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
+  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5', turnSpeed:Math.PI,       rallyMin:6, rallyMax:11 },
+  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, turnSpeed:Math.PI*1.34, rallyMin:5, rallyMax:9 },
+  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, turnSpeed:Math.PI*.62, rallyMin:7, rallyMax:12 },
+  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true, turnSpeed:Math.PI*.84, rallyMin:6, rallyMax:11 },
+  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true, turnSpeed:Math.PI*.5, rallyMin:4, rallyMax:7 }
 };
 const ARCHETYPES = { ...BASE_ARCHETYPES, ...FUSION_ARCHETYPES };
 
@@ -55,6 +54,7 @@ export function createArenaEnemySystem({
   const interp = createAttackInterpreter(THREE);
   const poseScratch = interp.P({ hold:[0,1,0], tip:[0,1,0] });
   const clamp = rig.clamp;
+  const lerp = THREE.MathUtils.lerp;
   const mats = rig.buildGoblinMaterials(materials);
   const bodyMats = {};
   for(const [kind, a] of Object.entries(ARCHETYPES)) bodyMats[kind] = new THREE.MeshStandardMaterial({ color:a.color, roughness:.78, flatShading:true });
@@ -80,7 +80,7 @@ export function createArenaEnemySystem({
 
   /* ---------- real-combat (grunt) pose mapping ---------- */
   // The goblin rig holds a weapon built with these blade coords (goblin-rig.js RIG).
-  const GRIP_CENTER = -.14, BLADE_TIP = 1.15, ZONE_R = .16;
+  const ZONE_R = .16;
   // "Combat space": maps a sampled player pose (hold/tip, ~unit scale) onto the
   // goblin torso. hold scales by height; the grip sits at a chest anchor; lunge
   // shifts forward. computeRealReach and applyRealCombatPose share these so the
@@ -96,10 +96,12 @@ export function createArenaEnemySystem({
   // Forward reach (body center -> weapon tip) at the attack's contact pose, in the
   // same units as enemy positions. Derived entirely from the real animation + the
   // real weapon length + scale, so spacing is emergent, not hand-authored.
-  function computeRealReach(att, geom, weaponScale){
+  function computeRealReach(att, geom, weaponScale, weaponRig){
     const p = interp.sampleAttack(att, att.contactAt, poseScratch);
     const holdZ = geom.radius*G_ANCHOR_Z + p.hold.z*(geom.height*G_HOLD) + p.lunge*(geom.radius*G_LUNGE);
-    const tipFwd = p.tip.z * (BLADE_TIP - GRIP_CENTER) * weaponScale;
+    const gripCenter = weaponRig?.gripCenter ?? -.14;
+    const bladeTip = weaponRig?.bladeTip ?? 1.15;
+    const tipFwd = p.tip.z * (bladeTip - gripCenter) * weaponScale;
     return holdZ + tipFwd + ZONE_R*weaponScale;
   }
 
@@ -108,6 +110,14 @@ export function createArenaEnemySystem({
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
   function wrapPi(a){ return Math.atan2(Math.sin(a), Math.cos(a)); }
   function approachN(cur, goal, dt, rate){ return cur + (goal - cur) * Math.min(1, dt*rate); }
+  function setFacingAngle(e, angle){ e.facingAngle = wrapPi(angle); e.facing.x = Math.sin(e.facingAngle); e.facing.z = Math.cos(e.facingAngle); }
+  function turnFacingToAngle(e, angle, dt, rate=e.turnSpeed){
+    const delta = wrapPi(angle - e.facingAngle), maxTurn = Math.max(0, rate || 0) * dt;
+    setFacingAngle(e, e.facingAngle + clamp(delta, -maxTurn, maxTurn));
+    e.targetFacingAngle = wrapPi(angle);
+    return Math.abs(delta);
+  }
+  function turnFacingToPoint(e, p, dt, rate=e.turnSpeed){ return turnFacingToAngle(e, Math.atan2(p.x-e.x,p.z-e.z), dt, rate); }
 
   /* ---------- build ---------- */
   function makeEnemy(kind, x, z){
@@ -128,27 +138,24 @@ export function createArenaEnemySystem({
     const bar = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.7, .065, .045), barMat); bar.position.copy(barBg.position); bar.position.z += .012; root.add(barBg, bar);
     const telegraph = new THREE.Mesh(new THREE.RingGeometry(.72, .78, 36), mats.windup); telegraph.rotation.x = -Math.PI/2; telegraph.visible = false; root.add(telegraph);
     const tokenRing = new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.6, .04, 6, 32), mats.windup); tokenRing.position.y = .08; tokenRing.visible = false; root.add(tokenRing);
-    // rock thrower: hide the held weapon, show a rock in hand
-    let rockProp = null;
-    if(a.thrower){
-      visual.weaponRoot.visible = false;
-      rockProp = new THREE.Mesh(new THREE.DodecahedronGeometry(.28, 0), mats.matIron);
-      rockProp.position.set(.3, a.height*.6, .2); visual.weaponRigRoot.add(rockProp);
-    }
+    const rockProp = a.thrower ? visual.weaponRoot : null;
     root.position.set(x, 0, z); group.add(root);
     // Real-combat goblin (grunt): wield the real player weapon + a real basic
     // attack, and derive its reach/spacing from that geometry.
     let combatAtt = null, realAtk = null, holdDist = HOLD();
+    const weaponScale = visual.RIG?.scale || GOBLIN_WEAPON_SCALE;
     if(a.useRealCombat){
       combatAtt = interp.ATTACKS[a.combatAttack];
-      const reach = computeRealReach(combatAtt, { height:a.height, radius:a.radius }, GOBLIN_WEAPON_SCALE);
+      const reach = computeRealReach(combatAtt, { height:a.height, radius:a.radius }, weaponScale, visual.RIG);
       // Keep the tuned EATK timings/damage/knock for balance; only the range is
       // replaced by the real, geometry-derived reach.
       realAtk = { ...EATK[a.attack], range: reach };
       holdDist = reach * HOLD_FRAC;
-      visual.weaponRoot.scale.setScalar(GOBLIN_WEAPON_SCALE);
+      visual.weaponRoot.scale.setScalar(weaponScale);
     }
     const hp = Math.round(a.hp * tuning.hpScale);
+    const initialFacing = { x:-Math.sign(x)||0, z:-Math.sign(z)||1 };
+    const initialFacingAngle = Math.atan2(initialFacing.x, initialFacing.z);
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       hp, maxHp:hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
@@ -159,10 +166,14 @@ export function createArenaEnemySystem({
       pairingTags:a.pairingTags || [], meleeAccessible:true, meleeWindow:null,
       rootLift:0, targetYOffset:0,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
-      useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
+      useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
-      token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
+      token:null, approachPermit:false, approachPermitTime:0, approachCooldown:0, approachCount:0,
+      facing:initialFacing, facingAngle:initialFacingAngle, targetFacingAngle:initialFacingAngle,
+      turnSpeed:a.turnSpeed || Math.PI*8, attackAlign:a.thrower ? .62 : .48, facingBias:THREE.MathUtils.randFloat(-.55,.55), facingDecisionT:THREE.MathUtils.randFloat(1.2,2.8), orbitDir:Math.random()<.5?-1:1,
+      gesture:null, gestureTime:0, gestureDuration:1.3, rallyFacingAngle:initialFacingAngle,
+      rallyTimer:THREE.MathUtils.randFloat(a.rallyMin || 7, a.rallyMax || 13), rallyMin:a.rallyMin || 7, rallyMax:a.rallyMax || 13,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
       yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
@@ -224,6 +235,12 @@ export function createArenaEnemySystem({
     const corr = (hold - r) * .7;
     steer(e, tx - rx/r*corr, tz - rz/r*corr, amount, dt);
   }
+  function orbitAtRange(e, p, dt, desired, amount=.55){
+    const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
+    const tx = (-rz/r)*e.orbitDir, tz = (rx/r)*e.orbitDir;
+    const corr = clamp((desired-r)*.7,-1,1);
+    steer(e,tx-rx/r*corr,tz-rz/r*corr,amount,dt);
+  }
   function keepRange(e, p, dt, desired){
     const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
     const dirIn = r - desired;
@@ -248,6 +265,55 @@ export function createArenaEnemySystem({
     else orbitPlayer(e, p, dt, .55);
   }
 
+  function goblinWaitingRange(e){
+    const attack = EATK[e.attackId];
+    if(attack?.kind === 'ranged') return 2.75*S;
+    return Math.max(1.3*S, (attack?.range || 1.0*S)*1.25 + e.radius);
+  }
+  function endRally(e){
+    if(e.gesture !== 'rally') return;
+    e.gesture = null; e.gestureTime = 0; e.rallyTimer = THREE.MathUtils.randFloat(e.rallyMin,e.rallyMax);
+    director.endRally(e);
+  }
+  function updateGoblinRally(e, p, dt, distance){
+    if(e.gesture === 'rally'){
+      e.gestureTime += dt; e.vx *= Math.pow(.01,dt); e.vz *= Math.pow(.01,dt);
+      turnFacingToAngle(e,e.rallyFacingAngle,dt,e.turnSpeed*.7);
+      if(e.gestureTime >= e.gestureDuration) endRally(e);
+      return true;
+    }
+    if(director.hasApproachPermit(e)) return false;
+    e.rallyTimer -= dt;
+    const wait = goblinWaitingRange(e);
+    if(e.rallyTimer <= 0 && distance >= wait-.7 && distance <= wait+2.3 && director.requestRally(e)){
+      e.gesture='rally'; e.gestureTime=0; e.rallyFacingAngle=wrapPi(e.facingAngle + THREE.MathUtils.randFloat(-.65,.65));
+      e.vx=e.vz=0;
+      return true;
+    }
+    return false;
+  }
+  function moveGoblin(e,p,dt,distance){
+    const permit = director.hasApproachPermit(e), attack = EATK[e.attackId];
+    if(permit){
+      const desired = attack?.kind === 'ranged' ? 2.6*S : (e.useRealCombat ? e.holdDist : .92*S);
+      if(distance > desired + .45*S) seekPlayer(e,p,dt);
+      else orbitAtRange(e,p,dt,desired,.22);
+      turnFacingToPoint(e,p,dt);
+      return;
+    }
+    const inner = goblinWaitingRange(e), outer = inner + 1.7;
+    if(distance < inner){
+      keepRange(e,p,dt,inner+.45);
+      turnFacingToAngle(e,Math.atan2(p.x-e.x,p.z-e.z)+e.facingBias,dt,e.turnSpeed*.7);
+    } else if(distance > outer){
+      const toward=norm(p.x-e.x,p.z-e.z); steer(e,toward.x,toward.z,.42,dt);
+      const travel=Math.atan2(e.vx,e.vz); turnFacingToAngle(e,travel,dt,e.turnSpeed*.8);
+    } else {
+      orbitAtRange(e,p,dt,inner+.7,e.kind==='dagger'?.58:.34);
+      const travel=Math.atan2(e.vx,e.vz); turnFacingToAngle(e,travel+e.facingBias*.35,dt,e.turnSpeed*.75);
+    }
+  }
+
   /* ---------- attacks ---------- */
   function chooseAttack(e, d, p){
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
@@ -260,7 +326,6 @@ export function createArenaEnemySystem({
   function startEnemyAttack(e, atk, p){
     e.attack = atk; e.state = 'windup'; e.stateTime = 0;
     e.windup = atk.windup; e.active = atk.active; e.recovery = atk.recovery; e.hitDone = false;
-    e.facing = norm(p.x - e.x, p.z - e.z);
     director.grant(e, atk);
   }
 
@@ -355,6 +420,10 @@ export function createArenaEnemySystem({
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
+    if(e.role === 'goblin'){
+      e.facingDecisionT -= dt;
+      if(e.facingDecisionT <= 0){ e.facingDecisionT=THREE.MathUtils.randFloat(1.3,2.8); e.facingBias=THREE.MathUtils.randFloat(-.55,.55); }
+    }
     updateFusionAccessibility(e);
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
@@ -370,13 +439,17 @@ export function createArenaEnemySystem({
     e.squashT = Math.max(0, e.squashT - dt);
 
     if(e.stunned > 0){
+      endRally(e);
       e.stunned -= dt;
       e.vx *= Math.pow(.004, dt); e.vz *= Math.pow(.004, dt);
       e.x += e.vx*dt; e.z += e.vz*dt;
     }
     else if(e.state === 'windup'){
       e.vx = e.vz = 0;
-      if(e.stateTime < e.windup*.45) e.facing = norm(p.x - e.x, p.z - e.z);
+      if(e.stateTime < e.windup*.45){
+        if(e.role === 'goblin') turnFacingToPoint(e,p,dt,e.turnSpeed*.65);
+        else { e.facing=norm(p.x-e.x,p.z-e.z); e.facingAngle=Math.atan2(e.facing.x,e.facing.z); }
+      }
       if(e.stateTime >= e.windup){
         e.state = 'active'; e.stateTime = 0;
         if(e.attack.projectile){ spawnProjectile(e); e.hitDone = true; }
@@ -398,15 +471,17 @@ export function createArenaEnemySystem({
     }
     else {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
-      e.facing = norm(dx,dz);
+      if(e.fusion){ e.facing=norm(dx,dz); e.facingAngle=Math.atan2(e.facing.x,e.facing.z); }
+      const permitted = director.hasApproachPermit(e);
+      const alignment = e.role === 'goblin' ? Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle)) : 0;
       const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d, p) : null;
-      if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
+      if(att && permitted && alignment <= e.attackAlign && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
         startEnemyAttack(e, att, p);
       } else {
-        const wantRange = e.fusion ? e.preferredRange : (e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S));
-        if(d > wantRange + .45*S) seekPlayer(e, p, dt);
-        else if(e.fusion) moveFusion(e, p, dt, d);
-        else deniedBehavior(e, p, dt);
+        if(e.fusion){
+          const wantRange=e.preferredRange;
+          if(d>wantRange+.45*S) seekPlayer(e,p,dt); else moveFusion(e,p,dt,d);
+        } else if(!updateGoblinRally(e,p,dt,d)) moveGoblin(e,p,dt,d);
         applySeparationSteering(e, dt);
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
@@ -455,6 +530,19 @@ export function createArenaEnemySystem({
   }
 
   /* ---------- punch-style rig pose ---------- */
+  function applyRallyPose(e){
+    e.headRoot.rotation.set(0,0,0);
+    if(e.gesture !== 'rally') return;
+    const u=clamp(e.gestureTime/e.gestureDuration,0,1);
+    const raise=u<.2 ? easeOutCubic(u/.2) : (u>.78 ? 1-easeOutCubic((u-.78)/.22) : 1);
+    const shaking=u>.2&&u<.8 ? Math.sin((u-.2)/.6*Math.PI*6) : 0;
+    e.weaponRigRoot.rotation.x=lerp(e.weaponRigRoot.rotation.x,-2.18,raise);
+    e.weaponRigRoot.rotation.z=shaking*.42*raise;
+    e.weaponRigRoot.position.y=.46*raise;
+    e.torsoRoot.position.y+=Math.abs(shaking)*.07*raise;
+    e.torsoRoot.rotation.z+=shaking*.055*raise;
+    e.headRoot.rotation.y=-shaking*.11*raise;
+  }
   function applyPunchPose(e){
     const k = e.poseScale ?? 1;
     let lean = 0, weaponA = -.4;
@@ -462,9 +550,9 @@ export function createArenaEnemySystem({
     else if(e.state === 'active'){ lean = .40; weaponA = .9; }
     else if(e.state === 'recovery'){ const pr = clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1); lean = .40*(1-pr); weaponA = .9 - 1.3*pr; }
     else if(e.stunned > 0){ lean = Math.sin(time*26)*.06; }
-    e.torsoRoot.rotation.x = lean;
+    e.torsoRoot.rotation.set(lean,0,0);
     e.torsoRoot.position.y = e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : 0;
-    e.weaponRigRoot.rotation.x = weaponA * k;
+    e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(weaponA*k,0,0);
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
   /* ---------- real-combat rig pose (grunt) ---------- */
@@ -490,7 +578,7 @@ export function createArenaEnemySystem({
     _tip.copy(pose.tip).normalize();
     _q.setFromUnitVectors(_UP, _tip); _qr.setFromAxisAngle(_tip, pose.roll); _q.premultiply(_qr);
     _holdV.set(pose.hold.x*(h*G_HOLD), h*G_ANCHOR_Y + pose.hold.y*(h*G_HOLD), r*G_ANCHOR_Z + pose.hold.z*(h*G_HOLD) + pose.lunge*(r*G_LUNGE));
-    _gripOff.set(0, GRIP_CENTER, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
+    _gripOff.set(0, e.RIG?.gripCenter ?? -.14, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
     e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(0,0,0); e.weaponRigRoot.scale.setScalar(1);
     e.weaponRoot.position.copy(_holdV).sub(_gripOff);
     e.weaponRoot.quaternion.copy(_q);
@@ -503,6 +591,7 @@ export function createArenaEnemySystem({
       fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale * e.visualScale);
     } else if(e.useRealCombat) applyRealCombatPose(e);
     else applyPunchPose(e);
+    if(!e.fusion) applyRallyPose(e);
     e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
@@ -544,6 +633,7 @@ export function createArenaEnemySystem({
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
     if(e.hp <= 0) return false;
+    endRally(e);
     // hit power (~1 average swing, ~2 charged haymaker) drives the body reaction
     const power = opts.power ?? clamp(amount / 28, .4, 2);
     const pop = opts.pop ?? 1;
@@ -602,7 +692,7 @@ export function createArenaEnemySystem({
   function update(dt, player){
     lastPlayer = player || lastPlayer;
     time += dt;
-    director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
+    director.update(dt, { enemies, player:lastPlayer, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
     for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }

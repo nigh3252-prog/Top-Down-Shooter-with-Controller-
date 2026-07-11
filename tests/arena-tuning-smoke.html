@@ -14,13 +14,13 @@ import * as THREE from 'three';
 import { createArenaEnemySystem } from '../src/arena-enemies.js';
 import { FUSION_ATTACKS } from '../src/fusion-enemies.js';
 
-function makeSystem({ aggression, count = 1, kind = 'phx' }){
+function makeSystem({ aggression, count = 1, kind = 'phx', mode = 'chaos' }){
   const worldRoot = new THREE.Group();
   const system = createArenaEnemySystem({ THREE, worldRoot, arenaRadius:18 });
   system.setWaveSize(count);
   system.setSpawnKind(kind);
   system.setAggression(aggression);
-  system.setDirectorMode('chaos');
+  system.setDirectorMode(mode);
   system.reset();
   return system;
 }
@@ -52,6 +52,28 @@ const highAttacks = countAttacks(high, 20);
 
 const goblins = makeSystem({ aggression:1, count:10, kind:'goblins' });
 const goblinKinds = ['grunt','dagger','mace','rock','captain'];
+
+const goblinBehavior = makeSystem({ aggression:1, count:5, kind:'goblins', mode:'oneAttacker' });
+goblinBehavior.enemies.forEach((enemy,i) => {
+  enemy.x=(i-2)*2.5; enemy.z=5+i*.25; enemy.cooldown=0;
+});
+goblinBehavior.update(1/60,{ x:0,z:0,invulnerable:true });
+const approachers=goblinBehavior.enemies.filter(enemy=>enemy.approachPermit);
+const waiting=goblinBehavior.enemies.find(enemy=>!enemy.approachPermit);
+waiting.x=0; waiting.z=Math.max(1.8,waiting.radius+1.1); waiting.approachCooldown=99;
+const closeDistance=Math.hypot(waiting.x,waiting.z);
+for(let t=0;t<.8;t+=1/60) goblinBehavior.update(1/60,{ x:0,z:0,invulnerable:true });
+const afterRetreat=Math.hypot(waiting.x,waiting.z);
+
+const turning=approachers[0] || goblinBehavior.enemies[0];
+turning.x=0; turning.z=7; turning.cooldown=999; turning.facingAngle=0;
+turning.facing.x=0; turning.facing.z=1;
+goblinBehavior.update(.1,{ x:0,z:0,invulnerable:true });
+const turnStep=Math.abs(turning.facingAngle);
+
+goblinBehavior.enemies.forEach(enemy=>{ if(!enemy.approachPermit){ enemy.rallyTimer=0; enemy.approachCooldown=99; enemy.x=0; enemy.z=7; } });
+goblinBehavior.update(1/60,{ x:0,z:0,invulnerable:true });
+const rallies=goblinBehavior.enemies.filter(enemy=>enemy.gesture==='rally');
 
 function gaitAdvance(speedScale){
   const system = makeSystem({ aggression:1, kind:'lion' });
@@ -89,6 +111,17 @@ for(let i = 0; i < spacing.enemies.length; i++){
 const result = {
   allSingleKind:spacing.enemies.every(enemy => enemy.kind === 'lion'),
   goblinsOnly:goblins.enemies.every(enemy => goblinKinds.includes(enemy.kind)),
+  goblinBehavior:{
+    customWeapons:goblins.enemies.every(enemy=>enemy.weaponRoot.userData.goblinWeaponKind===enemy.kind && enemy.weaponScale>=1.25),
+    approachers:approachers.length,
+    singleApproacher:approachers.length===1,
+    retreated:afterRetreat>closeDistance+.1,
+    turnStep:Number(turnStep.toFixed(3)),
+    turnLimited:turnStep<=turning.turnSpeed*.1+.02,
+    rallies:rallies.length,
+    rallyIsWaiting:rallies.length===1 && !rallies[0].approachPermit && !rallies[0].token,
+    roles:goblinBehavior.enemies.map(enemy=>enemy.role)
+  },
   aggression:{ low:lowAttacks, high:highAttacks, increased:highAttacks > lowAttacks },
   gait:{ slow:Number(slowGait.toFixed(3)), fast:Number(fastGait.toFixed(3)), speedSynced:fastGait > slowGait*1.7 },
   scale:{ sun:sun.visualScale, croc:crocEnemy.visualScale, stilt:stilt.visualScale },

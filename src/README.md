@@ -51,6 +51,18 @@ the core page it patched are retired to `archive/`.
 - `room-encounters.js` — persistent room-clear and opened-door state for a dungeon run.
 - `room-transition.js` — the input-locking, occluded midpoint room-swap state machine.
 
+## Recent combat modules
+
+- `guard-poses.js` defines the reusable European and Japanese ready poses
+  selected by authored stance cards.
+- `combat-links.js` contains pure recovery-boundary and light-follow-up
+  decisions shared by the browser runtime and focused node tests.
+- `player-combat.js` now crossfades from the captured outgoing recovery pose
+  into a queued windup, while complete unqueued recoveries return to the active
+  stance guard.
+- `weapons.js` now builds the curved two-handed katana and migrates the retired
+  `saber` weapon id in persisted settings.
+
 ## How the module boundary works
 
 `weapon-lab.html` builds one `LabAPI` object — a getter/setter bag defined in

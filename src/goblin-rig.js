@@ -8,7 +8,7 @@
 // Materials are built by rig.buildGoblinMaterials(overrides) and passed back into the
 // builders, so callers keep ownership of the per-kind body materials.
 
-import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
+import { buildGoblinWeapon } from './goblin-weapons.js';
 
 export function installGoblinRig(THREE){
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -56,12 +56,9 @@ export function installGoblinRig(THREE){
     const earGeo = new THREE.ConeGeometry(s.radius*.23, s.radius*.42, 4); [-1,1].forEach(side=>{ const ear = new THREE.Mesh(earGeo, bodyMat); ear.position.set(side*s.radius*.62, s.height*.84, s.radius*.02); ear.rotation.z = -side*Math.PI*.5; ear.rotation.y = side*.25; headRoot.add(ear); ears.push(ear); });
     const eye = new THREE.Mesh(new THREE.BoxGeometry(s.radius*.78, s.radius*.11, s.radius*.06), mats.goblinEye); eye.position.set(0, s.height*.86, s.radius*.58); headRoot.add(eye);
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(s.radius*.42, s.radius*.055, s.radius*.04), mats.goblinArmor); mouth.position.set(0, s.height*.77, s.radius*.6); headRoot.add(mouth);
-    const RIG = { bladeBase:.08, bladeTip:1.15, gripCenter:-.14 };
+    const RIG = buildGoblinWeapon({ THREE, kind, weaponRoot, mats });
     const weaponParts = {};
-    const addGrip = (r=.022,len=.40)=>{ const m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), mats.matLeather); m.position.y=-.14; m.castShadow=m.receiveShadow=true; weaponRoot.add(m); weaponRoot.add(meshLocalIco(.045, mats.matIron, [0,-.37,0])); };
-    const addGuard = (w=.34)=>weaponRoot.add(meshLocalBox(w,.045,.07,mats.matBronze,0,[0,RIG.bladeBase,0]));
-    buildStoneWeaponMesh({ THREE, weaponDef: weaponDef || STONE_WEAPONS[s.weapon] || STONE_WEAPONS.mace, weaponRoot, RIG, bladeLen:RIG.bladeTip-RIG.bladeBase, base:RIG.bladeBase, materials:mats, helpers:{ addGrip, addGuard, meshLocalBox, meshLocalIco }, weaponParts });
-    weaponRoot.scale.setScalar(.9); weaponRoot.rotation.x = .35; weaponRoot.position.set(.28, s.height*.56, .16);
+    weaponRoot.rotation.x = .35; weaponRoot.position.set(s.radius*1.02, s.height*.54, s.radius*.22);
     const goblinGlow = new THREE.Mesh(new THREE.SphereGeometry(s.radius * .72, 12, 8), new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:0, depthWrite:false }));
     goblinGlow.visible = false; torsoRoot.add(goblinGlow);
     const rigDebug = new THREE.Group(); rigDebug.name = 'goblin invisible puppet rig debug'; rigDebug.visible = showRig; root.add(rigDebug);

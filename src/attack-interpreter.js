@@ -61,10 +61,29 @@ export function createAttackInterpreter(THREE) {
     out.head.lerpVectors(a.head,b.head,e);
     return out;
   }
+  function poseCopy(source,out){
+    out.hold.copy(source.hold);
+    out.tip.copy(source.tip);
+    out.roll=source.roll;
+    out.twist=source.twist; out.pitch=source.pitch; out.lean=source.lean;
+    out.hipTwist=source.hipTwist;
+    out.hip.copy(source.hip);
+    out.lower=source.lower; out.lunge=source.lunge;
+    out.head.copy(source.head);
+    return out;
+  }
   const work = P({hold:[0,1,0],tip:[0,1,0]});   // scratch pose reused every frame
 
   const IDLE = P({ hold:[0.16,1.00,0.36], tip:[0.05,0.80,0.55], roll:0.20,
     twist:-0.16, pitch:0.02, lean:0.03, hipTwist:-0.08, hip:[0,0,0.02], lower:0.04, head:[-0.06,0.05] });
+
+  // Attack phase data keeps references to IDLE for authored recovery phases.
+  // Mutating this single pose therefore updates both the live ready pose and
+  // every attack's recovery target without rebuilding the attack library.
+  function setIdlePose(pose){
+    if(!pose) return IDLE;
+    return poseCopy(pose.hold?.isVector3 ? pose : P(pose), IDLE);
+  }
 
   /* ---- attacks: ordered key poses, each phase blends from the previous --- */
   function buildAttack(phases){
@@ -112,7 +131,7 @@ export function createAttackInterpreter(THREE) {
   }
 
   return {
-    Ease, smoothstep, P, poseLerp, work, IDLE,
+    Ease, smoothstep, P, poseLerp, poseCopy, work, IDLE, setIdlePose,
     buildAttack, buildAttackLibrary, sampleAttack, ATTACKS,
   };
 }

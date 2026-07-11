@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import { STANCE_CARDS } from '../src/stance-cards.js';
+import { GUARD_POSES, guardPoseFor } from '../src/guard-poses.js';
+import { STONE_WEAPON_ORDER, STONE_WEAPONS, normalizeStoneWeaponId } from '../src/weapons.js';
+import { WEAPON_AFFINITIES, getWeaponDamageMultiplier } from '../src/combat-balance.js';
+import { HEAVY_LIGHT_STAGE, lightFollowupForStage, shouldStartBufferedFollowup } from '../src/combat-links.js';
+import { createAttackInterpreter } from '../src/attack-interpreter.js';
+
+class Vector3 {
+  constructor(x=0,y=0,z=0){ this.set(x,y,z); this.isVector3=true; }
+  set(x,y,z){ this.x=x; this.y=y; this.z=z; return this; }
+  copy(v){ return this.set(v.x,v.y,v.z); }
+  normalize(){ const d=Math.hypot(this.x,this.y,this.z)||1; this.x/=d; this.y/=d; this.z/=d; return this; }
+  lerpVectors(a,b,t){ return this.set(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t); }
+}
+class Vector2 {
+  constructor(x=0,y=0){ this.set(x,y); this.isVector2=true; }
+  set(x,y){ this.x=x; this.y=y; return this; }
+  copy(v){ return this.set(v.x,v.y); }
+  lerpVectors(a,b,t){ return this.set(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t); }
+}
+const THREE={
+  Vector2, Vector3,
+  MathUtils:{
+    clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),
+    lerp:(a,b,t)=>a+(b-a)*t
+  }
+};
+
+assert.equal(normalizeStoneWeaponId('saber'),'katana','legacy saber saves migrate to katana');
+assert(!STONE_WEAPON_ORDER.includes('saber'),'saber is no longer selectable');
+assert(STONE_WEAPON_ORDER.includes('katana'),'katana is selectable');
+assert.equal(STONE_WEAPONS.katana.kind,'katana');
+assert(WEAPON_AFFINITIES.katana,'katana has combat balance data');
+assert(Number.isFinite(getWeaponDamageMultiplier({
+  weaponId:'katana', attackKey:'horizontal4', attackGroup:'horizontal',
+  hitType:'slice', zoneId:'katanaHa'
+})),'katana damage resolves through the normal balance path');
+
+assert.equal(STANCE_CARDS.length,30);
+const usedGuards=new Set();
+let japaneseAssignments=0;
+for(const stance of STANCE_CARDS){
+  assert(GUARD_POSES[stance.guardId],`${stance.id} references a real guard pose`);
+  assert.equal(guardPoseFor(stance),GUARD_POSES[stance.guardId].pose);
+  assert(!stance.preferredWeapons.includes('saber'),`${stance.id} has no stale saber affinity`);
+  for(const weaponId of stance.preferredWeapons) assert(STONE_WEAPONS[weaponId],`${stance.id} affinity ${weaponId} exists`);
+  usedGuards.add(stance.guardId);
+  if(GUARD_POSES[stance.guardId].tradition==='Japanese') japaneseAssignments++;
+}
+assert(usedGuards.size>=14,'stances use a broad set of visibly distinct guards');
+assert(japaneseAssignments>0 && japaneseAssignments<STANCE_CARDS.length/2,'guard mix is mostly European with some Japanese positions');
+
+assert.deepEqual(lightFollowupForStage('hit1'),{slot:1,pendingStage:'hit2'});
+assert.deepEqual(lightFollowupForStage('heavy'),{slot:0,pendingStage:HEAVY_LIGHT_STAGE});
+assert.equal(lightFollowupForStage(HEAVY_LIGHT_STAGE),null,'heavy follow-up cannot chain another light');
+assert.equal(lightFollowupForStage('finisher'),null);
+
+const interpreter=createAttackInterpreter(THREE);
+const first=interpreter.ATTACKS.vertical5;
+const second=interpreter.ATTACKS.horizontal4;
+assert(first.comboAt<first.total,'link point opens at recovery start, before full completion');
+assert.equal(shouldStartBufferedFollowup(first,first.comboAt-.001,'horizontal4'),false);
+assert.equal(shouldStartBufferedFollowup(first,first.comboAt,'horizontal4'),true);
+assert.equal(shouldStartBufferedFollowup(first,first.total,null),false);
+
+const recoveryPhase=first.phases[first.phases.length-1];
+assert.equal(recoveryPhase.pose,interpreter.IDLE,'authored recoveries share the mutable ready pose');
+interpreter.setIdlePose(guardPoseFor('ochsRight'));
+assert(Math.abs(interpreter.IDLE.hold.x-GUARD_POSES.ochsRight.pose.hold[0])<1e-9);
+const recovered=interpreter.sampleAttack(first,first.total,interpreter.work);
+assert(Math.abs(recovered.hold.x-interpreter.IDLE.hold.x)<1e-9,'completed attack returns to the selected stance guard');
+
+// The runtime captures this outgoing pose and uses it as crossfade alpha zero
+// for the next windup, guaranteeing no intervening neutral/guard frame.
+const outgoing=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
+interpreter.sampleAttack(first,first.comboAt,outgoing);
+const incoming=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
+interpreter.sampleAttack(second,0,incoming);
+const linked=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
+interpreter.poseLerp(outgoing,incoming,0,linked);
+assert.deepEqual([linked.hold.x,linked.hold.y,linked.hold.z],[outgoing.hold.x,outgoing.hold.y,outgoing.hold.z]);
+
+console.log('combat pass tests passed');
+

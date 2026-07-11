@@ -7,7 +7,7 @@ export const STONE_WEAPON_ORDER = [
   'longsword',
   'dagger',
   'rapier',
-  'saber',
+  'katana',
   'mace',
   'spear',
   'battleaxe',
@@ -41,13 +41,13 @@ export const STONE_WEAPONS = {
     profile: 'needle tip; best on thrusts with quick recovery',
     tune: { length: 0.92, weight: 0.12, pullback: 0.55, swingWidth: 0.58, windup: 0.72, follow: 0.70, recovery: 0.62, impact: 0.62, trailBoost: 0.75 }
   },
-  saber: {
-    label: 'Saber',
+  katana: {
+    label: 'Katana',
     weightClass: 'Light/Medium',
-    kind: 'saber',
-    baseLength: 0.92,
-    profile: 'curved cutter; wider slashes, still fast',
-    tune: { length: 0.88, weight: 0.24, pullback: 0.78, swingWidth: 1.12, windup: 0.82, follow: 0.88, recovery: 0.78, impact: 0.82, trailBoost: 1.05 }
+    kind: 'katana',
+    baseLength: 0.98,
+    profile: 'two-handed curved cutter; quick draw and committed edge arcs',
+    tune: { length: 0.96, weight: 0.27, pullback: 0.84, swingWidth: 1.08, windup: 0.84, follow: 0.90, recovery: 0.80, impact: 0.86, trailBoost: 1.08 }
   },
   whip: {
     label: 'Whip',
@@ -124,8 +124,12 @@ export function cloneWeaponDefinitions() {
   return JSON.parse(JSON.stringify(STONE_WEAPONS));
 }
 
+export function normalizeStoneWeaponId(id) {
+  return id === 'saber' ? 'katana' : id;
+}
+
 export function getStoneWeapon(id) {
-  return STONE_WEAPONS[id] || STONE_WEAPONS.longsword;
+  return STONE_WEAPONS[normalizeStoneWeaponId(id)] || STONE_WEAPONS.longsword;
 }
 
 
@@ -254,11 +258,41 @@ function buildHammer(ctx) { const { THREE, weaponRoot, bladeLen, base, materials
 function buildAxe(ctx) { const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalBox } = helpers; addGrip(.026, .50); addGuard(.18); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .024, bladeLen * .96, 7), matBronze); shaft.position.y = base + bladeLen * .48; weaponRoot.add(shaft); weaponRoot.add(meshLocalBox(.28, .27, .08, matSilver, .015, [.13, base + bladeLen * .88, 0])); const lip = new THREE.Mesh(new THREE.ConeGeometry(.12, .24, 4), matSilver); lip.position.set(.25, base + bladeLen * .88, 0); lip.rotation.z = -Math.PI / 2; lip.scale.z = .45; weaponRoot.add(lip); }
 function buildSpear(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip } = helpers; addGrip(.021, .46); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.014, .018, bladeLen * .84, 8), matBronze); shaft.position.y = base + bladeLen * .42; weaponRoot.add(shaft); const tip = new THREE.Mesh(new THREE.ConeGeometry(.06, bladeLen * .24, 4), matSilver); tip.position.y = base + bladeLen * .96; tip.scale.set(.65, 1, 1.35); weaponRoot.add(tip); }
 function buildRapier(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip } = helpers; addGrip(.019, .38); const guard = new THREE.Mesh(new THREE.TorusGeometry(.11, .008, 6, 24), matBronze); guard.position.y = base; guard.rotation.x = Math.PI / 2; weaponRoot.add(guard); const blade = new THREE.Mesh(new THREE.CylinderGeometry(.008, .014, bladeLen, 5), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.55, 1, .55); weaponRoot.add(blade); const tip = new THREE.Mesh(new THREE.ConeGeometry(.022, .10, 5), matSilver); tip.position.y = RIG.bladeTip + .02; weaponRoot.add(tip); }
-function buildSaber(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver } = materials, { addGrip, addGuard } = helpers; addGrip(.021, .40); addGuard(.30); const blade = new THREE.Mesh(new THREE.CylinderGeometry(.010, .043, bladeLen, 5), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.42, 1, 1.55); blade.rotation.z = .08; weaponRoot.add(blade); const tip = new THREE.Mesh(new THREE.ConeGeometry(.045, .12, 5), matSilver); tip.position.set(.045, RIG.bladeTip + .02, 0); tip.scale.set(.45, 1, 1.5); weaponRoot.add(tip); }
+function buildKatana(ctx) {
+  const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx;
+  const { matSilver, matBronze, matIron } = materials, { addGrip } = helpers;
+  addGrip(.024, .58);
+
+  // Compact tsuba and collar keep the silhouette distinct from the saber's
+  // broad hand guard while leaving enough room for the two-handed grip.
+  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(.14,.14,.026,12), matIron || matBronze);
+  tsuba.position.y=base; tsuba.rotation.x=Math.PI/2; tsuba.scale.x=1.18; weaponRoot.add(tsuba);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.035,.040,.075,8), matBronze);
+  collar.position.y=base+.045; weaponRoot.add(collar);
+
+  // A short chain of overlapping tapered sections produces a readable curved
+  // single-edge profile without requiring a heavyweight custom skinned mesh.
+  const sections=7, curve=bladeLen*.115;
+  for(let i=0;i<sections;i++){
+    const t0=i/sections, t1=(i+1)/sections, mid=(t0+t1)*.5;
+    const y0=base+bladeLen*t0, y1=base+bladeLen*t1;
+    const x0=curve*t0*t0, x1=curve*t1*t1;
+    const len=Math.hypot(y1-y0,x1-x0)*1.08;
+    const width=.050*(1-mid*.58);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(width,len,.026),matSilver);
+    seg.position.set((x0+x1)*.5,(y0+y1)*.5,0);
+    seg.rotation.z=-Math.atan2(x1-x0,y1-y0);
+    seg.scale.z=1.35;
+    weaponRoot.add(seg);
+  }
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.035,.13,5),matSilver);
+  tip.position.set(curve+.025,RIG.bladeTip+.035,0);
+  tip.rotation.z=-.20; tip.scale.set(.72,1,1.35); weaponRoot.add(tip);
+}
 function buildDefaultRigidBlade(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {}, weaponDef } = ctx; const { matSilver } = materials, { addGrip, addGuard } = helpers; addGrip(.023, .42); addGuard(weaponDef.weightClass === 'Heavy' ? .46 : .34); const blade = new THREE.Mesh(new THREE.CylinderGeometry(.012, .05, bladeLen, 4), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.5, 1, 1.7); weaponRoot.add(blade); const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .14, 4), matSilver); tip.position.y = RIG.bladeTip + .02; tip.scale.set(.5, 1, 1.7); weaponRoot.add(tip); }
 
 export const WEAPON_MESH_BUILDERS = {
-  whip: buildWhip, mace: buildMace, hammer: buildHammer, axe: buildAxe, spear: buildSpear, rapier: buildRapier, saber: buildSaber, blade: buildDefaultRigidBlade,
+  whip: buildWhip, mace: buildMace, hammer: buildHammer, axe: buildAxe, spear: buildSpear, rapier: buildRapier, katana: buildKatana, blade: buildDefaultRigidBlade,
   defaultRigidBlade: buildDefaultRigidBlade, redTollGreatsword: buildRedTollGreatsword
 };
 
