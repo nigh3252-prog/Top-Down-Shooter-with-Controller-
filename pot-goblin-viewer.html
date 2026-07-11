@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Pot Goblin Viewer</title>
+<style>
+  html,body{margin:0;height:100%;background:#5a5a5e;overflow:hidden;font-family:ui-monospace,Menlo,monospace}
+  #hud{position:fixed;top:10px;left:10px;color:#e8e8dc;text-shadow:0 1px 2px #0008;z-index:2}
+  #hud h1{font-size:15px;margin:0 0 2px;letter-spacing:.06em}
+  #hud p{font-size:11px;margin:0;opacity:.75}
+  #btns{position:fixed;bottom:14px;left:0;right:0;display:flex;gap:10px;justify-content:center;z-index:2}
+  button{background:#2c2f26;color:#cfe08a;border:1px solid #6a7a44;border-radius:10px;padding:12px 18px;font:600 13px ui-monospace,monospace;letter-spacing:.04em}
+  button:active{background:#42502c}
+</style>
+</head>
+<body>
+<div id="hud"><h1>POT GOBLIN VIEWER</h1><p>mace (angry, belted) &middot; spear (calm, sage) &middot; tap to test</p></div>
+<div id="btns">
+  <button id="bGlow">WINDUP GLOW</button>
+  <button id="bFlash">HIT FLASH</button>
+  <button id="bShatter">SHATTER</button>
+</div>
+<script type="module">
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js');
+  const { installGoblinRig } = await import('./src/pot-goblin-rig.js');
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x5a5a5e);
+  scene.fog = new THREE.Fog(0x5a5a5e, 12, 26);
+
+  const camera = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, .1, 60);
+  camera.position.set(0, 3.1, 7.2); camera.lookAt(0, 1.3, 0);
+
+  scene.add(new THREE.HemisphereLight(0xcfd6da, 0x3a3a30, .9));
+  const sun = new THREE.DirectionalLight(0xfff2dc, 1.5);
+  sun.position.set(4, 7, 5); sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = -6; sun.shadow.camera.right = 6;
+  sun.shadow.camera.top = 6; sun.shadow.camera.bottom = -6;
+  scene.add(sun);
+
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 24), new THREE.MeshStandardMaterial({ color:0x6a6a68, roughness:.95 }));
+  ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+  const rig = installGoblinRig(THREE);
+  const mats = rig.buildGoblinMaterials();
+
+  const KINDS = [
+    { kind:'maceGoblin',  x:-1.5, s:{ radius:.38, height:1.75, bellyColor:0x9cc65e, armorColor:0x6e4a26, weapon:'mace'  }, body:0x8fbf52 },
+    { kind:'spearGoblin', x: 1.5, s:{ radius:.38, height:1.90, bellyColor:0x8aa84e, armorColor:0x3f5a35, weapon:'spear' }, body:0x6f9445 }
+  ];
+
+  const worldRoot = new THREE.Group(); scene.add(worldRoot);
+  const deathPieces = [];
+  const goblins = [];
+
+  function spawn(def){
+    const root = new THREE.Group(); root.position.x = def.x; worldRoot.add(root);
+    const bodyMat = new THREE.MeshStandardMaterial({ color:def.body, roughness:.85, flatShading:true });
+    const visual = rig.makeGoblinRig({ kind:def.kind, root, s:def.s, bodyMat, mats, weaponDef:null });
+    goblins.push({ def, root, ...visual, alive:true, glowT:0, flashT:0 });
+  }
+  KINDS.forEach(spawn);
+
+  document.getElementById('bGlow').onclick = () => goblins.forEach(g => g.glowT = 1.2);
+  document.getElementById('bFlash').onclick = () => goblins.forEach(g => g.flashT = .3);
+  document.getElementById('bShatter').onclick = () => {
+    goblins.forEach(g => {
+      if(!g.alive) return;
+      g.alive = false;
+      rig.shatterGoblin(worldRoot, deathPieces, g, { x:(Math.random()-.5)*2, z:-1 }, mats.matIron, 1.3);
+      g.root.visible = false;
+      setTimeout(() => { g.root.visible = true; g.alive = true; }, 2600);
+    });
+  };
+
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    const t = now / 1000;
+    goblins.forEach((g, i) => {
+      g.root.rotation.y = t * .55 + i * 2.1;
+      // idle bob + cap wobble
+      g.torsoRoot.position.y = Math.sin(t * 2.2 + i) * .03;
+      g.headRoot.rotation.z = Math.sin(t * 1.6 + i * 1.3) * .05;
+      if(g.capRoot) g.capRoot.rotation.y = Math.sin(t * .9 + i) * .12;
+      // glow / flash tests through the real applyGoblinVisual states
+      g.glowT = Math.max(0, g.glowT - dt); g.flashT = Math.max(0, g.flashT - dt);
+      const e = { height:g.def.s.height, bodyRoot:g.bodyRoot, goblinGlow:g.goblinGlow,
+        state: g.glowT > .6 ? 'windup' : (g.glowT > 0 ? 'active' : 'idle'),
+        flash: g.flashT > 0 ? g.flashT * 3 : 0,
+        barBg:{ position:new THREE.Vector3() }, bar:{ position:new THREE.Vector3() }, stop:1.5 };
+      rig.applyGoblinVisual(e, 1, mats);
+    });
+    rig.updateDeathPieces(dt, deathPieces);
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+</script>
+</body>
+</html>

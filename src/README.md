@@ -21,11 +21,16 @@ the core page it patched are retired to `archive/`.
   (aim commit, audio, lab bookkeeping, DOM status, dummy-vs-enemy hit routing)
   are injected through `api.hooks`.
 - `combat-balance.js` — weapon style-affinity tables and damage multiplier helpers used by the swept dummy hit tests.
-- `goblin-rig.js` — `installGoblinRig(THREE)`, the shared articulated goblin
-  model (body/belly/belt/head/ears/eye/mouth + a held stone weapon), its
-  materials, the telegraph/token/health marker update, the attack glow, and the
-  death shatter. Used by both `enemies.js` (weapon-lab combat) and
-  `arena-enemies.js` (combat-arena).
+- `goblin-rig.js` — re-exports `installGoblinRig(THREE)` from `pot-goblin-rig.js`
+  so consumers keep the same import path.
+- `pot-goblin-rig.js` — the shared articulated goblin model: a faceted pot body,
+  wavy rim collar, brown belt, dark inner head with glowing eyes, and a
+  five-lobe leaf cap (shatter throws the leaves), plus a held stone weapon. Same
+  `installGoblinRig(THREE)` contract as the old capsule goblin (materials,
+  `makeGoblinRig`, the telegraph/token/health marker update, the attack glow,
+  and the death shatter) — used by both `enemies.js` (weapon-lab combat) and
+  `arena-enemies.js` (combat-arena). `pot-goblin-viewer.html` at the repo root
+  is a standalone glow/flash/shatter test page for it.
 - `arena-enemies.js` — `createArenaEnemySystem(...)`, the combat-arena enemy
   system: a port of the "Director Punch" enemy simulation (grunt / dagger / mace
   / rock / captain) scaled to arena units, rendered with the goblin rig. Enemies
