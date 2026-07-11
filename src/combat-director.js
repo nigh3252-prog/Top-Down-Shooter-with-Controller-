@@ -12,7 +12,7 @@ export const DIRECTOR_MODES = [
 
 export const DEFAULT_DIRECTOR_SETTINGS = {
   mode:'oneAttacker', pressureBudget:1.75, cycleOnWaveClear:true, nearCount:3,
-  battleCircleSlots:8, battleCircleRadius:4.5
+  battleCircleSlots:8, battleCircleRadius:4.5, aggression:1
 };
 
 export function createCombatDirector(options = {}){
@@ -37,7 +37,7 @@ export function createCombatDirector(options = {}){
   function release(enemy){ if(!enemy || !enemy.token) return; const token = enemy.token; state.activeTokens = state.activeTokens.filter(t => t !== token); state.cooldownPressure += (token.cost || 0) * .55; enemy.token = null; }
   function releaseAllForEnemy(enemy){ release(enemy); }
   function removeDeadTokens(enemies = []){ for(const e of enemies) if(!live(e) || e.stunned > 0) release(e); state.activeTokens = state.activeTokens.filter(t => live(t.enemy) && t.enemy.token === t); }
-  function update(dt, context = {}){ state.time += dt; const budget = Number(context.pressureBudget ?? settings.pressureBudget); state.cooldownPressure = Math.max(0, state.cooldownPressure - dt * budget * .7); removeDeadTokens(context.enemies || []); }
+  function update(dt, context = {}){ state.time += dt; const budget = Number(context.pressureBudget ?? settings.pressureBudget); const aggression = Math.max(.25, Number(context.aggression ?? settings.aggression) || 1); state.cooldownPressure = Math.max(0, state.cooldownPressure - dt * budget * .7 * aggression); removeDeadTokens(context.enemies || []); }
   function markNearEligible(enemies, player){ const sorted = enemies.filter(live).sort((a,b) => distSqTo(a, player) - distSqTo(b, player)); const n = state.mode === 'nearFar' ? settings.nearCount : 999; sorted.forEach((e, i) => { e.nearEligible = i < n; }); }
   function assignBattleCircleSlots(enemies){ if(state.mode !== 'battleCircle') return slots; for(const s of slots) s.enemyId = null; enemies.filter(live).forEach((e, i) => { e.slotIndex = i % slots.length; slots[e.slotIndex].enemyId = e.id; }); return slots; }
   function canGrant(enemy, attack, context = {}){
@@ -45,22 +45,23 @@ export function createCombatDirector(options = {}){
     if(state.mode === 'chaos') return true;
     const active = state.activeTokens;
     const budget = Number(context.pressureBudget ?? settings.pressureBudget);
-    const gap = state.mode === 'attackChain' ? 1.4 : state.mode === 'dodgeTraining' ? .85 : .48;
+    const aggression = Math.max(.25, Number(context.aggression ?? settings.aggression) || 1);
+    const gap = (state.mode === 'attackChain' ? 1.4 : state.mode === 'dodgeTraining' ? .85 : .48) / aggression;
     if(state.mode === 'nearFar' && !enemy.nearEligible) return false;
     if(attack.wantsSolo && active.length) return false;
-    if(state.mode === 'attackChain') return active.length < 1 && state.time - state.lastThreatTime > 1.35;
-    if(state.mode === 'dodgeTraining') return active.length < 1 && state.time - state.lastThreatTime > .75;
+    if(state.mode === 'attackChain') return active.length < 1 && state.time - state.lastThreatTime > 1.35 / aggression;
+    if(state.mode === 'dodgeTraining') return active.length < 1 && state.time - state.lastThreatTime > .75 / aggression;
     if(state.mode === 'oneAttacker' || state.mode === 'battleCircle' || state.mode === 'wavePacing') return active.length < 1 && state.time - state.lastThreatTime > gap;
     if(state.mode === 'eliteSpotlight'){
       const isElite = e => e.kind === 'brute' || e.kind === 'captain';
       const bruteAlive = (context.enemies || []).some(e => isElite(e) && live(e) && e.stunned <= 0);
       if(!isElite(enemy) && bruteAlive && active.length === 0 && Math.random() < .72) return false;
-      return active.length < 1 && state.time - state.lastThreatTime > .35;
+      return active.length < 1 && state.time - state.lastThreatTime > .35 / aggression;
     }
     if(state.mode === 'pressureBudget' || state.mode === 'nearFar'){
       if(activeCost() + state.cooldownPressure + attack.tokenCost > budget) return false;
       if(attack.kind === 'melee' && countActiveKind('melee') >= (budget >= 2.25 ? 2 : 1)) return false;
-      return state.time - state.lastThreatTime > .18;
+      return state.time - state.lastThreatTime > .18 / aggression;
     }
     return active.length < 1;
   }

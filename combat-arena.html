@@ -100,6 +100,10 @@
   .srow{margin-bottom:22px}
   .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px}
   .sval{color:#e8a04c}
+  .selectRow{margin:4px 0 18px}
+  .selectRow label{display:block;color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;margin-bottom:6px}
+  .selectRow select{width:100%;box-sizing:border-box;font-family:inherit;font-size:10px;letter-spacing:.04em;
+    color:#e8a04c;background:#122426;border:1px solid #2c4a47;border-radius:5px;padding:8px 9px}
   /* slider sits at 84% width so each row keeps an empty gutter on both sides —
      a thumb-free strip to grab when scrolling the panel on a phone */
   #panel input[type=range]{-webkit-appearance:none;appearance:none;width:84%;display:block;margin:6px auto 0;height:24px;background:transparent}
@@ -204,6 +208,10 @@
     </div>
     <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
     <div class="sbody" id="body-sim">
+      <div class="selectRow">
+        <label for="spawnSelect">ENEMY TYPE</label>
+        <select id="spawnSelect"></select>
+      </div>
       <div id="dirSliders"></div>
     </div>
     <button class="wide" id="resetBtn">RESET FIGHT</button>
@@ -239,6 +247,7 @@ import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
+import { FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
@@ -1197,9 +1206,24 @@ function updateModePanel(){
   modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
 }
 /* sim sliders */
+const spawnSelect=document.getElementById('spawnSelect');
+[
+  { id:'mixed', label:'Mixed Pure Strains' },
+  ...FUSION_ENEMY_OPTIONS
+].forEach(({id,label})=>{
+  const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);
+});
+enemySystem.setSpawnKind(StoneSettings.get('arena.spawnKind', enemySystem.spawnKind));
+spawnSelect.value=enemySystem.spawnKind;
+spawnSelect.addEventListener('change', ()=>{
+  enemySystem.setSpawnKind(spawnSelect.value);
+  StoneSettings.set('arena.spawnKind', enemySystem.spawnKind);
+  respawn();
+});
 const DIR_SLIDERS = [
   { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
+  { label:'AGGRESSION',      min:.25,max:3,   step:.05, get:()=>enemySystem.aggression,     set:v=>enemySystem.setAggression(v) },
   { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
   { label:'ENEMY HEALTH',    min:.25,max:5,   step:.05, get:()=>enemySystem.hpScale,        set:v=>enemySystem.setHpScale(v) },
   { label:'ENEMY SIZE',      min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
@@ -1212,6 +1236,7 @@ DIR_SLIDERS.forEach(d=>{
   const val=document.createElement('span'); val.className='sval'; val.textContent=d.get();
   lab.textContent=d.label+' '; lab.appendChild(val);
   const inp=document.createElement('input'); inp.type='range';
+  inp.setAttribute('aria-label', d.label);
   inp.min=d.min; inp.max=d.max; inp.step=d.step; inp.value=d.get();
   inp.addEventListener('input', ()=>{ d.set(parseFloat(inp.value)); val.textContent=inp.value; });
   row.appendChild(lab); row.appendChild(inp); dirBox.appendChild(row);

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arena Tuning Smoke Test</title>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"}}
+</script>
+</head>
+<body>
+<output id="status">starting</output>
+<script type="module">
+import * as THREE from 'three';
+import { createArenaEnemySystem } from '../src/arena-enemies.js';
+
+function makeSystem({ aggression, count = 1, kind = 'phx' }){
+  const worldRoot = new THREE.Group();
+  const system = createArenaEnemySystem({ THREE, worldRoot, arenaRadius:18 });
+  system.setWaveSize(count);
+  system.setSpawnKind(kind);
+  system.setAggression(aggression);
+  system.setDirectorMode('chaos');
+  system.reset();
+  return system;
+}
+
+function countAttacks(system, seconds){
+  const dt = 1/60;
+  let attacks = 0;
+  const previous = new Map();
+  system.enemies.forEach((enemy, i) => {
+    enemy.x = i * .04;
+    enemy.z = 3 + i * .04;
+    enemy.cooldown = 0;
+    previous.set(enemy, enemy.state);
+  });
+  for(let t = 0; t < seconds; t += dt){
+    system.update(dt, { x:0, z:0, invulnerable:true });
+    system.enemies.forEach(enemy => {
+      if(enemy.state === 'windup' && previous.get(enemy) !== 'windup') attacks++;
+      previous.set(enemy, enemy.state);
+    });
+  }
+  return attacks;
+}
+
+const low = makeSystem({ aggression:.25 });
+const high = makeSystem({ aggression:3 });
+const lowAttacks = countAttacks(low, 20);
+const highAttacks = countAttacks(high, 20);
+
+const spacing = makeSystem({ aggression:3, count:6, kind:'lion' });
+spacing.enemies.forEach((enemy, i) => { enemy.x = (i%2)*.03; enemy.z = 3 + Math.floor(i/2)*.03; });
+for(let t = 0; t < 2; t += 1/60) spacing.update(1/60, { x:0, z:0, invulnerable:true });
+let minDistance = Infinity;
+for(let i = 0; i < spacing.enemies.length; i++){
+  for(let j = i+1; j < spacing.enemies.length; j++){
+    minDistance = Math.min(minDistance, Math.hypot(spacing.enemies[i].x-spacing.enemies[j].x, spacing.enemies[i].z-spacing.enemies[j].z));
+  }
+}
+
+const result = {
+  allSingleKind:spacing.enemies.every(enemy => enemy.kind === 'lion'),
+  aggression:{ low:lowAttacks, high:highAttacks, increased:highAttacks > lowAttacks },
+  spacing:{ minDistance:Number(minDistance.toFixed(3)), separated:minDistance > 3 }
+};
+document.getElementById('status').textContent = JSON.stringify(result);
+</script>
+</body>
+</html>

@@ -65,7 +65,7 @@ export function createArenaEnemySystem({
   const enemies = [];
   const projectiles = [];
   const deathPieces = [];
-  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
+  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3, aggression:1, spawnKind:'mixed' };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let activeEncounterRoomId = null;
   let lastPlayer = { x:0, z:0, invulnerable:false };
@@ -174,6 +174,24 @@ export function createArenaEnemySystem({
     const sp = e.speed * tuning.speedScale;
     e.vx = approachN(e.vx, dx*sp*amount, dt, 6);
     e.vz = approachN(e.vz, dz*sp*amount, dt, 6);
+  }
+  const collisionRadius = e => e.radius * tuning.heightScale * (e.fusion ? 1.12 : 1);
+  function applySeparationSteering(e, dt){
+    let sx = 0, sz = 0;
+    for(const other of enemies){
+      if(other === e || other.hp <= 0) continue;
+      let dx = e.x - other.x, dz = e.z - other.z, d = Math.hypot(dx,dz);
+      const comfort = collisionRadius(e) + collisionRadius(other) + .7;
+      if(d >= comfort) continue;
+      if(d < 1e-4){ const a = ((e.id*19 + other.id*37) % 360) * Math.PI/180; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
+      const pressure = 1 - d/comfort;
+      sx += dx/d * pressure; sz += dz/d * pressure;
+    }
+    const amount = Math.hypot(sx,sz);
+    if(amount <= 0) return;
+    const maxSpeed = e.speed * tuning.speedScale;
+    e.vx = clamp(e.vx + sx/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
+    e.vz = clamp(e.vz + sz/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
   }
   function seekPlayer(e, p, dt){
     const target = navigation?.nextWaypoint?.(e, p, activeEncounterRoomId) || p;
@@ -351,19 +369,20 @@ export function createArenaEnemySystem({
     }
     else if(e.state === 'recovery'){
       e.vx = e.vz = 0;
-      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown; director.release(e); }
+      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown / tuning.aggression; director.release(e); }
     }
     else {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
       e.facing = norm(dx,dz);
       const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d) : null;
-      if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget })){
+      if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
         startEnemyAttack(e, att, p);
       } else {
         const wantRange = e.fusion ? e.preferredRange : (e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S));
         if(d > wantRange + .45*S) seekPlayer(e, p, dt);
         else if(e.fusion) moveFusion(e, p, dt, d);
         else deniedBehavior(e, p, dt);
+        applySeparationSteering(e, dt);
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
@@ -378,13 +397,14 @@ export function createArenaEnemySystem({
   }
 
   function resolveBodyCollisions(p){
-    for(let pass = 0; pass < 2; pass++){
+    const origins = new Map(enemies.map(e => [e, { x:e.x, z:e.z }]));
+    for(let pass = 0; pass < 4; pass++){
       for(let i = 0; i < enemies.length; i++){
         const a = enemies[i]; if(a.hp <= 0) continue;
         for(let j = i+1; j < enemies.length; j++){
           const b = enemies[j]; if(b.hp <= 0) continue;
           let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx,dz);
-          const min = a.radius + b.radius;
+          const min = collisionRadius(a) + collisionRadius(b) + .22;
           if(d >= min) continue;
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
           const push = (min - d) * .5 / d;
@@ -392,13 +412,15 @@ export function createArenaEnemySystem({
         }
         // keep enemies out of the player's body (the arena owns player pos, so we
         // only move the enemy — this is what stops a lunge from ending on top of you)
-        const e = a; const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz) || .001, min = e.radius + PLAYER_R;
+        const e = a; let dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz), min = collisionRadius(e) + PLAYER_R;
+        if(d < 1e-4){ const ang = (e.id * 47 % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
         if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
       }
     }
     if(navigation?.resolveMovement){
       for(const e of enemies){
-        const projected = navigation.resolveMovement({ x:e.x, z:e.z }, { x:0, z:0 }, e.radius);
+        const origin = origins.get(e) || { x:e.x, z:e.z };
+        const projected = navigation.resolveMovement(origin, { x:e.x - origin.x, z:e.z - origin.z }, collisionRadius(e));
         e.x = projected.x; e.z = projected.z;
       }
     }
@@ -470,7 +492,7 @@ export function createArenaEnemySystem({
   // module for compatibility and can be restored as a later mixed-pool mode.
   const MIX = FUSION_ENEMY_IDS;
   function chooseSpawnKind(i){
-    return MIX[(wave - 1 + i) % MIX.length];
+    return tuning.spawnKind === 'mixed' ? MIX[(wave - 1 + i) % MIX.length] : tuning.spawnKind;
   }
   function spawnPos(){
     const roomPoint = navigation?.randomSpawn?.(activeEncounterRoomId, lastPlayer);
@@ -549,7 +571,7 @@ export function createArenaEnemySystem({
   function update(dt, player){
     lastPlayer = player || lastPlayer;
     time += dt;
-    director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget });
+    director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
     for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
@@ -577,18 +599,22 @@ export function createArenaEnemySystem({
     enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
+    setAggression:(v)=>{ tuning.aggression = clamp(Number(v) || 1, .25, 3); director.settings.aggression = tuning.aggression; },
     setCycleOnWaveClear:(v)=>{ director.settings.cycleOnWaveClear = !!v; },
     setWaveSize:(v)=>{ tuning.waveSize = clamp(Math.round(Number(v) || 6), 1, 20); },
     setSpeedScale:(v)=>{ tuning.speedScale = clamp(Number(v) || 1, .25, 1.5); },
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
+    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },
     get hpScale(){ return tuning.hpScale; },
     get waveSize(){ return tuning.waveSize; },
     get idleRangeScale(){ return tuning.idleRangeScale; },
+    get aggression(){ return tuning.aggression; },
+    get spawnKind(){ return tuning.spawnKind; },
     get wave(){ return wave; },
     get waveKills(){ return waveKills; },
     get kills(){ return kills; },

@@ -51,4 +51,17 @@ export const FUSION_ARCHETYPES = {
 
 export const FUSION_ENEMY_IDS = Object.keys(FUSION_ARCHETYPES);
 
+export const FUSION_ENEMY_OPTIONS = [
+  { id:'lion', label:'Lion' },
+  { id:'spid', label:'Spider' },
+  { id:'sun', label:'Sun Serpent' },
+  { id:'grab', label:'Grabber' },
+  { id:'tooth', label:'Toothy' },
+  { id:'mother', label:'Mother Courage' },
+  { id:'stilt', label:'Stilt' },
+  { id:'ant', label:'Antelope' },
+  { id:'phx', label:'Phoenix' },
+  { id:'croc', label:'Croc' }
+];
+
 export function isFusionEnemy(kind){ return !!FUSION_ARCHETYPES[kind]; }
