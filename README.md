@@ -12,6 +12,13 @@ A phone/controller-friendly HTML5 top-down action prototype.
 - `archive/` — the retired iframe wrapper, the old string-patched lab core, and donor pages. Kept for reference only; nothing links to them.
 - `docs/` — source-move libraries (Hades, Diablo III) used as design references.
 
+## Recent combat pass
+
+Authored stance cards now select distinct mostly-European ready guards with a
+smaller Japanese set. Hit-confirmed Light 1 links from its recovery directly
+into Light 2, a landed Heavy can link into one Light, and the old saber slot is
+now a curved two-handed katana with saved-setting migration.
+
 ## Current goal
 
 This is a first-pass feel test for a top-down ARPG/brawler combat model:

@@ -213,8 +213,10 @@
 import * as THREE from 'three';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword } from './src/weapons.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { guardPoseFor } from './src/guard-poses.js';
+import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
@@ -331,7 +333,7 @@ const defaultFeel = () => feelAt(FEEL, 1/3);
 const arena = {
   charge: { active:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
   swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0 },
-  chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1 },
+  chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1, pendingStage:null },
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
@@ -388,7 +390,11 @@ const PC = installPlayerCombat({
     resolveAttackFacing(){ return resolveDesiredFacing(); },
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
-      if(arena.chain.pendingSlot >= 0){ arena.chain.activeSlot = arena.chain.pendingSlot; arena.chain.pendingSlot = -1; }
+      if(arena.chain.pendingSlot >= 0){
+        arena.chain.activeSlot = arena.chain.pendingSlot;
+        arena.chain.pendingSlot = -1;
+        if(arena.chain.pendingStage){ arena.chain.stage = arena.chain.pendingStage; arena.chain.pendingStage = null; }
+      }
       arena.swing.staminaSpent = spendStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
@@ -443,6 +449,7 @@ function setStance(index){
   const pool = stancePoolForWeapon();
   arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
   arena.stance = pool[arena.stanceIndex];
+  PC.setReadyPose(guardPoseFor(arena.stance));
   resetChainState();
   updatePill();
 }
@@ -521,6 +528,7 @@ function resetChainState(){
   arena.chain.lightLockT = 0;
   arena.chain.activeSlot = -1;
   arena.chain.pendingSlot = -1;
+  arena.chain.pendingStage = null;
   combatState.pending = null; combatState.pendingGroup = null;
   combatState.readyLock = 0;
 }
@@ -531,6 +539,7 @@ function lockChain(seconds){
   arena.chain.finisherDeadline = 0;
   arena.chain.activeSlot = -1;
   arena.chain.pendingSlot = -1;
+  arena.chain.pendingStage = null;
   combatState.pending = null; combatState.pendingGroup = null;
   combatState.readyLock = 1;
 }
@@ -558,15 +567,17 @@ function startChainMove(move, stage){
   arena.chain.activeSlot = move.slot;
   PC.startCombatAttack(move.key, move.att.group);
 }
-function queueSecondLight(move){
+function queueLightFollowup(move, pendingStage){
   combatState.pending = move.key; combatState.pendingGroup = move.att.group;
-  arena.chain.stage = 'hit2Queued';
-  arena.chain.pendingSlot = 1;
+  arena.chain.stage = pendingStage + 'Queued';
+  arena.chain.pendingSlot = move.slot;
+  arena.chain.pendingStage = pendingStage;
 }
 function finishChainMove(landed){
   const c = arena.chain, slot = c.activeSlot;
   combatState.chargePull = 0;
   if(c.pendingSlot >= 0) return;
+  if(c.stage === HEAVY_LIGHT_STAGE){ resetChainState(); return; }
   if(slot === 0){
     if(landed){
       c.stage = 'hit1Ready';
@@ -583,12 +594,13 @@ function lightDown(){
   if(!canUseCombatInput()) return;
   if(arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher') return;
   if(combatState.attack){
-    if(arena.chain.stage !== 'hit1' && arena.chain.stage !== 'hit1Ready') return;
     if(!combatState.hitIds || combatState.hitIds.size <= 0 || combatState.pending) return;
-    const move = chainMove(1);
+    const followup = lightFollowupForStage(arena.chain.stage);
+    if(!followup) return;
+    const move = chainMove(followup.slot);
     if(!move) return;
     if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
-    queueSecondLight(move);
+    queueLightFollowup(move, followup.pendingStage);
     return;
   }
   const now = performance.now()/1000;
@@ -1206,7 +1218,9 @@ function frame(){
 // console/testing handle
 window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel };
 spawnCharacter();
-PC.selectCombatWeapon(StoneSettings.get('arena.weapon','longsword'));
+const savedArenaWeapon=normalizeStoneWeaponId(StoneSettings.get('arena.weapon','longsword'));
+StoneSettings.set('arena.weapon',savedArenaWeapon);
+PC.selectCombatWeapon(savedArenaWeapon);
 if(!arena.stance) ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });

@@ -28,9 +28,9 @@ export const WEAPON_AFFINITIES = {
     slice: 0.18, pierce: 1.60, blunt: 0.55
   },
 
-  saber: {
-    vertical: 1.08, horizontal: 1.38, stab: 0.55,
-    slice: 1.30, pierce: 0.55, blunt: 0.70
+  katana: {
+    vertical: 1.15, horizontal: 1.33, stab: 0.63,
+    slice: 1.35, pierce: 0.63, blunt: 0.63
   },
 
   whip: {

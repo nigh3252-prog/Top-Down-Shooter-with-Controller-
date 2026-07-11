@@ -465,13 +465,14 @@
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, buildStoneWeaponMesh } from './src/weapons.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, buildStoneWeaponMesh, normalizeStoneWeaponId } from './src/weapons.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
 import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { guardPoseFor } from './src/guard-poses.js';
 import { createCombatEnemySystem } from './src/enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
 import { StoneSettings } from './src/settings.js';
@@ -905,7 +906,7 @@ function makeTrial(stance,reason='select'){
   labState.trials.push(trial); labState.currentTrial=trial; saveLabData(); return trial;
 }
 function setCurrentStance(stance,reason='select'){
-  labState.currentStance={...stance,chain:[...stance.chain]}; labState.source=stance.source||labState.source; labState.comboIndex=0; labState.comboDeadline=0; labState.activeEvent=null; makeTrial(labState.currentStance,reason); updateLabUI(); updateMainStatusLine();
+  labState.currentStance={...stance,chain:[...stance.chain]}; labState.source=stance.source||labState.source; labState.comboIndex=0; labState.comboDeadline=0; labState.activeEvent=null; PC.setReadyPose(guardPoseFor(labState.currentStance)); makeTrial(labState.currentStance,reason); updateLabUI(); updateMainStatusLine();
 }
 function selectAuthoredStance(index=0){
   const poolInfo = currentAuthoredPool(); const pool = poolInfo.stances;
@@ -1318,7 +1319,7 @@ function bindCombatUI(){
   if(shoulderSlider){ shoulderSlider.addEventListener('input',syncCombatShoulderDropReadout); syncCombatShoulderDropReadout(); }
   const floorSlider=StoneSettings.applyValue('combatFloorBlend','combat.floorBlend','100');
   if(floorSlider){ floorSlider.addEventListener('input',syncCombatFloorBlendReadout); syncCombatFloorBlendReadout(); }
-  const sel=document.getElementById('combatWeaponSelect'); if(sel){ sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.value=StoneSettings.get('combat.weapon','longsword'); sel.addEventListener('change',e=>{ StoneSettings.set('combat.weapon', e.target.value); selectCombatWeapon(e.target.value); }); }
+  const sel=document.getElementById('combatWeaponSelect'); if(sel){ const savedWeapon=normalizeStoneWeaponId(StoneSettings.get('combat.weapon','longsword')); StoneSettings.set('combat.weapon',savedWeapon); sel.innerHTML=WEAPON_ORDER.map(id=>`<option value="${id}">${WEAPONS[id].label} (${WEAPONS[id].weightClass})</option>`).join(''); sel.value=savedWeapon; sel.addEventListener('change',e=>{ StoneSettings.set('combat.weapon', e.target.value); selectCombatWeapon(e.target.value); }); }
   const hitboxScale=StoneSettings.applyValue('weaponHitboxScale','combat.weaponHitboxScale','1');
   if(hitboxScale){ combatState.weaponHitboxScale=Number(hitboxScale.value)||1; hitboxScale.addEventListener('change',e=>{ combatState.weaponHitboxScale=clamp(Number(e.target.value)||1,1,5); StoneSettings.set('combat.weaponHitboxScale', String(combatState.weaponHitboxScale)); if(dummyState) dummyState.prevZones.clear(); syncCombatStatus(); updateMainStatusLine(); }); }
   const commit=document.getElementById('attackCommitMode'); if(commit){ aimState.commitMode=commit.value; commit.addEventListener('change',e=>{aimState.commitMode=e.target.value; StoneSettings.set('combat.attackCommitMode', e.target.value); updateMainStatusLine();}); }
@@ -1327,7 +1328,7 @@ function bindCombatUI(){
   const dbg=document.getElementById('showCombatDriver'); if(dbg){ combatState.showDriver=dbg.checked; if(PC.driverDebug) PC.driverDebug.visible=combatState.showDriver; dbg.addEventListener('change',e=>{combatState.showDriver=e.target.checked; StoneSettings.set('combat.showDriver', e.target.checked); if(PC.driverDebug) PC.driverDebug.visible=combatState.showDriver;}); }
   const hideArms=document.getElementById('hideCombatArms'); if(hideArms){ combatState.hideArms=hideArms.checked; hideArms.addEventListener('change',e=>{combatState.hideArms=e.target.checked; StoneSettings.set('combat.hideArms', e.target.checked); updateCombatArmVisibility();}); updateCombatArmVisibility(); }
   const loop=document.getElementById('loopCombat'); if(loop){ combatState.loop=loop.checked; loop.addEventListener('change',e=>{combatState.loop=e.target.checked; StoneSettings.set('combat.loop', e.target.checked);}); }
-  updateVariantReadout(); selectCombatWeapon(StoneSettings.get('combat.weapon','longsword'));
+  updateVariantReadout(); selectCombatWeapon(normalizeStoneWeaponId(StoneSettings.get('combat.weapon','longsword')));
 }
 
 
