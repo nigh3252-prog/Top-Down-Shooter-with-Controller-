@@ -71,6 +71,8 @@ assert(Math.abs(interpreter.IDLE.hold.x-GUARD_POSES.ochsRight.pose.hold[0])<1e-9
 const recovered=interpreter.sampleAttack(first,first.total,interpreter.work);
 assert(Math.abs(recovered.hold.x-interpreter.IDLE.hold.x)<1e-9,'completed attack returns to the selected stance guard');
 
+// The runtime captures this outgoing pose and uses it as crossfade alpha zero
+// for the next windup, guaranteeing no intervening neutral/guard frame.
 const outgoing=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
 interpreter.sampleAttack(first,first.comboAt,outgoing);
 const incoming=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
