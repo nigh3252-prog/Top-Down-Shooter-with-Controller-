@@ -1,6 +1,6 @@
 // Combat input timing presets and pure queue helpers shared by the arena and tests.
 
-export const DEFAULT_COMBAT_INPUT_MODE = 'flow';
+export const DEFAULT_COMBAT_INPUT_MODE = 'brawler';
 
 export const COMBAT_INPUT_MODES = Object.freeze([
   Object.freeze({
