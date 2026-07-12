@@ -1,0 +1,74 @@
+name: Trigger responsive combo patch
+
+on:
+  push:
+    branches:
+      - Combo-fix
+    paths:
+      - .github/workflows/trigger-combo-flow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Combo-fix
+        uses: actions/checkout@v4
+        with:
+          ref: Combo-fix
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply, test, and record result
+        shell: bash
+        run: |
+          set +e
+          python3 - <<'EXTRACT'
+          from pathlib import Path
+          source = Path('.github/workflows/apply-combo-flow.yml').read_text(encoding='utf-8')
+          start = "          python3 <<'PY'\n"
+          end = "\n          PY"
+          if start not in source or end not in source:
+              raise SystemExit('Could not locate embedded patch script')
+          block = source.split(start, 1)[1].split(end, 1)[0]
+          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+          Path('/tmp/apply-combo-flow.py').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          EXTRACT
+          extract_status=$?
+          : > combo-patch.log
+          if [ $extract_status -ne 0 ]; then
+            echo "Patch extraction failed with status $extract_status" >> combo-patch.log
+            status=$extract_status
+          else
+            python3 /tmp/apply-combo-flow.py >> combo-patch.log 2>&1
+            status=$?
+          fi
+          if [ $status -eq 0 ]; then
+            node --check /tmp/combat-arena.mjs >> combo-patch.log 2>&1
+            status=$?
+          fi
+          if [ $status -eq 0 ]; then
+            npm test >> combo-patch.log 2>&1
+            status=$?
+          fi
+          if [ $status -eq 0 ]; then
+            rm -f combo-patch.log
+          else
+            echo "FINAL STATUS: $status" >> combo-patch.log
+          fi
+          rm -f .github/workflows/apply-combo-flow.yml .github/workflows/trigger-combo-flow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if [ $status -eq 0 ]; then
+            git commit -m "Add responsive combo timing modes"
+          else
+            git commit -m "Record responsive combo patch failure"
+          fi
+          git push origin HEAD:Combo-fix
