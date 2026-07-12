@@ -13,7 +13,7 @@
 //
 // Usage: const rig = installGoblinRig(THREE);  // or installPotGoblinRig
 
-import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
+import { buildGoblinWeapon } from './goblin-weapons.js';
 
 export function installPotGoblinRig(THREE){
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -88,7 +88,7 @@ export function installPotGoblinRig(THREE){
   }
 
   // Articulated pot goblin rig — same signature and return shape as goblin-rig.js.
-  function makeGoblinRig({ kind, root, s, bodyMat, mats, weaponDef, showRig = false }){
+  function makeGoblinRig({ kind, root, s, bodyMat, mats, showRig = false }){
     const look = POT_LOOKS[kind] || POT_LOOKS.default;
     const R = s.radius, H = s.height;
 
@@ -173,13 +173,10 @@ export function installPotGoblinRig(THREE){
       pelvis.add(f); feet.push(f);
     });
 
-    // --- weapon (identical to goblin-rig.js so attack posing keeps working) ---
-    const RIG = { bladeBase:.08, bladeTip:1.15, gripCenter:-.14 };
+    // --- crude per-archetype weapon; the returned reach metadata drives attacks ---
+    const RIG = buildGoblinWeapon({ THREE, kind, weaponRoot, mats });
     const weaponParts = {};
-    const addGrip = (r=.022,len=.40)=>{ const m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), mats.matLeather); m.position.y=-.14; m.castShadow=m.receiveShadow=true; weaponRoot.add(m); weaponRoot.add(meshLocalIco(.045, mats.matIron, [0,-.37,0])); };
-    const addGuard = (w=.34)=>weaponRoot.add(meshLocalBox(w,.045,.07,mats.matBronze,0,[0,RIG.bladeBase,0]));
-    buildStoneWeaponMesh({ THREE, weaponDef: weaponDef || STONE_WEAPONS[s.weapon] || STONE_WEAPONS.mace, weaponRoot, RIG, bladeLen:RIG.bladeTip-RIG.bladeBase, base:RIG.bladeBase, materials:mats, helpers:{ addGrip, addGuard, meshLocalBox, meshLocalIco }, weaponParts });
-    weaponRoot.scale.setScalar(.9); weaponRoot.rotation.x = .35; weaponRoot.position.set(.28, H * .56, .16);
+    weaponRoot.rotation.x = .35; weaponRoot.position.set(R * 1.02, H * .54, R * .22);
 
     // --- glow + rig debug (identical contract) ---
     const goblinGlow = new THREE.Mesh(new THREE.SphereGeometry(R * .72, 12, 8), new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:0, depthWrite:false }));

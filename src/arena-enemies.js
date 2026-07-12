@@ -13,45 +13,50 @@ import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-direct
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
+import { FUSION_ARCHETYPES, FUSION_ATTACKS, FUSION_ENEMY_IDS, isFusionEnemy } from './fusion-enemies.js';
+import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 
-// Single global bump for goblins that wield a real player weapon (vs the rig's
-// static .9). Scaling this up automatically grows the derived attack reach and
-// the stand-off distance (see computeRealReach), so spacing tracks the weapon.
-const GOBLIN_WEAPON_SCALE = 1.55;
+// Goblin weapons are built at their final readable size by goblin-weapons.js.
+// Real attack reach is derived from each weapon's own rig metadata.
+const GOBLIN_WEAPON_SCALE = 1;
 
-// Every melee archetype owns a small attacks.js vocabulary. Their weapon,
-// cadence and move silhouettes now create the role—not a shared placeholder dip.
+// The retained goblins use the chunky enemy-only weapons from goblin-weapons.js,
+// but drive them with the same authored attacks.js choreography as the player.
 export const ARENA_ENEMY_ARCHETYPES = {
-  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00 },
-  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88 },
-  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35 },
-  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',     score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9,  thrower:true },
-  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4,  combatAttacks:['vertical16','horizontal5','vertical15'], timingScale:1.22, isElite:true }
+  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00, turnSpeed:Math.PI,       rallyMin:6, rallyMax:11 },
+  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88, turnSpeed:Math.PI*1.34, rallyMin:5, rallyMax:9 },
+  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35, turnSpeed:Math.PI*.62, rallyMin:7, rallyMax:12 },
+  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',     score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9,  thrower:true, turnSpeed:Math.PI*.84, rallyMin:6, rallyMax:11 },
+  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4,  combatAttacks:['vertical16','horizontal5','vertical15'], timingScale:1.22, isElite:true, turnSpeed:Math.PI*.5, rallyMin:4, rallyMax:7 }
 };
-const ARCHETYPES = ARENA_ENEMY_ARCHETYPES;
+const BASE_ARCHETYPES = ARENA_ENEMY_ARCHETYPES;
+const ARCHETYPES = { ...BASE_ARCHETYPES, ...FUSION_ARCHETYPES };
 
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
-const EATK = {
+const BASE_EATK = {
   slash:        { kind:'melee',  name:'Slash',         range:.78*S,  tokenCost:1.0,  windup:.58, active:.16, recovery:.50, cooldown:1.45, damage:10, arc:1.1, knock:.5*S },
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
   rockThrow:    { kind:'ranged', name:'Rock Throw',    range:3.3*S,  tokenCost:.5,   windup:.78, active:.08, recovery:.60, cooldown:2.05, damage:8,  arc:0,   knock:.2*S, projectile:true },
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
+const EATK = { ...BASE_EATK, ...FUSION_ATTACKS };
 
 export function createArenaEnemySystem({
   THREE, worldRoot, materials = {}, arenaRadius = 18,
   navigation = null, roomEncounterMode = false, onEncounterCleared = null,
 } = {}){
   const rig = installGoblinRig(THREE);
+  const fusionRig = installFusionEnemyRig(THREE);
   // Shared choreography interpreter — the exact same pose sampler the player uses
   // (src/attack-interpreter.js), so a grunt swings the real player animation.
   const interp = createAttackInterpreter(THREE);
   const poseScratch = interp.P({ hold:[0,1,0], tip:[0,1,0] });
   const clamp = rig.clamp;
+  const lerp = THREE.MathUtils.lerp;
   const mats = rig.buildGoblinMaterials(materials);
   const bodyMats = {};
   for(const [kind, a] of Object.entries(ARCHETYPES)) bodyMats[kind] = new THREE.MeshStandardMaterial({ color:a.color, roughness:.78, flatShading:true });
@@ -62,7 +67,7 @@ export function createArenaEnemySystem({
   const enemies = [];
   const projectiles = [];
   const deathPieces = [];
-  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3 };
+  const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3, aggression:1, spawnKind:'mixed' };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let activeEncounterRoomId = null;
   let lastPlayer = { x:0, z:0, invulnerable:false };
@@ -77,7 +82,7 @@ export function createArenaEnemySystem({
 
   /* ---------- real-combat (grunt) pose mapping ---------- */
   // The goblin rig holds a weapon built with these blade coords (goblin-rig.js RIG).
-  const GRIP_CENTER = -.14, BLADE_TIP = 1.15, ZONE_R = .16;
+  const ZONE_R = .16;
   // "Combat space": maps a sampled player pose (hold/tip, ~unit scale) onto the
   // goblin torso. hold scales by height; the grip sits at a chest anchor; lunge
   // shifts forward. computeRealReach and applyRealCombatPose share these so the
@@ -93,16 +98,18 @@ export function createArenaEnemySystem({
   // Forward reach (body center -> weapon tip) at the attack's contact pose, in the
   // same units as enemy positions. Derived entirely from the real animation + the
   // real weapon length + scale, so spacing is emergent, not hand-authored.
-  function computeRealReach(att, geom, weaponScale){
+  function computeRealReach(att, geom, weaponScale, weaponRig){
     const p = interp.sampleAttack(att, att.contactAt, poseScratch);
     const holdZ = geom.radius*G_ANCHOR_Z + p.hold.z*(geom.height*G_HOLD) + p.lunge*(geom.radius*G_LUNGE);
-    const tipFwd = p.tip.z * (BLADE_TIP - GRIP_CENTER) * weaponScale;
+    const gripCenter = weaponRig?.gripCenter ?? -.14;
+    const bladeTip = weaponRig?.bladeTip ?? 1.15;
+    const tipFwd = p.tip.z * (bladeTip - gripCenter) * weaponScale;
     return holdZ + tipFwd + ZONE_R*weaponScale;
   }
-  function materializeEnemyAttack(a, attackKey){
+  function materializeGoblinAttack(a, attackKey, weaponScale, weaponRig){
     const combatAtt = interp.ATTACKS[attackKey];
     if(!combatAtt) return null;
-    const base = EATK[a.attack];
+    const base = BASE_EATK[a.attack];
     const scale = a.timingScale || 1;
     const activeEnd = Math.max(combatAtt.contactAt, combatAtt.comboAt);
     return {
@@ -113,7 +120,7 @@ export function createArenaEnemySystem({
       windup:combatAtt.contactAt * scale,
       active:Math.max(.06, activeEnd - combatAtt.contactAt) * scale,
       recovery:Math.max(.08, combatAtt.total - activeEnd) * scale,
-      range:computeRealReach(combatAtt, { height:a.height, radius:a.radius }, GOBLIN_WEAPON_SCALE),
+      range:computeRealReach(combatAtt, { height:a.height, radius:a.radius }, weaponScale, weaponRig),
     };
   }
 
@@ -122,6 +129,14 @@ export function createArenaEnemySystem({
   const norm = (x,z) => { const d = Math.hypot(x,z) || 1; return { x:x/d, z:z/d }; };
   function wrapPi(a){ return Math.atan2(Math.sin(a), Math.cos(a)); }
   function approachN(cur, goal, dt, rate){ return cur + (goal - cur) * Math.min(1, dt*rate); }
+  function setFacingAngle(e, angle){ e.facingAngle = wrapPi(angle); e.facing.x = Math.sin(e.facingAngle); e.facing.z = Math.cos(e.facingAngle); }
+  function turnFacingToAngle(e, angle, dt, rate=e.turnSpeed){
+    const delta = wrapPi(angle - e.facingAngle), maxTurn = Math.max(0, rate || 0) * dt;
+    setFacingAngle(e, e.facingAngle + clamp(delta, -maxTurn, maxTurn));
+    e.targetFacingAngle = wrapPi(angle);
+    return Math.abs(delta);
+  }
+  function turnFacingToPoint(e, p, dt, rate=e.turnSpeed){ return turnFacingToAngle(e, Math.atan2(p.x-e.x,p.z-e.z), dt, rate); }
 
   /* ---------- build ---------- */
   function makeEnemy(kind, x, z){
@@ -129,40 +144,55 @@ export function createArenaEnemySystem({
     const s = { radius:a.radius, height:a.height, bellyColor:a.bellyColor, armorColor:a.armorColor, weapon:a.weapon };
     const root = new THREE.Group(); root.name = `${kind} arena enemy`;
     const weaponDef = a.weapon ? STONE_WEAPONS[a.weapon] : STONE_WEAPONS.mace;
-    const visual = rig.makeGoblinRig({ kind, root, s, bodyMat:bodyMats[kind], mats, weaponDef, showRig:false });
+    let visual;
+    if(a.fusion){
+      const fusionVisual = fusionRig.create(kind);
+      root.add(fusionVisual.model.group);
+      visual = { fusionVisual };
+    } else {
+      visual = rig.makeGoblinRig({ kind, root, s, bodyMat:bodyMats[kind], mats, weaponDef, showRig:false });
+    }
     // markers (health bar + telegraph ring + token ring), matching the enemies.js layout
     const barBg = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.7, .055, .035), mats.flash); barBg.position.set(0, a.height + .32, 0);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(a.radius*1.7, .065, .045), barMat); bar.position.copy(barBg.position); bar.position.z += .012; root.add(barBg, bar);
     const telegraph = new THREE.Mesh(new THREE.RingGeometry(.72, .78, 36), mats.windup); telegraph.rotation.x = -Math.PI/2; telegraph.visible = false; root.add(telegraph);
     const tokenRing = new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.6, .04, 6, 32), mats.windup); tokenRing.position.y = .08; tokenRing.visible = false; root.add(tokenRing);
-    // rock thrower: hide the held weapon, show a rock in hand
-    let rockProp = null;
-    if(a.thrower){
-      visual.weaponRoot.visible = false;
-      rockProp = new THREE.Mesh(new THREE.DodecahedronGeometry(.28, 0), mats.matIron);
-      rockProp.position.set(.3, a.height*.6, .2); visual.weaponRigRoot.add(rockProp);
-    }
+    const rockProp = a.thrower ? visual.weaponRoot : null;
     root.position.set(x, 0, z); group.add(root);
-    const realAttacks = (a.combatAttacks || []).map(key => materializeEnemyAttack(a, key)).filter(Boolean);
+    const weaponScale = visual.RIG?.scale || GOBLIN_WEAPON_SCALE;
+    const realAttacks = (a.combatAttacks || []).map(key => materializeGoblinAttack(a, key, weaponScale, visual.RIG)).filter(Boolean);
     const useRealCombat = realAttacks.length > 0;
     let combatAtt = realAttacks[0]?.combatAtt || null;
     const maxReach = realAttacks.reduce((best, attack) => Math.max(best, attack.range), 0);
     const holdDist = useRealCombat ? maxReach * HOLD_FRAC : HOLD();
     if(useRealCombat){
-      visual.weaponRoot.scale.setScalar(GOBLIN_WEAPON_SCALE);
+      visual.weaponRoot.scale.setScalar(weaponScale);
     }
     const hp = Math.round(a.hp * tuning.hpScale);
+    const initialFacing = { x:-Math.sign(x)||0, z:-Math.sign(z)||1 };
+    const initialFacingAngle = Math.atan2(initialFacing.x, initialFacing.z);
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       hp, maxHp:hp, speed:a.speed, stop:useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
+      fusion:isFusionEnemy(kind) || !!a.fusion, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
+      visualScale:a.visualScale || 1, targetScale:a.targetScale || 1, currentTargetScale:a.targetScale || 1,
+      collisionScale:a.collisionScale || 1, separationScale:a.separationScale || a.collisionScale || 1,
+      attackOriginForward:a.attackOriginForward || 0, headCollisionRadius:a.headCollisionRadius || 0,
+      pairingTags:a.pairingTags || [], meleeAccessible:true, meleeWindow:null,
+      rootLift:0, targetYOffset:0,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
-      useRealCombat, combatAtt, realAttacks, combatAttackIndex:0, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
+      useRealCombat, combatAtt, realAttacks, combatAttackIndex:0, holdDist, weaponScale,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
-      token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
+      token:null, approachPermit:false, approachPermitTime:0, approachCooldown:0, approachCount:0,
+      facing:initialFacing, facingAngle:initialFacingAngle, targetFacingAngle:initialFacingAngle,
+      turnSpeed:a.turnSpeed || Math.PI*8, attackAlign:a.thrower ? .62 : .48, facingBias:THREE.MathUtils.randFloat(-.55,.55), facingDecisionT:THREE.MathUtils.randFloat(1.2,2.8), orbitDir:Math.random()<.5?-1:1,
+      gesture:null, gestureTime:0, gestureDuration:1.3, rallyFacingAngle:initialFacingAngle,
+      rallyTimer:THREE.MathUtils.randFloat(a.rallyMin || 7, a.rallyMax || 13), rallyMin:a.rallyMin || 7, rallyMax:a.rallyMax || 13,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
       yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
+      visualGroundSpeed:0, maxGroundSpeed:a.speed*tuning.speedScale,
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -175,6 +205,39 @@ export function createArenaEnemySystem({
     e.vx = approachN(e.vx, dx*sp*amount, dt, 6);
     e.vz = approachN(e.vz, dz*sp*amount, dt, 6);
   }
+  const collisionRadius = e => e.radius * tuning.heightScale * (e.collisionScale || 1);
+  const separationRadius = e => e.radius * tuning.heightScale * (e.separationScale || e.collisionScale || 1);
+  function pointForward(e, distance){
+    return { x:e.x + e.facing.x*distance, z:e.z + e.facing.z*distance };
+  }
+  function attackOrigin(e){
+    return e.attackOriginForward > 0 ? pointForward(e, e.attackOriginForward * tuning.heightScale) : { x:e.x, z:e.z };
+  }
+  function playerCollisionCircles(e){
+    const circles = [{ x:e.x, z:e.z, radius:collisionRadius(e) }];
+    if(e.headCollisionRadius > 0){
+      const head = pointForward(e, e.attackOriginForward * tuning.heightScale * .82);
+      circles.push({ ...head, radius:e.headCollisionRadius * tuning.heightScale });
+    }
+    return circles;
+  }
+  function applySeparationSteering(e, dt){
+    let sx = 0, sz = 0;
+    for(const other of enemies){
+      if(other === e || other.hp <= 0) continue;
+      let dx = e.x - other.x, dz = e.z - other.z, d = Math.hypot(dx,dz);
+      const comfort = separationRadius(e) + separationRadius(other) + .7;
+      if(d >= comfort) continue;
+      if(d < 1e-4){ const a = ((e.id*19 + other.id*37) % 360) * Math.PI/180; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
+      const pressure = 1 - d/comfort;
+      sx += dx/d * pressure; sz += dz/d * pressure;
+    }
+    const amount = Math.hypot(sx,sz);
+    if(amount <= 0) return;
+    const maxSpeed = e.speed * tuning.speedScale;
+    e.vx = clamp(e.vx + sx/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
+    e.vz = clamp(e.vz + sz/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
+  }
   function seekPlayer(e, p, dt){
     const target = navigation?.nextWaypoint?.(e, p, activeEncounterRoomId) || p;
     const d = norm(target.x - e.x, target.z - e.z);
@@ -186,6 +249,12 @@ export function createArenaEnemySystem({
     const hold = e.useRealCombat ? e.holdDist : HOLD();
     const corr = (hold - r) * .7;
     steer(e, tx - rx/r*corr, tz - rz/r*corr, amount, dt);
+  }
+  function orbitAtRange(e, p, dt, desired, amount=.55){
+    const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
+    const tx = (-rz/r)*e.orbitDir, tz = (rx/r)*e.orbitDir;
+    const corr = clamp((desired-r)*.7,-1,1);
+    steer(e,tx-rx/r*corr,tz-rz/r*corr,amount,dt);
   }
   function keepRange(e, p, dt, desired){
     const rx = e.x - p.x, rz = e.z - p.z, r = Math.hypot(rx,rz) || 1;
@@ -211,26 +280,120 @@ export function createArenaEnemySystem({
     else orbitPlayer(e, p, dt, .55);
   }
 
+  function goblinWaitingRange(e){
+    const attack = EATK[e.attackId];
+    if(attack?.kind === 'ranged') return 2.75*S;
+    return Math.max(1.3*S, (attack?.range || 1.0*S)*1.25 + e.radius);
+  }
+  function endRally(e){
+    if(e.gesture !== 'rally') return;
+    e.gesture = null; e.gestureTime = 0; e.rallyTimer = THREE.MathUtils.randFloat(e.rallyMin,e.rallyMax);
+    director.endRally(e);
+  }
+  function updateGoblinRally(e, p, dt, distance){
+    if(e.gesture === 'rally'){
+      e.gestureTime += dt; e.vx *= Math.pow(.01,dt); e.vz *= Math.pow(.01,dt);
+      turnFacingToAngle(e,e.rallyFacingAngle,dt,e.turnSpeed*.7);
+      if(e.gestureTime >= e.gestureDuration) endRally(e);
+      return true;
+    }
+    if(director.hasApproachPermit(e)) return false;
+    e.rallyTimer -= dt;
+    const wait = goblinWaitingRange(e);
+    if(e.rallyTimer <= 0 && distance >= wait-.7 && distance <= wait+2.3 && director.requestRally(e)){
+      e.gesture='rally'; e.gestureTime=0; e.rallyFacingAngle=wrapPi(e.facingAngle + THREE.MathUtils.randFloat(-.65,.65));
+      e.vx=e.vz=0;
+      return true;
+    }
+    return false;
+  }
+  function moveGoblin(e,p,dt,distance){
+    const permit = director.hasApproachPermit(e), attack = EATK[e.attackId];
+    if(permit){
+      const desired = attack?.kind === 'ranged' ? 2.6*S : (e.useRealCombat ? e.holdDist : .92*S);
+      if(distance > desired + .45*S) seekPlayer(e,p,dt);
+      else orbitAtRange(e,p,dt,desired,.22);
+      turnFacingToPoint(e,p,dt);
+      return;
+    }
+    const inner = goblinWaitingRange(e), outer = inner + 1.7;
+    if(distance < inner){
+      keepRange(e,p,dt,inner+.45);
+      turnFacingToAngle(e,Math.atan2(p.x-e.x,p.z-e.z)+e.facingBias,dt,e.turnSpeed*.7);
+    } else if(distance > outer){
+      const toward=norm(p.x-e.x,p.z-e.z); steer(e,toward.x,toward.z,.42,dt);
+      const travel=Math.atan2(e.vx,e.vz); turnFacingToAngle(e,travel,dt,e.turnSpeed*.8);
+    } else {
+      orbitAtRange(e,p,dt,inner+.7,e.kind==='dagger'?.58:.34);
+      const travel=Math.atan2(e.vx,e.vz); turnFacingToAngle(e,travel+e.facingBias*.35,dt,e.turnSpeed*.75);
+    }
+  }
+
   /* ---------- attacks ---------- */
-  function chooseAttack(e, d){
+  function chooseAttack(e, d, p){
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
     const a = e.useRealCombat ? e.realAttacks[e.combatAttackIndex % e.realAttacks.length] : EATK[e.attackId];
     if(!a) return null;
-    return d <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
+    const origin = attackOrigin(e);
+    const threatDistance = e.attackOriginForward > 0 ? Math.hypot(p.x - origin.x, p.z - origin.z) : d;
+    return threatDistance <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
   }
   function startEnemyAttack(e, atk, p){
     e.attack = atk; e.state = 'windup'; e.stateTime = 0;
     e.windup = atk.windup; e.active = atk.active; e.recovery = atk.recovery; e.hitDone = false;
-    if(e.useRealCombat){ e.combatAtt = atk.combatAtt; e.combatAttackIndex = (e.combatAttackIndex + 1) % e.realAttacks.length; }
-    e.facing = norm(p.x - e.x, p.z - e.z);
+    if(e.useRealCombat){
+      e.combatAtt = atk.combatAtt;
+      e.combatAttackIndex = (e.combatAttackIndex + 1) % e.realAttacks.length;
+    }
     director.grant(e, atk);
   }
+
+  function updateFusionAccessibility(e){
+    e.currentTargetScale = e.targetScale || 1;
+    if(!e.fusion){ e.meleeAccessible = true; e.meleeWindow = null; e.rootLift = 0; e.targetYOffset = 0; return; }
+    const attack = e.attack;
+    const states = attack?.meleeWindow?.states || [];
+    e.meleeAccessible = !states.length || states.includes(e.state);
+    e.meleeWindow = e.meleeAccessible && states.length ? attack.meleeWindow.id : null;
+    if(e.meleeWindow && attack.meleeWindow.targetHeight === 'standard') e.currentTargetScale = 1;
+    // The aerial body leaves the floor during its windup and dive. It returns
+    // to the standard target height for recovery, where melee can connect.
+    e.rootLift = e.kind === 'phx' && attack && (e.state === 'windup' || e.state === 'active') ? 2.1 * tuning.heightScale : 0;
+    e.targetYOffset = e.rootLift;
+  }
+
+  function moveFusion(e, p, dt, d){
+    const desired = e.preferredRange;
+    if(e.role === 'flanker'){
+      if(d > desired + .35) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .8);
+      return;
+    }
+    if(e.role === 'skirmisher' || e.role === 'aerial harasser'){
+      keepRange(e, p, dt, desired); orbitPlayer(e, p, dt, .55);
+      return;
+    }
+    if(e.role === 'area controller' || e.role === 'reach sentinel'){
+      if(d < desired - .5) keepRange(e, p, dt, desired); else orbitPlayer(e, p, dt, .25);
+      return;
+    }
+    if(e.role === 'charger'){
+      if(d > desired) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .35);
+      return;
+    }
+    if(e.role === 'low ambusher'){
+      if(d > desired + .3) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .25);
+      return;
+    }
+    if(d > desired) seekPlayer(e, p, dt); else orbitPlayer(e, p, dt, .25);
+  }
   function resolveEnemyMelee(e, p){
-    const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
+    const origin = attackOrigin(e);
+    const dx = p.x - origin.x, dz = p.z - origin.z, d = Math.hypot(dx,dz);
     if(d > e.attack.range + PLAYER_R) return;
-    if(navigation?.raycastWalls?.({ x:e.x, z:e.z }, { x:p.x, z:p.z })) return;
+    if(navigation?.raycastWalls?.(origin, { x:p.x, z:p.z })) return;
     const ang = Math.atan2(dx,dz), fa = Math.atan2(e.facing.x, e.facing.z);
-    if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < e.radius + PLAYER_R + .26){
+    const closeRadius = (e.headCollisionRadius > 0 ? e.headCollisionRadius*tuning.heightScale : collisionRadius(e)) + PLAYER_R + .26;
+    if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < closeRadius){
       e.hitDone = true;
       hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
     }
@@ -276,6 +439,11 @@ export function createArenaEnemySystem({
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
+    if(e.role === 'goblin'){
+      e.facingDecisionT -= dt;
+      if(e.facingDecisionT <= 0){ e.facingDecisionT=THREE.MathUtils.randFloat(1.3,2.8); e.facingBias=THREE.MathUtils.randFloat(-.55,.55); }
+    }
+    updateFusionAccessibility(e);
     // knock decay (arena hit reaction)
     e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     // hit-feel body reaction: vertical pop, hit spin, squash timer
@@ -290,13 +458,17 @@ export function createArenaEnemySystem({
     e.squashT = Math.max(0, e.squashT - dt);
 
     if(e.stunned > 0){
+      endRally(e);
       e.stunned -= dt;
       e.vx *= Math.pow(.004, dt); e.vz *= Math.pow(.004, dt);
       e.x += e.vx*dt; e.z += e.vz*dt;
     }
     else if(e.state === 'windup'){
       e.vx = e.vz = 0;
-      if(e.stateTime < e.windup*.45) e.facing = norm(p.x - e.x, p.z - e.z);
+      if(e.stateTime < e.windup*.45){
+        if(e.role === 'goblin') turnFacingToPoint(e,p,dt,e.turnSpeed*.65);
+        else { e.facing=norm(p.x-e.x,p.z-e.z); e.facingAngle=Math.atan2(e.facing.x,e.facing.z); }
+      }
       if(e.stateTime >= e.windup){
         e.state = 'active'; e.stateTime = 0;
         if(e.attack.projectile){ spawnProjectile(e); e.hitDone = true; }
@@ -304,30 +476,38 @@ export function createArenaEnemySystem({
     }
     else if(e.state === 'active'){
       if(!e.attack.projectile){
-        e.x += e.facing.x*1.9*S*dt; e.z += e.facing.z*1.9*S*dt;   // lunge-commit
+        const lungeScale = e.fusion
+          ? ({ pounce:1.05, dart:.72, snatch:.38, chomp:.28, harvest:.18, stomp:.12, charge:1.55, dive:.92, snap:.22, stab:.48 }[e.attack.movement] || .5) * S
+          : 1.9*S;
+        e.x += e.facing.x*lungeScale*dt; e.z += e.facing.z*lungeScale*dt;   // lunge-commit
         if(!e.hitDone) resolveEnemyMelee(e, p);
       }
       if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; }
     }
     else if(e.state === 'recovery'){
       e.vx = e.vz = 0;
-      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown; director.release(e); }
+      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown / tuning.aggression; director.release(e); }
     }
     else {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
-      e.facing = norm(dx,dz);
-      const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d) : null;
-      if(att && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget })){
+      if(e.fusion){ e.facing=norm(dx,dz); e.facingAngle=Math.atan2(e.facing.x,e.facing.z); }
+      const permitted = director.hasApproachPermit(e);
+      const alignment = e.role === 'goblin' ? Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle)) : 0;
+      const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d, p) : null;
+      if(att && permitted && alignment <= e.attackAlign && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
         startEnemyAttack(e, att, p);
       } else {
-        const wantRange = e.useRealCombat ? e.holdDist : (EATK[e.attackId].kind === 'ranged' ? 2.6*S : .92*S);
-        if(d > wantRange + .45*S) seekPlayer(e, p, dt);
-        else deniedBehavior(e, p, dt);
+        if(e.fusion){
+          const wantRange=e.preferredRange;
+          if(d>wantRange+.45*S) seekPlayer(e,p,dt); else moveFusion(e,p,dt,d);
+        } else if(!updateGoblinRally(e,p,dt,d)) moveGoblin(e,p,dt,d);
+        applySeparationSteering(e, dt);
         e.x += e.vx*dt; e.z += e.vz*dt;
       }
     }
+    updateFusionAccessibility(e);
     if(navigation?.resolveMovement){
-      const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, e.radius);
+      const moved = navigation.resolveMovement(previous, { x:e.x - previous.x, z:e.z - previous.z }, collisionRadius(e));
       e.x = moved.x; e.z = moved.z;
     } else {
       const rr = Math.hypot(e.x, e.z);
@@ -336,14 +516,14 @@ export function createArenaEnemySystem({
   }
 
   function resolveBodyCollisions(p){
-    const bodyRadius = e => e.radius * tuning.heightScale * 1.18;
-    for(let pass = 0; pass < 2; pass++){
+    const origins = new Map(enemies.map(e => [e, { x:e.x, z:e.z }]));
+    for(let pass = 0; pass < 4; pass++){
       for(let i = 0; i < enemies.length; i++){
         const a = enemies[i]; if(a.hp <= 0) continue;
         for(let j = i+1; j < enemies.length; j++){
           const b = enemies[j]; if(b.hp <= 0) continue;
           let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx,dz);
-          const min = (bodyRadius(a) + bodyRadius(b)) * 1.04;
+          const min = separationRadius(a) + separationRadius(b) + .22;
           if(d >= min) continue;
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
           const push = (min - d) * .5 / d;
@@ -351,32 +531,44 @@ export function createArenaEnemySystem({
         }
         // keep enemies out of the player's body (the arena owns player pos, so we
         // only move the enemy — this is what stops a lunge from ending on top of you)
-        const e = a; let dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz), min = bodyRadius(e) + PLAYER_R;
-        if(d < min){
-          if(d < 1e-4){ const angle = (e.id * 2.399963) % (Math.PI*2); dx = Math.cos(angle); dz = Math.sin(angle); d = 1; }
-          const push = (min - d) / d; e.x += dx*push; e.z += dz*push;
+        const e = a;
+        for(const circle of playerCollisionCircles(e)){
+          let dx = circle.x - p.x, dz = circle.z - p.z, d = Math.hypot(dx,dz), min = circle.radius + PLAYER_R;
+          if(d < 1e-4){ const ang = (e.id * 47 % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
+          if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
         }
       }
     }
     if(navigation?.resolveMovement){
       for(const e of enemies){
-        const projected = navigation.resolveMovement({ x:e.x, z:e.z }, { x:0, z:0 }, e.radius);
+        const origin = origins.get(e) || { x:e.x, z:e.z };
+        const projected = navigation.resolveMovement(origin, { x:e.x - origin.x, z:e.z - origin.z }, collisionRadius(e));
         e.x = projected.x; e.z = projected.z;
       }
     }
   }
 
   /* ---------- punch-style rig pose ---------- */
+  function applyRallyPose(e){
+    e.headRoot.rotation.set(0,0,0);
+    if(e.gesture !== 'rally') return;
+    const u=clamp(e.gestureTime/e.gestureDuration,0,1);
+    const raise=u<.2 ? easeOutCubic(u/.2) : (u>.78 ? 1-easeOutCubic((u-.78)/.22) : 1);
+    const shaking=u>.2&&u<.8 ? Math.sin((u-.2)/.6*Math.PI*6) : 0;
+    e.weaponRigRoot.rotation.x=lerp(e.weaponRigRoot.rotation.x,-2.18,raise);
+    e.weaponRigRoot.rotation.z=shaking*.42*raise;
+    e.weaponRigRoot.position.y=.46*raise;
+    e.torsoRoot.position.y+=Math.abs(shaking)*.07*raise;
+    e.torsoRoot.rotation.z+=shaking*.055*raise;
+    e.headRoot.rotation.y=-shaking*.11*raise;
+  }
   function applyPunchPose(e){
     const k = e.poseScale ?? 1;
     let lean = 0, weaponA = -.4;
     if(e.thrower){
-      // A readable two-beat throw: hide the rock behind the shoulder, then snap
-      // it through the release point. This keeps the ranged role visually unique.
       if(e.state === 'windup'){
         const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1));
         lean = -.18*pr; e.weaponRigRoot.rotation.set(-.35*pr, .55*pr, -.65*pr);
-        e.rockProp?.position.set(.36, e.height*.64, .20 - .42*pr);
       } else if(e.state === 'active'){
         lean = .32; e.weaponRigRoot.rotation.set(.75, -.18, .35);
       } else if(e.state === 'recovery'){
@@ -388,12 +580,12 @@ export function createArenaEnemySystem({
     else if(e.state === 'active'){ lean = .40; weaponA = .9; }
     else if(e.state === 'recovery'){ const pr = clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1); lean = .40*(1-pr); weaponA = .9 - 1.3*pr; }
     else if(e.stunned > 0){ lean = Math.sin(time*26)*.06; }
-    e.torsoRoot.rotation.x = lean;
+    e.torsoRoot.rotation.set(lean,0,0);
     e.torsoRoot.position.y = e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : 0;
-    if(!e.thrower) e.weaponRigRoot.rotation.x = weaponA * k;
+    if(!e.thrower){ e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(weaponA*k,0,0); }
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
-  /* ---------- authored melee rig pose ---------- */
+  /* ---------- authored goblin melee pose ---------- */
   // Maps the enemy state clock onto the real attack's timeline, samples the exact
   // player pose (shared interpreter), then drives the goblin rig: torso coil +
   // the weapon floated at the pose's hold point / tip direction. The rig has no
@@ -419,31 +611,41 @@ export function createArenaEnemySystem({
     _tip.copy(pose.tip).normalize();
     _q.setFromUnitVectors(_UP, _tip); _qr.setFromAxisAngle(_tip, pose.roll); _q.premultiply(_qr);
     _holdV.set(pose.hold.x*(h*G_HOLD), h*G_ANCHOR_Y + pose.hold.y*(h*G_HOLD), r*G_ANCHOR_Z + pose.hold.z*(h*G_HOLD));
-    _gripOff.set(0, GRIP_CENTER, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
+    _gripOff.set(0, e.RIG?.gripCenter ?? -.14, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
     e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(0,0,0); e.weaponRigRoot.scale.setScalar(1);
     e.weaponRoot.position.copy(_holdV).sub(_gripOff);
     e.weaponRoot.quaternion.copy(_q);
     e.weaponRoot.scale.setScalar(e.weaponScale);
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
-  function updateEnemyVisual(e){
-    if(e.useRealCombat) applyRealCombatPose(e); else applyPunchPose(e);
-    e.root.position.set(e.x, e.yOff, e.z);
+  function updateEnemyVisual(e, dt){
+    if(e.fusion){
+      e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
+      fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale * e.visualScale);
+    } else if(e.useRealCombat) applyRealCombatPose(e);
+    else applyPunchPose(e);
+    if(!e.fusion) applyRallyPose(e);
+    e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
     const sq = e.squash * (e.squashT / e.squashMax);
     e.root.scale.set(flashScale * (1 + sq*.45), flashScale * (1 - sq*.36), flashScale * (1 + sq*.45));
     e.root.rotation.z = e.spin * .12;
-    rig.applyGoblinVisual(e, tuning.heightScale, mats);
+    if(e.fusion) rig.updateSharedEnemyMarkers(e, e.height * tuning.heightScale * e.targetScale, mats);
+    else rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
   }
 
   /* ---------- waves ---------- */
-  const MIX = ['grunt','dagger','grunt','rock','dagger','grunt','mace','dagger','grunt'];
+  // Pure strains remain the default; the picker can switch the wave to the
+  // retained goblin roster or focus on one pure strain.
+  const MIX = FUSION_ENEMY_IDS;
+  const GOBLIN_MIX = Object.keys(BASE_ARCHETYPES);
   function chooseSpawnKind(i){
-    if(director.getMode() === 'eliteSpotlight' && i === 0) return 'captain';
-    return MIX[i % MIX.length];
+    if(tuning.spawnKind === 'mixed') return MIX[(wave - 1 + i) % MIX.length];
+    if(tuning.spawnKind === 'goblins') return GOBLIN_MIX[(wave - 1 + i) % GOBLIN_MIX.length];
+    return tuning.spawnKind;
   }
   function spawnPos(){
     const roomPoint = navigation?.randomSpawn?.(activeEncounterRoomId, lastPlayer);
@@ -464,6 +666,7 @@ export function createArenaEnemySystem({
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
     if(e.hp <= 0) return false;
+    endRally(e);
     // hit power (~1 average swing, ~2 charged haymaker) drives the body reaction
     const power = opts.power ?? clamp(amount / 28, .4, 2);
     const pop = opts.pop ?? 1;
@@ -482,7 +685,13 @@ export function createArenaEnemySystem({
       kills++; waveKills++;
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
-      rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron, 1.2 + power * .7);
+      if(e.fusion){
+        fusionRig.shatterMeshes(e.fusionVisual).forEach((mesh, i) => {
+          rig.addDeathPieceFromObject(worldRoot, deathPieces, mesh, null, mesh.material, knock, (1 + i*.025) * (1.05 + power*.35));
+        });
+      } else {
+        rig.shatterGoblin(worldRoot, deathPieces, e, knock, mats.matIron, 1.2 + power * .7);
+      }
       removeEnemy(e);
       return true;
     }
@@ -493,7 +702,10 @@ export function createArenaEnemySystem({
   function clearDeathPieces(){ deathPieces.forEach(p => p.mesh?.parent && p.mesh.parent.remove(p.mesh)); deathPieces.length = 0; }
   function clearEnemies(){
     director.reset();
-    enemies.splice(0).forEach(e => e.root.parent && e.root.parent.remove(e.root));
+    enemies.splice(0).forEach(e => {
+      if(e.fusion) fusionRig.dispose(e.fusionVisual);
+      if(e.root.parent) e.root.parent.remove(e.root);
+    });
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
     clearDeathPieces();
   }
@@ -513,13 +725,18 @@ export function createArenaEnemySystem({
   function update(dt, player){
     lastPlayer = player || lastPlayer;
     time += dt;
-    director.update(dt, { enemies, pressureBudget:director.settings.pressureBudget });
+    director.update(dt, { enemies, player:lastPlayer, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
+    for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
     for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
     resolveBodyCollisions(lastPlayer);
+    for(const e of enemies){
+      e.maxGroundSpeed = Math.max(.1, e.speed * tuning.speedScale);
+      e.visualGroundSpeed = Math.min(e.maxGroundSpeed, Math.hypot(e.x - e._visualStartX, e.z - e._visualStartZ) / Math.max(dt, .001));
+    }
     updateProjectiles(dt, lastPlayer);
-    for(const e of enemies) updateEnemyVisual(e);
+    for(const e of enemies) updateEnemyVisual(e, dt);
     rig.updateDeathPieces(dt, deathPieces);
     // wave clear when everything is dead
     if(!enemies.length && !playerDead()){
@@ -541,18 +758,22 @@ export function createArenaEnemySystem({
     enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
+    setAggression:(v)=>{ tuning.aggression = clamp(Number(v) || 1, .25, 3); director.settings.aggression = tuning.aggression; },
     setCycleOnWaveClear:(v)=>{ director.settings.cycleOnWaveClear = !!v; },
     setWaveSize:(v)=>{ tuning.waveSize = clamp(Math.round(Number(v) || 6), 1, 20); },
     setSpeedScale:(v)=>{ tuning.speedScale = clamp(Number(v) || 1, .25, 1.5); },
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
+    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || kind === 'goblins' || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },
     get hpScale(){ return tuning.hpScale; },
     get waveSize(){ return tuning.waveSize; },
     get idleRangeScale(){ return tuning.idleRangeScale; },
+    get aggression(){ return tuning.aggression; },
+    get spawnKind(){ return tuning.spawnKind; },
     get wave(){ return wave; },
     get waveKills(){ return waveKills; },
     get kills(){ return kills; },

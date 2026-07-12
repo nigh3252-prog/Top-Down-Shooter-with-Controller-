@@ -6,6 +6,7 @@ import { WEAPON_AFFINITIES, getWeaponDamageMultiplier } from '../src/combat-bala
 import { HEAVY_LIGHT_STAGE, lightFollowupForStage, shouldStartBufferedFollowup } from '../src/combat-links.js';
 import { createAttackInterpreter } from '../src/attack-interpreter.js';
 import { ARENA_ENEMY_ARCHETYPES } from '../src/arena-enemies.js';
+import { GOBLIN_WEAPON_SPECS, normalizeGoblinWeaponKind } from '../src/goblin-weapons.js';
 
 class Vector3 {
   constructor(x=0,y=0,z=0){ this.set(x,y,z); this.isVector3=true; }
@@ -66,6 +67,9 @@ for(const [kind,enemy] of Object.entries(ARENA_ENEMY_ARCHETYPES)){
   }
 }
 assert.notDeepEqual(ARENA_ENEMY_ARCHETYPES.dagger.combatAttacks,ARENA_ENEMY_ARCHETYPES.mace.combatAttacks,'dagger and mace roles have different move silhouettes');
+assert.equal(normalizeGoblinWeaponKind('maceGoblin'),'mace','main-combat mace goblin uses the chunky mace');
+assert.equal(normalizeGoblinWeaponKind('spearGoblin'),'spear','main-combat spear goblin uses the chunky spear');
+assert(GOBLIN_WEAPON_SPECS.spear.bladeTip>GOBLIN_WEAPON_SPECS.mace.bladeTip,'chunky spear keeps its reach silhouette');
 const first=interpreter.ATTACKS.vertical5;
 const second=interpreter.ATTACKS.horizontal4;
 assert(first.comboAt<first.total,'link point opens at recovery start, before full completion');
@@ -80,6 +84,8 @@ assert(Math.abs(interpreter.IDLE.hold.x-GUARD_POSES.ochsRight.pose.hold[0])<1e-9
 const recovered=interpreter.sampleAttack(first,first.total,interpreter.work);
 assert(Math.abs(recovered.hold.x-interpreter.IDLE.hold.x)<1e-9,'completed attack returns to the selected stance guard');
 
+// The runtime captures this outgoing pose and uses it as crossfade alpha zero
+// for the next windup, guaranteeing no intervening neutral/guard frame.
 const outgoing=interpreter.P({hold:[0,1,0],tip:[0,1,0]});
 interpreter.sampleAttack(first,first.comboAt,outgoing);
 const incoming=interpreter.P({hold:[0,1,0],tip:[0,1,0]});

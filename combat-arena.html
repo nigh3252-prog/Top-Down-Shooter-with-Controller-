@@ -13,6 +13,7 @@
   #topBar button{pointer-events:auto}
   .tbtn{font-family:inherit;font-size:11px;letter-spacing:.1em;color:#e8a04c;
     background:rgba(18,36,38,.85);border:1px solid #6e3a24;padding:0 12px;border-radius:6px;min-height:36px}
+  .tbtn.icon{width:42px;padding:0;font-size:21px;line-height:1;letter-spacing:0}
   .tbtn:active{background:#2c4a47}
   /* ---- HUD ---- */
   #hud{position:fixed;top:52px;left:max(10px,env(safe-area-inset-left));z-index:10;pointer-events:none}
@@ -82,9 +83,14 @@
   #shuffleBtn:active{background:#2c4a47}
   /* ---- panel ---- */
   #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(78vw,300px);
-    max-height:calc(100vh - 66px);overflow-y:auto;padding:10px 12px 16px;box-sizing:border-box;
+    max-height:calc(100vh - 66px);overflow-y:scroll;padding:10px 12px 16px;box-sizing:border-box;
     background:linear-gradient(180deg,rgba(10,20,22,.94),rgba(10,20,22,.85));
-    border:1px solid #2c4a47;border-radius:8px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+    border:1px solid #2c4a47;border-radius:8px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+    scrollbar-width:auto;scrollbar-color:#6e3a24 #122426}
+  #panel::-webkit-scrollbar{width:22px}
+  #panel::-webkit-scrollbar-track{background:#122426;border-left:1px solid #2c4a47;border-radius:0 8px 8px 0}
+  #panel::-webkit-scrollbar-thumb{background:#6e3a24;border:5px solid #122426;border-radius:12px;min-height:56px}
+  #panel::-webkit-scrollbar-thumb:hover{background:#e8a04c}
   #panel.hidden{display:none}
   #tabs{display:flex;gap:6px;margin-bottom:10px}
   #tabs button{flex:1;font-family:inherit;font-size:10px;letter-spacing:.15em;padding:8px 0;
@@ -100,6 +106,10 @@
   .srow{margin-bottom:22px}
   .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px}
   .sval{color:#e8a04c}
+  .selectRow{margin:4px 0 18px}
+  .selectRow label{display:block;color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;margin-bottom:6px}
+  .selectRow select{width:100%;box-sizing:border-box;font-family:inherit;font-size:10px;letter-spacing:.04em;
+    color:#e8a04c;background:#122426;border:1px solid #2c4a47;border-radius:5px;padding:8px 9px}
   /* slider sits at 84% width so each row keeps an empty gutter on both sides —
      a thumb-free strip to grab when scrolling the panel on a phone */
   #panel input[type=range]{-webkit-appearance:none;appearance:none;width:84%;display:block;margin:6px auto 0;height:24px;background:transparent}
@@ -150,6 +160,7 @@
 <body>
 <div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
+  <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
@@ -204,6 +215,10 @@
     </div>
     <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
     <div class="sbody" id="body-sim">
+      <div class="selectRow">
+        <label for="spawnSelect">ENEMY TYPE</label>
+        <select id="spawnSelect"></select>
+      </div>
       <div id="dirSliders"></div>
     </div>
     <button class="wide" id="resetBtn">RESET FIGHT</button>
@@ -241,6 +256,7 @@ import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
+import { FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
@@ -892,9 +908,17 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   for(const e of [...enemySystem.enemies]){
     if(combatState.hitIds.has(e)) continue;
     const enemyScale = enemySystem.heightScale || 1;
-    const scaledRadius = e.radius * enemyScale;
-    const h = (e.height || e.radius * 2) * enemyScale;
-    const hitSamples = [.24, .52, .80].map(k => new THREE.Vector3(e.x, h * k, e.z));
+    const scaledRadius = e.radius * enemyScale * (e.collisionScale || 1);
+    const h = (e.height || e.radius * 2) * enemyScale * (e.currentTargetScale || e.targetScale || 1);
+    const targetOffsetY = e.targetYOffset || 0;
+    const targetOrigins = [{ x:e.x, z:e.z }];
+    if(e.attackOriginForward > 0){
+      targetOrigins.push({
+        x:e.x + e.facing.x * e.attackOriginForward * enemyScale,
+        z:e.z + e.facing.z * e.attackOriginForward * enemyScale
+      });
+    }
+    const hitSamples = targetOrigins.flatMap(origin => [.24, .52, .80].map(k => new THREE.Vector3(origin.x, targetOffsetY + h * k, origin.z)));
     let best = null;
     for(const zone of zones){
       const a = PC.weaponRoot.localToWorld(zone.from.clone());
@@ -1144,18 +1168,24 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
   startGate.classList.add('hidden');
 });
-const sgFsBtn=document.getElementById('sgFsBtn');
+const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
 function toggleFullscreen(){
   if(!inFullscreen()){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
   else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
 }
+fsBtn.addEventListener('click', toggleFullscreen);
 sgFsBtn.addEventListener('click', toggleFullscreen);
 function syncFsButtons(){
-  sgFsBtn.textContent = inFullscreen()?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
+  const active = inFullscreen();
+  fsBtn.textContent = active?'⤢':'⛶';
+  fsBtn.title = active?'Exit fullscreen':'Enter fullscreen';
+  fsBtn.setAttribute('aria-label', fsBtn.title);
+  sgFsBtn.textContent = active?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
 }
 document.addEventListener('fullscreenchange', syncFsButtons);
 document.addEventListener('webkitfullscreenchange', syncFsButtons);
+syncFsButtons();
 document.getElementById('resetBtn').addEventListener('click', ()=>{ respawn(); toggleMenu(); });
 document.getElementById('weaponBtn').addEventListener('click', ()=>cycleWeapon());
 document.getElementById('stanceBtn').addEventListener('click', ()=>cycleStance());
@@ -1208,9 +1238,25 @@ function updateModePanel(){
   modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
 }
 /* sim sliders */
+const spawnSelect=document.getElementById('spawnSelect');
+[
+  { id:'mixed', label:'Mixed Pure Strains' },
+  { id:'goblins', label:'Goblins Only' },
+  ...FUSION_ENEMY_OPTIONS
+].forEach(({id,label})=>{
+  const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);
+});
+enemySystem.setSpawnKind(StoneSettings.get('arena.spawnKind', enemySystem.spawnKind));
+spawnSelect.value=enemySystem.spawnKind;
+spawnSelect.addEventListener('change', ()=>{
+  enemySystem.setSpawnKind(spawnSelect.value);
+  StoneSettings.set('arena.spawnKind', enemySystem.spawnKind);
+  respawn();
+});
 const DIR_SLIDERS = [
   { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
+  { label:'AGGRESSION',      min:.25,max:3,   step:.05, get:()=>enemySystem.aggression,     set:v=>enemySystem.setAggression(v) },
   { label:'ENEMY SPEED',     min:.25,max:1.5, step:.05, get:()=>enemySystem.speedScale,     set:v=>enemySystem.setSpeedScale(v) },
   { label:'ENEMY HEALTH',    min:.25,max:5,   step:.05, get:()=>enemySystem.hpScale,        set:v=>enemySystem.setHpScale(v) },
   { label:'ENEMY SIZE',      min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
@@ -1223,6 +1269,7 @@ DIR_SLIDERS.forEach(d=>{
   const val=document.createElement('span'); val.className='sval'; val.textContent=d.get();
   lab.textContent=d.label+' '; lab.appendChild(val);
   const inp=document.createElement('input'); inp.type='range';
+  inp.setAttribute('aria-label', d.label);
   inp.min=d.min; inp.max=d.max; inp.step=d.step; inp.value=d.get();
   inp.addEventListener('input', ()=>{ d.set(parseFloat(inp.value)); val.textContent=inp.value; });
   row.appendChild(lab); row.appendChild(inp); dirBox.appendChild(row);
@@ -1319,7 +1366,8 @@ function updateAttackPreviews(){
   const lightMoves = [chainMove(0), chainMove(1)], heavyMove = chainMove(2);
   atkArrow.textContent = lightMoves.map(move=>moveArrow(move?.att || {})).join(' ');
   heavyArrow.textContent = moveArrow(heavyMove?.att || {});
-  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher' || !!combatState.attack;
+  const canBufferLight = !!combatState.attack && !combatState.pending && (arena.chain.stage === 'hit1' || arena.chain.stage === 'heavy') && (combatState.hitIds?.size || 0) > 0;
+  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher' || (!!combatState.attack && !canBufferLight);
   const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || !!combatState.attack;
   atkBtn.classList.toggle('disabled', lightDisabled);
   heavyBtn.classList.toggle('disabled', heavyDisabled);
