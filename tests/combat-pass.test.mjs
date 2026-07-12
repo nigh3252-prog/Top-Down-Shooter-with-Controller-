@@ -59,7 +59,8 @@ assert.equal(lightFollowupForStage('finisher'),null);
 
 const combatModeIds=COMBAT_INPUT_MODES.map(mode=>mode.id);
 assert.deepEqual(combatModeIds,['flow','brawler','precision','legacy']);
-assert.equal(getCombatInputMode('missing').id,DEFAULT_COMBAT_INPUT_MODE,'unknown timing mode falls back to Hades Flow');
+assert.equal(DEFAULT_COMBAT_INPUT_MODE,'brawler','Absolum Brawler is the default timing mode');
+assert.equal(getCombatInputMode('missing').id,DEFAULT_COMBAT_INPUT_MODE,'unknown timing mode falls back to Absolum Brawler');
 
 const flowMode=getCombatInputMode('flow');
 const brawlerMode=getCombatInputMode('brawler');
