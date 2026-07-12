@@ -213,6 +213,11 @@
         <button class="wide" id="stanceBtn">STANCE</button>
       </div>
     </div>
+    <button class="ptitle sect" data-sect="combatTiming" data-label="COMBO TIMING"></button>
+    <div class="sbody" id="body-combatTiming">
+      <div class="modeGrid" id="combatModeGrid"></div>
+      <div class="ptitle" id="combatModeNote" style="margin-top:8px;line-height:1.45"></div>
+    </div>
     <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
     <div class="sbody" id="body-sim">
       <div class="selectRow">
@@ -252,6 +257,7 @@ import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, n
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
+import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
 import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
@@ -366,13 +372,14 @@ const Y_AXIS = new THREE.Vector3(0,1,0);
 const FEEL = createFeelKeys();
 const defaultFeel = () => feelAt(FEEL, 1/3);
 const arena = {
-  charge: { active:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
+  charge: { active:false, queued:false, buttonHeld:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
   swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0 },
-  chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1, pendingStage:null },
+  chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1, pendingStage:null, pendingExpiresAt:0, pendingInput:null },
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
   paused:false, started:false, cycleMode:false,
+  combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
   stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
@@ -425,10 +432,27 @@ const PC = installPlayerCombat({
     resolveAttackFacing(){ return resolveDesiredFacing(); },
     commitFacing(angle){ actorFacing = angle; },
     onAttackStart(info){
+      const queuedInput = arena.chain.pendingInput;
       if(arena.chain.pendingSlot >= 0){
         arena.chain.activeSlot = arena.chain.pendingSlot;
         arena.chain.pendingSlot = -1;
         if(arena.chain.pendingStage){ arena.chain.stage = arena.chain.pendingStage; arena.chain.pendingStage = null; }
+        arena.chain.pendingExpiresAt = 0;
+        arena.chain.pendingInput = null;
+      }
+      if(queuedInput === 'heavy'){
+        arena.charge.queued = false;
+        arena.charge.active = arena.charge.buttonHeld;
+        arena.charge.hold = 0;
+        arena.charge.forceTier = null;
+        arena.charge.tier = 1/3;
+        arena.charge.s = defaultFeel();
+        combatState.chargePull = 0;
+      } else if(queuedInput){
+        arena.charge.queued = false;
+        arena.charge.active = false;
+        arena.charge.forceTier = null;
+        combatState.chargePull = 0;
       }
       arena.swing.staminaSpent = spendStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
@@ -710,6 +734,18 @@ function attackCommitWeight(){
 }
 
 /* ---------- attack flow: light combo + hold-heavy charge ---------- */
+function combatInputMode(){ return getCombatInputMode(arena.combatInputMode); }
+function activeStageForSlot(slot){ return slot === 0 ? 'hit1' : slot === 1 ? 'hit2' : slot === 2 ? 'heavy' : 'idle'; }
+function clearPendingCombatInput(){
+  const c = arena.chain;
+  c.pendingSlot = -1;
+  c.pendingStage = null;
+  c.pendingExpiresAt = 0;
+  c.pendingInput = null;
+  combatState.pending = null;
+  combatState.pendingGroup = null;
+  arena.charge.queued = false;
+}
 function resetChainState(){
   arena.chain.stage = 'idle';
   arena.chain.comboDeadline = 0;
@@ -717,9 +753,7 @@ function resetChainState(){
   arena.chain.inputLockT = 0;
   arena.chain.lightLockT = 0;
   arena.chain.activeSlot = -1;
-  arena.chain.pendingSlot = -1;
-  arena.chain.pendingStage = null;
-  combatState.pending = null; combatState.pendingGroup = null;
+  clearPendingCombatInput();
   combatState.readyLock = 0;
 }
 function lockChain(seconds){
@@ -728,21 +762,32 @@ function lockChain(seconds){
   arena.chain.comboDeadline = 0;
   arena.chain.finisherDeadline = 0;
   arena.chain.activeSlot = -1;
-  arena.chain.pendingSlot = -1;
-  arena.chain.pendingStage = null;
-  combatState.pending = null; combatState.pendingGroup = null;
+  clearPendingCombatInput();
   combatState.readyLock = 1;
 }
 function updateChainTimers(dt){
   const c = arena.chain, now = performance.now()/1000;
+  const mode = combatInputMode();
   c.inputLockT = Math.max(0, c.inputLockT - dt);
   c.lightLockT = Math.max(0, c.lightLockT - dt);
+  if(combatState.attack && combatState.pending && shouldExpireBufferedInput({
+    mode, now, expiresAt:c.pendingExpiresAt,
+    attackTime:combatState.t, comboAt:combatState.attack.comboAt,
+  })){
+    clearPendingCombatInput();
+    c.stage = activeStageForSlot(c.activeSlot);
+  }
   if(c.stage === 'locked' && c.inputLockT <= 0) resetChainState();
-  if(!combatState.attack && c.stage === 'hit1Ready' && now > c.comboDeadline) lockChain(CHAIN.whiffLock);
-  if(!combatState.attack && c.stage === 'finisher' && now > c.finisherDeadline) resetChainState();
-  const inputLock = CHAIN.whiffLock > 0 ? c.inputLockT / CHAIN.whiffLock : 0;
-  const lightLock = CHAIN.postSecondLightLock > 0 ? c.lightLockT / CHAIN.postSecondLightLock : 0;
-  combatState.readyLock = combatState.attack ? 0 : clamp(Math.max(inputLock, lightLock), 0, 1);
+  if(!combatState.attack && c.stage === 'hit1Ready' && now > c.comboDeadline){
+    if(mode.missLock) lockChain(CHAIN.whiffLock);
+    else resetChainState();
+  }
+  if(mode.postSecondLock && !combatState.attack && c.stage === 'finisher' && now > c.finisherDeadline) resetChainState();
+  if(mode.missLock || mode.postSecondLock){
+    const inputLock = CHAIN.whiffLock > 0 ? c.inputLockT / CHAIN.whiffLock : 0;
+    const lightLock = CHAIN.postSecondLightLock > 0 ? c.lightLockT / CHAIN.postSecondLightLock : 0;
+    combatState.readyLock = combatState.attack ? 0 : clamp(Math.max(inputLock, lightLock), 0, 1);
+  } else combatState.readyLock = 0;
 }
 function chainMove(slot){
   if(!arena.stance) return null;
@@ -757,63 +802,97 @@ function startChainMove(move, stage){
   arena.chain.activeSlot = move.slot;
   PC.startCombatAttack(move.key, move.att.group);
 }
-function queueLightFollowup(move, pendingStage){
-  combatState.pending = move.key; combatState.pendingGroup = move.att.group;
-  arena.chain.stage = pendingStage + 'Queued';
-  arena.chain.pendingSlot = move.slot;
-  arena.chain.pendingStage = pendingStage;
+function queueCombatFollowup(move, pendingStage, inputKind){
+  const c = arena.chain, mode = combatInputMode();
+  combatState.pending = move.key;
+  combatState.pendingGroup = move.att.group;
+  c.stage = pendingStage + 'Queued';
+  c.pendingSlot = move.slot;
+  c.pendingStage = pendingStage;
+  c.pendingInput = inputKind;
+  c.pendingExpiresAt = mode.id === 'legacy' ? Infinity : bufferExpiresAt(mode, performance.now()/1000);
+  if(inputKind !== 'heavy') arena.charge.queued = false;
 }
 function finishChainMove(landed){
-  const c = arena.chain, slot = c.activeSlot;
+  const c = arena.chain, slot = c.activeSlot, mode = combatInputMode();
   combatState.chargePull = 0;
   if(c.pendingSlot >= 0) return;
   if(c.stage === HEAVY_LIGHT_STAGE){ resetChainState(); return; }
   if(slot === 0){
-    if(landed){
+    if(landed || !mode.requireHitToLink){
       c.stage = 'hit1Ready';
       c.comboDeadline = performance.now()/1000 + CHAIN.comboWindow;
-    } else lockChain(CHAIN.whiffLock);
+    } else if(mode.missLock) lockChain(CHAIN.whiffLock);
+    else resetChainState();
   } else if(slot === 1){
-    c.stage = 'finisher';
-    c.finisherDeadline = performance.now()/1000 + CHAIN.finisherWindow;
-    c.lightLockT = Math.max(c.lightLockT, CHAIN.postSecondLightLock);
+    if(mode.postSecondLock){
+      c.stage = 'finisher';
+      c.finisherDeadline = performance.now()/1000 + CHAIN.finisherWindow;
+      c.lightLockT = Math.max(c.lightLockT, CHAIN.postSecondLightLock);
+      c.activeSlot = -1;
+    } else resetChainState();
   } else if(slot === 2) resetChainState();
-  if(c.stage !== 'locked') c.activeSlot = -1;
+  if(c.stage !== 'locked' && c.stage !== 'idle' && c.stage !== 'finisher') c.activeSlot = -1;
 }
 function lightDown(){
   if(roomTransition?.active) return;
   if(!canUseCombatInput()) return;
-  if(arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher') return;
+  const mode = combatInputMode();
+  if(mode.postSecondLock && (arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher')) return;
   if(combatState.attack){
-    if(!combatState.hitIds || combatState.hitIds.size <= 0 || combatState.pending) return;
-    const followup = lightFollowupForStage(arena.chain.stage);
+    if(mode.id === 'legacy' && combatState.pending) return;
+    if(mode.requireHitToLink && (!combatState.hitIds || combatState.hitIds.size <= 0)) return;
+    const followup = mode.id === 'legacy'
+      ? lightFollowupForStage(arena.chain.stage)
+      : lightFollowupForActiveMove({ activeSlot:arena.chain.activeSlot, stage:arena.chain.stage, mode });
     if(!followup) return;
     const move = chainMove(followup.slot);
     if(!move) return;
     if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
-    queueLightFollowup(move, followup.pendingStage);
+    queueCombatFollowup(move, followup.pendingStage, 'light');
     return;
   }
   const now = performance.now()/1000;
-  const slot = arena.chain.stage === 'hit1Ready' && now <= arena.chain.comboDeadline ? 1 : 0;
-  if(arena.chain.stage === 'hit1Ready' && slot === 0){ lockChain(CHAIN.whiffLock); return; }
+  let slot = arena.chain.stage === 'hit1Ready' && now <= arena.chain.comboDeadline ? 1 : 0;
+  if(arena.chain.stage === 'hit1Ready' && slot === 0){
+    if(mode.missLock){ lockChain(CHAIN.whiffLock); return; }
+    resetChainState();
+    slot = 0;
+  }
   const move = chainMove(slot);
   if(!move) return;
   if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
-  arena.charge.active = false; combatState.chargePull = 0;
+  arena.charge.active = false;
+  arena.charge.queued = false;
+  combatState.chargePull = 0;
   startChainMove(move, slot === 0 ? 'hit1' : 'hit2');
 }
 function heavyDown(){
   if(roomTransition?.active) return;
-  if(!canUseCombatInput() || combatState.attack) return;
+  arena.charge.buttonHeld = true;
+  if(!canUseCombatInput()) return;
+  const mode = combatInputMode();
+  if(combatState.attack){
+    if(!mode.allowHeavyBuffer || (arena.chain.activeSlot !== 0 && arena.chain.activeSlot !== 1)) return;
+    const move = chainMove(2);
+    if(!move) return;
+    if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
+    arena.charge.queued = true;
+    queueCombatFollowup(move, 'heavy', 'heavy');
+    return;
+  }
   const now = performance.now()/1000;
   if(arena.chain.stage === 'hit1Ready') resetChainState();
-  if(arena.chain.stage === 'finisher' && now > arena.chain.finisherDeadline){ resetChainState(); return; }
+  if(mode.postSecondLock && arena.chain.stage === 'finisher' && now > arena.chain.finisherDeadline){ resetChainState(); return; }
   const move = chainMove(2);
   if(!move) return;
   if(!hasStamina(staminaCostForGroup(move.att.group))){ exhaustFlash(); return; }
-  arena.charge.active = true; arena.charge.hold = 0; arena.charge.forceTier = null;
-  arena.charge.tier = 1/3; arena.charge.s = defaultFeel();
+  arena.charge.active = true;
+  arena.charge.queued = false;
+  arena.charge.hold = 0;
+  arena.charge.forceTier = null;
+  arena.charge.tier = 1/3;
+  arena.charge.s = defaultFeel();
   startChainMove(move, 'heavy');
 }
 function releaseCharge(){
@@ -825,9 +904,10 @@ function releaseCharge(){
   combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
   arena.charge.active = false; arena.charge.forceTier = null; combatState.chargePull = 0;
 }
-function heavyUp(){ releaseCharge(); }
+function heavyUp(){ arena.charge.buttonHeld = false; releaseCharge(); }
 function attackDown(){ lightDown(); }
 function attackUp(){ heavyUp(); }
+
 function beginTestSwing(tier){
   // FEEL-tab debug tool: deliberately not stamina-gated (the swing itself still deducts)
   if(arena.deadT >= 0 || combatState.attack || !arena.stance) return;
@@ -854,7 +934,7 @@ function updateCharge(dt){
 function triggerDodge(){
   const d = arena.dodge;
   if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0) return;
-  arena.charge.active = false; combatState.chargePull = 0;
+  arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
   let dir;
@@ -1009,7 +1089,7 @@ function respawn(){
   transitionView.cameraPush = 0;
   arena.deadT = -1;
   actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
-  arena.charge.active = false; combatState.chargePull = 0;
+  arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   fullRefillStamina();
   rebuildDeck();
@@ -1232,10 +1312,33 @@ DIRECTOR_MODES.forEach(m=>{
   b.addEventListener('click', ()=>setMode(CYCLE_MODE_ID));
   modeGrid.appendChild(b);
 }
+const combatModeGrid=document.getElementById('combatModeGrid');
+const combatModeNote=document.getElementById('combatModeNote');
+function setCombatInputMode(id, { reset = true } = {}){
+  const next = getCombatInputMode(id);
+  arena.combatInputMode = next.id;
+  StoneSettings.set('arena.combatInputMode', next.id);
+  resetChainState();
+  if(reset) respawn();
+  updateModePanel();
+  if(reset) announce(next.label, .9);
+}
+COMBAT_INPUT_MODES.forEach(mode=>{
+  const b=document.createElement('button');
+  b.textContent=mode.label;
+  b.dataset.id=mode.id;
+  b.title=mode.note;
+  b.addEventListener('click', ()=>setCombatInputMode(mode.id));
+  combatModeGrid.appendChild(b);
+});
+
 function updateModePanel(){
   const mode = enemySystem.director.getMode();
   const active = arena.cycleMode ? CYCLE_MODE_ID : mode;
   modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
+  const inputMode = combatInputMode();
+  combatModeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===inputMode.id));
+  combatModeNote.textContent = inputMode.note;
 }
 /* sim sliders */
 const spawnSelect=document.getElementById('spawnSelect');
@@ -1366,9 +1469,21 @@ function updateAttackPreviews(){
   const lightMoves = [chainMove(0), chainMove(1)], heavyMove = chainMove(2);
   atkArrow.textContent = lightMoves.map(move=>moveArrow(move?.att || {})).join(' ');
   heavyArrow.textContent = moveArrow(heavyMove?.att || {});
-  const canBufferLight = !!combatState.attack && !combatState.pending && (arena.chain.stage === 'hit1' || arena.chain.stage === 'heavy') && (combatState.hitIds?.size || 0) > 0;
-  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher' || (!!combatState.attack && !canBufferLight);
-  const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0 || !!combatState.attack;
+  const mode = combatInputMode();
+  const followup = combatState.attack
+    ? (mode.id === 'legacy'
+      ? lightFollowupForStage(arena.chain.stage)
+      : lightFollowupForActiveMove({ activeSlot:arena.chain.activeSlot, stage:arena.chain.stage, mode }))
+    : null;
+  const hitAllowsLink = !mode.requireHitToLink || (combatState.hitIds?.size || 0) > 0;
+  const canBufferLight = !!combatState.attack && !!followup && hitAllowsLink;
+  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0
+    || (mode.postSecondLock && (arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher'))
+    || (!!combatState.attack && !canBufferLight);
+  const canBufferHeavy = !!combatState.attack && mode.allowHeavyBuffer
+    && (arena.chain.activeSlot === 0 || arena.chain.activeSlot === 1);
+  const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0
+    || (!!combatState.attack && !canBufferHeavy);
   atkBtn.classList.toggle('disabled', lightDisabled);
   heavyBtn.classList.toggle('disabled', heavyDisabled);
 }
@@ -1534,7 +1649,7 @@ frame();
 
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
   get mazeWorld(){ return mazeWorld; }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
-  lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing,
+  lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
   playCard, startDeckShuffle };
 
 addEventListener('resize', ()=>{
