@@ -31,8 +31,9 @@
 // install this module before most of its own state exists.
 
 import { ATTACK_GROUPS } from './attacks.js';
-import { buildStoneWeaponMesh } from './weapons.js';
+import { buildStoneWeaponMesh, normalizeStoneWeaponId } from './weapons.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
+import { shouldStartBufferedFollowup } from './combat-links.js';
 
 export function installPlayerCombat(api) {
   const { THREE, scene, materials, facet } = api;
@@ -68,7 +69,7 @@ export function installPlayerCombat(api) {
   // src/attack-interpreter.js so the player and the arena grunt animate from the
   // exact same choreography and code. Everything weapon-specific stays here.
   const interpreter = createAttackInterpreter(THREE);
-  const { Ease, smoothstep, P, poseLerp, work, IDLE, sampleAttack, ATTACKS } = interpreter;
+  const { Ease, smoothstep, P, poseLerp, poseCopy, work, IDLE, setIdlePose, sampleAttack, ATTACKS } = interpreter;
 
   const DEFAULT_COMBAT_SCALE = 4.00;
   const combatState = {
@@ -78,6 +79,13 @@ export function installPlayerCombat(api) {
     commitYaw:0, lastAttackLabel:'none',
     hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, chargePull:0, readyLock:0
   };
+  const lastRenderedPose=P({hold:[0,1,0],tip:[0,1,0]});
+  const linkFromPose=P({hold:[0,1,0],tip:[0,1,0]});
+  const linkWorkPose=P({hold:[0,1,0],tip:[0,1,0]});
+  const readyFromPose=P({hold:[0,1,0],tip:[0,1,0]});
+  let haveRenderedPose=false, linkBlendElapsed=-1, readyBlendElapsed=-1;
+  const READY_BLEND_DURATION=.16;
+  const LINK_BLEND_DURATION=.085;
   const COMBAT_ORIGIN = new THREE.Vector3(0,-0.30,0.42);
   const weaponBaseLocal = new THREE.Vector3(0,RIG.bladeBase,0);
   const weaponTipLocal = new THREE.Vector3(0,RIG.bladeTip,0);
@@ -126,10 +134,10 @@ export function installPlayerCombat(api) {
       add('rapierTip','Rapier tip','pierce',.88,1.06,.15,grp==='stab'?36:14,1.05,0,0,'stab');
       add('rapierSide','Rapier side','weak',.20,.82,.07,grp==='stab'?6:5,.25,0,0,'swing');
       add('rapierGuard','Rapier guard','blunt',-.05,.04,.12,4,.20,0,0,'any');
-    } else if(kind==='saber'){
-      add('saberTip','Saber tip','pierce',.88,1.06,.14,grp==='stab'?18:10,.72,0,0,'stab');
-      add('saberEdge','Curved edge','slice',.22,.92,.15,grp==='horizontal'?27:(grp==='vertical'?23:12),1.00,0,0,'swing');
-      add('saberGuard','Guard','blunt',-.07,.06,.13,5,.26,0,0,'any');
+    } else if(kind==='katana'){
+      add('katanaKissaki','Katana kissaki','pierce',.88,1.06,.14,grp==='stab'?20:11,.76,0,0,'stab');
+      add('katanaHa','Katana cutting edge','slice',.20,.94,.15,grp==='horizontal'?28:(grp==='vertical'?25:13),1.04,0,0,'swing');
+      add('katanaTsuba','Tsuba / pommel','blunt',-.08,.06,.13,5,.26,0,0,'any');
     } else if(kind==='spear'){
       add('spearTip','Spear head','pierce',.84,1.08,.20,grp==='stab'?34:24,1.18,0,0,'any');
       add('spearShaft','Spear shaft','blunt',.12,.78,.11,8,.42,0,0,'any');
@@ -187,6 +195,7 @@ export function installPlayerCombat(api) {
   /* ---- weapon lifecycle --------------------------------------------------- */
   function selectCombatWeapon(id){
     const WEAPONS=api.WEAPONS;
+    id=normalizeStoneWeaponId(id);
     if(!WEAPONS[id]) return;
     combatState.weapon=id;
     combatState.tune=Object.assign({},TUNE_DEFAULTS,WEAPONS[id].tune||{});
@@ -210,6 +219,10 @@ export function installPlayerCombat(api) {
   }
   function startCombatAttack(key,group,labEvent=null){
     const att=ATTACKS[key]; if(!att) return;
+    const linking=!!combatState.attack && haveRenderedPose;
+    if(linking) poseCopy(lastRenderedPose,linkFromPose);
+    linkBlendElapsed=linking ? 0 : -1;
+    readyBlendElapsed=-1;
     const aim=hooks.resolveAttackFacing?.();
     if(aim){
       combatState.commitYaw=aim.angle;
@@ -226,7 +239,14 @@ export function installPlayerCombat(api) {
     const picked=chooseAttack(name); if(!picked) return;
     hooks.flashCombatButton?.(picked.group);
     if(!combatState.attack) startCombatAttack(picked.key,picked.group);
-    else { combatState.pending=picked.key; combatState.pendingGroup=picked.group; if(combatState.t>combatState.attack.comboAt){startCombatAttack(picked.key,picked.group); combatState.pending=null; combatState.pendingGroup=null;} }
+    else { combatState.pending=picked.key; combatState.pendingGroup=picked.group; }
+  }
+
+  function setReadyPose(pose){
+    if(!pose) return IDLE;
+    if(!combatState.attack && haveRenderedPose){ poseCopy(lastRenderedPose,readyFromPose); readyBlendElapsed=0; }
+    setIdlePose(pose);
+    return IDLE;
   }
   function getAttackPhaseIndex(att,t){if(!att) return -1; for(let i=0;i<att.phases.length;i++){if(t<=att.phases[i].t1) return i;} return att.phases.length-1;}
   function currentAttackTimeScale(att,t){
@@ -409,27 +429,49 @@ export function installPlayerCombat(api) {
     }
     combatState._lastTipScene = tipScene;
   }
+  function completeCombatAttack(){
+    hooks.onAttackComplete?.();
+    if(combatState.pending){
+      const key=combatState.pending, group=combatState.pendingGroup, event=combatState.pendingLabEvent||null;
+      combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
+      startCombatAttack(key,group,event);
+    } else {
+      combatState.attack=null; combatState.t=0; linkBlendElapsed=-1;
+      hooks.onAttackChainIdle?.();
+      if(combatState.loop) setTimeout(()=>triggerCombatAttack(combatState.last),80);
+    }
+  }
   function updateCombat(dt,now,sway,rawDt=dt){
     // hitStop drains on rawDt: under a global hitstop (hit-feel.js) dt is already
     // near-frozen, and draining by it would stretch this micro-stop ~28x.
     let adt=dt; if(combatState.hitStop>0){combatState.hitStop-=rawDt; adt*=.06;}
-    if(combatState.attack){
-      const timeScale=currentAttackTimeScale(combatState.attack,combatState.t); combatState.t += adt / timeScale;
-      if(!combatState.fired && combatState.t>=combatState.attack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
-      if(combatState.t>=combatState.attack.total){
-        hooks.onAttackComplete?.();
-        if(combatState.pending){
-          startCombatAttack(combatState.pending,combatState.pendingGroup,combatState.pendingLabEvent||null);
-          combatState.pending=null; combatState.pendingGroup=null; combatState.pendingLabEvent=null;
-        } else {
-          combatState.attack=null; combatState.t=0;
-          hooks.onAttackChainIdle?.();
-          if(combatState.loop) setTimeout(()=>triggerCombatAttack(combatState.last),80);
-        }
-      }
+    const activeAttack=combatState.attack;
+    if(activeAttack){
+      const timeScale=currentAttackTimeScale(activeAttack,combatState.t); combatState.t += adt / timeScale;
+      if(!combatState.fired && combatState.t>=activeAttack.contactAt){combatState.fired=true; const impactScale=combatState.impactScale ?? 1; combatState.hitStop=.04*combatState.tune.impact*impactScale; combatTrail.flash=.9*combatState.tune.impact*impactScale; combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*combatState.tune.impact*impactScale; if(combatState._lastTipScene) burstCombat(combatState._lastTipScene);}
     }
-    const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : shapeReadyLockPose(poseLerp(IDLE,IDLE,0,work));
+    let p = activeAttack ? shapePoseForWeapon(sampleAttack(activeAttack,combatState.t,work)) : shapeReadyLockPose(poseLerp(IDLE,IDLE,0,work));
+    if(activeAttack && linkBlendElapsed>=0){
+      // Keep the first frame of the incoming attack exactly on the captured
+      // outgoing pose, then blend through the new windup on following frames.
+      const e=smoothstep(0,LINK_BLEND_DURATION,linkBlendElapsed);
+      p=poseLerp(linkFromPose,p,e,linkWorkPose);
+      if(e>=.999) linkBlendElapsed=-1;
+      else linkBlendElapsed+=dt;
+    } else if(!activeAttack && readyBlendElapsed>=0){
+      readyBlendElapsed+=dt;
+      const e=smoothstep(0,READY_BLEND_DURATION,readyBlendElapsed);
+      p=poseLerp(readyFromPose,p,e,linkWorkPose);
+      if(e>=.999) readyBlendElapsed=-1;
+    }
     applyCombatPoseToWarden(p,dt,now,sway);
+    poseCopy(p,lastRenderedPose); haveRenderedPose=true;
+    // A buffered follow-up takes over at the authored recovery boundary. With
+    // no buffered input, the complete recovery still plays into the guard.
+    if(activeAttack && combatState.attack===activeAttack){
+      if(shouldStartBufferedFollowup(activeAttack,combatState.t,combatState.pending)) completeCombatAttack();
+      else if(combatState.t>=activeAttack.total) completeCombatAttack();
+    }
     updateCombatSparks(dt);
   }
   function combatMovePenalty(){ if(!combatState.attack) return 1; return clamp(1 - combatState.tune.weight*.38, .52, .95); }
@@ -448,7 +490,7 @@ export function installPlayerCombat(api) {
     currentWeapon, tuneNum, getCombatScale, getCombatShoulderDrop, getCombatFloorBlend,
     combatToWarden, getWeaponHitboxScale, getWeaponHitZones, getZoneWorld, pointSegmentDistance,
     // lifecycle + machine
-    selectCombatWeapon, applyCombatWeaponTuning, attackGroupFor, chooseAttack,
+    selectCombatWeapon, applyCombatWeaponTuning, attackGroupFor, chooseAttack, setReadyPose,
     startCombatAttack, triggerCombatAttack, getAttackPhaseIndex, currentAttackTimeScale,
     clearWeaponRoot, updateWeaponDynamicVisual, attachCombatToActiveModel, updateCombatArmVisibility,
     resetCombatTrail, updateCombat, combatMovePenalty

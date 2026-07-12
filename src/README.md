@@ -50,12 +50,25 @@ the core page it patched are retired to `archive/`.
   (cylinder-world bend shader, standing-element lean, 2D sky pass, long-lens
   camera). Ported from `bent_horizon_camera_prototype_v7`.
 
+## Recent combat modules
+
+- `guard-poses.js` defines the reusable European and Japanese ready poses
+  selected by authored stance cards.
+- `combat-links.js` contains pure recovery-boundary and light-follow-up
+  decisions shared by the browser runtime and focused node tests.
+- `player-combat.js` now crossfades from the captured outgoing recovery pose
+  into a queued windup, while complete unqueued recoveries return to the active
+  stance guard.
+- `weapons.js` now builds the curved two-handed katana and migrates the retired
+  `saber` weapon id in persisted settings.
+
+## Recent dungeon modules
+
 - `hex-maze.js` — deterministic axial hex-maze carving, dead-end braiding, room segmentation, derived doors, and validation.
 - `hex-maze-navigation.js` — axial/world conversion, shared collision segments, circle movement, wall raycasts, and room-local pathfinding.
 - `hex-maze-renderer.js` — debug rendering plus the active-room-only Three.js world builder, doorway wings, animated door slabs, and collision output.
 - `room-encounters.js` — persistent room-clear and opened-door state for a dungeon run.
 - `room-transition.js` — the input-locking, occluded midpoint room-swap state machine.
-
 ## How the module boundary works
 
 `weapon-lab.html` builds one `LabAPI` object — a getter/setter bag defined in
