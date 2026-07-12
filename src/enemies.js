@@ -1,9 +1,9 @@
 import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-director.js';
 import { ENEMY_ATTACK_BY_KIND } from './enemy-attacks.js';
-import { ATTACK_DEFINITIONS } from './attacks.js';
 import { STANCE_CARDS } from './stance-cards.js';
-import { STONE_WEAPONS, buildStoneWeaponMesh } from './weapons.js';
+import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
+import { createAttackInterpreter } from './attack-interpreter.js';
 
 export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },
@@ -18,33 +18,6 @@ export function spawnCap(wave){ return 7 + wave * 2; }
 
 
 const GOBLIN_KINDS = new Set(['maceGoblin', 'spearGoblin']);
-const Ease = {
-  linear:t=>t,
-  inQuad:t=>t*t,
-  outQuad:t=>t*(2-t),
-  inCubic:t=>t*t*t,
-  outCubic:t=>1-Math.pow(1-t,3),
-  inOutCubic:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,
-  inQuint:t=>t*t*t*t*t,
-  outBack:t=>{const c=1.0;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);}
-};
-
-function makePoseFactory(THREE){
-  const P = o => ({
-    hold:new THREE.Vector3(o.hold[0], o.hold[1], o.hold[2]),
-    tip:new THREE.Vector3(o.tip[0], o.tip[1], o.tip[2]).normalize(),
-    roll:o.roll||0, twist:o.twist||0, pitch:o.pitch||0, lean:o.lean||0,
-    hipTwist:o.hipTwist||0,
-    hip:new THREE.Vector3((o.hip&&o.hip[0])||0,0,(o.hip&&o.hip[2])||0),
-    lower:o.lower||0, lunge:o.lunge||0,
-    head:new THREE.Vector2((o.head&&o.head[0])||0,(o.head&&o.head[1])||0)
-  });
-  const IDLE = P({ hold:[0.16,1.00,0.36], tip:[0.05,0.80,0.55], roll:0.20, twist:-0.16, pitch:0.02, lean:0.03, hipTwist:-0.08, hip:[0,0,0.02], lower:0.04, head:[-0.06,0.05] });
-  function poseLerp(a,b,e,out){ out.hold.lerpVectors(a.hold,b.hold,e); out.tip.lerpVectors(a.tip,b.tip,e).normalize(); out.roll=a.roll+(b.roll-a.roll)*e; out.twist=a.twist+(b.twist-a.twist)*e; out.pitch=a.pitch+(b.pitch-a.pitch)*e; out.lean=a.lean+(b.lean-a.lean)*e; out.hipTwist=a.hipTwist+(b.hipTwist-a.hipTwist)*e; out.hip.lerpVectors(a.hip,b.hip,e); out.lower=a.lower+(b.lower-a.lower)*e; out.lunge=a.lunge+(b.lunge-a.lunge)*e; out.head.lerpVectors(a.head,b.head,e); return out; }
-  function buildAttack(def){ let t=0, contactAt=0; const phases=def.phases.map(ph=>{ const out={ dur:ph.dur, ease:Ease[ph.ease]||Ease.linear, pose:ph.pose==='IDLE'?IDLE:P(ph.pose) }; out.t0=t; t+=out.dur; out.t1=t; if(ph.contact){ out.contact=true; contactAt=out.t1; } return out; }); return { group:def.group, label:def.label, phases, total:t, contactAt, comboAt:phases[phases.length-1]?.t0||0 }; }
-  function sampleAttack(att,t,out){ t=clamp(t,0,att.total); let ph=att.phases[0], i=0; for(;i<att.phases.length;i++){ if(t<=att.phases[i].t1){ ph=att.phases[i]; break; } } if(i>=att.phases.length) ph=att.phases[att.phases.length-1]; const from=i===0?IDLE:att.phases[i-1].pose; const local=ph.dur>0?clamp((t-ph.t0)/ph.dur,0,1):1; return poseLerp(from, ph.pose, ph.ease(local), out); }
-  return { P, IDLE, work:P({hold:[0,1,0],tip:[0,1,0]}), buildAttack, sampleAttack };
-}
 
 export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, materials = {}, directorOptions = {} }){
   const enemies = [];
@@ -66,7 +39,11 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   const tipQ = new THREE.Quaternion();
   const rollQ = new THREE.Quaternion();
   const deathPieces = [];
-  const poseTools = makePoseFactory(THREE);
+  // Use the exact same materialized attack library and sampler as the player.
+  // The old goblin path carried a private, increasingly stale copy of this code.
+  const poseTools = createAttackInterpreter(THREE);
+  const poseScratch = poseTools.P({ hold:[0,1,0], tip:[0,1,0] });
+  const gripOffset = new THREE.Vector3();
   const goblinDebug = { showRig:false, spawnGoblins:true };
   const matByKind = {
     chaser: materials.chaser || new THREE.MeshStandardMaterial({ color: ENEMY_STATS.chaser.color, roughness: .7, flatShading: true }),
@@ -121,7 +98,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     spawnedThisWave++;
     const stance = STANCE_CARDS.find(card => card.id === s.stanceId) || STANCE_CARDS.find(card => card.preferredWeapons?.includes?.(s.weapon)) || STANCE_CARDS[0];
     const e = { id: nextId++, kind, x, z, radius: s.radius, height: s.height, hp: s.hp, maxHp: s.hp, speed: s.speed, stop: s.stop, flash: 0, knockX: 0, knockZ: 0,
-      state:'approach', stateTime:0, attack:null, token:null, facing:{x:0,z:1}, windup:0, active:0, recovery:0, hitDone:false, stunned:0, nearEligible:true, slotIndex:-1, deniedTimer:0, cooldown:THREE.MathUtils.randFloat(.2, 1.1), personality:THREE.MathUtils.randFloat(.85, 1.15), weaponId:s.weapon, stance, comboIndex:0, visualAttack:null, visualAttackKey:null, visualAttackTime:0, visualAttackContactAt:0, visualAttackTotal:0, ...visual };
+      state:'approach', stateTime:0, attack:null, token:null, facing:{x:0,z:1}, windup:0, active:0, recovery:0, hitDone:false, stunned:0, nearEligible:true, slotIndex:-1, deniedTimer:0, cooldown:THREE.MathUtils.randFloat(.2, 1.1), personality:THREE.MathUtils.randFloat(.85, 1.15), weaponId:s.weapon, stance, comboIndex:0, visualAttack:null, visualAttackKey:null, visualAttackTime:0, visualAttackContactAt:0, visualAttackRecoveryAt:0, visualAttackTotal:0, ...visual };
     applyEnemyVisual(e); enemies.push(e); return e;
   }
 
@@ -145,24 +122,53 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
   function moveToSlot(e, p, dt){ const slots = director.getDebugState().slots; const slot = slots[e.slotIndex]; if(!slot){ orbit(e,p,dt); return; } const tx = p.x + Math.cos(slot.angle) * slot.radius, tz = p.z + Math.sin(slot.angle) * slot.radius; const d = Math.hypot(tx-e.x, tz-e.z); const n = norm(tx-e.x, tz-e.z); if(d > .6) steer(e, n.x, n.z, .95, dt); else orbit(e,p,dt,.18); e.facing = norm(p.x - e.x, p.z - e.z); }
   function deniedBehavior(e, p, dt){ if(director.getMode() === 'battleCircle') return moveToSlot(e,p,dt); if(director.getMode() === 'nearFar' && !e.nearEligible){ const away = norm(e.x-p.x, e.z-p.z); if(dist(e,p) < 5 * tuning.idleRangeScale) steer(e, away.x, away.z, .7, dt); else orbit(e,p,dt,.45); return; } orbit(e,p,dt,e.kind === 'brute' ? .35 : .65); }
   function chooseAttack(e, p){ const a = ENEMY_ATTACK_BY_KIND[e.kind]; return a && dist(e,p) <= a.range + .65 ? a : null; }
-  function prepareGoblinAttack(e){ if(!GOBLIN_KINDS.has(e.kind) || !e.stance?.chain?.length) return; const key = e.stance.chain[e.comboIndex % e.stance.chain.length]; const def = ATTACK_DEFINITIONS[key]; e.comboIndex++; e.visualAttackKey = key; e.visualAttack = def ? poseTools.buildAttack(def) : null; e.visualAttackTime = 0; e.visualAttackContactAt = e.visualAttack?.contactAt || 0; e.visualAttackTotal = e.visualAttack?.total || 0; }
-  function startAttack(e, attack){ prepareGoblinAttack(e); e.attack = attack; e.state = 'windup'; e.stateTime = 0; e.windup = attack.windup; e.active = attack.active; e.recovery = attack.recovery; e.hitDone = false; e.facing = norm((lastPlayer.x ?? e.x) - e.x, (lastPlayer.z ?? e.z) - e.z); director.grant(e, attack); }
+  function prepareGoblinAttack(e){
+    if(!GOBLIN_KINDS.has(e.kind) || !e.stance?.chain?.length) return;
+    const key = e.stance.chain[e.comboIndex % e.stance.chain.length];
+    e.comboIndex++;
+    e.visualAttackKey = key;
+    e.visualAttack = poseTools.ATTACKS[key] || null;
+    e.visualAttackTime = 0;
+    e.visualAttackContactAt = e.visualAttack?.contactAt || 0;
+    e.visualAttackRecoveryAt = e.visualAttack?.comboAt || e.visualAttackContactAt;
+    e.visualAttackTotal = e.visualAttack?.total || 0;
+  }
+  function startAttack(e, attack){
+    prepareGoblinAttack(e);
+    // Combat timing, the visible pose, and the hit now share one authored clock.
+    // Keep enemy damage/token/cooldown balance, but identify the actual move.
+    e.attack = e.visualAttack ? { ...attack, name:e.visualAttack.label, attackKey:e.visualAttackKey } : attack;
+    e.state = 'windup'; e.stateTime = 0;
+    e.windup = e.visualAttack?.contactAt || attack.windup;
+    e.active = Math.max(.06, (e.visualAttack?.comboAt || 0) - e.windup) || attack.active;
+    e.recovery = Math.max(.08, (e.visualAttack?.total || 0) - e.windup - e.active) || attack.recovery;
+    e.hitDone = false;
+    e.facing = norm((lastPlayer.x ?? e.x) - e.x, (lastPlayer.z ?? e.z) - e.z);
+    director.grant(e, e.attack);
+  }
   let lastPlayer = { x:0, z:0 };
   function hitPlayer(e, p){ if(p.invulnerable) return; const a = e.attack; const to = norm(p.x-e.x, p.z-e.z); const d = dist(e,p); const dot = to.x * e.facing.x + to.z * e.facing.z; const ang = Math.acos(clamp(dot, -1, 1)); if(d <= a.range + .45 && ang < (a.arc || 1)){ tuning.playerHp = Math.max(0, tuning.playerHp - a.damage); tuning.lastPlayerHit = `${e.kind} ${a.name} hit for ${a.damage}`; } }
 
-  function applyGoblinPose(e, dt){
+  function applyGoblinPose(e){
     if(!GOBLIN_KINDS.has(e.kind) || !e.weaponRigRoot) return;
     const active = e.visualAttack && (e.state === 'windup' || e.state === 'active' || e.state === 'recovery');
-    const p = active ? poseTools.sampleAttack(e.visualAttack, e.visualAttackTime, poseTools.work) : poseTools.IDLE;
-    const scale = .58;
-    e.pelvis.position.set((p.hip.x || 0) * scale, -(p.lower || 0) * .12, (p.hip.z || 0) * scale + (p.lunge || 0) * .45);
-    e.pelvis.rotation.y = p.hipTwist;
-    e.torsoRoot.rotation.set(p.pitch, p.twist, p.lean);
-    e.headRoot.rotation.set(p.head.y, p.head.x, 0);
-    e.weaponRigRoot.position.set(p.hold.x * scale, p.hold.y * scale, p.hold.z * scale);
+    const p = active ? poseTools.sampleAttack(e.visualAttack, e.visualAttackTime, poseScratch) : poseTools.poseLerp(poseTools.IDLE, poseTools.IDLE, 0, poseScratch);
+    const h = e.height, r = e.radius, holdScale = h * .30;
+    e.pelvis.position.set((p.hip.x || 0) * h*.16, -(p.lower || 0) * h*.10, (p.hip.z || 0) * h*.10 + (p.lunge || 0) * r*.70);
+    e.pelvis.rotation.y = p.hipTwist * .65;
+    e.torsoRoot.rotation.set(p.pitch*.35, p.twist*.34, p.lean*.30);
+    e.headRoot.rotation.set(p.head.y*.35, p.head.x*.42, 0);
+    // Place the actual grip, rather than the weapon object's origin, on the
+    // authored hold point. This is the same correction the player rig performs.
     tipQ.setFromUnitVectors(weaponUp, p.tip);
     rollQ.setFromAxisAngle(p.tip, p.roll);
-    e.weaponRigRoot.quaternion.copy(tipQ).multiply(rollQ);
+    tipQ.premultiply(rollQ);
+    const weaponScale = e.kind === 'spearGoblin' ? 1.08 : 1.0;
+    gripOffset.set(0, e.RIG?.gripCenter ?? -.14, 0).applyQuaternion(tipQ).multiplyScalar(weaponScale);
+    e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(0,0,0); e.weaponRigRoot.scale.setScalar(1);
+    e.weaponRoot.position.set(p.hold.x*holdScale, h*.46 + p.hold.y*holdScale, r*.28 + p.hold.z*holdScale).sub(gripOffset);
+    e.weaponRoot.quaternion.copy(tipQ);
+    e.weaponRoot.scale.setScalar(weaponScale);
   }
 
 
@@ -177,19 +183,21 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     rig.addDeathPieceFromObject(worldRoot, deathPieces, e.eye, null, e.eye.material, knock, 1.35);
   }
   function updateGoblinAttackState(e, dt, player){
-    if(!GOBLIN_KINDS.has(e.kind) || !(e.state === 'windup' || e.state === 'active')) return false;
+    if(!GOBLIN_KINDS.has(e.kind) || !(e.state === 'windup' || e.state === 'active' || e.state === 'recovery')) return false;
     const total = e.visualAttackTotal || ((e.attack?.windup || 0) + (e.attack?.active || 0) + (e.attack?.recovery || 0)) || .75;
     const contactAt = e.visualAttackContactAt || Math.min(total, e.attack?.windup || total * .45);
+    const recoveryAt = Math.max(contactAt, e.visualAttackRecoveryAt || contactAt + (e.attack?.active || .1));
     const prev = e.visualAttackTime || 0;
     e.facing = norm(player.x - e.x, player.z - e.z);
     e.visualAttackTime = Math.min(total, prev + dt);
-    e.state = e.visualAttackTime >= contactAt ? 'active' : 'windup';
+    e.state = e.visualAttackTime >= recoveryAt ? 'recovery' : (e.visualAttackTime >= contactAt ? 'active' : 'windup');
     if(!e.hitDone && prev < contactAt && e.visualAttackTime >= contactAt){ hitPlayer(e, player); e.hitDone = true; }
     if(e.visualAttackTime >= total){ director.release(e); e.cooldown = (e.attack?.cooldown || 1) * e.personality; e.attack = null; e.visualAttack = null; e.state = 'approach'; e.stateTime = 0; }
     return true;
   }
 
-  function resolveEnemySpacing(){
+  function collisionRadius(e){ return e.radius * (GOBLIN_KINDS.has(e.kind) ? tuning.heightScale * 1.18 : 1); }
+  function resolveEnemySpacing(player){
     for(let pass = 0; pass < 2; pass++){
       for(let i = 0; i < enemies.length; i++){
         const a = enemies[i]; if(a.state === 'dead') continue;
@@ -197,13 +205,22 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
           const b = enemies[j]; if(b.state === 'dead') continue;
           let dx = b.x - a.x, dz = b.z - a.z;
           let d = Math.hypot(dx, dz);
-          const minD = Math.max(.05, (a.radius + b.radius) * 2);
+          const minD = Math.max(.05, (collisionRadius(a) + collisionRadius(b)) * 1.06);
           if(d >= minD) continue;
           if(d < 1e-4){ const angle = ((a.id * 17 + b.id * 31) % 360) * Math.PI / 180; dx = Math.cos(angle); dz = Math.sin(angle); d = 1; }
           const push = (minD - d) * .5;
           const nx = dx / d, nz = dz / d;
           a.x -= nx * push; a.z -= nz * push;
           b.x += nx * push; b.z += nz * push;
+        }
+        // Visual scale used to be ignored here, so enlarged goblins could stand
+        // mathematically apart while visibly occupying the player and each other.
+        let px = a.x - player.x, pz = a.z - player.z, pd = Math.hypot(px,pz);
+        const playerMin = collisionRadius(a) + .68;
+        if(pd < playerMin){
+          if(pd < 1e-4){ const angle = (a.id * 2.399963) % (Math.PI*2); px = Math.cos(angle); pz = Math.sin(angle); pd = 1; }
+          const push = playerMin - pd;
+          a.x += px/pd * push; a.z += pz/pd * push;
         }
       }
     }
@@ -224,7 +241,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
       else if(dist(e, player) > e.stop * Math.min(tuning.idleRangeScale, 2.5)) approach(e, player, dt); else orbit(e, player, dt, .4);
     }
     e.x += e.knockX * dt; e.z += e.knockZ * dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
-    applyGoblinPose(e, dt);
+    applyGoblinPose(e);
     e.root.position.set(e.x, 0, e.z); e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18; e.root.scale.set(flashScale, flashScale, flashScale); applyEnemyVisual(e);
     if(!GOBLIN_KINDS.has(e.kind)) e.body.material = e.flash > 0 ? matByKind.flash : (e.state === 'active' ? matByKind.active : (e.state === 'windup' ? matByKind.windup : matByKind[e.kind]));
@@ -237,7 +254,7 @@ export function createCombatEnemySystem({ THREE, worldRoot, dungeonScale = 6.5, 
     if(spawnTimer <= 0 && spawnedThisWave < cap && enemies.length < cap){ spawn(chooseSpawnKind()); spawnTimer = nextSpawnDelay(wave); }
     director.update(dt, { enemies, pressureBudget: director.settings.pressureBudget }); director.markNearEligible(enemies, player); director.assignBattleCircleSlots(enemies, player);
     for(const e of [...enemies]) updateEnemy(e, dt, player);
-    resolveEnemySpacing();
+    resolveEnemySpacing(player);
     for(const e of enemies) e.root.position.set(e.x, 0, e.z);
     rig.updateDeathPieces(dt, deathPieces);
   }

@@ -6,12 +6,19 @@ export const GOBLIN_WEAPON_SPECS = {
   grunt:   { bladeBase:.10, bladeTip:1.52, gripCenter:-.20, scale:1.38 },
   dagger:  { bladeBase:.08, bladeTip:1.22, gripCenter:-.18, scale:1.45 },
   mace:    { bladeBase:.10, bladeTip:1.48, gripCenter:-.22, scale:1.38 },
+  spear:   { bladeBase:.10, bladeTip:1.92, gripCenter:-.36, scale:1.42 },
   rock:    { bladeBase:.08, bladeTip:.72,  gripCenter:-.12, scale:1.25 },
   captain: { bladeBase:.10, bladeTip:1.95, gripCenter:-.28, scale:1.36 }
 };
 
+export function normalizeGoblinWeaponKind(kind){
+  return kind === 'maceGoblin' ? 'mace' : (kind === 'spearGoblin' ? 'spear' : kind);
+}
+
 export function buildGoblinWeapon({ THREE, kind, weaponRoot, mats }){
-  const spec = GOBLIN_WEAPON_SPECS[kind] || GOBLIN_WEAPON_SPECS.grunt;
+  // weapon-lab uses legacy species IDs while combat-arena uses role IDs.
+  const weaponKind = normalizeGoblinWeaponKind(kind);
+  const spec = GOBLIN_WEAPON_SPECS[weaponKind] || GOBLIN_WEAPON_SPECS.grunt;
   const add = (geometry, material, position = [0,0,0], rotation = [0,0,0]) => {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(...position); mesh.rotation.set(...rotation);
@@ -27,12 +34,12 @@ export function buildGoblinWeapon({ THREE, kind, weaponRoot, mats }){
     add(new THREE.IcosahedronGeometry(radius*1.45,0),mats.matIron,[0,center-length*.52,0]);
   };
 
-  if(kind === 'dagger'){
+  if(weaponKind === 'dagger'){
     handle(.62,.06,-.19);
     add(new THREE.ConeGeometry(.22,1.14,4),mats.matIron,[.035,.66,0],[0,0,-.035]);
     box(.40,.10,.16,mats.matBronze,[0,.09,0],[0,0,.12]);
     box(.09,.32,.18,mats.matBronze,[.08,.42,.005],[0,0,.14]);
-  } else if(kind === 'mace'){
+  } else if(weaponKind === 'mace'){
     handle(.84,.07,-.18);
     add(new THREE.CylinderGeometry(.065,.085,1.18,6),mats.matBronze,[0,.48,0]);
     const head = add(new THREE.IcosahedronGeometry(.38,1),mats.matIron,[0,1.18,0]);
@@ -43,7 +50,13 @@ export function buildGoblinWeapon({ THREE, kind, weaponRoot, mats }){
       if(z) spike.rotation.x = z>0 ? Math.PI*.5 : -Math.PI*.5;
     });
     wrap(.20,.24); wrap(.62,.22);
-  } else if(kind === 'captain'){
+  } else if(weaponKind === 'spear'){
+    handle(1.18,.06,-.36);
+    add(new THREE.CylinderGeometry(.045,.06,1.70,6),mats.matLeather,[0,.50,0]);
+    add(new THREE.ConeGeometry(.22,.72,4),mats.matIron,[0,1.68,0],[0,0,Math.PI*.25]);
+    box(.34,.10,.17,mats.matBronze,[0,1.28,0],[0,0,.10]);
+    wrap(-.56,.21); wrap(-.28,.21); wrap(.02,.19);
+  } else if(weaponKind === 'captain'){
     handle(.92,.075,-.24);
     box(.66,1.48,.19,mats.matIron,[.07,.88,0],[0,0,-.025]);
     add(new THREE.ConeGeometry(.46,.54,4),mats.matIron,[.07,1.86,0],[0,0,Math.PI*.25]);
@@ -51,7 +64,7 @@ export function buildGoblinWeapon({ THREE, kind, weaponRoot, mats }){
     box(.72,.08,.23,mats.matLeather,[.02,.64,.01],[0,0,-.22]);
     box(.72,.08,.23,mats.matLeather,[.02,1.12,.01],[0,0,.18]);
     box(.18,.36,.21,mats.matBronze,[-.12,1.42,.01],[0,0,.16]);
-  } else if(kind === 'rock'){
+  } else if(weaponKind === 'rock'){
     handle(.46,.065,-.13);
     const stone=add(new THREE.DodecahedronGeometry(.42,0),mats.matIron,[.04,.42,0]);
     stone.scale.set(1.12,.9,1);
@@ -65,7 +78,7 @@ export function buildGoblinWeapon({ THREE, kind, weaponRoot, mats }){
     box(.44,.07,.18,mats.matLeather,[.08,.94,.01],[0,0,-.24]);
   }
 
-  weaponRoot.userData.goblinWeaponKind = kind;
+  weaponRoot.userData.goblinWeaponKind = weaponKind;
   weaponRoot.userData.goblinWeaponSpec = spec;
   weaponRoot.scale.setScalar(spec.scale);
   return spec;
