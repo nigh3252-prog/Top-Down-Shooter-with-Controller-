@@ -1,0 +1,86 @@
+name: Apply D-pad weapon cycling
+
+on:
+  push:
+    branches:
+      - Combo-fix
+    paths:
+      - .github/workflows/apply-dpad-weapon-cycle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Combo-fix
+        uses: actions/checkout@v4
+        with:
+          ref: Combo-fix
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Patch, validate, and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('combat-arena.html')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  "  if(bd(14))mx-=1; if(bd(15))mx+=1; if(bd(12))mz-=1; if(bd(13))mz+=1;\n",
+                  "  // D-pad left/right remain movement; up/down are reserved for weapon testing.\n"
+                  "  if(bd(14))mx-=1; if(bd(15))mx+=1;\n",
+                  'D-pad movement mapping',
+              ),
+              (
+                  "  const strt = bd(9), sel = bd(8);\n",
+                  "  const strt = bd(9), sel = bd(8);\n"
+                  "  const weaponPrev = bd(12), weaponNext = bd(13);\n",
+                  'D-pad weapon buttons',
+              ),
+              (
+                  "  if(rb && !padPrev.rb) playCard(1);\n  if(strt && !padPrev.strt) toggleMenu();\n",
+                  "  if(rb && !padPrev.rb) playCard(1);\n"
+                  "  if(weaponPrev && !padPrev.weaponPrev) cycleWeapon(-1);\n"
+                  "  if(weaponNext && !padPrev.weaponNext) cycleWeapon(1);\n"
+                  "  if(strt && !padPrev.strt) toggleMenu();\n",
+                  'weapon cycle edge presses',
+              ),
+              (
+                  "  padPrev.strt=strt; padPrev.sel=sel;\n",
+                  "  padPrev.strt=strt; padPrev.sel=sel; padPrev.weaponPrev=weaponPrev; padPrev.weaponNext=weaponNext;\n",
+                  'weapon cycle previous state',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+          script = text.split('<script type="module">', 1)[1].split('</script>', 1)[0]
+          Path('/tmp/combat-arena.mjs').write_text(script, encoding='utf-8')
+          PY
+
+          node --check /tmp/combat-arena.mjs
+          npm test
+
+          rm .github/workflows/apply-dpad-weapon-cycle.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add combat-arena.html .github/workflows/apply-dpad-weapon-cycle.yml
+          git commit -m "Add D-pad weapon cycling"
+          git push origin HEAD:Combo-fix
