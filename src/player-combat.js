@@ -34,6 +34,7 @@ import { ATTACK_GROUPS } from './attacks.js';
 import { buildStoneWeaponMesh, normalizeStoneWeaponId } from './weapons.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
 import { shouldStartBufferedFollowup } from './combat-links.js';
+import { RAPIER_TIP_TUNING } from './weapon-balance.js';
 
 export function installPlayerCombat(api) {
   const { THREE, scene, materials, facet } = api;
@@ -131,7 +132,8 @@ export function installPlayerCombat(api) {
     const def=currentWeapon(), kind=def.kind, grp=combatState.attackGroup||'vertical'; const zones=[];
     const add=(id,label,type,from,to,r,damage,stagger=1,x=0,z=0,prefer='any')=>zones.push({id,label,type,from:createZonePoint(from,x,z),to:createZonePoint(to,x,z),radius:r,damage,stagger,prefer});
     if(kind==='rapier'){
-      add('rapierTip','Rapier tip','pierce',.88,1.06,.15,grp==='stab'?36:14,1.05,0,0,'stab');
+      const tip = RAPIER_TIP_TUNING;
+      add('rapierTip','Rapier tip','pierce',tip.from,tip.to,tip.radius,grp==='stab'?tip.damage:14,tip.stagger,0,0,'stab');
       add('rapierSide','Rapier side','weak',.20,.82,.07,grp==='stab'?6:5,.25,0,0,'swing');
       add('rapierGuard','Rapier guard','blunt',-.05,.04,.12,4,.20,0,0,'any');
     } else if(kind==='katana'){
