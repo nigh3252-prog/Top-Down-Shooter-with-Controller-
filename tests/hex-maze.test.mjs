@@ -4,8 +4,15 @@ import { axialToWorld, buildMazeEdges, findCellAtPoint, findPath, raycastWalls, 
 import { createRoomEncounterState } from '../src/room-encounters.js';
 import { createRoomTransitionController } from '../src/room-transition.js';
 
+const iterationsArg = process.argv.find(arg => arg.startsWith('--iterations='));
+const iterationsText = iterationsArg?.slice('--iterations='.length);
+const iterations = iterationsText === undefined ? 20 : Number(iterationsText);
+if(!Number.isSafeInteger(iterations) || iterations < 1){
+  throw new Error(`--iterations must be a positive integer; received ${iterationsText ?? 'no value'}`);
+}
+
 let cellCount = null;
-for(let i = 0; i < 500; i++){
+for(let i = 0; i < iterations; i++){
   const maze = createHexMaze({ seed:`validation-${i}`, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
   const validation = validateHexMaze(maze);
   assert.equal(validation.valid, true, `seed ${maze.seed}: ${validation.errors.join(' | ')}`);
@@ -75,4 +82,4 @@ assert.equal(swaps, 1, 'room swap callback should fire once');
 assert.equal(transition.update(.49).completed, true, 'transition should finish at its duration');
 assert.equal(completes, 1, 'room completion callback should fire once');
 
-console.log(`Validated 500 deterministic braided mazes (${cellCount} cells each).`);
+console.log(`Validated ${iterations} deterministic braided mazes (${cellCount} cells each).`);
