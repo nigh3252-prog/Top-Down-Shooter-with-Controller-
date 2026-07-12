@@ -24,7 +24,7 @@ export function createCombatDirector(options = {}){
   const state = {
     mode:settings.mode, time:0, activeTokens:[], approachers:[], activeRally:null,
     lastRallyTime:-99, cooldownPressure:0, lastThreatTime:-99, nextTokenId:1,
-    waveCleared:false, grantTimes:[]
+    waveCleared:false, grantTimes:[], modeSelectionMigrated:false
   };
   const slots = Array.from({ length:settings.battleCircleSlots }, (_, i) => ({
     angle: -Math.PI * .9 + i * (Math.PI * 1.8 / Math.max(1, settings.battleCircleSlots - 1)),
@@ -46,7 +46,15 @@ export function createCombatDirector(options = {}){
     state.waveCleared = false;
     state.grantTimes.length = 0;
   }
-  function setMode(modeId){ if(modeIds.includes(modeId)) { state.mode = modeId; releaseAll(); } }
+  function setMode(modeId){
+    // Existing players may have the former default persisted in localStorage. Migrate
+    // that first boot selection once; later manual One Attacker selections still work.
+    if(!state.modeSelectionMigrated){
+      state.modeSelectionMigrated = true;
+      if(modeId === 'oneAttacker') modeId = 'pressureBudget';
+    }
+    if(modeIds.includes(modeId)) { state.mode = modeId; releaseAll(); }
+  }
   function getMode(){ return state.mode; }
   function nextMode(){ const i = Math.max(0, modeIds.indexOf(state.mode)); setMode(modeIds[(i + 1) % modeIds.length]); return state.mode; }
   function releaseAll(){
