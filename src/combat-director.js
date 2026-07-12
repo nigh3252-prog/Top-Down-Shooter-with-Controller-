@@ -17,6 +17,24 @@ export const DEFAULT_DIRECTOR_SETTINGS = {
   rangedActiveCap:1, rangedGap:.9, directEngageDelay:.2
 };
 
+const INITIATION_PROFILES = {
+  slash:        { engageRange:7.2, closeSpeed:1.30, preferredRange:3.0, lungeSpeed:9.5,  hop:2.0, minLungeDistance:2.0 },
+  poke:         { engageRange:6.6, closeSpeed:1.45, preferredRange:2.2, lungeSpeed:10.5, hop:1.8, minLungeDistance:1.8 },
+  maceOverhead: { engageRange:7.8, closeSpeed:1.18, preferredRange:4.0, lungeSpeed:7.5,  hop:1.2, minLungeDistance:2.5 },
+  captainSmash: { engageRange:8.8, closeSpeed:1.15, preferredRange:4.6, lungeSpeed:8.2,  hop:2.4, minLungeDistance:2.8 },
+  lionPounce:   { engageRange:8.4, closeSpeed:1.35, preferredRange:3.1, lungeSpeed:12.0, hop:3.4, minLungeDistance:2.2 },
+  spidLegStab:  { engageRange:6.8, closeSpeed:1.55, preferredRange:2.2, lungeSpeed:11.0, hop:1.7, minLungeDistance:1.7 },
+  sunDart:      { engageRange:7.5, closeSpeed:1.45, preferredRange:3.0, lungeSpeed:10.5, hop:2.2, minLungeDistance:2.0 },
+  grabSnatch:   { engageRange:6.5, closeSpeed:1.35, preferredRange:2.0, lungeSpeed:9.0,  hop:1.8, minLungeDistance:1.8 },
+  toothyChomp:  { engageRange:5.8, closeSpeed:1.25, preferredRange:1.8, lungeSpeed:7.5,  hop:1.0, minLungeDistance:1.5 },
+  motherHarvest:{ engageRange:7.2, closeSpeed:1.10, preferredRange:2.8, lungeSpeed:7.0,  hop:1.4, minLungeDistance:2.2 },
+  stiltStomp:   { engageRange:8.4, closeSpeed:1.15, preferredRange:2.8, lungeSpeed:8.0,  hop:2.1, minLungeDistance:2.4 },
+  antCharge:    { engageRange:10.0,closeSpeed:1.55, preferredRange:3.8, lungeSpeed:14.0, hop:3.0, minLungeDistance:2.5 },
+  phoenixDive:  { engageRange:10.0,closeSpeed:1.45, preferredRange:3.4, lungeSpeed:13.0, hop:4.5, minLungeDistance:2.5 },
+  crocSnap:     { engageRange:7.0, closeSpeed:1.50, preferredRange:1.0, lungeSpeed:11.0, hop:.8,  minLungeDistance:1.5 },
+  default:      { engageRange:7.0, closeSpeed:1.30, preferredRange:2.5, lungeSpeed:9.0,  hop:1.8, minLungeDistance:2.0 }
+};
+
 export function createCombatDirector(options = {}){
   const settings = { ...DEFAULT_DIRECTOR_SETTINGS, ...options };
   // The arena previously constructed this director with the old 2.25 budget.
@@ -38,8 +56,10 @@ export function createCombatDirector(options = {}){
   const live = e => e && e.hp > 0 && e.state !== 'dead';
   const distSqTo = (e, p) => { const dx = (p.x ?? 0) - e.x, dz = (p.z ?? 0) - e.z; return dx*dx + dz*dz; };
   const isRangedEnemy = e => !!e?.thrower || e?.attackId === 'rockThrow';
-  const isMeleeGoblin = e => live(e) && e.role === 'goblin' && !isRangedEnemy(e);
+  const isMeleeEnemy = e => live(e) && !!e.attackId && !isRangedEnemy(e);
+  const isMeleeGoblin = e => isMeleeEnemy(e) && e.role === 'goblin';
   const tokenIsCommitting = token => live(token?.enemy) && token.enemy.state !== 'recovery';
+  const initiationProfile = enemy => INITIATION_PROFILES[enemy?.attackId] || INITIATION_PROFILES.default;
 
   function reset(){
     releaseAll();
@@ -95,6 +115,8 @@ export function createCombatDirector(options = {}){
     enemy.approachPermitTime = 0;
     enemy.directEngaged = false;
     enemy.directEngageReadyAt = 0;
+    enemy.directEngageDistance = 0;
+    enemy.directEngageCooldownCap = null;
     enemy.approachCooldown = Math.max(enemy.approachCooldown || 0, cooldown);
   }
   function release(enemy){
@@ -123,13 +145,32 @@ export function createCombatDirector(options = {}){
       attack.damage = damageTargets.get(currentDamage) ?? Math.max(currentDamage + 2, Math.round(currentDamage * 1.18));
     }
     if(Number.isFinite(attack.cooldown)) attack.cooldown = Math.max(.55, attack.cooldown * .82);
+    // Keep attacks readable but remove the long stationary invitation to walk away.
+    // Heavy attacks retain more anticipation than fast pokes and pounces.
+    if(attack.kind === 'melee' && Number.isFinite(attack.windup)){
+      attack.windup = Math.max(.28, attack.windup * (attack.wantsSolo ? .80 : .78));
+    }
     tunedAttacks.add(attack);
   }
 
   function tuneEnemyPressure(enemy, dt){
     if(!live(enemy)) return;
     if(!Number.isFinite(enemy._pressureBaseSpeed)) enemy._pressureBaseSpeed = enemy.speed;
-    const speedMultiplier = enemy.role === 'goblin' ? 1.65 : 1.22;
+    if(!Number.isFinite(enemy._pressureBasePreferredRange)) enemy._pressureBasePreferredRange = enemy.preferredRange;
+    const profile = initiationProfile(enemy);
+    let speedMultiplier = enemy.role === 'goblin' ? 1.65 : 1.22;
+    if(enemy.directEngaged && !enemy.token){
+      speedMultiplier *= profile.closeSpeed;
+      if(Number.isFinite(enemy.directEngageCooldownCap) && enemy.cooldown > 0){
+        enemy.cooldown = Math.min(enemy.cooldown, enemy.directEngageCooldownCap);
+      }
+      enemy.attackAlign = Math.max(enemy.attackAlign || 0, .92);
+      if(enemy.fusion && Number.isFinite(enemy._pressureBasePreferredRange)){
+        enemy.preferredRange = Math.min(enemy._pressureBasePreferredRange, profile.preferredRange);
+      }
+    } else if(enemy.fusion && Number.isFinite(enemy._pressureBasePreferredRange)){
+      enemy.preferredRange = enemy._pressureBasePreferredRange;
+    }
     enemy.speed = enemy._pressureBaseSpeed * speedMultiplier;
     if(enemy.role === 'goblin') enemy.attackAlign = Math.max(enemy.attackAlign || 0, .78);
     // Cooldowns continue ticking in the enemy system; this extra drain removes a
@@ -143,10 +184,12 @@ export function createCombatDirector(options = {}){
     if(state.mode === 'oneAttacker' || state.mode === 'battleCircle' || state.mode === 'wavePacing') return 2;
     return 2;
   }
-  function grantApproach(enemy, { direct=false } = {}){
+  function grantApproach(enemy, { direct=false, lone=false, distance=0 } = {}){
     if(!enemy) return;
     const wasDirect = !!enemy.directEngaged;
-    if(!enemy.approachPermit){
+    // Only goblins consume approach slots. Fusion enemies already own their movement
+    // roles, but can still be marked as the direct-engagement melee claimant.
+    if(enemy.role === 'goblin' && !enemy.approachPermit){
       enemy.approachPermit = true;
       enemy.approachPermitTime = 0;
       enemy.approachCount = (enemy.approachCount || 0) + 1;
@@ -154,8 +197,12 @@ export function createCombatDirector(options = {}){
     }
     if(direct){
       enemy.directEngaged = true;
+      enemy.directEngageDistance = distance;
+      const firstAttack = !enemy._pressureHasAttacked;
+      enemy.directEngageCooldownCap = firstAttack ? (lone ? .02 : .10) : (lone ? .35 : .48);
       if(!wasDirect || !Number.isFinite(enemy.directEngageReadyAt)){
-        enemy.directEngageReadyAt = state.time + Math.max(0, Number(settings.directEngageDelay) || 0);
+        const baseDelay = Math.max(0, Number(settings.directEngageDelay) || 0);
+        enemy.directEngageReadyAt = state.time + (lone ? Math.min(.12, baseDelay) : baseDelay);
       }
       state.directEngagedEnemy = enemy;
       if(enemy.gesture === 'rally'){
@@ -166,14 +213,15 @@ export function createCombatDirector(options = {}){
     }
   }
   function directEngagementRange(enemy){
+    const profile = initiationProfile(enemy);
     const realRange = Number(enemy?.realAtk?.range);
-    if(Number.isFinite(realRange) && realRange > 0) return realRange + 1.1;
+    if(Number.isFinite(realRange) && realRange > 0) return Math.max(profile.engageRange, realRange + 1.1);
     const holdRange = Number(enemy?.holdDist || enemy?.stop);
-    if(Number.isFinite(holdRange) && holdRange > 0) return Math.max(4.2, holdRange);
-    return 5.8;
+    if(Number.isFinite(holdRange) && holdRange > 0) return Math.max(profile.engageRange, holdRange);
+    return profile.engageRange;
   }
-  function assignDirectEngagement(meleeGoblins, player, limit){
-    for(const enemy of meleeGoblins){
+  function assignDirectEngagement(meleeEnemies, player, limit){
+    for(const enemy of meleeEnemies){
       if(enemy !== state.directEngagedEnemy && !enemy.token) enemy.directEngaged = false;
     }
     // A recovering attacker no longer occupies the commitment lane, allowing the
@@ -182,7 +230,7 @@ export function createCombatDirector(options = {}){
       state.directEngagedEnemy = null;
       return;
     }
-    const candidates = meleeGoblins.filter(enemy => {
+    const candidates = meleeEnemies.filter(enemy => {
       if(enemy.token || enemy.state !== 'idle' || enemy.stunned > 0 || enemy.gesture === 'rally') return false;
       const range = directEngagementRange(enemy);
       return distSqTo(enemy, player) <= range * range;
@@ -200,19 +248,21 @@ export function createCombatDirector(options = {}){
       state.directEngagedEnemy.directEngaged = false;
       state.directEngagedEnemy.directEngageReadyAt = 0;
     }
-    if(!chosen.approachPermit && state.approachers.length >= limit){
+    if(chosen.role === 'goblin' && !chosen.approachPermit && state.approachers.length >= limit){
       const replaceable = state.approachers
         .filter(enemy => enemy && !enemy.token && enemy !== chosen)
         .sort((a,b) => distSqTo(b, player) - distSqTo(a, player))[0];
       if(replaceable) releaseApproach(replaceable, .15);
     }
-    grantApproach(chosen, { direct:true });
+    const distance = Math.sqrt(distSqTo(chosen, player));
+    grantApproach(chosen, { direct:true, lone:meleeEnemies.length === 1, distance });
   }
   function assignApproachPermits(enemies, player, context = {}){
     const budget = Number(context.pressureBudget ?? settings.pressureBudget);
+    const meleeEnemies = enemies.filter(isMeleeEnemy);
     // Ranged goblins use the ranged harassment lane and never consume the melee
     // approach roster. Only melee goblins are selected to close on the player.
-    const meleeGoblins = enemies.filter(isMeleeGoblin);
+    const meleeGoblins = meleeEnemies.filter(isMeleeGoblin);
     state.approachers = state.approachers.filter(e => {
       const keep = meleeGoblins.includes(e) && e.stunned <= 0 && e.gesture !== 'rally';
       if(!keep){
@@ -226,7 +276,7 @@ export function createCombatDirector(options = {}){
       if(isMeleeGoblin(e) && !state.approachers.includes(e)) grantApproach(e);
     }
     const limit = approachLimit(budget);
-    assignDirectEngagement(meleeGoblins, player, limit);
+    assignDirectEngagement(meleeEnemies, player, limit);
     while(state.approachers.length < limit){
       // Start closing before the personal cooldown is fully finished so the next
       // attacker can be in position while the current attacker is recovering.
@@ -271,6 +321,22 @@ export function createCombatDirector(options = {}){
     });
   }
 
+  function applyInitiationImpulse(enemy, attack){
+    if(!enemy?.directEngaged || attack?.kind !== 'melee') return false;
+    const profile = initiationProfile(enemy);
+    const distance = Number(enemy.directEngageDistance) || 0;
+    if(distance < profile.minLungeDistance) return false;
+    const aggressionBoost = Math.min(1.18, 1 + Math.max(0, (Number(settings.aggression) || 1) - 1) * .06);
+    const impulse = profile.lungeSpeed * aggressionBoost;
+    const fx = Number(enemy.facing?.x) || 0;
+    const fz = Number(enemy.facing?.z) || 0;
+    enemy.knockX = (Number(enemy.knockX) || 0) + fx * impulse;
+    enemy.knockZ = (Number(enemy.knockZ) || 0) + fz * impulse;
+    if(Number.isFinite(enemy.vyOff)) enemy.vyOff = Math.max(enemy.vyOff, profile.hop);
+    enemy._pressureInitiation = { started:state.time, distance, attackId:enemy.attackId };
+    return true;
+  }
+
   function canGrant(enemy, attack, context = {}){
     if(!live(enemy) || !attack) return false;
     tuneAttack(attack);
@@ -299,7 +365,8 @@ export function createCombatDirector(options = {}){
         if(state.time - state.lastRangedThreatTime < Math.max(.2, Number(settings.rangedGap) || .9) / aggression) return false;
         return impactSlotOpen(attack);
       }
-      if(activeCost('melee') + state.cooldownPressure + attack.tokenCost > budget) return false;
+      const pressureMemory = enemy.directEngaged ? 0 : state.cooldownPressure;
+      if(activeCost('melee') + pressureMemory + attack.tokenCost > budget) return false;
       if(countActiveKind('melee') >= Math.max(1, Number(settings.pressureMeleeCap) || 1)) return false;
       if(!impactSlotOpen(attack)) return false;
       const meleeGap = enemy.directEngaged ? 0 : .1 / aggression;
@@ -310,11 +377,13 @@ export function createCombatDirector(options = {}){
   function grant(enemy, attack){
     tuneAttack(attack);
     if(isMeleeGoblin(enemy) && !enemy.approachPermit) grantApproach(enemy);
-    state.grantTimes.push({ time:state.time, kind:attack.kind });
+    const initiation = applyInitiationImpulse(enemy, attack);
+    state.grantTimes.push({ time:state.time, kind:attack.kind, initiation });
+    enemy._pressureHasAttacked = true;
     if(state.mode === 'chaos') return null;
     const token = {
       id:`t${state.nextTokenId++}`, enemy, attack, cost:attack.tokenCost, kind:attack.kind,
-      started:state.time, impactAt:impactTimeFor(attack)
+      started:state.time, impactAt:impactTimeFor(attack), initiation
     };
     state.activeTokens.push(token);
     enemy.token = token;
@@ -325,6 +394,7 @@ export function createCombatDirector(options = {}){
   }
   function hasApproachPermit(enemy){
     // Ranged enemies are governed by the ranged lane, not the melee approach roster.
+    // Fusion enemies own role-specific movement, so only goblins need explicit slots.
     return enemy?.role !== 'goblin' || isRangedEnemy(enemy) || !!enemy.approachPermit || !!enemy.token;
   }
   function requestRally(enemy){
@@ -343,6 +413,8 @@ export function createCombatDirector(options = {}){
       activeRanged:countActiveKind('ranged'),
       approachers:state.approachers.length,
       directEngagedEnemy:state.directEngagedEnemy?.id || null,
+      directEngageAttackId:state.directEngagedEnemy?.attackId || null,
+      directEngageDistance:state.directEngagedEnemy?.directEngageDistance || 0,
       activeRally:state.activeRally?.id || null,
       activeCost:activeCost('melee'),
       cooldownPressure:state.cooldownPressure,
@@ -350,6 +422,7 @@ export function createCombatDirector(options = {}){
       attacksStarted10s:state.grantTimes.length,
       meleeStarted10s:state.grantTimes.filter(t => t.kind === 'melee').length,
       rangedStarted10s:state.grantTimes.filter(t => t.kind === 'ranged').length,
+      initiationsStarted10s:state.grantTimes.filter(t => t.initiation).length,
       targetApproachers:approachLimit(settings.pressureBudget),
       targetMeleeCap:settings.pressureMeleeCap,
       targetRangedCap:settings.rangedActiveCap,
