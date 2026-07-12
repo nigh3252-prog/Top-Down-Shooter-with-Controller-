@@ -4,6 +4,7 @@ import { GUARD_POSES, guardPoseFor } from '../src/guard-poses.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS, normalizeStoneWeaponId } from '../src/weapons.js';
 import { WEAPON_AFFINITIES, getWeaponDamageMultiplier } from '../src/combat-balance.js';
 import { HEAVY_LIGHT_STAGE, lightFollowupForStage, shouldStartBufferedFollowup } from '../src/combat-links.js';
+import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from '../src/combat-input-modes.js';
 import { createAttackInterpreter } from '../src/attack-interpreter.js';
 
 class Vector3 {
@@ -55,6 +56,37 @@ assert.deepEqual(lightFollowupForStage('hit1'),{slot:1,pendingStage:'hit2'});
 assert.deepEqual(lightFollowupForStage('heavy'),{slot:0,pendingStage:HEAVY_LIGHT_STAGE});
 assert.equal(lightFollowupForStage(HEAVY_LIGHT_STAGE),null,'heavy follow-up cannot chain another light');
 assert.equal(lightFollowupForStage('finisher'),null);
+
+const combatModeIds=COMBAT_INPUT_MODES.map(mode=>mode.id);
+assert.deepEqual(combatModeIds,['flow','brawler','precision','legacy']);
+assert.equal(getCombatInputMode('missing').id,DEFAULT_COMBAT_INPUT_MODE,'unknown timing mode falls back to Hades Flow');
+
+const flowMode=getCombatInputMode('flow');
+const brawlerMode=getCombatInputMode('brawler');
+const precisionMode=getCombatInputMode('precision');
+const legacyMode=getCombatInputMode('legacy');
+assert.equal(flowMode.requireHitToLink,false);
+assert.equal(flowMode.postSecondLock,false);
+assert.equal(legacyMode.requireHitToLink,true);
+assert.equal(legacyMode.postSecondLock,true);
+assert.equal(brawlerMode.persistentBuffer,true);
+assert.equal(bufferExpiresAt(brawlerMode,10),Infinity);
+assert(Math.abs(bufferExpiresAt(flowMode,10)-10.22)<1e-9);
+assert(Math.abs(bufferExpiresAt(precisionMode,10)-10.06)<1e-9);
+assert.deepEqual(lightFollowupForActiveMove({activeSlot:0,stage:'hit1',mode:flowMode}),{slot:1,pendingStage:'hit2'});
+assert.deepEqual(lightFollowupForActiveMove({activeSlot:1,stage:'hit2',mode:flowMode}),{slot:0,pendingStage:'hit1'});
+assert.deepEqual(lightFollowupForActiveMove({activeSlot:2,stage:'heavy',mode:flowMode}),{slot:0,pendingStage:HEAVY_LIGHT_STAGE});
+assert.equal(lightFollowupForActiveMove({activeSlot:1,stage:'hit2',mode:legacyMode}),null);
+assert.equal(lightFollowupForActiveMove({activeSlot:0,stage:HEAVY_LIGHT_STAGE,mode:flowMode}),null);
+assert.equal(shouldExpireBufferedInput({
+  mode:flowMode, now:10.23, expiresAt:10.22, attackTime:.10, comboAt:.20,
+}),true,'an early buffered press expires before its link point');
+assert.equal(shouldExpireBufferedInput({
+  mode:flowMode, now:10.23, expiresAt:10.22, attackTime:.20, comboAt:.20,
+}),false,'a queued press survives once the authored link point is reached');
+assert.equal(shouldExpireBufferedInput({
+  mode:brawlerMode, now:99, expiresAt:10, attackTime:.10, comboAt:.20,
+}),false,'Absolum mode keeps one persistent intent');
 
 const interpreter=createAttackInterpreter(THREE);
 const first=interpreter.ATTACKS.vertical5;
