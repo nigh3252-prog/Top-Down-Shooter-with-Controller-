@@ -22,14 +22,16 @@ const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 // the stand-off distance (see computeRealReach), so spacing tracks the weapon.
 const GOBLIN_WEAPON_SCALE = 1.55;
 
-// Punch TYPES + goblin skin, distances/speeds pre-scaled by S. hp/score unchanged.
-const ARCHETYPES = {
-  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',        score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0, useRealCombat:true, combatAttack:'vertical5' },
-  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',         score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85 },
-  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25 },
-  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',    score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9, thrower:true },
-  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4, isElite:true }
+// Every melee archetype owns a small attacks.js vocabulary. Their weapon,
+// cadence and move silhouettes now create the role—not a shared placeholder dip.
+export const ARENA_ENEMY_ARCHETYPES = {
+  grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00 },
+  dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88 },
+  mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35 },
+  rock:    { hp:38,  radius:.95, height:3.96, speed:2.84, attack:'rockThrow',     score:16, weapon:null,         color:0x7ba85f, bellyColor:0xc2d488, armorColor:0x4d5a30, poseScale:.9,  thrower:true },
+  captain: { hp:170, radius:1.55, height:5.93, speed:2.54, attack:'captainSmash', score:60, weapon:'greatsword', color:0x8fb35a, bellyColor:0xd0dd8a, armorColor:0x6b5230, poseScale:1.4,  combatAttacks:['vertical16','horizontal5','vertical15'], timingScale:1.22, isElite:true }
 };
+const ARCHETYPES = ARENA_ENEMY_ARCHETYPES;
 
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
 const EATK = {
@@ -97,6 +99,23 @@ export function createArenaEnemySystem({
     const tipFwd = p.tip.z * (BLADE_TIP - GRIP_CENTER) * weaponScale;
     return holdZ + tipFwd + ZONE_R*weaponScale;
   }
+  function materializeEnemyAttack(a, attackKey){
+    const combatAtt = interp.ATTACKS[attackKey];
+    if(!combatAtt) return null;
+    const base = EATK[a.attack];
+    const scale = a.timingScale || 1;
+    const activeEnd = Math.max(combatAtt.contactAt, combatAtt.comboAt);
+    return {
+      ...base,
+      name:combatAtt.label,
+      attackKey,
+      combatAtt,
+      windup:combatAtt.contactAt * scale,
+      active:Math.max(.06, activeEnd - combatAtt.contactAt) * scale,
+      recovery:Math.max(.08, combatAtt.total - activeEnd) * scale,
+      range:computeRealReach(combatAtt, { height:a.height, radius:a.radius }, GOBLIN_WEAPON_SCALE),
+    };
+  }
 
   /* ---------- helpers ---------- */
   const dist = (e,p) => Math.hypot((p.x ?? 0) - e.x, (p.z ?? 0) - e.z) || 1;
@@ -124,24 +143,20 @@ export function createArenaEnemySystem({
       rockProp.position.set(.3, a.height*.6, .2); visual.weaponRigRoot.add(rockProp);
     }
     root.position.set(x, 0, z); group.add(root);
-    // Real-combat goblin (grunt): wield the real player weapon + a real basic
-    // attack, and derive its reach/spacing from that geometry.
-    let combatAtt = null, realAtk = null, holdDist = HOLD();
-    if(a.useRealCombat){
-      combatAtt = interp.ATTACKS[a.combatAttack];
-      const reach = computeRealReach(combatAtt, { height:a.height, radius:a.radius }, GOBLIN_WEAPON_SCALE);
-      // Keep the tuned EATK timings/damage/knock for balance; only the range is
-      // replaced by the real, geometry-derived reach.
-      realAtk = { ...EATK[a.attack], range: reach };
-      holdDist = reach * HOLD_FRAC;
+    const realAttacks = (a.combatAttacks || []).map(key => materializeEnemyAttack(a, key)).filter(Boolean);
+    const useRealCombat = realAttacks.length > 0;
+    let combatAtt = realAttacks[0]?.combatAtt || null;
+    const maxReach = realAttacks.reduce((best, attack) => Math.max(best, attack.range), 0);
+    const holdDist = useRealCombat ? maxReach * HOLD_FRAC : HOLD();
+    if(useRealCombat){
       visual.weaponRoot.scale.setScalar(GOBLIN_WEAPON_SCALE);
     }
     const hp = Math.round(a.hp * tuning.hpScale);
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
-      hp, maxHp:hp, speed:a.speed, stop:a.useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
+      hp, maxHp:hp, speed:a.speed, stop:useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       attackId:a.attack, thrower:!!a.thrower, isElite:!!a.isElite,
-      useRealCombat:!!a.useRealCombat, combatAtt, realAtk, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
+      useRealCombat, combatAtt, realAttacks, combatAttackIndex:0, holdDist, weaponScale:GOBLIN_WEAPON_SCALE,
       state:'idle', stateTime:0, cooldown:THREE.MathUtils.randFloat(.2, 1.0), stunned:0,
       attack:null, windup:0, active:0, recovery:0, hitDone:false,
       token:null, facing:{ x:-Math.sign(x)||0, z:-Math.sign(z)||1 }, orbitDir:Math.random()<.5?-1:1,
@@ -199,13 +214,14 @@ export function createArenaEnemySystem({
   /* ---------- attacks ---------- */
   function chooseAttack(e, d){
     if(e.thrower && d < 1.25 * S) return null;              // rock: don't throw point-blank
-    const a = e.useRealCombat ? e.realAtk : EATK[e.attackId];
+    const a = e.useRealCombat ? e.realAttacks[e.combatAttackIndex % e.realAttacks.length] : EATK[e.attackId];
     if(!a) return null;
     return d <= a.range + (a.kind === 'ranged' ? .9*S : .22*S) ? a : null;
   }
   function startEnemyAttack(e, atk, p){
     e.attack = atk; e.state = 'windup'; e.stateTime = 0;
     e.windup = atk.windup; e.active = atk.active; e.recovery = atk.recovery; e.hitDone = false;
+    if(e.useRealCombat){ e.combatAtt = atk.combatAtt; e.combatAttackIndex = (e.combatAttackIndex + 1) % e.realAttacks.length; }
     e.facing = norm(p.x - e.x, p.z - e.z);
     director.grant(e, atk);
   }
@@ -320,13 +336,14 @@ export function createArenaEnemySystem({
   }
 
   function resolveBodyCollisions(p){
+    const bodyRadius = e => e.radius * tuning.heightScale * 1.18;
     for(let pass = 0; pass < 2; pass++){
       for(let i = 0; i < enemies.length; i++){
         const a = enemies[i]; if(a.hp <= 0) continue;
         for(let j = i+1; j < enemies.length; j++){
           const b = enemies[j]; if(b.hp <= 0) continue;
           let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx,dz);
-          const min = a.radius + b.radius;
+          const min = (bodyRadius(a) + bodyRadius(b)) * 1.04;
           if(d >= min) continue;
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
           const push = (min - d) * .5 / d;
@@ -334,8 +351,11 @@ export function createArenaEnemySystem({
         }
         // keep enemies out of the player's body (the arena owns player pos, so we
         // only move the enemy — this is what stops a lunge from ending on top of you)
-        const e = a; const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz) || .001, min = e.radius + PLAYER_R;
-        if(d < min){ const push = (min - d) / d; e.x += dx*push; e.z += dz*push; }
+        const e = a; let dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx,dz), min = bodyRadius(e) + PLAYER_R;
+        if(d < min){
+          if(d < 1e-4){ const angle = (e.id * 2.399963) % (Math.PI*2); dx = Math.cos(angle); dz = Math.sin(angle); d = 1; }
+          const push = (min - d) / d; e.x += dx*push; e.z += dz*push;
+        }
       }
     }
     if(navigation?.resolveMovement){
@@ -350,38 +370,55 @@ export function createArenaEnemySystem({
   function applyPunchPose(e){
     const k = e.poseScale ?? 1;
     let lean = 0, weaponA = -.4;
-    if(e.state === 'windup'){ const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1)); lean = -.38*pr; weaponA = -.4 - 1.6*pr; }
+    if(e.thrower){
+      // A readable two-beat throw: hide the rock behind the shoulder, then snap
+      // it through the release point. This keeps the ranged role visually unique.
+      if(e.state === 'windup'){
+        const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1));
+        lean = -.18*pr; e.weaponRigRoot.rotation.set(-.35*pr, .55*pr, -.65*pr);
+        e.rockProp?.position.set(.36, e.height*.64, .20 - .42*pr);
+      } else if(e.state === 'active'){
+        lean = .32; e.weaponRigRoot.rotation.set(.75, -.18, .35);
+      } else if(e.state === 'recovery'){
+        const pr = clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1);
+        lean = .32*(1-pr); e.weaponRigRoot.rotation.set(.75*(1-pr), -.18*(1-pr), .35*(1-pr));
+      } else e.weaponRigRoot.rotation.set(0,0,0);
+    }
+    else if(e.state === 'windup'){ const pr = easeOutCubic(clamp(e.stateTime/Math.max(e.windup,1e-3),0,1)); lean = -.38*pr; weaponA = -.4 - 1.6*pr; }
     else if(e.state === 'active'){ lean = .40; weaponA = .9; }
     else if(e.state === 'recovery'){ const pr = clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1); lean = .40*(1-pr); weaponA = .9 - 1.3*pr; }
     else if(e.stunned > 0){ lean = Math.sin(time*26)*.06; }
     e.torsoRoot.rotation.x = lean;
     e.torsoRoot.position.y = e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : 0;
-    e.weaponRigRoot.rotation.x = weaponA * k;
+    if(!e.thrower) e.weaponRigRoot.rotation.x = weaponA * k;
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
-  /* ---------- real-combat rig pose (grunt) ---------- */
+  /* ---------- authored melee rig pose ---------- */
   // Maps the enemy state clock onto the real attack's timeline, samples the exact
   // player pose (shared interpreter), then drives the goblin rig: torso coil +
   // the weapon floated at the pose's hold point / tip direction. The rig has no
   // arms, so — like its static weapon — the weapon simply hangs at the grip.
   function applyRealCombatPose(e){
     const att = e.combatAtt;
-    const activeAnim = (att.total - att.contactAt) * .45;   // post-contact swing carried by 'active'
+    const activeEnd = Math.max(att.contactAt, att.comboAt);
     let at = -1;                                            // -1 = idle -> IDLE pose
     if(e.state === 'windup')        at = clamp(e.stateTime/Math.max(e.windup,1e-3),0,1) * att.contactAt;
-    else if(e.state === 'active')   at = att.contactAt + clamp(e.stateTime/Math.max(e.active,1e-3),0,1) * activeAnim;
-    else if(e.state === 'recovery'){ const start = att.contactAt + activeAnim; at = start + clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1) * (att.total - start); }
+    else if(e.state === 'active')   at = att.contactAt + clamp(e.stateTime/Math.max(e.active,1e-3),0,1) * (activeEnd - att.contactAt);
+    else if(e.state === 'recovery') at = activeEnd + clamp(e.stateTime/Math.max(e.recovery,1e-3),0,1) * (att.total - activeEnd);
     const pose = at >= 0 ? interp.sampleAttack(att, at, poseScratch)
                          : interp.poseLerp(interp.IDLE, interp.IDLE, 0, poseScratch);
     const h = e.height, r = e.radius;
     // torso coil — kept light so the weapon swing (pose.tip) reads without the
     // torso rotation double-compounding onto it.
-    e.torsoRoot.rotation.set(pose.pitch*.35, pose.twist*.18, pose.lean*.22);
-    e.torsoRoot.position.set(0, e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : -pose.lower*.10, 0);
+    e.pelvis.position.set(pose.hip.x*h*.16, -pose.lower*h*.10, pose.hip.z*h*.10 + pose.lunge*r*G_LUNGE);
+    e.pelvis.rotation.y = pose.hipTwist*.65;
+    e.torsoRoot.rotation.set(pose.pitch*.35, pose.twist*.34, pose.lean*.30);
+    e.torsoRoot.position.set(0, e.state === 'idle' ? Math.sin(time*2 + e.bobPhase)*.03 : 0, 0);
+    e.headRoot.rotation.set(pose.head.y*.35, pose.head.x*.42, 0);
     // weapon transform in torso-local space (weaponRigRoot stays identity)
     _tip.copy(pose.tip).normalize();
     _q.setFromUnitVectors(_UP, _tip); _qr.setFromAxisAngle(_tip, pose.roll); _q.premultiply(_qr);
-    _holdV.set(pose.hold.x*(h*G_HOLD), h*G_ANCHOR_Y + pose.hold.y*(h*G_HOLD), r*G_ANCHOR_Z + pose.hold.z*(h*G_HOLD) + pose.lunge*(r*G_LUNGE));
+    _holdV.set(pose.hold.x*(h*G_HOLD), h*G_ANCHOR_Y + pose.hold.y*(h*G_HOLD), r*G_ANCHOR_Z + pose.hold.z*(h*G_HOLD));
     _gripOff.set(0, GRIP_CENTER, 0).applyQuaternion(_q).multiplyScalar(e.weaponScale);
     e.weaponRigRoot.position.set(0,0,0); e.weaponRigRoot.rotation.set(0,0,0); e.weaponRigRoot.scale.setScalar(1);
     e.weaponRoot.position.copy(_holdV).sub(_gripOff);

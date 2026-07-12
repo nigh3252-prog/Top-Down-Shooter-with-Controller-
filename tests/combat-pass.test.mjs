@@ -5,6 +5,7 @@ import { STONE_WEAPON_ORDER, STONE_WEAPONS, normalizeStoneWeaponId } from '../sr
 import { WEAPON_AFFINITIES, getWeaponDamageMultiplier } from '../src/combat-balance.js';
 import { HEAVY_LIGHT_STAGE, lightFollowupForStage, shouldStartBufferedFollowup } from '../src/combat-links.js';
 import { createAttackInterpreter } from '../src/attack-interpreter.js';
+import { ARENA_ENEMY_ARCHETYPES } from '../src/arena-enemies.js';
 
 class Vector3 {
   constructor(x=0,y=0,z=0){ this.set(x,y,z); this.isVector3=true; }
@@ -57,6 +58,14 @@ assert.equal(lightFollowupForStage(HEAVY_LIGHT_STAGE),null,'heavy follow-up cann
 assert.equal(lightFollowupForStage('finisher'),null);
 
 const interpreter=createAttackInterpreter(THREE);
+for(const [kind,enemy] of Object.entries(ARENA_ENEMY_ARCHETYPES)){
+  if(enemy.thrower) continue;
+  assert(enemy.combatAttacks?.length>=3,`${kind} has a varied authored attack vocabulary`);
+  for(const attackKey of enemy.combatAttacks){
+    assert(interpreter.ATTACKS[attackKey],`${kind} references real attacks.js move ${attackKey}`);
+  }
+}
+assert.notDeepEqual(ARENA_ENEMY_ARCHETYPES.dagger.combatAttacks,ARENA_ENEMY_ARCHETYPES.mace.combatAttacks,'dagger and mace roles have different move silhouettes');
 const first=interpreter.ATTACKS.vertical5;
 const second=interpreter.ATTACKS.horizontal4;
 assert(first.comboAt<first.total,'link point opens at recovery start, before full completion');
