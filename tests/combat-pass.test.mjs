@@ -82,4 +82,3 @@ interpreter.poseLerp(outgoing,incoming,0,linked);
 assert.deepEqual([linked.hold.x,linked.hold.y,linked.hold.z],[outgoing.hold.x,outgoing.hold.y,outgoing.hold.z]);
 
 console.log('combat pass tests passed');
-
