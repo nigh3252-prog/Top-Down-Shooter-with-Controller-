@@ -3,6 +3,7 @@ import { STANCE_CARDS } from '../src/stance-cards.js';
 import { GUARD_POSES, guardPoseFor } from '../src/guard-poses.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS, normalizeStoneWeaponId } from '../src/weapons.js';
 import { WEAPON_AFFINITIES, getWeaponDamageMultiplier } from '../src/combat-balance.js';
+import { RAPIER_TIP_TUNING, WEAPON_STAMINA_MULTIPLIERS, getWeaponStaminaMultiplier, staminaCostForWeapon, weaponAllowsCleave } from '../src/weapon-balance.js';
 import { HEAVY_LIGHT_STAGE, lightFollowupForStage, shouldStartBufferedFollowup } from '../src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from '../src/combat-input-modes.js';
 import { createAttackInterpreter } from '../src/attack-interpreter.js';
@@ -37,6 +38,25 @@ assert(Number.isFinite(getWeaponDamageMultiplier({
   weaponId:'katana', attackKey:'horizontal4', attackGroup:'horizontal',
   hitType:'slice', zoneId:'katanaHa'
 })),'katana damage resolves through the normal balance path');
+
+const expectedStaminaClasses={
+  longsword:'Medium', dagger:'Light', rapier:'Light', katana:'Medium', whip:'Light',
+  mace:'Medium', spear:'Medium', battleaxe:'Heavy', warhammer:'Heavy', claymore:'Heavy', greatsword:'Heavy'
+};
+for(const [weaponId,staminaClass] of Object.entries(expectedStaminaClasses)){
+  assert.equal(STONE_WEAPONS[weaponId].staminaClass,staminaClass,`${weaponId} has a definite stamina class`);
+  assert.equal(STONE_WEAPONS[weaponId].weightClass,staminaClass,`${weaponId} displays the same definite weight class`);
+}
+assert.deepEqual(WEAPON_STAMINA_MULTIPLIERS,{Light:.5,Medium:1,Heavy:1.5});
+assert.equal(getWeaponStaminaMultiplier(STONE_WEAPONS.rapier),.5);
+assert.equal(staminaCostForWeapon(18,STONE_WEAPONS.rapier),9);
+assert.equal(staminaCostForWeapon(18,STONE_WEAPONS.longsword),18);
+assert.equal(staminaCostForWeapon(18,STONE_WEAPONS.greatsword),27);
+assert.equal(weaponAllowsCleave({weaponDef:STONE_WEAPONS.rapier,attackSlot:0,maxCharge:false}),false);
+assert.equal(weaponAllowsCleave({weaponDef:STONE_WEAPONS.dagger,attackSlot:2,maxCharge:false}),false);
+assert.equal(weaponAllowsCleave({weaponDef:STONE_WEAPONS.whip,attackSlot:2,maxCharge:true}),true);
+assert.equal(weaponAllowsCleave({weaponDef:STONE_WEAPONS.spear,attackSlot:0,maxCharge:false}),true);
+assert.deepEqual(RAPIER_TIP_TUNING,{from:.92,to:1.04,radius:.11,damage:36,stagger:.5});
 
 assert.equal(STANCE_CARDS.length,30);
 const usedGuards=new Set();

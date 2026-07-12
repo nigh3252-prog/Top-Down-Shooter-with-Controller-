@@ -260,6 +260,7 @@ import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js'
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
 import { createStanceDeck, moveArrow } from './src/stance-deck.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
+import { staminaCostForWeapon, weaponAllowsCleave } from './src/weapon-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
 import { FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
@@ -373,7 +374,7 @@ const FEEL = createFeelKeys();
 const defaultFeel = () => feelAt(FEEL, 1/3);
 const arena = {
   charge: { active:false, queued:false, buttonHeld:false, hold:0, tier:1/3, s:defaultFeel(), forceTier:null },
-  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0 },
+  swing:  { s:defaultFeel(), dmgMult:1, knockMult:1, stun:.2, lunge:1, staminaSpent:0, maxChargeCleave:false },
   chain:  { stage:'idle', comboDeadline:0, finisherDeadline:0, inputLockT:0, lightLockT:0, activeSlot:-1, pendingSlot:-1, pendingStage:null, pendingExpiresAt:0, pendingInput:null },
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
@@ -383,7 +384,10 @@ const arena = {
   stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
-function staminaCostForGroup(group){ return STAMINA.costs[group] ?? STAMINA.costs.default; }
+function staminaCostForGroup(group){
+  const base = STAMINA.costs[group] ?? STAMINA.costs.default;
+  return staminaCostForWeapon(base, PC.currentWeapon());
+}
 function hasStamina(cost){ return arena.stamina.v >= cost - 1e-6; }
 function spendStamina(cost){
   const spent = Math.min(arena.stamina.v, Math.max(0, cost));
@@ -454,6 +458,8 @@ const PC = installPlayerCombat({
         arena.charge.forceTier = null;
         combatState.chargePull = 0;
       }
+      arena.swing.maxChargeCleave = false;
+      combatState.singleTargetEnemy = null;
       arena.swing.staminaSpent = spendStamina(staminaCostForGroup(info.group));   // fires exactly once per real swing, combos included
       CombatAudio.onAttackStart({ group: info.group, weapon: info.weapon });
       if(!arena.charge.active) applySwingFeel(defaultFeel());
@@ -470,6 +476,8 @@ const PC = installPlayerCombat({
       }
       finishChainMove(landed);
       arena.swing.staminaSpent = 0;
+      arena.swing.maxChargeCleave = false;
+      combatState.singleTargetEnemy = null;
     },
     onAttackChainIdle(){
       // Explicit light/heavy chain state opens windows from onAttackComplete only.
@@ -899,6 +907,7 @@ function releaseCharge(){
   if(!arena.charge.active) return;
   const base = staminaCostForGroup(combatState.attackGroup);
   const chargeFrac = clamp((arena.charge.tier - 1/3) / (2/3), 0, 1);
+  arena.swing.maxChargeCleave = chargeFrac >= .999;
   arena.swing.staminaSpent += spendStamina(base * (STAMINA.chargeCostMult - 1) * chargeFrac);
   applySwingFeel(arena.charge.s);
   combatState.impactScale = arena.charge.s.impact * Math.max(.25, HitFeel.tuning.master);
@@ -985,7 +994,18 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.hitIds) combatState.hitIds = new Set();
   const zones = PC.getWeaponHitZones();
   detectDoorHits(zones);
-  for(const e of [...enemySystem.enemies]){
+  const weaponDef = PC.currentWeapon();
+  const canCleave = weaponAllowsCleave({
+    weaponDef,
+    attackSlot: arena.chain.activeSlot,
+    maxCharge: arena.swing.maxChargeCleave,
+  });
+  const enemies = [...enemySystem.enemies];
+  if(!canCleave){
+    enemies.sort((a,b)=>Math.hypot(a.x-actorPos.x,a.z-actorPos.y)-Math.hypot(b.x-actorPos.x,b.z-actorPos.y));
+  }
+  for(const e of enemies){
+    if(!canCleave && combatState.singleTargetEnemy && combatState.singleTargetEnemy !== e) continue;
     if(combatState.hitIds.has(e)) continue;
     const enemyScale = enemySystem.heightScale || 1;
     const scaledRadius = e.radius * enemyScale * (e.collisionScale || 1);
@@ -1009,7 +1029,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
       if(bestDist <= threshold){
         if(mazeNavigation.raycastWalls({ x:actorPos.x, z:actorPos.y }, { x:bestCenter.x, z:bestCenter.z })) continue;
         const quality = 1 - clamp(bestDist / threshold, 0, 1);
-        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef: PC.currentWeapon(), attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
+        const weaponMult = getWeaponDamageMultiplier({ weaponId: combatState.weapon, weaponDef, attackKey: combatState.attackKey, attackGroup: combatState.attackGroup, hitType: zone.type, zoneId: zone.id });
         const raw = zone.damage * (.82 + quality * .42) * weaponMult * arena.swing.dmgMult;
         const motion = tipScene.clone().sub(baseScene); if(motion.lengthSq() < 1e-6) motion.set(e.x - actorPos.x, 0, e.z - actorPos.y); motion.normalize();
         const cand = { zone, damage: Math.max(1, Math.round(raw)), point: bestCenter.clone().lerp(tipScene, .25), motion };
@@ -1017,6 +1037,7 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
       }
     }
     if(best){
+      if(!canCleave) combatState.singleTargetEnemy = e;
       combatState.hitIds.add(e);
       const stagger = best.zone.stagger * arena.swing.knockMult * Math.max(0, HitFeel.tuning.knock);
       const killed = enemySystem.damageEnemy(e, best.damage,
@@ -1030,12 +1051,12 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
         damage: best.damage, kill: killed,
         color: HIT_TYPE_COLOR[best.zone.type] || 0xffffff
       });
-      // attacker sells it too: slight recoil away from the impact
       const recoil = .20 * clamp(best.damage / 28, .4, 2) * HitFeel.tuning.master;
       actorPos.x -= best.motion.x * recoil;
       actorPos.y -= best.motion.z * recoil;
       spawnHitEffect(best.point, best.zone.type, best.damage);
       CombatAudio.onDummyEvent({ damage: best.damage, kill: killed });
+      if(!canCleave) break;
     }
   }
 }

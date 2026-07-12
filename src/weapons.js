@@ -20,6 +20,7 @@ export const STONE_WEAPONS = {
   longsword: {
     label: 'Longsword',
     weightClass: 'Medium',
+    staminaClass: 'Medium',
     kind: 'blade',
     baseLength: 1.00,
     profile: 'balanced sword; default testing weapon',
@@ -28,6 +29,7 @@ export const STONE_WEAPONS = {
   dagger: {
     label: 'Dagger',
     weightClass: 'Light',
+    staminaClass: 'Light',
     kind: 'blade',
     baseLength: 0.55,
     profile: 'short, snappy, little recovery',
@@ -36,6 +38,7 @@ export const STONE_WEAPONS = {
   rapier: {
     label: 'Rapier',
     weightClass: 'Light',
+    staminaClass: 'Light',
     kind: 'rapier',
     baseLength: 0.98,
     profile: 'needle tip; best on thrusts with quick recovery',
@@ -43,7 +46,8 @@ export const STONE_WEAPONS = {
   },
   katana: {
     label: 'Katana',
-    weightClass: 'Light/Medium',
+    weightClass: 'Medium',
+    staminaClass: 'Medium',
     kind: 'katana',
     baseLength: 0.98,
     profile: 'two-handed curved cutter; quick draw and committed edge arcs',
@@ -51,7 +55,8 @@ export const STONE_WEAPONS = {
   },
   whip: {
     label: 'Whip',
-    weightClass: 'Light / Reach',
+    weightClass: 'Light',
+    staminaClass: 'Light',
     kind: 'whip',
     baseLength: 1.65,
     profile: 'flexible lash; snaps forward near contact',
@@ -60,6 +65,7 @@ export const STONE_WEAPONS = {
   mace: {
     label: 'Mace',
     weightClass: 'Medium',
+    staminaClass: 'Medium',
     kind: 'mace',
     baseLength: 0.82,
     profile: 'compact blunt head; chunky impact',
@@ -67,7 +73,8 @@ export const STONE_WEAPONS = {
   },
   spear: {
     label: 'Spear',
-    weightClass: 'Medium / Reach',
+    weightClass: 'Medium',
+    staminaClass: 'Medium',
     kind: 'spear',
     baseLength: 1.58,
     profile: 'long shaft; big reach and direct thrusts',
@@ -75,7 +82,8 @@ export const STONE_WEAPONS = {
   },
   battleaxe: {
     label: 'Battle Axe',
-    weightClass: 'Medium/Heavy',
+    weightClass: 'Heavy',
+    staminaClass: 'Heavy',
     kind: 'axe',
     baseLength: 1.02,
     profile: 'top-heavy blade; committed chops',
@@ -84,6 +92,7 @@ export const STONE_WEAPONS = {
   warhammer: {
     label: 'War Hammer',
     weightClass: 'Heavy',
+    staminaClass: 'Heavy',
     kind: 'hammer',
     baseLength: 0.98,
     profile: 'heavy blunt head; slow windup and huge hit feel',
@@ -92,6 +101,7 @@ export const STONE_WEAPONS = {
   claymore: {
     label: 'Claymore',
     weightClass: 'Heavy',
+    staminaClass: 'Heavy',
     kind: 'blade',
     baseLength: 1.48,
     profile: 'big two-handed blade; wide arcs and deep pullback',
@@ -100,6 +110,7 @@ export const STONE_WEAPONS = {
   greatsword: {
     label: 'Greatsword',
     weightClass: 'Heavy',
+    staminaClass: 'Heavy',
     kind: 'blade',
     baseLength: 1.70,
     profile: 'longest rigid blade; extra reach and camera room',
