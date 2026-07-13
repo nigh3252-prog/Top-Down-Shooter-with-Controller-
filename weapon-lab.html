@@ -305,6 +305,10 @@
     </details>
 
     <div class="section">Stance Chain Lab</div>
+    <div class="combat-meta lab-meta" id="abilityCard" data-lab-action="ability" style="cursor:pointer">
+      <strong>⚡ Falcon Pilebunker</strong> <span id="abilityCardState">Ready — C / RB / click</span>
+      <div style="height:4px;background:rgba(255,255,255,.12);border-radius:99px;margin-top:5px;overflow:hidden"><i id="abilityCardFill" style="display:block;height:100%;width:100%;background:#e8a04c"></i></div>
+    </div>
     <div class="combat-meta lab-meta" id="stanceMeta">Stance lab loading…</div>
     <div class="combat-buttons">
       <button class="combat-attack" type="button" data-lab-action="attack">□ Attack<small>next chain hit</small></button>
@@ -458,6 +462,7 @@
   <div class="combat-touch-buttons">
     <button data-combat-touch="stance">Stance</button>
     <button data-combat-touch="attack">Attack</button>
+    <button data-combat-touch="ability">Pilebunker</button>
     <button data-combat-touch="weapon">Weapon</button>
   </div>
 </div>
@@ -477,13 +482,18 @@ import { installLabModes } from './src/lab-modes.js';
 import { installBentWorld } from './src/bent-world.js';
 import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
 import { getWeaponDamageMultiplier } from './src/combat-balance.js';
-import { STANCE_CARDS } from './src/stance-cards.js';
+import { STANCE_CARDS, ABILITY_CARDS } from './src/stance-cards.js';
+import { createPilebunkerAbility } from './src/pilebunker-ability.js';
 import { createCombatEnemySystem } from './src/enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
 import { StoneSettings } from './src/settings.js';
 
 const launchParams = new URLSearchParams(location.search);
 const launchMode = launchParams.get('mode') || 'lab';
+// ?bg=1 keeps the loop ticking while the tab is hidden (automation / testing);
+// normal play still pauses in background tabs via requestAnimationFrame.
+const runInBackground = launchParams.get('bg') === '1';
+function scheduleFrame(fn){ if(runInBackground && document.hidden) setTimeout(fn, 16); else requestAnimationFrame(fn); }
 
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
@@ -1314,6 +1324,7 @@ function canAcceptLabFollowup(){
 }
 function queueExactLabAttack(key,slot){
   const att=ATTACKS[key]; if(!att) return false;
+  if(pilebunkerAbility.active){const st=document.getElementById('status'); if(st) st.textContent='Falcon Pilebunker in progress — wait for the recovery.'; return false;}
   if(!canAcceptLabFollowup()){const st=document.getElementById('status'); if(st) st.textContent='Too early — wait for the combo timing window.'; return false;}
   const group=att.group||attackGroupFor(key); const event=makeLabEvent(key,slot);
   flashCombatButton(group);
@@ -1331,6 +1342,7 @@ function labAttack(){
 function labAction(action){
   if(LabAPI.moveTest?.intercept?.(action)) return;
   if(action==='attack') labAttack();
+  else if(action==='ability') playAbilityCard(ABILITY_CARDS[0]);
   else if(action==='nextStance') nextAuthoredStance();
   else if(action==='randomStance') randomStance();
   else if(action==='nextWeapon') nextWeaponForLab();
@@ -1405,6 +1417,12 @@ const combatDesiredQ = new THREE.Quaternion();
 const combatIdentityQ = new THREE.Quaternion();
 let combatLayer = null, weaponRoot = null, driverDebug = null, rightArmA = null, rightArmB = null, leftArmA = null, leftArmB = null, rightHandProxy = null, leftHandProxy = null;
 let weaponParts = {}, activeWeaponKind = 'blade', haveCombatTip = false;
+
+/* ---------- Falcon Pilebunker ability (deck card, not a weapon/stance) ---------- */
+const pilebunkerAbility = createPilebunkerAbility({ THREE, cooldown: ABILITY_CARDS[0].cooldown });
+window.PB_ABILITY = pilebunkerAbility;   // live-tune rig scale/size from console
+let abilityWasActive = false, abilityPrevHideArms = false, abilityCommitYaw = 0, abilityLungeApplied = 0;
+const abilityShoulderR = new THREE.Vector3();
 const prevCombatTip = new THREE.Vector3();
 
 const combatTrail = (()=>{
@@ -1679,6 +1697,7 @@ function chooseAttack(name){
 }
 function startCombatAttack(key,group,labEvent=null){
   const att=ATTACKS[key]; if(!att) return;
+  if(pilebunkerAbility.active) return;   // the ability owns the body until it finishes
   const aim=resolveDesiredFacing(aimState.moveVec, aimState.moveVec.lengthSq()>0.01);
   combatState.commitYaw=aim.angle;
   actorFacing=aim.angle;
@@ -1796,6 +1815,7 @@ function attachCombatToActiveModel(){
   if(combatLayer) activeModel.remove(combatLayer);
   combatLayer=new THREE.Group(); activeModel.add(combatLayer);
   weaponRoot=new THREE.Group(); combatLayer.add(weaponRoot);
+  pilebunkerAbility.attach(combatLayer);
   rightArmA=makeArmSegment(matCoat); rightArmB=makeArmSegment(matCoat); leftArmA=makeArmSegment(matCoat); leftArmB=makeArmSegment(matCoat);
   rightHandProxy=meshLocalBox(.16,.14,.16,matIron,.008,[0,0,0]); leftHandProxy=meshLocalBox(.16,.14,.16,matIron,.008,[0,0,0]);
   combatLayer.add(rightArmA,rightArmB,leftArmA,leftArmB,rightHandProxy,leftHandProxy);
@@ -1880,11 +1900,106 @@ function updateCombat(dt,now,sway){
       }
     }
   }
-  const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : poseLerp(IDLE,IDLE,0,work);
+  updatePilebunkerAbility(adt,now);
+  const p = combatState.attack ? shapePoseForWeapon(sampleAttack(combatState.attack,combatState.t,work)) : pilebunkerAbility.applyBodyPose(poseLerp(IDLE,IDLE,0,work));
   applyCombatPoseToWarden(p,dt,now,sway);
   updateCombatSparks(dt);
 }
-function combatMovePenalty(){ if(!combatState.attack) return 1; return clamp(1 - combatState.tune.weight*.38, .52, .95); }
+function combatMovePenalty(){ if(pilebunkerAbility.active) return pilebunkerAbility.committed ? .3 : .55; if(!combatState.attack) return 1; return clamp(1 - combatState.tune.weight*.38, .52, .95); }
+
+/* ---------- Falcon Pilebunker ability: play / damage / HUD ---------- */
+function playAbilityCard(card){
+  const st=document.getElementById('status');
+  if(pilebunkerAbility.active) return;
+  if(pilebunkerAbility.cooldown>0){ if(st) st.textContent=`${card.name} recharging — ${pilebunkerAbility.cooldown.toFixed(1)}s.`; return; }
+  if(combatState.attack){ if(st) st.textContent='Too early — finish the current swing first.'; return; }
+  abilityPrevHideArms=combatState.hideArms;
+  combatState.hideArms=true; updateCombatArmVisibility();
+  abilityLungeApplied=0;
+  abilityCommitYaw=actorFacing;
+  pilebunkerAbility.play();
+  CombatAudio.onAttackStart({ group:'stab', weapon:card.name });
+  if(st) st.textContent='FALCON PILEBUNKER!';
+  updateAbilityCardUI();
+}
+function firePilebunkerStrike(hit){
+  if(launchMode!=='combat' || !enemySystem) return;
+  const FIST_R=.45;
+  const fx=Math.sin(abilityCommitYaw), fz=Math.cos(abilityCommitYaw);
+  // High point damage: anything the fist swept through takes the pile strike.
+  for(const e of [...enemySystem.enemies]){
+    const h=(e.height || e.radius*2)*(enemySystem.heightScale||1);
+    const samples=[.24,.52,.80].map(k=>new THREE.Vector3(e.x,h*k,e.z));
+    let d=Infinity, c=samples[1];
+    for(const s of samples){ const dd=pointSegmentDistance(s,hit.prev,hit.point); if(dd<d){d=dd;c=s;} }
+    if(d<=e.radius+FIST_R+.38){
+      const killed=enemySystem.damageEnemy(e,55,{x:fx*2.2,z:fz*2.2});
+      aimState.lastDamage=killed?`defeated ${e.kind}`:`55 blunt vs ${e.kind}`;
+      spawnHitEffect(c.clone().lerp(hit.point,.25),'blunt',55,'Pile Strike');
+      CombatAudio.onDummyEvent({damage:55,kill:killed});
+    }
+  }
+  // Frontal shockwave (Wave of Force): cone falloff with point-blank forgiveness.
+  const range=6.0, cosHalf=.55;
+  for(const e of [...enemySystem.enemies]){
+    const dx=e.x-actorPos.x, dz=e.z-actorPos.y, d=Math.hypot(dx,dz)||1;
+    if(d>range) continue;
+    const nx=dx/d, nz=dz/d;
+    if(d>1.4 && nx*fx+nz*fz<cosHalf) continue;
+    const dmg=Math.max(1,Math.round(24*(1-.45*d/range)));
+    const killed=enemySystem.damageEnemy(e,dmg,{x:nx*2.6,z:nz*2.6});
+    const hh=(e.height || e.radius*2)*(enemySystem.heightScale||1);
+    spawnHitEffect(new THREE.Vector3(e.x,hh*.5,e.z),'blunt',dmg,'Shockwave');
+    CombatAudio.onDummyEvent({damage:dmg,kill:killed});
+  }
+  updateMainStatusLine();
+}
+let abilityCardLastText='';
+function updateAbilityCardUI(){
+  const stateEl=document.getElementById('abilityCardState'), fill=document.getElementById('abilityCardFill'), cardEl=document.getElementById('abilityCard');
+  if(!stateEl || !fill) return;
+  const cd=pilebunkerAbility.cooldown, total=pilebunkerAbility.cooldownTotal||5;
+  let text, pct;
+  if(pilebunkerAbility.active){ text=pilebunkerAbility.phase; pct=100; }
+  else if(cd>0){ text=`Recharging ${cd.toFixed(1)}s`; pct=(1-cd/total)*100; }
+  else { text='Ready — C / RB / click'; pct=100; }
+  if(text!==abilityCardLastText){ stateEl.textContent=text; abilityCardLastText=text; }
+  fill.style.width=pct.toFixed(0)+'%';
+  fill.style.background=pilebunkerAbility.active?'#ff7a4a':(cd>0?'#8a7a55':'#e8a04c');
+  if(cardEl) cardEl.style.opacity=(pilebunkerAbility.active||cd>0)?'.72':'1';
+}
+function updatePilebunkerAbility(adt,now){
+  pilebunkerAbility.update(adt, { shoulderR: abilityShoulderR.set(.72, 1.20-getCombatShoulderDrop(), .36), time: now });
+  if(pilebunkerAbility.active){
+    const ev=pilebunkerAbility.consumeEvents();
+    if(ev.strikeStarted) abilityCommitYaw=actorFacing;
+    if(ev.clicks) CombatAudio.playTest('hitLight');
+    if(ev.slam){
+      combatState.hitStop=.05*pilebunkerAbility.tune.impact;
+      combatState.wobble.vel+=(Math.random()<.5?-1:1)*5.8*pilebunkerAbility.tune.impact;
+      burstCombat(pilebunkerAbility.fistWorld);
+      combatTrail.flash=.9;
+    }
+    if(ev.hit) firePilebunkerStrike(ev.hit);
+    // Real forward lunge along the committed facing (Furious Charge).
+    const target=2.4*pilebunkerAbility.lungeProgress;
+    const delta=target-abilityLungeApplied;
+    if(delta>1e-4){
+      const fx=Math.sin(abilityCommitYaw), fz=Math.cos(abilityCommitYaw);
+      const r=footprintRadius[activeCharacter]||.6, bounds=4.9*dungeonScale;
+      const nx=actorPos.x+fx*delta, nz=actorPos.y+fz*delta;
+      if(!collideBox(nx,actorPos.y,r)) actorPos.x=THREE.MathUtils.clamp(nx,-bounds,bounds);
+      if(!collideBox(actorPos.x,nz,r)) actorPos.y=THREE.MathUtils.clamp(nz,-bounds,bounds);
+      actorRoot.position.set(actorPos.x,0,actorPos.y);
+      abilityLungeApplied=target;
+    }
+  }
+  if(abilityWasActive && !pilebunkerAbility.active){
+    combatState.hideArms=abilityPrevHideArms; updateCombatArmVisibility();
+  }
+  abilityWasActive=pilebunkerAbility.active;
+  updateAbilityCardUI();
+}
 function syncCombatScaleReadout(){
   const slider=document.getElementById('combatScale');
   const out=document.getElementById('combatScaleReadout');
@@ -2098,6 +2213,7 @@ function pollGamepads(){
     if(gpPressed(gp,0) && launchMode !== 'combat') labAction('nextWeapon');    // Cross / A button
     if(gpPressed(gp,4) && launchMode !== 'combat') labAction('rateDown');      // LB
     if(gpPressed(gp,5) && launchMode !== 'combat') labAction('rateUp');        // RB
+    if(gpPressed(gp,5) && launchMode === 'combat') labAction('ability');       // RB — Falcon Pilebunker
     if(gpPressed(gp,9)) toggleFullscreen();
     break;
   }
@@ -2137,6 +2253,7 @@ window.addEventListener('keydown', e => {
     if(k==='j' || k===' ') labAction('attack');
     if(k==='q' || k==='t') labAction('nextStance');
     if(k==='c' && launchMode !== 'combat') labAction('randomStance');
+    if(k==='c' && launchMode === 'combat') labAction('ability');
     if(k==='e' || k==='x') labAction('nextWeapon');
     if(k==='[' && launchMode !== 'combat') labAction('rateDown');
     if(k===']' && launchMode !== 'combat') labAction('rateUp');
@@ -2177,7 +2294,7 @@ function bindCombatTouchControls(){
     stick.addEventListener('pointermove',ev=>{if(ev.buttons) update(ev);});
     stick.addEventListener('pointerup',reset); stick.addEventListener('pointercancel',reset);
   }
-  document.querySelectorAll('[data-combat-touch]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ev.preventDefault(); const a=btn.dataset.combatTouch; if(a==='attack') labAction('attack'); else if(a==='stance') labAction('nextStance'); else if(a==='weapon') labAction('nextWeapon');}));
+  document.querySelectorAll('[data-combat-touch]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ev.preventDefault(); const a=btn.dataset.combatTouch; if(a==='attack') labAction('attack'); else if(a==='stance') labAction('nextStance'); else if(a==='ability') labAction('ability'); else if(a==='weapon') labAction('nextWeapon');}));
 }
 bindCombatTouchControls();
 
@@ -2282,6 +2399,7 @@ function animate() {
   aimState.moveVec.copy(desiredMove);
   const desiredAim = resolveDesiredFacing(desiredMove, isMoving);
   actorFacing = applyAimAndCommitment(desiredAim);
+  if(pilebunkerAbility.active && pilebunkerAbility.committed) actorFacing = abilityCommitYaw;
   updateMainStatusLine();
 
   actorRoot.position.set(actorPos.x, 0, actorPos.y);
@@ -2307,7 +2425,7 @@ function animate() {
   // BENT WORLD: camera scroll-follows the actor, then sky renders under the world.
   BentWorld.update(dt);
   BentWorld.renderFrame();
-  requestAnimationFrame(animate);
+  scheduleFrame(animate);
 }
 
 // Install the remaining src/ modules now that WEAPONS, combatState, ATTACK_GROUPS,

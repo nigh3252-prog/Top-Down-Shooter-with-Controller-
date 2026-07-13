@@ -1,3 +1,16 @@
+// Ability cards live in the same deck as the stance cards, but playing one
+// fires a single self-contained attack without touching the current stance,
+// weapon, or combo position. The Falcon Pilebunker's rig/animation lives in
+// src/pilebunker-ability.js.
+export const ABILITY_CARDS = [
+  {
+    id: 'A01',
+    name: 'Falcon Pilebunker',
+    cooldown: 5,
+    note: 'Piston gauntlet: ratchet windup, lunging pile strike, frontal shockwave.'
+  }
+];
+
 export const STANCE_CARDS = [
   {
     id:'S01',
