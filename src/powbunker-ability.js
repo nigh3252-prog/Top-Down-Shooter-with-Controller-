@@ -51,7 +51,7 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
     const savedMode=localStorage.getItem(STORAGE.weaponMode);
     if(Number.isFinite(savedSize))tuning.size=clamp(savedSize,.14,.40);
     if(Number.isFinite(savedHeight))tuning.armHeight=clamp(savedHeight,-3,3);
-    if(['stance','right','hidden'].includes(savedMode))tuning.weaponMode=savedMode;
+    if(['stance','left','right','hidden'].includes(savedMode))tuning.weaponMode=savedMode;
   }catch(_){}
 
   /* ---------- hidden puppet hierarchy ---------- */
@@ -67,7 +67,7 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
   const REST_SHOULDER_R=V3(.27,1.49,.02);
 
   /* ---------- visible mechanical forearm ---------- */
-  const pb=buildPowBunkerMesh(THREE,1); // exact PB.R orientation from approved demo
+  const pb=buildPowBunkerMesh(THREE,1);
   char.add(pb.root);
   function applyRear(){
     pb.backRam.position.set(-.52-tuning.rear*.72,.04,0);
@@ -225,6 +225,9 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
     const dHold=.18*s.holdTime*timeScale,dStrike=.105*s.strikeTime*timeScale,dImpact=.12*s.impactHold*timeScale,dPiston=.28*s.pistonHold*timeScale,dRetract=.22*s.retractTime*timeScale,dRecover=.75*s.recoverTime*timeScale;
     const B1=dWind,B2=B1+dHold,B3=B2+dStrike,B4=B3+dImpact,B5=B4+dPiston,B6=B5+dRetract,B7=B6+dRecover;state.total=B7;
     const t=state.t,W=wristT.R,WL=wristT.L;
+    const slamAt=clamp(s.pileDelay,.45,.94),slamSpan=.16/s.pileSnap;
+    const slamTriggerT=B2+dStrike*clamp(slamAt+slamSpan,0,1);
+    const hitTriggerT=B2+dStrike*.82;
     let hipTw=0,chestTw=0,lungeTarget=0,shLead=0,shAcross=0,crouch=0;
     const windCharge=clamp(t/Math.max(dWind,.0001),0,1),steps=4,stepF=Math.min(steps-1e-4,windCharge*steps),step=Math.floor(stepF),pull=easeOutCubic(Math.min(1,(stepF-step)/.58));
     mech.pist=-((step+pull)/steps)*PB_MAX_RETRACT;mech.gearA=-(step+pull)*(Math.PI/4);mech.charge=windCharge;mech.cock=.052*windCharge;
@@ -247,14 +250,11 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
       hipTw=lerp(FALCON.coilHip*s.twist,FALCON.punchHip*s.twist,hp);chestTw=lerp(FALCON.coilChest*s.twist,FALCON.punchChest*s.twist,cp);lungeTarget=.34*s.launch*move;shLead=.16*move;shAcross=.070*move;crouch=lerp(.16*s.crouch,.095*s.crouch,easeOutCubic(p));
       WL.lerpVectors(FALCON.offReach,V3(-.08,1.39,.31),easeOutCubic(clamp(p*1.4,0,1)));
       if(!state.whooshDone&&p>.18){effects.whoosh(FALCON.weight*s.impact);state.whooshDone=true;}
-      const slamAt=clamp(s.pileDelay,.45,.94),slamSpan=.16/s.pileSnap;
       if(p<slamAt){mech.pist=-PB_MAX_RETRACT+Math.sin(t*105)*.009;mech.cock=.052;}
       else{
         const k=easeOutCubic(clamp((p-slamAt)/Math.max(slamSpan,.03),0,1));
         mech.pist=-PB_MAX_RETRACT+(tuning.throwExt+PB_MAX_RETRACT)*k;mech.cock=.052*(1-k);mech.gearA=-steps*(Math.PI/4)-k*Math.PI*.65;
-        if(k>=1&&!mech.slammed){mech.slammed=true;slamFx();events.slam=true;}
       }
-      if(!state.hitDone&&p>=.82){state.hitDone=true;events.hit=true;}
       state.phase='BODY LAUNCH';
     }else if(t<B4){
       const p=(t-B3)/Math.max(dImpact,.0001);W.lerpVectors(poses.impact,poses.follow,easeOutCubic(clamp(p*1.7,0,1)));WL.set(-.08,1.39,.31);poleT.R.copy(FALCON.impactPole);slerpRailDir(mech.railDir,mech.railEndDir,smoothstep(p),mech.railZax,mech.poseDir);
@@ -283,6 +283,13 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
     hips.rotation.y=state.hipT;chest.rotation.y=state.chestT-state.hipT;hips.position.y=.95-crouch;
     shAnchor.R.position.z=.02+shLead;shAnchor.R.position.x=.27-shAcross;shAnchor.L.position.set(-.27,.20,.02);
     mountMechanism(true,dt);
+
+    // These are timeline crossings, not narrow phase-window checks. A slow or
+    // uneven mobile frame can no longer skip the shared smoke/sound/hit events.
+    if(!mech.slammed&&t>=slamTriggerT){
+      mech.slammed=true;mech.pist=tuning.throwExt;mountMechanism(true,0);slamFx();events.slam=true;
+    }
+    if(!state.hitDone&&t>=hitTriggerT){state.hitDone=true;events.hit=true;}
     if(t>=B2&&t<B4)effects.trailPoint(fistWorld,effectScale());
   }
 
@@ -303,7 +310,7 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
   }
   function setSize(v){tuning.size=clamp(Number(v)||.16,.14,.40);try{localStorage.setItem(STORAGE.size,String(tuning.size));}catch(_){}return tuning.size;}
   function setArmHeight(v){tuning.armHeight=clamp(Number(v)||0,-3,3);try{localStorage.setItem(STORAGE.armHeight,String(tuning.armHeight));}catch(_){}return tuning.armHeight;}
-  function setWeaponMode(v){const mode=['stance','right','hidden'].includes(v)?v:'stance';tuning.weaponMode=mode;try{localStorage.setItem(STORAGE.weaponMode,mode);}catch(_){}return mode;}
+  function setWeaponMode(v){const mode=['stance','left','right','hidden'].includes(v)?v:'stance';tuning.weaponMode=mode;try{localStorage.setItem(STORAGE.weaponMode,mode);}catch(_){}return mode;}
   function dispose(){
     char.parent?.remove(char);char.traverse(o=>{if(o.isMesh)o.geometry?.dispose?.();});
     for(const material of new Set([...Object.values(pb.materials),pb.glowMat]))material?.dispose?.();
@@ -341,7 +348,7 @@ export function installPowBunkerTuningPanel(ability){
   const modeLabel=document.createElement('div');modeLabel.className='slabel';modeLabel.textContent='WEAPON DURING PILEBUNKER';
   const select=document.createElement('select');select.setAttribute('aria-label','Weapon during Pilebunker');
   select.style.cssText='width:100%;padding:8px;border:1px solid rgba(232,160,76,.45);border-radius:6px;background:#102426;color:#f0d7b1;font:inherit;';
-  for(const [value,label] of [['stance','STANCE POSITION'],['right','RIGHT-SIDE CARRY'],['hidden','HIDDEN']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.appendChild(option);}
+  for(const [value,label] of [['stance','STANCE POSITION'],['left','LEFT-SIDE CARRY'],['right','RIGHT-SIDE CARRY'],['hidden','HIDDEN']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.appendChild(option);}
   select.value=ability.tuning.weaponMode;select.addEventListener('change',()=>ability.setWeaponMode(select.value));
   modeRow.append(modeLabel,select);body.appendChild(modeRow);
   loadout.insertAdjacentElement('afterend',body);body.insertAdjacentElement('beforebegin',header);
