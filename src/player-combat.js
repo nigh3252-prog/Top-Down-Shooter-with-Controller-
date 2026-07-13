@@ -39,9 +39,8 @@ export function installPlayerCombat(api) {
   };
 
   /* ---------- optional weapon presentation while the card resolves ---------- */
-  const carryHold=new THREE.Vector3(.48,.72,-.10);
-  const carryTip=new THREE.Vector3(.18,-.28,-.94).normalize();
-  const carryRoll=1.08;
+  const carryHold=new THREE.Vector3();
+  const carryTip=new THREE.Vector3();
   const carrySwordQ=new THREE.Quaternion();
   const carryRollQ=new THREE.Quaternion();
   const carryPlaneQ=new THREE.Quaternion();
@@ -67,7 +66,15 @@ export function installPlayerCombat(api) {
     const mode=ability.tuning.weaponMode;
     if(mode==='hidden'){root.visible=false;return;}
     root.visible=true;
-    if(mode!=='right')return;
+    if(mode!=='left'&&mode!=='right')return;
+
+    // Mirror the complete carry pose, not just its position. This gives two
+    // genuinely opposite test choices even though the approved Pilebunker
+    // animation's internal side labels do not match its visual handedness.
+    const side=mode==='left'?-1:1;
+    carryHold.set(.48*side,.72,-.10);
+    carryTip.set(.18*side,-.28,-.94).normalize();
+    const carryRoll=1.08*side;
 
     const activeModel=api.activeModel;
     carryParentQ.copy(api.actorVisual?.quaternion||carryIdentityQ).multiply(activeModel?.quaternion||carryIdentityQ);
