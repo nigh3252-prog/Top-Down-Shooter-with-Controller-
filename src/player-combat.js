@@ -56,7 +56,7 @@ export function installPlayerCombat(api) {
   const combatEffect=createPilebunkerCombatEffect({
     THREE,
     scene:api.scene,
-    getEnemies,
+    getEnemies:getArenaEnemies,
     getPlayer:getPlayerTransform,
     hitEnemy:hitArenaEnemy,
   });
