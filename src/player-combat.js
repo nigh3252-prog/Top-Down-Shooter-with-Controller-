@@ -1,4 +1,4 @@
-// Branch-local integration wrapper for the maze-combat POW Bunker card.
+// Branch-local integration wrapper for the maze-combat Pilebunker card.
 // The untouched combat core is pinned to the exact commit this branch started
 // from; this wrapper adds the ability without rewriting or destabilising the
 // sword puppet. Non-arena pages receive the original combat core unchanged.
@@ -23,6 +23,13 @@ export function installPlayerCombat(api) {
   const ability = createPowBunkerAbility({ THREE, scene:api.scene });
   installPowBunkerTuningPanel(ability);
 
+  // The animation module still uses its original internal powbunker identifiers,
+  // but every player-facing name is simply PILEBUNKER.
+  const pilebunkerHeader = document.querySelector('button[data-sect="powbunker"]');
+  if (pilebunkerHeader) pilebunkerHeader.dataset.label = 'PILEBUNKER';
+  const pilebunkerSizeLabel = document.querySelector('#body-powbunker .slabel');
+  if (pilebunkerSizeLabel?.firstChild) pilebunkerSizeLabel.firstChild.nodeValue = 'PILEBUNKER SIZE ';
+
   const original = {
     attach: PC.attachCombatToActiveModel,
     update: PC.updateCombat,
@@ -32,9 +39,17 @@ export function installPlayerCombat(api) {
     movePenalty: PC.combatMovePenalty,
   };
   let abilityHitMode = false;
+  // combat-arena treats every truthy combatState.attack as a normal authored
+  // attack in a few UI/charge helpers. Supply one harmless phase so those helpers
+  // can safely read phases[0].t1 while the ability owns the animation.
   const abilityBlocker = {
-    __powBunker:true, total:999, contactAt:1, comboAt:999, phases:[],
-    group:'ability', label:'POW Bunker',
+    __powBunker:true,
+    total:999,
+    contactAt:1,
+    comboAt:999,
+    phases:[{ t0:0, t1:999 }],
+    group:'ability',
+    label:'PILEBUNKER',
   };
 
   function canPlay() {
@@ -84,12 +99,12 @@ export function installPlayerCombat(api) {
     const compensate = desired => desired / Math.max(.001, mult * 1.24);
     return [
       {
-        id:'powBunkerImpact', label:'POW Bunker impact', type:'blunt',
+        id:'powBunkerImpact', label:'Pilebunker impact', type:'blunt',
         from:new THREE.Vector3(0,0,0), to:new THREE.Vector3(0,.18,0),
         radius:1.62, damage:compensate(58), stagger:4.2, prefer:'any',
       },
       {
-        id:'powBunkerShockwave', label:'POW Bunker shockwave', type:'blunt',
+        id:'powBunkerShockwave', label:'Pilebunker shockwave', type:'blunt',
         from:new THREE.Vector3(0,.15,0), to:new THREE.Vector3(0,6.4,0),
         radius:1.28, damage:compensate(20), stagger:2.25, prefer:'any',
       },
@@ -123,7 +138,12 @@ export function installPlayerCombat(api) {
       // Heavy weapon forces the existing arena cleave gate open for the radial
       // impact and shockwave. This switch is synchronous and never renders.
       PC.combatState.weapon = 'greatsword';
-      PC.combatState.attack = { total:.01, contactAt:0, comboAt:0, phases:[] };
+      PC.combatState.attack = {
+        total:.01,
+        contactAt:0,
+        comboAt:0,
+        phases:[{ t0:0, t1:.01 }],
+      };
       PC.combatState.attackKey = 'vertical';
       PC.combatState.attackGroup = 'vertical';
       PC.combatState.hitIds = new Set();
