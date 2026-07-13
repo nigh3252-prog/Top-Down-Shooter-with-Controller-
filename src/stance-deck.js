@@ -5,7 +5,7 @@
 // tosses the current hand and takes a countdown before the new hand arrives.
 // Pure logic — no DOM, no stamina (the page owns resources).
 //
-// Prototype addition: every weapon deck also receives one POW Bunker ability
+// Prototype addition: every weapon deck also receives one Pilebunker ability
 // card. The arena's existing playCard() function is stance-shaped, so this
 // module returns a proxy of the currently active stance after firing the
 // ability event. That preserves the stance/weapon while still allowing the
@@ -51,7 +51,7 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
       const icon = el.querySelector('.cicon');
       const isAbility = s.hand[i]?.type === 'ability';
       el.dataset.cardType = isAbility ? 'ability' : 'stance';
-      el.setAttribute('aria-label', isAbility ? 'Play POW Bunker ability card' : 'Play stance card');
+      el.setAttribute('aria-label', isAbility ? 'Play Pilebunker ability card' : 'Play stance card');
       if (icon) {
         icon.textContent = isAbility ? 'PB' : '';
         icon.style.display = 'grid';
@@ -121,7 +121,7 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
         scheduleDecoration();
         // Same id/chain as the active stance means combat-arena's existing
         // stance selection simply reselects what was already active. The name
-        // remains POW BUNKER so its normal announcement identifies the card.
+        // remains PILEBUNKER so its normal announcement identifies the card.
         return { ...stance, name:POW_BUNKER_CARD.name, __abilityProxy:true };
       }
 
