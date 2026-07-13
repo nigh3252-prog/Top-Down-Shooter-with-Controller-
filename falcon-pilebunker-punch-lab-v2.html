@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>FALCON PILEBUNKER LAB v2 — smooth windup · pneumatic retract</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touch-action:none;
+    -webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
+  canvas{display:block}
+  #hud{position:fixed;top:10px;left:50%;transform:translateX(-50%);text-align:center;
+    color:#7fb8b0;font-size:12px;letter-spacing:.08em;
+    text-transform:uppercase;pointer-events:none;text-shadow:0 1px 0 #000}
+  #hud b{color:#e8a04c;font-size:15px}
+  #hint{position:fixed;top:10px;right:12px;color:#4a6f6a;font-size:10px;letter-spacing:.06em;
+    text-align:right;pointer-events:none;line-height:1.6}
+  .btnrow{position:fixed;bottom:18px;right:14px;display:flex;gap:10px}
+  .pbtn{width:72px;height:72px;border-radius:50%;border:2px solid #2c4a47;color:#9fd2c9;
+    background:rgba(18,36,38,.72);font-family:inherit;font-size:11px;letter-spacing:.1em;
+    display:flex;align-items:center;justify-content:center;touch-action:none;
+    box-shadow:0 3px 0 #081112}
+  .pbtn:active{background:#2c4a47;transform:translateY(2px);box-shadow:0 1px 0 #081112}
+  .pbtn.hk{border-color:#6e3a24;color:#e8a04c}
+
+  #tuneToggle{position:fixed;top:10px;left:12px;z-index:20;font-family:inherit;font-size:11px;
+    letter-spacing:.12em;color:#e8a04c;background:rgba(18,36,38,.82);border:1px solid #6e3a24;
+    padding:7px 12px;border-radius:4px}
+  #tuneToggle:active{background:#2c4a47}
+  #panel{position:fixed;top:46px;left:0;z-index:19;width:44vw;max-width:216px;
+    max-height:calc(100vh - 60px);overflow-y:auto;padding:10px 12px 16px;box-sizing:border-box;
+    background:linear-gradient(180deg,rgba(10,20,22,.93),rgba(10,20,22,.80));
+    border-right:1px solid #2c4a47;border-bottom:1px solid #2c4a47;border-radius:0 0 8px 0;
+    transform:translateX(0);transition:transform .22s ease;touch-action:pan-y;
+    -webkit-overflow-scrolling:touch}
+  #panel:not(.open){transform:translateX(-101%)}
+  .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:0 0 8px}
+  #presets{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:13px}
+  #presets button{font-family:inherit;font-size:9.5px;letter-spacing:.05em;color:#9fd2c9;
+    background:rgba(30,52,52,.7);border:1px solid #2c4a47;border-radius:4px;padding:8px 2px}
+  #presets button:active{background:#2c4a47;color:#e8a04c}
+  .srow{margin-bottom:11px}
+  .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;
+    justify-content:space-between;margin-bottom:2px}
+  .sval{color:#e8a04c}
+  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;
+    background:transparent;margin:0}
+  #panel input[type=range]::-webkit-slider-runnable-track{height:3px;background:#243f3d;border-radius:2px}
+  #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    margin-top:-6px;border-radius:50%;background:#e8a04c;border:2px solid #0d191b;
+    box-shadow:0 0 0 1px #6e3a24}
+  #panel input[type=range]::-moz-range-track{height:3px;background:#243f3d;border-radius:2px}
+  #panel input[type=range]::-moz-range-thumb{width:13px;height:13px;border:2px solid #0d191b;
+    border-radius:50%;background:#e8a04c}
+  .wbtn{width:100%;margin-top:4px;font-family:inherit;font-size:10px;letter-spacing:.12em;
+    color:#e8a04c;background:rgba(60,28,18,.55);border:1px solid #6e3a24;border-radius:4px;padding:9px 2px}
+  .wbtn:active{background:#6e3a24;color:#ffd9a8}
+  #phasebar{width:180px;height:4px;margin:6px auto 0;background:#18302f;border:1px solid #2c4a47;border-radius:4px;overflow:hidden}
+  #phasefill{display:block;width:0%;height:100%;background:#e8a04c;transition:width .04s linear}
+  .btnrow{align-items:flex-end}
+  .pbtn.main{width:104px;height:104px;border-color:#8d4928;color:#ffd09a;font-size:12px;
+    background:rgba(72,29,18,.78);box-shadow:0 4px 0 #081112}
+  .pbtn.small{width:62px;height:62px;font-size:9px}
+  #phaseName{color:#6f9b95;font-size:10px;margin-top:2px}
+  @media (max-width:700px){
+    #hint{top:auto;bottom:132px;right:10px}
+    #hud{max-width:48vw}
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b id="atk">READY</b>
+  <div id="phaseName">FALCON PILEBUNKER</div>
+  <div id="phasebar"><i id="phasefill"></i></div>
+</div>
+<div id="hint">backbone: △ · key: F / space<br>cam: drag orbit · wheel zoom · 2-finger pan</div>
+<div class="btnrow">
+  <button id="slowBtn" class="pbtn small">SLOW<br>¼×</button>
+  <button class="pbtn main" data-a="falcon">FALCON<br>PUNCH</button>
+</div>
+
+<button id="tuneToggle">TUNE ◂</button>
+<div id="panel" class="open">
+  <div class="ptitle">FALCON PUNCH — AUTHORED PHASES</div>
+  <div id="presets">
+    <button data-p="SMASH64">SMASH 64</button>
+    <button data-p="ULTIMATE">ULTIMATE</button>
+    <button data-p="HEAVY">HEAVY</button>
+    <button data-p="DEFAULT">RESET</button>
+  </div>
+  <div id="sliders"></div>
+  <div class="ptitle" style="margin-top:14px">PILEBUNKER MECHANISM</div>
+  <div id="pbsliders"></div>
+  <button id="replayBtn" class="wbtn">REPLAY ATTACK</button>
+  <button id="camReset" class="wbtn">RESET CAMERA</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js';
+
+/* ============================================================
+   FALCON PILEBUNKER LAB
+   One authored signature attack:
+   palm brace -> overhead ratchet -> deep crouched coil -> threatening hold
+   -> frozen launch rail -> delayed internal pile strike -> committed hold
+   -> separate knuckles-forward recovery.
+
+   The windup is pose-authored. The actual release remains rail-driven,
+   preserving the clean timing and stable impact that worked in the punch lab.
+   ============================================================ */
+
+const V3 = (x,y,z)=>new THREE.Vector3(x,y,z);
+const UP = V3(0,1,0);
+const clamp = THREE.MathUtils.clamp;
+const lerp  = THREE.MathUtils.lerp;
+
+/* ---------- scene ---------- */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d191b);
+scene.fog = new THREE.Fog(0x0d191b, 5.5, 12);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, .1, 50);
+const camBase = V3(2.45, 1.72, -1.72);
+const camLook = V3(0, 1.15, 0.55);
+
+/* ---------- camera: orbit / pan / zoom (derived from the original fixed shot) ---------- */
+const camTarget = camLook.clone();
+const _camOffInit = camBase.clone().sub(camTarget);
+let camDist  = _camOffInit.length();
+let camYaw   = Math.atan2(_camOffInit.x, _camOffInit.z);
+let camPitch = Math.asin(clamp(_camOffInit.y / camDist, -1, 1));
+const CAM_INIT = { yaw:camYaw, pitch:camPitch, dist:camDist, target:camTarget.clone() };
+const CAM_DIST_MIN = 1.1, CAM_DIST_MAX = 6.5;
+const CAM_PITCH_MIN = -0.6, CAM_PITCH_MAX = 1.15;
+const _cFwd=V3(0,0,0), _cRight=V3(0,0,0), _cUp=V3(0,0,0);
+function camBasis(){
+  _cFwd.set(-Math.sin(camYaw)*Math.cos(camPitch), -Math.sin(camPitch), -Math.cos(camYaw)*Math.cos(camPitch));
+  _cRight.crossVectors(_cFwd, UP).normalize();
+  _cUp.crossVectors(_cRight, _cFwd).normalize();
+}
+function camPan(dx,dy){
+  camBasis();
+  const k = camDist*0.0017;
+  camTarget.addScaledVector(_cRight, -dx*k).addScaledVector(_cUp, dy*k);
+}
+
+scene.add(new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 0.9));
+const sun = new THREE.DirectionalLight(0xffe0b8, 1.15);
+sun.position.set(2.5, 4, -2);
+scene.add(sun);
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 40),
+  new THREE.MeshLambertMaterial({color:0x142a2c})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+const ring = new THREE.Mesh(
+  new THREE.RingGeometry(1.55,1.62,48),
+  new THREE.MeshBasicMaterial({color:0x24484a})
+);
+ring.rotation.x = -Math.PI/2; ring.position.y = .005; ring.position.z = .5;
+scene.add(ring);
+
+/* ---------- helpers ---------- */
+// hash-based vertex jitter — welded across duplicated face verts
+function crumple(geo, amt){
+  const p = geo.attributes.position;
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+    const h1 = Math.sin(x*127.1 + y*311.7 + z*74.7)*43758.5453;
+    const h2 = Math.sin(x*269.5 + y*183.3 + z*246.1)*28001.8384;
+    const h3 = Math.sin(x*113.5 + y*271.9 + z*124.6)*41414.4141;
+    p.setXYZ(i,
+      x + ((h1-Math.floor(h1))-.5)*amt,
+      y + ((h2-Math.floor(h2))-.5)*amt,
+      z + ((h3-Math.floor(h3))-.5)*amt);
+  }
+  p.needsUpdate = true;
+  return geo;
+}
+function box(w,h,d,color,amt=0.018){
+  return new THREE.Mesh(
+    crumple(new THREE.BoxGeometry(w,h,d), amt),
+    new THREE.MeshLambertMaterial({color, flatShading:true})
+  );
+}
+// unit-height limb, stretched between joints each frame
+function limb(thick,color){
+  const m = box(thick,1,thick,color,0.012);
+  return m;
+}
+const _dir = V3(0,0,0);
+function setLimb(mesh,A,B){
+  mesh.position.copy(A).add(B).multiplyScalar(.5);
+  _dir.copy(B).sub(A);
+  const len = Math.max(_dir.length(), 1e-4);
+  mesh.scale.y = len;
+  mesh.quaternion.setFromUnitVectors(UP, _dir.normalize());
+}
+
+/* ---------- character ---------- */
+const STONE=0x8f8a80, STONE_D=0x6e6a62, WRAP=0x314b48;
+const char = new THREE.Group(); scene.add(char);
+
+const hips = new THREE.Group(); hips.position.y = 0.95; char.add(hips);
+const pelvis = box(.34,.20,.24, STONE_D); hips.add(pelvis);
+const chest = new THREE.Group(); chest.position.y = 0.34; hips.add(chest);
+const torso = box(.42,.40,.28, STONE); torso.position.y = -.06; chest.add(torso);
+const head  = box(.20,.24,.22, STONE); head.position.y = .34; chest.add(head);
+const brow  = box(.22,.05,.06, 0xe8a04c, .01); brow.position.set(0,.36,.11); chest.add(brow);
+
+// legs — static stance
+for(const s of [-1,1]){
+  const th = limb(.13, STONE_D); char.add(th);
+  const sh = limb(.11, STONE_D); char.add(sh);
+  const hp=V3(s*.13,.88,0), kn=V3(s*.15,.46, s>0?-.10:.14), ft=V3(s*.16,.06, s>0?-.16:.22);
+  setLimb(th,hp,kn); setLimb(sh,kn,ft);
+  const foot = box(.14,.09,.26, STONE_D); foot.position.set(s*.16,.05, s>0?-.10:.28);
+  char.add(foot);
+}
+
+// shoulder anchors (children of chest → carried by twist)
+const shAnchor = {};
+const shBaseZ = 0.02;
+const shBaseX = {L:-.27, R:.27};
+for(const s of ['L','R']){
+  const g = new THREE.Group();
+  g.position.set(shBaseX[s], .20, shBaseZ);
+  chest.add(g); shAnchor[s]=g;
+  const pad = box(.15,.13,.15, STONE); g.add(pad);
+}
+
+// arm meshes live directly under char — driven in char-local space
+const arm = {};
+for(const s of ['L','R']){
+  arm[s] = {
+    upper: limb(.10, STONE),
+    fore:  limb(.085, WRAP),
+    fist:  box(.13,.11,.14, STONE),
+    prevFistWorld: V3(0,0,0),
+    fistWorld: V3(0,0,0)
+  };
+  char.add(arm[s].upper, arm[s].fore, arm[s].fist);
+  arm[s].fore.visible = false;   // replaced by pilebunker housing
+  arm[s].fist.visible = false;   // replaced by carriage fist
+}
+const L1=0.30, L2=0.28;
+
+/* ============================================================
+   PILEBUNKER FOREARMS — ported from SUDDEN IMPACT
+   housing + carriage built along local +X, fist rest at x=4.38.
+   Whole assembly scaled by PBTUNE.size, anchored so the fist
+   (at carriage rest) sits on the IK wrist, housing offset
+   perpendicular from the elbow line (PBTUNE.off) so the
+   carriage clears the upper arm on retract — Big O style.
+   ============================================================ */
+function Mst(c,o={}){ return new THREE.MeshStandardMaterial(Object.assign({color:c, flatShading:true, roughness:.72, metalness:.18}, o)); }
+const pbMat = {
+  black: Mst(0x23262c),
+  gun:   Mst(0x3a3f47),
+  cream: Mst(0xd8cfb8,{roughness:.82, metalness:.05}),
+  red:   Mst(0xa8262a,{roughness:.6}),
+  brass: Mst(0xb08d3e,{roughness:.35, metalness:.75}),
+  chrome:Mst(0x9aa2ad,{roughness:.25, metalness:.9}),
+  dark:  Mst(0x15171c,{roughness:.9})
+};
+function octShape(w,h,c){
+  c = Math.min(c, w/2-0.001, h/2-0.001);
+  const s = new THREE.Shape(), x=w/2, y=h/2;
+  s.moveTo(-x+c,-y); s.lineTo(x-c,-y); s.lineTo(x,-y+c); s.lineTo(x,y-c);
+  s.lineTo(x-c,y); s.lineTo(-x+c,y); s.lineTo(-x,y-c); s.lineTo(-x,-y+c); s.closePath();
+  return s;
+}
+function pbSlab(w,h,d,c,mat){
+  const bev = Math.min(c*0.7, d*0.35);
+  const g = new THREE.ExtrudeGeometry(octShape(w,h,c), {depth:d-bev*2, bevelEnabled:true, bevelThickness:bev, bevelSize:bev, bevelSegments:1});
+  g.translate(0,0,-(d-bev*2)/2); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+function pbBox(w,h,d,mat){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); }
+function pbCyl(r1,r2,h,seg,mat){ return new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,seg), mat); }
+
+function buildPilebunker(mz){   // mz = ±1 mirrors across Z so gears face outward on both arms
+  const root = new THREE.Group();
+  const fore = new THREE.Group(); root.add(fore);              // recoils along -x on slam
+  const glowMat = new THREE.MeshStandardMaterial({color:0x0a0a0a, emissive:0xff4a20, emissiveIntensity:0, flatShading:true});
+  const housingLen = 3.3;
+  const shell = pbSlab(1.7,1.7,housingLen,0.4,pbMat.black);
+  shell.rotation.y = Math.PI/2; shell.position.set(0.72+housingLen/2,0,0); fore.add(shell);
+  const panel=(w,h,d,mat)=>{ const p=pbSlab(w,h,d,0.12,mat); p.rotation.y=Math.PI/2; return p; };
+  const topPlate = panel(1.3,0.22,2.3,pbMat.cream); topPlate.position.set(2.0,0.92,0); fore.add(topPlate);
+  const topPlate2 = panel(0.9,0.18,1.1,pbMat.cream); topPlate2.position.set(1.47,1.08,0); fore.add(topPlate2);
+  const sideL = panel(0.22,1.1,2.0,pbMat.cream); sideL.position.set(2.08,0.05,0.92*mz); fore.add(sideL);
+  const sideR = sideL.clone(); sideR.position.z = -0.92*mz; fore.add(sideR);
+  [[2.62,0.05,1.0],[2.62,0.05,-1.0],[1.52,0.05,1.0],[1.52,0.05,-1.0]].forEach(p=>{
+    const st = pbBox(0.06,0.9,0.06,pbMat.red); st.position.set(p[0],p[1],p[2]*mz); st.rotation.x = 0.35*mz; fore.add(st);
+  });
+  const collar = pbSlab(1.35,1.35,0.55,0.3,pbMat.gun); collar.rotation.y=Math.PI/2; collar.position.set(0.72+housingLen+0.15,0,0); fore.add(collar);
+  const collarRing = pbCyl(0.62,0.7,0.22,8,pbMat.dark); collarRing.rotation.z=Math.PI/2; collarRing.position.set(0.72+housingLen+0.45,0,0); fore.add(collarRing);
+  const breech = pbSlab(1.28,1.28,0.7,0.3,pbMat.gun); breech.rotation.y=Math.PI/2; breech.position.set(0.42,0,0); fore.add(breech);
+  const rearSeal = pbCyl(0.62,0.68,0.22,8,pbMat.red); rearSeal.rotation.z=Math.PI/2; rearSeal.position.set(0.04,0.04,0); fore.add(rearSeal);
+  const rearSocket = pbCyl(0.52,0.58,0.62,8,pbMat.gun); rearSocket.rotation.z=Math.PI/2; rearSocket.position.set(0.24,0.04,0); fore.add(rearSocket);
+  const stacks = [];
+  for(let s=-1; s<=1; s+=2){
+    const st = pbCyl(0.16,0.2,0.72,6,pbMat.dark); st.position.set(0.55,0.86,0.45*s); st.rotation.x = 0.35*s; fore.add(st); stacks.push(st);
+  }
+  const gear = new THREE.Group(); gear.position.set(1.66,0.1,1.17*mz); gear.scale.setScalar(0.83); fore.add(gear);
+  const gearDisc = pbCyl(0.55,0.55,0.16,10,pbMat.brass); gearDisc.rotation.x=Math.PI/2; gear.add(gearDisc);
+  for(let i=0;i<8;i++){ const t=pbBox(0.16,0.22,0.14,pbMat.brass); const a=i/8*Math.PI*2; t.position.set(Math.cos(a)*0.6,Math.sin(a)*0.6,0); t.rotation.z=a; gear.add(t); }
+  const gearHub = pbCyl(0.16,0.16,0.24,6,pbMat.dark); gearHub.rotation.x=Math.PI/2; gear.add(gearHub);
+  const idler = new THREE.Group(); idler.position.set(2.29,0.62,1.17*mz); idler.scale.setScalar(0.83); fore.add(idler);
+  const idisc = pbCyl(0.3,0.3,0.14,8,pbMat.chrome); idisc.rotation.x=Math.PI/2; idler.add(idisc);
+  for(let i=0;i<6;i++){ const t=pbBox(0.1,0.14,0.12,pbMat.chrome); const a=i/6*Math.PI*2; t.position.set(Math.cos(a)*0.33,Math.sin(a)*0.33,0); t.rotation.z=a; idler.add(t); }
+  for(let i=0;i<3;i++){
+    const v=pbBox(0.5,0.1,0.05,glowMat); v.position.set(1.18+i*0.55,-0.75,0.88); fore.add(v);
+    const v2=v.clone(); v2.position.z=-0.88; fore.add(v2);
+  }
+  /* --- carriage: rear ram pokes out the back on retract, fist flies out the front on slam --- */
+  const carriage = new THREE.Group(); fore.add(carriage);
+  const backRam = pbCyl(0.4,0.4,1.85,8,pbMat.cream); backRam.rotation.z=Math.PI/2; carriage.add(backRam);
+  const backHead = pbCyl(0.52,0.56,0.28,8,pbMat.gun); backHead.rotation.z=Math.PI/2; carriage.add(backHead);
+  for(let s=-1; s<=1; s+=2){ const rod=pbCyl(0.08,0.08,2.75,6,pbMat.brass); rod.rotation.z=Math.PI/2; rod.position.set(1.98,0.45,0.56*s); carriage.add(rod); }
+  const ram = pbCyl(0.34,0.34,2.9,8,pbMat.chrome); ram.rotation.z=Math.PI/2; ram.position.set(2.4,-0.05,0); carriage.add(ram);
+  const ramCollar = pbCyl(0.42,0.42,0.3,8,pbMat.brass); ramCollar.rotation.z=Math.PI/2; ramCollar.position.set(3.32,-0.05,0); carriage.add(ramCollar);
+  const fist = new THREE.Group(); fist.position.set(4.38,-0.05,0); carriage.add(fist);
+  const fistCore = pbSlab(1.15,1.35,1.5,0.3,pbMat.black); fistCore.rotation.y=Math.PI/2; fist.add(fistCore);
+  const fistFace = pbSlab(0.95,1.15,0.35,0.24,pbMat.gun); fistFace.rotation.y=Math.PI/2; fistFace.position.x=0.7; fist.add(fistFace);
+  for(let iy=0; iy<2; iy++) for(let iz=0; iz<2; iz++){
+    const k=pbSlab(0.34,0.34,0.35,0.1,pbMat.cream); k.rotation.y=Math.PI/2; k.position.set(0.95,(iy?0.3:-0.3),(iz?0.32:-0.32)); fist.add(k);
+  }
+  const thumb = pbSlab(0.5,0.3,0.5,0.1,pbMat.gun); thumb.rotation.y=Math.PI/2; thumb.position.set(0.25,-0.75,0.35*mz); thumb.rotation.z=0.3; fist.add(thumb);
+  const wristSocket = pbSlab(0.92,1.08,1.22,0.2,pbMat.black); wristSocket.rotation.y=Math.PI/2; wristSocket.position.x=-0.86; fist.add(wristSocket);
+  const wristGuard = pbCyl(0.43,0.47,0.22,8,pbMat.red); wristGuard.rotation.z=Math.PI/2; wristGuard.position.set(-1.2,0,0); fist.add(wristGuard);
+
+  // Upper-arm attachment point.  The old rig mounted the mechanism from the fist and
+  // displayed a separate IK elbow nearby; those two points could visibly separate.
+  // This socket is part of the housing, so the upper arm and hinge can terminate on
+  // the exact same mechanical point every frame.
+  const elbowSocket = new THREE.Object3D();
+  elbowSocket.position.set(3.10, 0.10, 0);
+  root.add(elbowSocket);
+
+  return {root, fore, carriage, fist, elbowSocket, gear, idler, backRam, backHead, stacks, glowMat};
+}
+function buildElbow(){   // hinge cylinder from the original rig — sits at the IK elbow
+  const g = new THREE.Group();
+  const core = pbCyl(0.42,0.42,1.06,8,pbMat.black); g.add(core);
+  const band = pbCyl(0.5,0.52,0.18,8,pbMat.brass); band.position.y=0.02; g.add(band);
+  const capA = pbCyl(0.28,0.28,0.17,6,pbMat.red); capA.position.y=0.53; g.add(capA);
+  const capB = capA.clone(); capB.position.y=-0.53; g.add(capB);
+  return g;
+}
+
+/* --- per-arm pilebunker state --- */
+const PBTUNE = { size:0.24, off:0.55, throwExt:2.33, rear:-0.85, slamAt:0.45, hitPile:true };
+const PB_MAX_RETRACT = 0.95, PB_STEPS = 3, PB_SLAM_END = 0.88, PB_FIST_X = 4.38;
+window.PB_TUNE = PBTUNE;   // live-tweak from console
+const PB = {};
+for(const s of ['L','R']){
+  const b = buildPilebunker(s==='L' ? -1 : 1);
+  char.add(b.root);
+  b.elbowG = buildElbow(); char.add(b.elbowG);
+  PB[s] = Object.assign(b, {
+    pist:0, gearA:0, recoil:0, cock:0, charge:0,
+    lastStep:-1, slammed:false, upDir:V3(0,1,0),
+    cockedBack:V3(0,0,0), railCtrl:V3(0,0,0), railDir:V3(1,0,0),
+    railEndDir:V3(1,0,0), poseDir:V3(1,0,0), railUp:V3(0,1,0), railZax:V3(0,0,1),
+    windStart:V3(0,0,0), windDirStart:V3(1,0,0), guardDir:V3(1,0,0),
+    brace:V3(), high:V3(), coil:V3(), impact:V3(), follow:V3(),
+    windCtrlA:V3(), windCtrlB:V3()
+  });
+}
+function applyPbRear(){
+  for(const s of ['L','R']){
+    PB[s].backRam.position.set(-0.52 - PBTUNE.rear*0.72, 0.04, 0);
+    PB[s].backHead.position.set(PB[s].backRam.position.x - 0.94, 0.04, 0);
+  }
+}
+applyPbRear();
+
+/* ---------- 2-bone analytic IK ---------- */
+const _st=V3(0,0,0), _pp=V3(0,0,0), _perp=V3(0,0,0), _e=V3(0,0,0), _tc=V3(0,0,0);
+function solveArm(S, T, pole, out){
+  _st.copy(T).sub(S);
+  let d = _st.length();
+  const reach = L1+L2-1e-4;
+  if(d > reach) d = reach;
+  _st.normalize();
+  _tc.copy(S).addScaledVector(_st, d);           // clamped wrist
+  const a = (L1*L1 - L2*L2 + d*d) / (2*d);
+  const h = Math.sqrt(Math.max(0, L1*L1 - a*a));
+  _pp.copy(pole).sub(S);
+  _perp.copy(_pp).addScaledVector(_st, -_pp.dot(_st));
+  if(_perp.lengthSq() < 1e-8) _perp.set(0,-1,0);
+  _perp.normalize();
+  _e.copy(S).addScaledVector(_st, a).addScaledVector(_perp, h);
+  out.elbow.copy(_e); out.wrist.copy(_tc);
+}
+const ik = { L:{elbow:V3(0,0,0),wrist:V3(0,0,0)}, R:{elbow:V3(0,0,0),wrist:V3(0,0,0)} };
+
+/* ---------- enemy ---------- */
+const RUST=0x8a3b24;
+const enemy = new THREE.Group(); enemy.position.set(0,0,1.02); scene.add(enemy);
+const eBody = new THREE.Group(); eBody.position.y=0; enemy.add(eBody);
+const eMat = new THREE.MeshLambertMaterial({color:RUST, flatShading:true, emissive:0x000000});
+const eCyl = new THREE.Mesh(crumple(new THREE.CylinderGeometry(.21,.24,.95,9),.02), eMat);
+eCyl.position.y = 0.95; eBody.add(eCyl);
+const eCap = new THREE.Mesh(crumple(new THREE.SphereGeometry(.21,9,7),.02), eMat);
+eCap.position.y = 1.44; eBody.add(eCap);
+const eEye = box(.20,.04,.05, 0x1a1210, .01); eEye.position.set(0,1.47,-.17); eBody.add(eEye);
+const eBase = new THREE.Mesh(crumple(new THREE.CylinderGeometry(.30,.36,.28,9),.02),
+  new THREE.MeshLambertMaterial({color:0x5c2818, flatShading:true}));
+eBase.position.y=.14; eBody.add(eBase);
+// spring state
+const eSpr = { rx:0, rvx:0, pz:0, pvz:0, flash:0 };
+
+/* ---------- authored Falcon Punch data ---------- */
+// Local-space wrist targets.  R is the pilebunker punch; L acts as the brace/counterbalance hand.
+const GUARD = {
+  L:{ w:V3(-.16,1.36,.32), pole:V3(-.58,.90,.05) },
+  R:{ w:V3( .16,1.32,.26), pole:V3( .58,.88,.02) }
+};
+
+const FALCON = {
+  side:'R',
+  weight:1.35,
+
+  // Signature poses.  These are deliberately theatrical rather than boxing-correct.
+  brace:       V3(.08,1.35,.36),
+  bracePalm:   V3(-.05,1.34,.43),
+  high:        V3(.38,1.62,.02),
+  coil:        V3(.43,1.21,-.10),
+  offReach:    V3(-.14,1.19,.57),
+  impact:      V3(.00,1.22,.88),
+  follow:      V3(-.07,1.18,.98),
+  recoverMid:  V3(.28,1.23,.38),
+
+  bracePole:   V3(.62,1.02,.04),
+  highPole:    V3(.72,1.20,-.02),
+  coilPole:    V3(.70,.92,-.05),
+  impactPole:  V3(.66,.92,.02),
+
+  // Stable authored housing directions.  The launch direction is frozen in startAttack().
+  braceDir: V3(.08,.14,.99).normalize(),
+  highDir:  V3(.24,.82,.52).normalize(),
+  coilDir:  V3(-.06,.10,.99).normalize(),
+
+  coilHip:.66,
+  coilChest:1.02,
+  punchHip:-.46,
+  punchChest:-.78
+};
+window.FALCON_PUNCH = FALCON;
+
+/* ---------- easing ---------- */
+const easeInCubic     = t=>t*t*t;
+const easeInQuart     = t=>t*t*t*t;
+const easeOutCubic    = t=>1-Math.pow(1-t,3);
+const easeInOutCubic  = t=>t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+const easeInOut       = t=>t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+const smoothstep      = t=>t*t*(3-2*t);
+function easeOutBack(t,c1){ const c3=c1+1; const u=t-1; return 1 + c3*u*u*u + c1*u*u; }
+
+/* ---------- combat state ---------- */
+const state = {
+  cur:null, t:0, hitDone:false, whooshDone:false, hissDone:false,
+  lunge:0, hipT:0, chestT:0, phase:'READY', total:1
+};
+const hud = {
+  atk:document.getElementById('atk'),
+  phase:document.getElementById('phaseName'),
+  fill:document.getElementById('phasefill')
+};
+const PLAYBACK = { rate:1 };
+window.FALCON_PLAYBACK = PLAYBACK;
+
+/* ---------- phase and silhouette tuning ---------- */
+const PARAMS = [
+  {k:'timeScale',   label:'OVERALL HEAVY TIME', min:.55,max:3.2, step:.05, def:1},
+  {k:'braceTime',   label:'PALM BRACE TIME',    min:.25,max:2.5, step:.05, def:1},
+  {k:'ratchetTime', label:'OVERHEAD RATCHET',   min:.25,max:2.8, step:.05, def:1},
+  {k:'coilTime',    label:'DROP INTO COIL',     min:.25,max:2.8, step:.05, def:1},
+  {k:'holdTime',    label:'FINAL THREAT HOLD',  min:0,  max:3.0, step:.05, def:1},
+  {k:'strikeTime',  label:'BODY LAUNCH TIME',   min:.45,max:2.2, step:.05, def:1},
+  {k:'impactHold',  label:'BODY IMPACT HOLD',    min:0,  max:3.0, step:.05, def:1},
+  {k:'pistonHold',  label:'PISTON-OUT HOLD',     min:0,  max:3.0, step:.05, def:1},
+  {k:'retractTime', label:'PNEUMATIC RETRACT',   min:.35,max:2.5, step:.05, def:1},
+  {k:'recoverTime', label:'HEAVY RECOVERY',      min:.35,max:3.0, step:.05, def:1},
+  {k:'arcRadius',   label:'WINDUP ARC RADIUS',  min:.25,max:2.5, step:.05, def:1},
+  {k:'fistHeight',  label:'OVERHEAD FIST HEIGHT',min:.55,max:1.7,step:.05, def:1},
+  {k:'pullback',    label:'FINAL PULLBACK',     min:.45,max:2.0, step:.05, def:1},
+  {k:'crouch',      label:'CROUCH DEPTH',       min:.25,max:2.0, step:.05, def:1},
+  {k:'twist',       label:'TORSO COIL',         min:.35,max:1.8, step:.05, def:1},
+  {k:'launch',      label:'FORWARD LAUNCH',     min:.25,max:2.0, step:.05, def:1},
+  {k:'follow',      label:'FOLLOW-THROUGH',     min:.25,max:2.0, step:.05, def:1},
+  {k:'pileDelay',   label:'PILE STRIKE DELAY',  min:.45,max:.94, step:.01, def:.76},
+  {k:'pileSnap',    label:'PILE RELEASE SPEED', min:.35,max:2.0, step:.05, def:1},
+  {k:'impact',      label:'IMPACT FORCE',       min:.35,max:2.5, step:.05, def:1.25},
+];
+const PRESETS = {
+  DEFAULT: {
+    timeScale:1, braceTime:1, ratchetTime:1, coilTime:1, holdTime:1, strikeTime:1,
+    impactHold:1, pistonHold:1, retractTime:1, recoverTime:1,
+    arcRadius:1, fistHeight:1, pullback:1, crouch:1,
+    twist:1, launch:1, follow:1, pileDelay:.76, pileSnap:1, impact:1.25
+  },
+  SMASH64: {
+    timeScale:.92, braceTime:.45, ratchetTime:1.22, coilTime:1.05, holdTime:.72, strikeTime:.92,
+    impactHold:1.15, pistonHold:.90, retractTime:.82, recoverTime:.95,
+    arcRadius:1.34, fistHeight:1.28, pullback:1.06,
+    crouch:1.12, twist:1.08, launch:1.02, follow:1.18, pileDelay:.78, pileSnap:1.10, impact:1.35
+  },
+  ULTIMATE: {
+    timeScale:1, braceTime:1.28, ratchetTime:.78, coilTime:1.03, holdTime:1.05, strikeTime:.94,
+    impactHold:.92, pistonHold:1.05, retractTime:.92, recoverTime:1.02,
+    arcRadius:.88, fistHeight:.88, pullback:1,
+    crouch:1.22, twist:1.16, launch:1.10, follow:1.05, pileDelay:.75, pileSnap:1.05, impact:1.30
+  },
+  HEAVY: {
+    timeScale:1.34, braceTime:1.15, ratchetTime:1.18, coilTime:1.12, holdTime:1.55, strikeTime:1.12,
+    impactHold:1.45, pistonHold:1.50, retractTime:1.18, recoverTime:1.35,
+    arcRadius:1.08, fistHeight:1.02, pullback:1.18,
+    crouch:1.16, twist:1.14, launch:1.12, follow:1.16, pileDelay:.81, pileSnap:.78, impact:1.65
+  }
+};
+const scale = {...PRESETS.DEFAULT};
+window.FALCON_TUNE = scale;
+
+const sliderEls = {};
+const sliderBox = document.getElementById('sliders');
+PARAMS.forEach(p => {
+  const row=document.createElement('div'); row.className='srow';
+  const lab=document.createElement('div'); lab.className='slabel';
+  const val=document.createElement('span'); val.className='sval'; val.textContent=Number(p.def).toFixed(2);
+  lab.textContent=p.label+' '; lab.appendChild(val);
+  const inp=document.createElement('input');
+  inp.type='range'; inp.min=p.min; inp.max=p.max; inp.step=p.step; inp.value=p.def;
+  inp.addEventListener('input',()=>{
+    scale[p.k]=parseFloat(inp.value);
+    val.textContent=parseFloat(inp.value).toFixed(2);
+  });
+  row.append(lab,inp); sliderBox.appendChild(row);
+  sliderEls[p.k]={inp,val,row};
+});
+function applyPreset(name){
+  const pr=PRESETS[name]; if(!pr) return;
+  Object.entries(pr).forEach(([k,v])=>{
+    scale[k]=v;
+    if(sliderEls[k]){
+      sliderEls[k].inp.value=v;
+      sliderEls[k].val.textContent=Number(v).toFixed(2);
+    }
+  });
+  requestAttack();
+}
+document.querySelectorAll('#presets button').forEach(b=>b.addEventListener('click',()=>applyPreset(b.dataset.p)));
+
+/* ---------- pilebunker controls ---------- */
+const PB_PARAMS = [
+  {k:'size',     label:'PILEBUNKER SIZE', min:.14,max:.40,step:.005,def:PBTUNE.size},
+  {k:'off',      label:'ELBOW LIFT',      min:0,  max:1.1,step:.01, def:PBTUNE.off},
+  {k:'throwExt', label:'PILE THROW',      min:1.2,max:2.8,step:.01, def:PBTUNE.throwExt},
+  {k:'rear',     label:'REAR PISTON',     min:-1, max:1.2,step:.01,def:PBTUNE.rear},
+];
+const pbBoxEl=document.getElementById('pbsliders');
+const pbSliderEls={};
+PB_PARAMS.forEach(p=>{
+  const row=document.createElement('div'); row.className='srow';
+  const lab=document.createElement('div'); lab.className='slabel';
+  const val=document.createElement('span'); val.className='sval'; val.textContent=Number(p.def).toFixed(2);
+  lab.textContent=p.label+' '; lab.appendChild(val);
+  const inp=document.createElement('input');
+  inp.type='range'; inp.min=p.min; inp.max=p.max; inp.step=p.step; inp.value=p.def;
+  inp.addEventListener('input',()=>{
+    PBTUNE[p.k]=parseFloat(inp.value);
+    val.textContent=parseFloat(inp.value).toFixed(2);
+    if(p.k==='rear') applyPbRear();
+  });
+  row.append(lab,inp); pbBoxEl.appendChild(row);
+  pbSliderEls[p.k]={inp,val,row};
+});
+
+document.getElementById('replayBtn').addEventListener('click',()=>requestAttack());
+document.getElementById('camReset').addEventListener('click',()=>{
+  camYaw=CAM_INIT.yaw; camPitch=CAM_INIT.pitch; camDist=CAM_INIT.dist; camTarget.copy(CAM_INIT.target);
+});
+const slowBtn=document.getElementById('slowBtn');
+slowBtn.addEventListener('click',()=>{
+  PLAYBACK.rate = PLAYBACK.rate===1 ? .25 : 1;
+  slowBtn.innerHTML = PLAYBACK.rate===1 ? 'SLOW<br>¼×' : 'NORMAL<br>1×';
+});
+
+const panel=document.getElementById('panel');
+const tuneToggle=document.getElementById('tuneToggle');
+tuneToggle.addEventListener('click',()=>{
+  tuneToggle.textContent=panel.classList.toggle('open')?'TUNE ◂':'TUNE ▸';
+});
+
+/* ---------- frozen rail and direction helpers ---------- */
+const _railCoil=V3(0,0,0), _railShoulder=V3(0,0,0), _railPerp=V3(0,0,0);
+const _railMid=V3(0,0,0), _railBaseCtrl=V3(0,0,0), _railD0=V3(0,0,0), _railD1=V3(0,0,0);
+const _curveDir=V3(0,0,0), _curvePole=V3(0,0,0), _curveOff=V3(0,0,0);
+function sampleQuadRail(p0, p1, p2, t, outPos, outTan){
+  const u = 1-t;
+  outPos.copy(p0).multiplyScalar(u*u)
+    .addScaledVector(p1, 2*u*t)
+    .addScaledVector(p2, t*t);
+  _railD0.copy(p1).sub(p0).multiplyScalar(2*u);
+  _railD1.copy(p2).sub(p1).multiplyScalar(2*t);
+  outTan.copy(_railD0).add(_railD1);
+  if(outTan.lengthSq()<1e-8) outTan.copy(p2).sub(p0);
+  return outTan.normalize();
+}
+// Smoothly rotate an oriented rail direction without linearly crossing through zero.
+// The supplied plane normal chooses a deterministic turn direction for near-opposites.
+const _dirA=V3(0,0,0), _dirB=V3(0,0,0), _dirAxis=V3(0,0,0), _dirQ=new THREE.Quaternion();
+function slerpRailDir(a,b,t,planeNormal,out){
+  _dirA.copy(a).normalize(); _dirB.copy(b).normalize();
+  let dot = clamp(_dirA.dot(_dirB),-1,1);
+  if(dot > .9995) return out.lerpVectors(_dirA,_dirB,t).normalize();
+  if(dot < -.9995){
+    _dirAxis.copy(planeNormal);
+    if(_dirAxis.lengthSq()<1e-8 || Math.abs(_dirAxis.dot(_dirA))>.98){
+      _dirAxis.crossVectors(_dirA, UP);
+      if(_dirAxis.lengthSq()<1e-8) _dirAxis.set(0,0,1);
+    }
+    _dirAxis.normalize();
+    _dirQ.setFromAxisAngle(_dirAxis, Math.PI*t);
+    return out.copy(_dirA).applyQuaternion(_dirQ).normalize();
+  }
+  _dirAxis.crossVectors(_dirA,_dirB).normalize();
+  _dirQ.setFromAxisAngle(_dirAxis, Math.acos(dot)*t);
+  return out.copy(_dirA).applyQuaternion(_dirQ).normalize();
+}
+function startAttack(){
+  state.cur='falcon';
+  state.t=0;
+  state.hitDone=false;
+  state.whooshDone=false;
+  state.hissDone=false;
+  state.s={...scale};
+
+  const pb=PB.R;
+  pb.lastStep=-1;
+  pb.slammed=false;
+  pb.windStart.copy(wristT.R);
+  pb.windDirStart.copy(pb.poseDir).normalize();
+
+  // Scale the signature poses without changing their authored identities.
+  pb.brace.copy(FALCON.brace);
+  pb.high.copy(FALCON.high);
+  pb.high.y = FALCON.brace.y + (FALCON.high.y-FALCON.brace.y)*state.s.fistHeight;
+  pb.coil.copy(FALCON.coil);
+  pb.coil.x = FALCON.brace.x + (FALCON.coil.x-FALCON.brace.x)*state.s.pullback;
+  pb.coil.z = FALCON.brace.z + (FALCON.coil.z-FALCON.brace.z)*state.s.pullback;
+
+  pb.impact.copy(FALCON.impact);
+  pb.impact.z = pb.coil.z + (FALCON.impact.z-FALCON.coil.z)*state.s.launch;
+  pb.follow.copy(pb.impact).lerp(FALCON.follow, state.s.follow);
+
+  // One continuous, centripetal Catmull-Rom windup.  The previous version
+  // eased to a full stop at brace, high pose, and coil; that made the joints
+  // read as jerky at normal speed.  These curves pass smoothly through every
+  // authored pose and only ease at the beginning and end of the whole windup.
+  const arcDelta=(state.s.arcRadius-1);
+  pb.high.x += arcDelta*.16;
+  pb.high.z -= arcDelta*.035;
+  pb.coil.x += arcDelta*.10;
+  pb.coil.z -= arcDelta*.055;
+
+  pb.windCurve = new THREE.CatmullRomCurve3(
+    [pb.windStart.clone(), pb.brace.clone(), pb.high.clone(), pb.coil.clone()],
+    false, 'centripetal', .5
+  );
+  pb.poleCurve = new THREE.CatmullRomCurve3(
+    [GUARD.R.pole.clone(), FALCON.bracePole.clone(), FALCON.highPole.clone(), FALCON.coilPole.clone()],
+    false, 'centripetal', .5
+  );
+  pb.offCurve = new THREE.CatmullRomCurve3(
+    [GUARD.L.w.clone(), FALCON.bracePalm.clone(), FALCON.bracePalm.clone().lerp(FALCON.offReach,.46), FALCON.offReach.clone()],
+    false, 'centripetal', .5
+  );
+  pb.dirCurve = new THREE.CatmullRomCurve3(
+    [pb.windDirStart.clone(), FALCON.braceDir.clone(), FALCON.highDir.clone(), FALCON.coilDir.clone()],
+    false, 'centripetal', .5
+  );
+
+  // The release itself is deliberately straight and frozen.
+  pb.railDir.copy(pb.impact).sub(pb.coil).normalize();
+  pb.railEndDir.copy(pb.follow).sub(pb.impact).normalize();
+  if(pb.railEndDir.lengthSq()<1e-8) pb.railEndDir.copy(pb.railDir);
+
+  char.updateMatrixWorld(true);
+  shAnchor.R.getWorldPosition(_railShoulder); char.worldToLocal(_railShoulder);
+  pb.guardDir.copy(GUARD.R.w).sub(_railShoulder).normalize();
+  _railPerp.copy(pb.coil).sub(_railShoulder);
+  _railPerp.addScaledVector(pb.railDir,-_railPerp.dot(pb.railDir));
+  if(_railPerp.lengthSq()<1e-6) _railPerp.set(0,1,0);
+  pb.railUp.copy(_railPerp.normalize());
+  pb.railZax.crossVectors(pb.railDir,pb.railUp).normalize();
+  pb.railUp.crossVectors(pb.railZax,pb.railDir).normalize();
+
+  arm.R.prevFistWorld.copy(arm.R.fistWorld);
+  hud.atk.textContent='FALCON PUNCH';
+  hud.phase.textContent='PALM BRACE';
+  hud.fill.style.width='0%';
+}
+function requestAttack(){
+  ensureAudio();
+  startAttack();
+}
+
+/* ---------- input ---------- */
+/* camera: left/1-finger drag orbits, right-drag/2-finger drag pans, wheel/pinch zooms */
+const camPtrs=new Map();
+let camDrag=null;
+let cLastX=0,cLastY=0,cLastMidX=0,cLastMidY=0,cLastPinch=0;
+function camMid(pts){let x=0,y=0;for(const p of pts){x+=p.clientX;y+=p.clientY;}return[x/pts.length,y/pts.length];}
+function camPinchD(pts){return Math.hypot(pts[0].clientX-pts[1].clientX,pts[0].clientY-pts[1].clientY);}
+renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+renderer.domElement.addEventListener('pointerdown',e=>{
+  camPtrs.set(e.pointerId,e); renderer.domElement.setPointerCapture?.(e.pointerId);
+  const pts=[...camPtrs.values()];
+  if(pts.length===2){camDrag='pinch';cLastPinch=camPinchD(pts);[cLastMidX,cLastMidY]=camMid(pts);}
+  else if(pts.length===1){camDrag=e.button===2?'pan':'orbit';cLastX=e.clientX;cLastY=e.clientY;}
+});
+addEventListener('pointermove',e=>{
+  if(!camPtrs.has(e.pointerId))return;
+  camPtrs.set(e.pointerId,e); const pts=[...camPtrs.values()];
+  if(camDrag==='pinch'&&pts.length>=2){
+    const d=camPinchD(pts); if(cLastPinch>4)camDist=clamp(camDist*(cLastPinch/d),CAM_DIST_MIN,CAM_DIST_MAX);
+    cLastPinch=d; const[mx,my]=camMid(pts); camPan(mx-cLastMidX,my-cLastMidY); cLastMidX=mx;cLastMidY=my;
+  }else if(camDrag==='orbit'){
+    const dx=e.clientX-cLastX,dy=e.clientY-cLastY;cLastX=e.clientX;cLastY=e.clientY;
+    camYaw-=dx*.0062;camPitch=clamp(camPitch+dy*.0052,CAM_PITCH_MIN,CAM_PITCH_MAX);
+  }else if(camDrag==='pan'){
+    const dx=e.clientX-cLastX,dy=e.clientY-cLastY;cLastX=e.clientX;cLastY=e.clientY;camPan(dx,dy);
+  }
+});
+function camPtrEnd(e){
+  camPtrs.delete(e.pointerId); const pts=[...camPtrs.values()];
+  if(pts.length===2){camDrag='pinch';cLastPinch=camPinchD(pts);[cLastMidX,cLastMidY]=camMid(pts);}
+  else if(pts.length===1){camDrag=(pts[0].buttons&2)?'pan':'orbit';cLastX=pts[0].clientX;cLastY=pts[0].clientY;}
+  else camDrag=null;
+}
+addEventListener('pointerup',camPtrEnd);addEventListener('pointercancel',camPtrEnd);
+addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist*Math.pow(1.0017,e.deltaY),CAM_DIST_MIN,CAM_DIST_MAX);},{passive:false});
+
+document.querySelector('[data-a="falcon"]').addEventListener('pointerdown',e=>{e.preventDefault();requestAttack();});
+addEventListener('keydown',e=>{
+  if(e.repeat)return;
+  if(e.key.toLowerCase()==='f'||e.code==='Space'){e.preventDefault();requestAttack();}
+});
+// Backbone / standard mapping: triangle is button 3.
+const padPrev=[false,false,false,false];
+function pollPad(){
+  const gp=navigator.getGamepads?.()[0]; if(!gp)return;
+  const down=gp.buttons[3]?.pressed;
+  if(down&&!padPrev[3])requestAttack();
+  for(let i=0;i<4;i++)padPrev[i]=!!gp.buttons[i]?.pressed;
+}
+
+/* ---------- audio ---------- */
+let ac=null, master=null, noiseBuf=null;
+function ensureAudio(){
+  if(ac) return;
+  ac = new (window.AudioContext||window.webkitAudioContext)();
+  master = ac.createGain(); master.gain.value = .8;
+  const comp = ac.createDynamicsCompressor();
+  master.connect(comp); comp.connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate*1, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+}
+function whoosh(w){
+  if(!ac) return; const t = ac.currentTime;
+  const src = ac.createBufferSource(); src.buffer = noiseBuf;
+  src.playbackRate.value = .9 + Math.random()*.2;
+  const bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value = 1.4;
+  bp.frequency.setValueAtTime(240+320*w, t);
+  bp.frequency.exponentialRampToValueAtTime(850+1100*w, t+.085);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(.0001, t);
+  g.gain.exponentialRampToValueAtTime(.14+.30*w, t+.03);
+  g.gain.exponentialRampToValueAtTime(.0001, t+.16);
+  src.connect(bp); bp.connect(g); g.connect(master);
+  src.start(t); src.stop(t+.2);
+}
+function impact(w){
+  if(!ac) return; const t = ac.currentTime;
+  // low thump
+  const o = ac.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(110+40*w + Math.random()*12, t);
+  o.frequency.exponentialRampToValueAtTime(36, t+.13);
+  const og = ac.createGain();
+  og.gain.setValueAtTime(.7*w+.2, t);
+  og.gain.exponentialRampToValueAtTime(.0001, t+.16);
+  o.connect(og); og.connect(master); o.start(t); o.stop(t+.18);
+  // knuckle crack
+  const n1 = ac.createBufferSource(); n1.buffer = noiseBuf;
+  const b1 = ac.createBiquadFilter(); b1.type='bandpass';
+  b1.frequency.value = 650 + Math.random()*500; b1.Q.value = 8;
+  const g1 = ac.createGain();
+  g1.gain.setValueAtTime(.5*w, t);
+  g1.gain.exponentialRampToValueAtTime(.0001, t+.05);
+  n1.connect(b1); b1.connect(g1); g1.connect(master); n1.start(t); n1.stop(t+.07);
+  // body resonance
+  const n2 = ac.createBufferSource(); n2.buffer = noiseBuf;
+  const b2 = ac.createBiquadFilter(); b2.type='bandpass';
+  b2.frequency.value = 165 + Math.random()*40; b2.Q.value = 12;
+  const g2 = ac.createGain();
+  g2.gain.setValueAtTime(.4*w, t+.005);
+  g2.gain.exponentialRampToValueAtTime(.0001, t+.13);
+  n2.connect(b2); b2.connect(g2); g2.connect(master); n2.start(t); n2.stop(t+.15);
+}
+/* --- pilebunker sfx (ported from SUDDEN IMPACT) --- */
+function sfxClick(){
+  if(!ac) return; const t = ac.currentTime;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type='square'; o.frequency.setValueAtTime(1900,t); o.frequency.exponentialRampToValueAtTime(600,t+.03);
+  g.gain.setValueAtTime(.10,t); g.gain.exponentialRampToValueAtTime(.0001,t+.05);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+.06);
+  const n=ac.createBufferSource(); n.buffer=noiseBuf;
+  const f=ac.createBiquadFilter(); f.type='highpass'; f.frequency.value=3000;
+  const ng=ac.createGain(); ng.gain.setValueAtTime(.08,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.04);
+  n.connect(f); f.connect(ng); ng.connect(master); n.start(t); n.stop(t+.05);
+}
+function sfxHiss(dur){
+  if(!ac) return; const t = ac.currentTime;
+  const n=ac.createBufferSource(); n.buffer=noiseBuf;
+  const f=ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=2400; f.Q.value=.8;
+  const g=ac.createGain();
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.07,t+.05); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t+dur+.02);
+}
+function sfxSlam(w){
+  if(!ac) return; const t = ac.currentTime;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(130,t); o.frequency.exponentialRampToValueAtTime(34,t+.28);
+  g.gain.setValueAtTime(.45*w+.1,t); g.gain.exponentialRampToValueAtTime(.0001,t+.4);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+.45);
+  const n=ac.createBufferSource(); n.buffer=noiseBuf;
+  const f=ac.createBiquadFilter(); f.type='lowpass';
+  f.frequency.setValueAtTime(5000,t); f.frequency.exponentialRampToValueAtTime(300,t+.25);
+  const ng=ac.createGain(); ng.gain.setValueAtTime(.3*w,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.32);
+  n.connect(f); f.connect(ng); ng.connect(master); n.start(t); n.stop(t+.34);
+  const o2=ac.createOscillator(), g2=ac.createGain();
+  o2.type='triangle'; o2.frequency.setValueAtTime(870,t+.01);
+  g2.gain.setValueAtTime(.06*w,t+.01); g2.gain.exponentialRampToValueAtTime(.0001,t+.5);
+  o2.connect(g2); g2.connect(master); o2.start(t+.01); o2.stop(t+.55);
+}
+
+/* --- steam puffs + slam flash light --- */
+const fxArr = [];
+const steamGeo = new THREE.DodecahedronGeometry(.045);
+function steamPuff(worldPos, dir){
+  for(let i=0;i<4;i++){
+    const m = new THREE.Mesh(steamGeo, new THREE.MeshBasicMaterial({color:0xaab2c0, transparent:true, opacity:.5, depthWrite:false}));
+    m.position.copy(worldPos);
+    const vel = dir.clone().multiplyScalar(.6+Math.random()*.6)
+      .add(V3((Math.random()-.5)*.3, Math.random()*.45, (Math.random()-.5)*.3));
+    fxArr.push({m, vel, life:.6+Math.random()*.35, t:0});
+    scene.add(m);
+  }
+}
+function updateFx(rawDt){
+  for(let i=fxArr.length-1;i>=0;i--){
+    const f = fxArr[i]; f.t += rawDt;
+    const k = f.t/f.life;
+    if(k>=1){ scene.remove(f.m); f.m.material.dispose(); fxArr.splice(i,1); continue; }
+    f.m.position.addScaledVector(f.vel, rawDt);
+    f.vel.multiplyScalar(1-2.2*rawDt);
+    f.m.scale.setScalar(1+k*3);
+    f.m.material.opacity = .5*(1-k);
+  }
+}
+const slamLight = new THREE.PointLight(0xffb070, 0, 5);
+scene.add(slamLight);
+const pressureWaves=[];
+function pressureWave(worldPos){
+  const mat=new THREE.MeshBasicMaterial({
+    color:0xffb04a,transparent:true,opacity:.8,side:THREE.DoubleSide,
+    blending:THREE.AdditiveBlending,depthWrite:false
+  });
+  const mesh=new THREE.Mesh(new THREE.RingGeometry(.10,.15,32),mat);
+  mesh.position.copy(worldPos);
+  scene.add(mesh);
+  pressureWaves.push({mesh,t:0,life:.38});
+}
+function updatePressureWaves(rawDt){
+  for(let i=pressureWaves.length-1;i>=0;i--){
+    const w=pressureWaves[i];w.t+=rawDt;
+    const p=w.t/w.life;
+    if(p>=1){scene.remove(w.mesh);w.mesh.geometry.dispose();w.mesh.material.dispose();pressureWaves.splice(i,1);continue;}
+    w.mesh.scale.setScalar(1+p*7);
+    w.mesh.material.opacity=(1-p)*.8;
+    w.mesh.position.z+=rawDt*.35;
+  }
+}
+const _wp = V3(0,0,0);
+function pbSlamFx(side, w, followThru){
+  const pb = PB[side];
+  pb.recoil = 0.32 * followThru;
+  sfxSlam(w); sfxHiss(.5);
+  shakeVel.z += .45*w; shakeVel.y -= .12*w;
+  pb.fist.getWorldPosition(_wp);
+  slamLight.position.copy(_wp); slamLight.intensity = 5;
+  pressureWave(_wp);
+  for(const st of pb.stacks){
+    st.getWorldPosition(_wp); _wp.y += .08;
+    steamPuff(_wp, V3(0,1,.25*Math.sign(st.position.z)));
+  }
+}
+
+/* ---------- knuckle trail ---------- */
+const TRAIL_MAX = 28;
+const trailPts = [];   // {p:Vector3, life}
+const trailGeo = new THREE.BufferGeometry();
+const tPos = new Float32Array(TRAIL_MAX*2*3);
+const tCol = new Float32Array(TRAIL_MAX*2*3);
+trailGeo.setAttribute('position', new THREE.BufferAttribute(tPos,3).setUsage(THREE.DynamicDrawUsage));
+trailGeo.setAttribute('color',    new THREE.BufferAttribute(tCol,3).setUsage(THREE.DynamicDrawUsage));
+{
+  const idx = [];
+  for(let i=0;i<TRAIL_MAX-1;i++){
+    const a=i*2, b=i*2+1, c=i*2+2, d=i*2+3;
+    idx.push(a,b,c, b,d,c);
+  }
+  trailGeo.setIndex(idx);
+}
+const trailMesh = new THREE.Mesh(trailGeo, new THREE.MeshBasicMaterial({
+  vertexColors:true, blending:THREE.AdditiveBlending, transparent:true,
+  depthWrite:false, side:THREE.DoubleSide
+}));
+trailMesh.frustumCulled = false;
+scene.add(trailMesh);
+const AMBER = new THREE.Color(0xffb04a);
+const _seg=V3(0,0,0), _side=V3(0,0,0), _camF=V3(0,0,0);
+function updateTrail(rawDt){
+  for(let i=trailPts.length-1;i>=0;i--){
+    trailPts[i].life -= rawDt*6.5;
+    if(trailPts[i].life<=0) trailPts.splice(i,1);
+  }
+  const n = trailPts.length;
+  if(n<2){ trailGeo.setDrawRange(0,0); return; }
+  camera.getWorldDirection(_camF);
+  for(let i=0;i<n;i++){
+    const pt = trailPts[i];
+    const nx = trailPts[Math.min(i+1,n-1)].p, pv = trailPts[Math.max(i-1,0)].p;
+    _seg.copy(nx).sub(pv);
+    _side.crossVectors(_seg,_camF);
+    if(_side.lengthSq()<1e-8) _side.set(0,1,0);
+    _side.normalize().multiplyScalar(.028*pt.life + .006);
+    const o=i*6;
+    tPos[o  ]=pt.p.x-_side.x; tPos[o+1]=pt.p.y-_side.y; tPos[o+2]=pt.p.z-_side.z;
+    tPos[o+3]=pt.p.x+_side.x; tPos[o+4]=pt.p.y+_side.y; tPos[o+5]=pt.p.z+_side.z;
+    const c = pt.life*pt.life;
+    tCol[o  ]=AMBER.r*c; tCol[o+1]=AMBER.g*c; tCol[o+2]=AMBER.b*c;
+    tCol[o+3]=AMBER.r*c; tCol[o+4]=AMBER.g*c; tCol[o+5]=AMBER.b*c;
+  }
+  trailGeo.attributes.position.needsUpdate = true;
+  trailGeo.attributes.color.needsUpdate = true;
+  trailGeo.setDrawRange(0,(n-1)*6);
+}
+
+/* ---------- sparks (raw-dt during hitstop) ---------- */
+const sparks = [];
+const sparkGeo = crumple(new THREE.BoxGeometry(.035,.035,.035),.01);
+const sparkMat = new THREE.MeshBasicMaterial({color:0xffc46a});
+const sparkPool = [];
+for(let i=0;i<40;i++){
+  const m = new THREE.Mesh(sparkGeo, sparkMat);
+  m.visible=false; scene.add(m); sparkPool.push(m);
+}
+function burst(p, dirZ, w){
+  const n = 6 + Math.floor(8*w);
+  for(let i=0;i<n;i++){
+    const m = sparkPool.find(s=>!s.visible); if(!m) break;
+    m.visible = true; m.position.copy(p);
+    m.scale.setScalar(.6+Math.random()*.9);
+    sparks.push({m,
+      v:V3((Math.random()-.5)*2.2, Math.random()*2.4+.6, dirZ*(.5+Math.random()*2.0)),
+      life:.28+Math.random()*.22});
+  }
+}
+function updateSparks(rawDt){
+  for(let i=sparks.length-1;i>=0;i--){
+    const s = sparks[i];
+    s.life -= rawDt;
+    if(s.life<=0){ s.m.visible=false; sparks.splice(i,1); continue; }
+    s.v.y -= 9*rawDt;
+    s.m.position.addScaledVector(s.v, rawDt);
+    s.m.scale.multiplyScalar(Math.pow(.02, rawDt));
+  }
+}
+
+/* ---------- segment-segment distance (Ericson) ---------- */
+const _d1=V3(0,0,0),_d2=V3(0,0,0),_r=V3(0,0,0),_c1=V3(0,0,0),_c2=V3(0,0,0);
+function segSegDist(p1,q1,p2,q2,outPoint){
+  _d1.copy(q1).sub(p1); _d2.copy(q2).sub(p2); _r.copy(p1).sub(p2);
+  const a=_d1.dot(_d1), e=_d2.dot(_d2), f=_d2.dot(_r);
+  let s=0,t=0;
+  if(a<=1e-9 && e<=1e-9){ /* both points */ }
+  else if(a<=1e-9){ t=clamp(f/e,0,1); }
+  else {
+    const c=_d1.dot(_r);
+    if(e<=1e-9){ s=clamp(-c/a,0,1); }
+    else {
+      const b=_d1.dot(_d2), den=a*e-b*b;
+      s = den>1e-9 ? clamp((b*f-c*e)/den,0,1) : 0;
+      t = (b*s+f)/e;
+      if(t<0){ t=0; s=clamp(-c/a,0,1); }
+      else if(t>1){ t=1; s=clamp((b-c)/a,0,1); }
+    }
+  }
+  _c1.copy(p1).addScaledVector(_d1,s);
+  _c2.copy(p2).addScaledVector(_d2,t);
+  if(outPoint) outPoint.copy(_c1);
+  return _c1.distanceTo(_c2);
+}
+
+/* ---------- feel: hitstop + shake ---------- */
+let hitstop = 0, hitstopScale = .06;
+const shake = V3(0,0,0), shakeVel = V3(0,0,0);
+function onHit(point, w){
+  hitstop = .04 + .05*w;
+  shakeVel.z += .9*w; shakeVel.x += (Math.random()-.5)*.5*w; shakeVel.y -= .3*w;
+  eSpr.rvx += 5.5*w; eSpr.pvz += 2.0*w; eSpr.flash = 1;
+  burst(point, 1, w);
+  impact(w);
+}
+
+/* ---------- per-frame pose ---------- */
+const wristT = { L:V3(0,0,0), R:V3(0,0,0) };
+const poleT  = { L:V3(0,0,0), R:V3(0,0,0) };
+const _sPos=V3(0,0,0), _tmp=V3(0,0,0), _hit=V3(0,0,0), _capA=V3(0,0,0), _capB=V3(0,0,0);
+const CAP_R = 0.21, FIST_R = 0.095;
+const _fwd=V3(0,0,0), _upv=V3(0,0,0), _perp2=V3(0,0,0), _zax=V3(0,0,0), _yax=V3(0,0,0);
+const _bm = new THREE.Matrix4();
+const fistRadius = ()=> PBTUNE.hitPile ? .72*PBTUNE.size : FIST_R;
+let idleT = 0;
+
+function updateCombat(dt){
+  idleT += dt;
+
+  // -------- guard defaults --------
+  const bobA=Math.sin(idleT*2.1)*.012,bobB=Math.sin(idleT*1.7+1.3)*.012;
+  wristT.L.copy(GUARD.L.w);wristT.L.y+=bobA;
+  wristT.R.copy(GUARD.R.w);wristT.R.y+=bobB;
+  poleT.L.copy(GUARD.L.pole);poleT.R.copy(GUARD.R.pole);
+
+  let hipTw=Math.sin(idleT*1.3)*.03;
+  let chestTw=hipTw*1.4;
+  let lungeTarget=0,shLead=0,shAcross=0,crouch=0,activeSide=null;
+
+  if(state.cur){
+    const s=state.s;
+    const pb=PB.R;
+    activeSide='R';
+    state.t+=dt;
+
+    const time=s.timeScale;
+    const dBrace=.15*s.braceTime*time;
+    const dRatchet=.55*s.ratchetTime*time;
+    const dCoil=.35*s.coilTime*time;
+    const dWind=dBrace+dRatchet+dCoil;
+    const dHold=.18*s.holdTime*time;
+    const dStrike=.105*s.strikeTime*time;
+    const dImpact=.12*s.impactHold*time;
+    const dPistonHold=.28*s.pistonHold*time;
+    const dRetract=.22*s.retractTime*time;
+    const dRecover=.75*s.recoverTime*time;
+
+    const B1=dWind;
+    const B2=B1+dHold;
+    const B3=B2+dStrike;
+    const B4=B3+dImpact;
+    const B5=B4+dPistonHold;
+    const B6=B5+dRetract;
+    const B7=B6+dRecover;
+    state.total=B7;
+
+    const t=state.t;
+    const W=wristT.R;
+    const WL=wristT.L;
+
+    // Shared ratchet progression across the entire continuous windup.
+    const windCharge=clamp(t/Math.max(dWind,.0001),0,1);
+    const steps=4;
+    const stepF=Math.min(steps-1e-4,windCharge*steps);
+    const step=Math.floor(stepF);
+    const stepLocal=stepF-step;
+    const pull=easeOutCubic(Math.min(1,stepLocal/.58));
+    pb.pist=-((step+pull)/steps)*PB_MAX_RETRACT;
+    pb.gearA=-(step+pull)*(Math.PI/4);
+    pb.charge=windCharge;
+    pb.cock=.052*windCharge;
+    if(step!==pb.lastStep){
+      pb.lastStep=step;sfxClick();
+      if(step===steps-1)pb.recoil=Math.max(pb.recoil,.055);
+    }
+
+    if(t<B1){ /* one continuous authored windup spline */
+      const raw=clamp(t/Math.max(dWind,.0001),0,1);
+      const p=easeInOutCubic(raw); // ease only at the two ends, never at intermediate poses
+
+      pb.windCurve.getPointAt(p,W);
+      pb.poleCurve.getPointAt(p,_curvePole); poleT.R.copy(_curvePole);
+      pb.offCurve.getPointAt(p,_curveOff); WL.copy(_curveOff);
+      pb.dirCurve.getPointAt(p,_curveDir);
+      if(_curveDir.lengthSq()<1e-8)_curveDir.copy(FALCON.coilDir);
+      pb.poseDir.copy(_curveDir.normalize());
+
+      // Body motion also uses one uninterrupted progression.
+      const bodyP=smoothstep(p);
+      hipTw=lerp(0,FALCON.coilHip*s.twist,bodyP);
+      chestTw=lerp(0,FALCON.coilChest*s.twist,bodyP);
+      crouch=.16*s.crouch*Math.pow(bodyP,1.28);
+
+      const braceFrac=dBrace/Math.max(dWind,.0001);
+      const ratchetFrac=(dBrace+dRatchet)/Math.max(dWind,.0001);
+      state.phase=raw<braceFrac?'PALM BRACE':(raw<ratchetFrac?'OVERHEAD RATCHET':'DEEP COIL');
+    }
+    else if(t<B2){ /* threatening stillness before release */
+      const p=(t-B1)/Math.max(dHold,.0001);
+      W.copy(pb.coil);
+      W.x+=Math.sin(t*63)*.003*(1-p);
+      W.y+=Math.sin(t*79)*.002*(1-p);
+      WL.copy(FALCON.offReach);
+      poleT.R.copy(FALCON.coilPole);
+      pb.poseDir.copy(FALCON.coilDir);
+      pb.pist=-PB_MAX_RETRACT+Math.sin(t*92)*.010;
+      pb.cock=.052;
+      hipTw=FALCON.coilHip*s.twist;
+      chestTw=FALCON.coilChest*s.twist;
+      crouch=.16*s.crouch;
+      state.phase='FINAL HOLD';
+    }
+    else if(t<B3){ /* frozen linear launch rail */
+      const p=(t-B2)/Math.max(dStrike,.0001);
+      const move=easeInQuart(p);
+      W.lerpVectors(pb.coil,pb.impact,move);
+      poleT.R.lerpVectors(FALCON.coilPole,FALCON.impactPole,easeInOutCubic(p));
+      slerpRailDir(FALCON.coilDir,pb.railDir,easeInOutCubic(clamp(p/.42,0,1)),pb.railZax,pb.poseDir);
+
+      const hp=easeOutCubic(clamp(p*1.28,0,1));
+      const cp=easeInOutCubic(clamp((p-.06)/.94,0,1));
+      hipTw=lerp(FALCON.coilHip*s.twist,FALCON.punchHip*s.twist,hp);
+      chestTw=lerp(FALCON.coilChest*s.twist,FALCON.punchChest*s.twist,cp);
+      lungeTarget=.34*s.launch*move;
+      shLead=.16*move;
+      shAcross=.070*move;
+      crouch=lerp(.16*s.crouch,.095*s.crouch,easeOutCubic(p));
+      WL.lerpVectors(FALCON.offReach,V3(-.08,1.39,.31),easeOutCubic(clamp(p*1.4,0,1)));
+
+      if(!state.whooshDone&&p>.18){whoosh(FALCON.weight*s.impact);state.whooshDone=true;}
+
+      const slamAt=clamp(s.pileDelay,.45,.94);
+      const slamSpan=.16/s.pileSnap;
+      if(p<slamAt){
+        pb.pist=-PB_MAX_RETRACT+Math.sin(t*105)*.009;
+        pb.cock=.052;
+      }else{
+        const k=easeOutCubic(clamp((p-slamAt)/Math.max(slamSpan,.03),0,1));
+        pb.pist=-PB_MAX_RETRACT+(PBTUNE.throwExt+PB_MAX_RETRACT)*k;
+        pb.cock=.052*(1-k);
+        pb.gearA=-steps*(Math.PI/4)-k*Math.PI*.65;
+        if(k>=1&&!pb.slammed){
+          pb.slammed=true;
+          pbSlamFx('R',FALCON.weight*s.impact,s.follow);
+        }
+      }
+
+      trailPts.push({p:arm.R.fistWorld.clone(),life:1});
+      if(trailPts.length>TRAIL_MAX)trailPts.shift();
+
+      if(!state.hitDone&&p>=.82){
+        state.hitDone=true;
+        _hit.copy(arm.R.fistWorld);
+        onHit(_hit,FALCON.weight*s.impact);
+      }
+      state.phase='BODY LAUNCH';
+    }
+    else if(t<B4){ /* committed body extension */
+      const p=(t-B3)/Math.max(dImpact,.0001);
+      W.lerpVectors(pb.impact,pb.follow,easeOutCubic(clamp(p*1.7,0,1)));
+      WL.set(-.08,1.39,.31);
+      poleT.R.copy(FALCON.impactPole);
+      slerpRailDir(pb.railDir,pb.railEndDir,smoothstep(p),pb.railZax,pb.poseDir);
+      hipTw=FALCON.punchHip*s.twist;
+      chestTw=FALCON.punchChest*s.twist;
+      lungeTarget=.34*s.launch;
+      shLead=.16;shAcross=.070;
+      crouch=.095*s.crouch;
+      pb.pist=PBTUNE.throwExt;
+      pb.charge=1-p*.12;
+      state.phase='IMPACT HOLD';
+    }
+    else if(t<B5){ /* visibly leave the piston fully extended */
+      W.copy(pb.follow);
+      WL.set(-.08,1.39,.31);
+      poleT.R.copy(FALCON.impactPole);
+      pb.poseDir.copy(pb.railEndDir);
+      hipTw=FALCON.punchHip*s.twist;
+      chestTw=FALCON.punchChest*s.twist;
+      lungeTarget=.34*s.launch;
+      shLead=.16;shAcross=.070;
+      crouch=.095*s.crouch;
+      pb.pist=PBTUNE.throwExt;
+      pb.cock=0;
+      pb.charge=.82;
+      state.phase='PISTON LOCKED OUT';
+    }
+    else if(t<B6){ /* short pneumatic hiss and deliberate piston retraction */
+      const raw=(t-B5)/Math.max(dRetract,.0001);
+      const p=easeInOutCubic(raw);
+      if(!state.hissDone){
+        state.hissDone=true;
+        sfxHiss(clamp(dRetract*.90,.12,.34));
+      }
+
+      W.copy(pb.follow);
+      WL.set(-.08,1.39,.31);
+      poleT.R.copy(FALCON.impactPole);
+      pb.poseDir.copy(pb.railEndDir);
+
+      // Hold most of the body pose while the mechanism cycles.
+      const settle=smoothstep(raw)*.10;
+      hipTw=lerp(FALCON.punchHip*s.twist,FALCON.punchHip*s.twist*.90,settle);
+      chestTw=lerp(FALCON.punchChest*s.twist,FALCON.punchChest*s.twist*.90,settle);
+      lungeTarget=.34*s.launch;
+      shLead=.16;shAcross=.070;
+      crouch=.095*s.crouch;
+
+      pb.pist=lerp(PBTUNE.throwExt,0,p);
+      pb.gearA=lerp(-steps*(Math.PI/4)-Math.PI*.65,0,p);
+      pb.cock=0;
+      pb.charge=lerp(.82,.35,p);
+      state.phase='PNEUMATIC RETRACT';
+    }
+    else if(t<B7){ /* body recovery begins only after the piston is home */
+      const raw=(t-B6)/Math.max(dRecover,.0001);
+      const p=easeInOutCubic(raw);
+      sampleQuadRail(pb.follow,FALCON.recoverMid,GUARD.R.w,p,W,_tmp);
+      WL.lerpVectors(V3(-.08,1.39,.31),GUARD.L.w,p);
+      poleT.R.lerpVectors(FALCON.impactPole,GUARD.R.pole,p);
+      slerpRailDir(pb.railEndDir,pb.guardDir,p,pb.railZax,pb.poseDir);
+
+      hipTw=lerp(FALCON.punchHip*s.twist*.90,0,p);
+      chestTw=lerp(FALCON.punchChest*s.twist*.90,0,p);
+      lungeTarget=.34*s.launch*(1-p);
+      shLead=.16*(1-p);shAcross=.070*(1-p);
+      crouch=.095*s.crouch*(1-p);
+
+      pb.pist=0;
+      pb.gearA=0;
+      pb.cock=0;
+      pb.charge=lerp(.35,0,p);
+      state.phase='HEAVY RECOVERY';
+    }
+    else{
+      state.cur=null;
+      state.phase='READY';
+      hud.atk.textContent='READY';
+      hud.phase.textContent='FALCON PILEBUNKER';
+      hud.fill.style.width='0%';
+    }
+
+    if(state.cur){
+      hud.phase.textContent=state.phase;
+      hud.fill.style.width=`${clamp(state.t/state.total,0,1)*100}%`;
+    }
+  }
+
+  // -------- apply body pose --------
+  state.lunge=lerp(state.lunge,lungeTarget,1-Math.pow(.0001,dt));
+  char.position.z=state.lunge;
+  state.hipT=lerp(state.hipT,hipTw,1-Math.pow(.000001,dt));
+  state.chestT=lerp(state.chestT,chestTw,1-Math.pow(.000001,dt));
+  hips.rotation.y=state.hipT;
+  chest.rotation.y=state.chestT-state.hipT;
+  head.rotation.y=-state.chestT*.62;
+  brow.rotation.y=head.rotation.y;
+  hips.position.y=.95-crouch+Math.sin(idleT*2.1)*.008;
+
+  for(const side of ['L','R']){
+    shAnchor[side].position.z=shBaseZ+(side===activeSide?shLead:0);
+    const inward=side==='L'?1:-1;
+    shAnchor[side].position.x=shBaseX[side]+(side===activeSide?inward*shAcross:0);
+  }
+
+  // -------- solve arms and mount the pilebunkers --------
+  for(const side of ['L','R']){
+    const A=arm[side],pb=PB[side];
+    A.prevFistWorld.copy(A.fistWorld);
+    shAnchor[side].getWorldPosition(_sPos);char.worldToLocal(_sPos);
+    solveArm(_sPos,wristT[side],poleT[side],ik[side]);
+    setLimb(A.fore,ik[side].elbow,ik[side].wrist);
+    _dir.copy(ik[side].wrist).sub(ik[side].elbow).normalize();
+    A.fist.position.copy(ik[side].wrist).addScaledVector(_dir,.07);
+    A.fist.quaternion.setFromUnitVectors(UP,_dir);
+
+    const attacking=state.cur&&side==='R';
+    if(!attacking){
+      const rk=1-Math.pow(.002,dt);
+      pb.pist+=(Math.sin(idleT*1.4+(side==='L'?0:2.1))*.015-pb.pist)*rk;
+      pb.gearA+=(0-pb.gearA)*rk;
+      pb.cock+=(0-pb.cock)*rk;
+      pb.charge=Math.max(0,pb.charge-dt*2.5);
+    }
+    pb.recoil+=(0-pb.recoil)*Math.min(1,dt*7);
+
+    if(attacking){
+      _fwd.copy(pb.poseDir).normalize();
+      _zax.copy(pb.railZax);
+      _yax.crossVectors(_zax,_fwd).normalize();
+      _zax.crossVectors(_fwd,_yax).normalize();
+      pb.upDir.copy(_yax);
+    }else{
+      _fwd.copy(ik[side].wrist).sub(ik[side].elbow).normalize();
+      pb.poseDir.copy(_fwd);
+      _upv.copy(ik[side].elbow).sub(_sPos).normalize();
+      _perp2.copy(_upv).addScaledVector(_fwd,-_upv.dot(_fwd));
+      if(_perp2.lengthSq()>1e-6)pb.upDir.lerp(_perp2.normalize(),1-Math.pow(1e-6,dt)).normalize();
+      _zax.crossVectors(_fwd,pb.upDir);
+      if(_zax.lengthSq()<1e-8)_zax.set(1,0,0);
+      _zax.normalize();_yax.crossVectors(_zax,_fwd);
+    }
+    _bm.makeBasis(_fwd,_yax,_zax);
+    pb.root.quaternion.setFromRotationMatrix(_bm);
+    if(pb.cock)pb.root.rotateZ(pb.cock);
+
+    const sc=PBTUNE.size;
+    pb.root.scale.setScalar(sc);
+    _wp.copy(ik[side].elbow).addScaledVector(_yax,PBTUNE.off*sc);
+    const sideOut=side==='L'?-1:1;
+    const minSocketOut=attacking?.205:.195;
+    if(sideOut*_wp.x<minSocketOut)_wp.x=sideOut*minSocketOut;
+    _tmp.copy(pb.elbowSocket.position).multiplyScalar(sc).applyQuaternion(pb.root.quaternion);
+    pb.root.position.copy(_wp).sub(_tmp);
+
+    setLimb(A.upper,_sPos,_wp);
+    pb.elbowG.position.copy(_wp);
+    pb.elbowG.quaternion.setFromUnitVectors(UP,_zax);
+    pb.elbowG.scale.setScalar(sc);
+
+    pb.carriage.position.x=pb.pist;
+    pb.gear.rotation.z=pb.gearA;
+    pb.idler.rotation.z=-pb.gearA*(.55/.3);
+    pb.fore.position.x=-pb.recoil;
+    pb.glowMat.emissiveIntensity=pb.charge*(.8+Math.sin(performance.now()*.02)*.2)*2.4;
+    const ext=Math.max(0,pb.pist)/PBTUNE.throwExt;
+    pb.fist.scale.set(1-ext*.06,1+ext*.04,1+ext*.04);
+
+    pb.root.updateMatrixWorld(true);
+    if(PBTUNE.hitPile)pb.fist.getWorldPosition(A.fistWorld);
+    else{A.fistWorld.copy(A.fist.position);char.localToWorld(A.fistWorld);}
+  }
+}
+
+/* ---------- enemy springs ---------- */
+function updateEnemy(dt){
+  const k=55, c=7.5;
+  eSpr.rvx += (-k*eSpr.rx - c*eSpr.rvx)*dt;  eSpr.rx += eSpr.rvx*dt;
+  eSpr.pvz += (-k*eSpr.pz - c*eSpr.pvz)*dt;  eSpr.pz += eSpr.pvz*dt;
+  eBody.rotation.x = eSpr.rx;
+  eBody.position.z = eSpr.pz;
+  eBody.rotation.y = Math.sin(idleT*.9)*.06;
+  eSpr.flash = Math.max(0, eSpr.flash - dt*7);
+  eMat.emissive.setRGB(eSpr.flash*.9, eSpr.flash*.45, eSpr.flash*.1);
+}
+
+/* ---------- camera ---------- */
+function updateCamera(rawDt){
+  shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
+  shake.addScaledVector(shakeVel,rawDt);
+  const swayK = camDist / CAM_INIT.dist;   // keep the breathing sway proportionally consistent at any zoom
+  const sy = Math.sin(idleT*.4)*.045*swayK, sb = Math.sin(idleT*.31)*.02*swayK;
+  camera.position.set(
+    camTarget.x + Math.sin(camYaw)*Math.cos(camPitch)*camDist + sy + shake.x,
+    camTarget.y + Math.sin(camPitch)*camDist + sb + shake.y,
+    camTarget.z + Math.cos(camYaw)*Math.cos(camPitch)*camDist + shake.z
+  );
+  camera.lookAt(camTarget.x+shake.x*.5, camTarget.y, camTarget.z+shake.z*.5);
+}
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+function frame(){
+  requestAnimationFrame(frame);
+  const rawDt = Math.min(clock.getDelta(), .05);
+  let dt = rawDt*PLAYBACK.rate;
+  if(hitstop > 0){ hitstop -= rawDt; dt = rawDt*PLAYBACK.rate*hitstopScale; }
+
+  pollPad();
+  updateCombat(dt);
+  updateEnemy(dt);
+  updateSparks(rawDt);      // …particles don't
+  updateFx(rawDt*PLAYBACK.rate);
+  updatePressureWaves(rawDt*PLAYBACK.rate);
+  slamLight.intensity += (0-slamLight.intensity)*Math.min(1, rawDt*8);
+  updateTrail(rawDt);
+  updateCamera(rawDt);
+  renderer.render(scene, camera);
+}
+frame();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
