@@ -11,8 +11,11 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
   const tmpPos = V3();
 
   let ac=null, master=null, noiseBuf=null;
+  function wakeAudio(){
+    if(ac?.state==='suspended') ac.resume().catch(()=>{});
+  }
   function ensureAudio(){
-    if(ac) return;
+    if(ac){ wakeAudio(); return; }
     const AudioContext=window.AudioContext||window.webkitAudioContext;
     if(!AudioContext) return;
     ac=new AudioContext();
@@ -22,8 +25,10 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);
     const d=noiseBuf.getChannelData(0);
     for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    wakeAudio();
   }
   function noiseBurst({type='bandpass',frequency=1000,q=1,gain=.1,duration=.08,delay=0}={}){
+    ensureAudio();
     if(!ac||!noiseBuf)return;
     const t=ac.currentTime+delay,n=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
     n.buffer=noiseBuf;f.type=type;f.frequency.value=frequency;f.Q.value=q;
@@ -31,7 +36,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     n.connect(f);f.connect(g);g.connect(master);n.start(t);n.stop(t+duration+.02);
   }
   function click(){
-    if(!ac)return;
+    ensureAudio();if(!ac)return;
     const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
     o.type='square';o.frequency.setValueAtTime(1900,t);o.frequency.exponentialRampToValueAtTime(600,t+.03);
     g.gain.setValueAtTime(.10,t);g.gain.exponentialRampToValueAtTime(.0001,t+.05);
@@ -39,14 +44,14 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     noiseBurst({type:'highpass',frequency:3000,gain:.08,duration:.04});
   }
   function hiss(dur){
-    if(!ac)return;
+    ensureAudio();if(!ac)return;
     const t=ac.currentTime,n=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
     n.buffer=noiseBuf;f.type='bandpass';f.frequency.value=2400;f.Q.value=.8;
     g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.07,t+.05);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
     n.connect(f);f.connect(g);g.connect(master);n.start(t);n.stop(t+dur+.02);
   }
   function whoosh(w){
-    if(!ac)return;
+    ensureAudio();if(!ac)return;
     const t=ac.currentTime,n=ac.createBufferSource(),bp=ac.createBiquadFilter(),g=ac.createGain();
     n.buffer=noiseBuf;n.playbackRate.value=.9+Math.random()*.2;
     bp.type='bandpass';bp.Q.value=1.4;bp.frequency.setValueAtTime(240+320*w,t);bp.frequency.exponentialRampToValueAtTime(850+1100*w,t+.085);
@@ -54,7 +59,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     n.connect(bp);bp.connect(g);g.connect(master);n.start(t);n.stop(t+.2);
   }
   function slamSound(w){
-    if(!ac)return;
+    ensureAudio();if(!ac)return;
     const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
     o.type='sine';o.frequency.setValueAtTime(130,t);o.frequency.exponentialRampToValueAtTime(34,t+.28);
     g.gain.setValueAtTime(.45*w+.1,t);g.gain.exponentialRampToValueAtTime(.0001,t+.4);
@@ -69,7 +74,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     o2.connect(g2);g2.connect(master);o2.start(t+.01);o2.stop(t+.55);
   }
   function impactSound(w){
-    if(!ac)return;
+    ensureAudio();if(!ac)return;
     const t=ac.currentTime,o=ac.createOscillator(),og=ac.createGain();
     o.type='sine';o.frequency.setValueAtTime(110+40*w+Math.random()*12,t);o.frequency.exponentialRampToValueAtTime(36,t+.13);
     og.gain.setValueAtTime(.7*w+.2,t);og.gain.exponentialRampToValueAtTime(.0001,t+.16);
@@ -80,6 +85,11 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
 
   const steamParticles=[],waves=[],impactBursts=[],sparks=[],trail=[];
   const steamGeo=new THREE.DodecahedronGeometry(.045);
+  const steamPool=[];
+  for(let i=0;i<30;i++){
+    const material=new THREE.MeshBasicMaterial({color:0xaab2c0,transparent:true,opacity:0,depthWrite:false});
+    const m=new THREE.Mesh(steamGeo,material);m.visible=false;m.renderOrder=7;scene.add(m);steamPool.push(m);
+  }
   const sparkGeo=new THREE.BoxGeometry(.035,.035,.035);
   const sparkMat=new THREE.MeshBasicMaterial({color:0xffc46a});
   const sparkPool=[];
@@ -91,8 +101,8 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
   function steam(worldPos,dir,effectScale=1){
     const puffScale=Math.max(.7,effectScale);
     for(let i=0;i<5;i++){
-      const material=new THREE.MeshBasicMaterial({color:0xaab2c0,transparent:true,opacity:.62,depthWrite:false});
-      const m=new THREE.Mesh(steamGeo,material);m.position.copy(worldPos);m.scale.setScalar(puffScale);m.renderOrder=7;scene.add(m);
+      const m=steamPool.find(candidate=>!candidate.visible);if(!m)break;
+      m.visible=true;m.position.copy(worldPos);m.scale.setScalar(puffScale);m.material.opacity=.62;
       const vel=dir.clone().normalize().multiplyScalar((.75+Math.random()*.85)*puffScale)
         .add(V3((Math.random()-.5)*.36,Math.random()*.50,(Math.random()-.5)*.36).multiplyScalar(puffScale));
       steamParticles.push({m,vel,life:.68+Math.random()*.42,t:0,base:puffScale});
@@ -100,6 +110,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
   }
   function orientRing(mesh,forward){
     tmpDir.copy(forward||V3(0,0,1));
+    tmpDir.y=0; // keep the effect upright/normal to the enemy on the arena floor
     if(tmpDir.lengthSq()<1e-8)tmpDir.set(0,0,1);
     tmpDir.normalize();
     mesh.quaternion.setFromUnitVectors(RING_NORMAL,tmpDir);
@@ -108,7 +119,8 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     const mat=new THREE.MeshBasicMaterial({color:0xffb04a,transparent:true,opacity:.88,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false});
     const mesh=new THREE.Mesh(new THREE.RingGeometry(.10,.15,32),mat);
     mesh.position.copy(worldPos);orientRing(mesh,forward);mesh.scale.setScalar(effectScale);mesh.renderOrder=6;scene.add(mesh);
-    waves.push({mesh,t:0,life:.40,base:effectScale,forward:(forward||V3(0,0,1)).clone().normalize()});
+    const flatForward=(forward||V3(0,0,1)).clone();flatForward.y=0;if(flatForward.lengthSq()<1e-8)flatForward.set(0,0,1);flatForward.normalize();
+    waves.push({mesh,t:0,life:.40,base:effectScale,forward:flatForward});
   }
   function impactFlash(point,forward,effectScale=1){
     const ring=new THREE.Mesh(new THREE.RingGeometry(.12,.25,32),new THREE.MeshBasicMaterial({color:0xffc46a,transparent:true,opacity:1,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
@@ -119,13 +131,13 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
   }
   function sparkBurst(point,forward,weight,effectScale=1){
     const count=Math.min(sparkPool.length,8+Math.floor(10*weight));
-    const f=(forward||V3(0,0,1)).clone().normalize();
+    const f=(forward||V3(0,0,1)).clone();f.y=0;if(f.lengthSq()<1e-8)f.set(0,0,1);f.normalize();
     for(let i=0;i<count;i++){
       const m=sparkPool.find(s=>!s.visible);if(!m)break;
       m.visible=true;m.position.copy(point);m.scale.setScalar((.7+Math.random()*1.0)*effectScale);
       const vel=f.clone().multiplyScalar(.5+Math.random()*2.2)
         .add(V3((Math.random()-.5)*2.8,Math.random()*2.8+.7,(Math.random()-.5)*2.8)).multiplyScalar(effectScale);
-      sparks.push({m,v:vel,life:.32+Math.random()*.28,maxLife:.60});
+      sparks.push({m,v:vel,life:.32+Math.random()*.28});
     }
   }
 
@@ -162,7 +174,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
     slamLight.intensity+=(0-slamLight.intensity)*Math.min(1,dt*10);
     for(let i=steamParticles.length-1;i>=0;i--){
       const f=steamParticles[i];f.t+=dt;const k=f.t/f.life;
-      if(k>=1){scene.remove(f.m);f.m.material.dispose();steamParticles.splice(i,1);continue;}
+      if(k>=1){f.m.visible=false;f.m.material.opacity=0;steamParticles.splice(i,1);continue;}
       f.m.position.addScaledVector(f.vel,dt);f.vel.multiplyScalar(Math.max(0,1-2.0*dt));f.m.scale.setScalar(f.base*(1+k*3.2));f.m.material.opacity=.62*(1-k);
     }
     for(let i=waves.length-1;i>=0;i--){
@@ -195,7 +207,7 @@ export function createPowBunkerEffects({ THREE, scene } = {}) {
   }
 
   function dispose(){
-    for(const f of steamParticles){scene.remove(f.m);f.m.material.dispose();}
+    for(const m of steamPool){scene.remove(m);m.material.dispose();}
     for(const w of waves){scene.remove(w.mesh);w.mesh.geometry.dispose();w.mesh.material.dispose();}
     for(const b of impactBursts){scene.remove(b.ring,b.core);b.ring.geometry.dispose();b.ring.material.dispose();b.core.geometry.dispose();b.core.material.dispose();}
     for(const m of sparkPool)scene.remove(m);
