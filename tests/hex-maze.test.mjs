@@ -19,6 +19,9 @@ for(let i = 0; i < iterations; i++){
   assert.equal(validation.deadEnds.length, 0, `seed ${maze.seed} retained dead ends`);
   assert.equal(maze.cells.size, cellCount ?? maze.cells.size, 'cell count changed for a fixed radius');
   assert.equal(maze.cells.size, new Set(maze.rooms.flatMap(room => room.cellKeys)).size, 'not every cell has one room');
+  for(const room of maze.rooms){
+    assert.ok((validation.roomDoorCounts.get(room.id) || 0) >= 2, `seed ${maze.seed} room ${room.id} has fewer than two doors`);
+  }
   cellCount ??= maze.cells.size;
 }
 
@@ -26,6 +29,7 @@ const first = createHexMaze({ seed:'deterministic-check' });
 const second = createHexMaze({ seed:'deterministic-check' });
 assert.deepEqual([...first.openEdges].sort(), [...second.openEdges].sort(), 'same seed should carve the same maze');
 assert.deepEqual(first.rooms, second.rooms, 'same seed should segment the same rooms');
+assert.deepEqual(first.doors, second.doors, 'same seed should connect the same rooms');
 
 const startCell = first.cells.get(first.startCellKey);
 const arenaHexSize = 20;
@@ -61,8 +65,9 @@ assert.deepEqual([...encounters.sealedRoomIds], [first.startRoomId], 'uncleared 
 encounters.clearRoom();
 assert.equal(encounters.isCleared(first.startRoomId), true, 'cleared room should persist');
 assert.equal(encounters.sealedRoomIds.size, 0, 'cleared room should reopen');
-const startDoor = first.doors.find(door => door.roomA === first.startRoomId || door.roomB === first.startRoomId);
-assert.ok(startDoor, 'starting room should have a door');
+const startDoors = first.doors.filter(door => door.roomA === first.startRoomId || door.roomB === first.startRoomId);
+assert.ok(startDoors.length >= 2, 'starting room should have at least two doors');
+const startDoor = startDoors[0];
 assert.equal(encounters.canOpenDoor(startDoor.edge), true, 'cleared room door should become breakable');
 assert.equal(encounters.openDoor(startDoor.edge), true, 'breakable door should open once');
 assert.equal(encounters.openDoor(startDoor.edge), false, 'opened door should not open twice');
@@ -79,7 +84,7 @@ assert.equal(transition.start({ toRoomId:2 }), false, 'a second transition shoul
 assert.equal(transition.update(.49).swapped, false, 'room should remain loaded before the occluded midpoint');
 assert.equal(transition.update(.02).swapped, true, 'room should swap once behind the transition veil');
 assert.equal(swaps, 1, 'room swap callback should fire once');
-assert.equal(transition.update(.49).completed, true, 'transition should finish at its duration');
-assert.equal(completes, 1, 'room completion callback should fire once');
+assert.equal(transition.update(.49).completed, true, 'room transition should finish at its duration');
+assert.equal(completes, 1, 'room completion hook should fire once');
 
-console.log(`Validated ${iterations} deterministic braided mazes (${cellCount} cells each).`);
+console.log(`Validated ${iterations} deterministic room-first braided mazes (${cellCount} cells each).`);
