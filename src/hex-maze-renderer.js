@@ -118,6 +118,30 @@ function splitDoorEdge(edge, doorWidth){
   };
 }
 
+function insetDoorTargetTowardRoom(maze, roomId, door, hexSize, inset = .7){
+  if(roomId === null) return door;
+  const activeCellKey = door.roomA === roomId ? door.cellA : door.roomB === roomId ? door.cellB : null;
+  const activeCell = activeCellKey ? maze.cells.get(activeCellKey) : null;
+  if(!activeCell) return door;
+  const edgeMid = {
+    x:(door.a.x + door.b.x) / 2,
+    z:(door.a.z + door.b.z) / 2,
+  };
+  const activeCenter = axialToWorld(activeCell.q, activeCell.r, hexSize);
+  const dx = activeCenter.x - edgeMid.x;
+  const dz = activeCenter.z - edgeMid.z;
+  const length = Math.hypot(dx, dz) || 1;
+  const ox = dx / length * inset;
+  const oz = dz / length * inset;
+  return {
+    ...door,
+    a:{ x:door.a.x + ox, z:door.a.z + oz },
+    b:{ x:door.b.x + ox, z:door.b.z + oz },
+    center:{ x:door.center.x + ox, z:door.center.z + oz },
+    visualCenter:door.center,
+  };
+}
+
 export function createMazeWorld({
   THREE, maze, roomId = null, hexSize = 2.6, wallHeight = 1.8,
   wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(),
@@ -149,16 +173,19 @@ export function createMazeWorld({
   }
   const doorMeshes = new Map();
   const doorTargets = new Map();
+  const doorHeight = wallHeight * 1.84;
   for(const edge of runtimeEdges.filter(candidate => candidate.door)){
     const split = splitDoorEdge(edge, doorWidth);
     for(const wing of split.wings) group.add(makeWallMesh(THREE, wing, wallMaterial, wallHeight, wallThickness));
-    const mesh = makeWallMesh(THREE, split.door, sealedDoorMaterial, wallHeight * .92, wallThickness * 1.7);
+    const mesh = makeWallMesh(THREE, split.door, sealedDoorMaterial, doorHeight, wallThickness * 1.7);
     mesh.userData.edge = split.door;
     mesh.userData.baseY = mesh.position.y;
     mesh.userData.openProgress = 0;
     mesh.userData.state = 'sealed';
+    mesh.userData.doorHeight = doorHeight;
     doorMeshes.set(edge.edge, mesh);
-    doorTargets.set(edge.edge, { ...split.door, mesh, state:'sealed' });
+    const target = insetDoorTargetTowardRoom(maze, roomId, split.door, hexSize, Math.min(.7, hexSize * .04));
+    doorTargets.set(edge.edge, { ...target, mesh, state:'sealed', height:doorHeight });
     group.add(mesh);
   }
   let sealedRoomIds = new Set();
@@ -204,7 +231,7 @@ export function createMazeWorld({
       mesh.userData.openProgress = Math.min(1, mesh.userData.openProgress + dt / .38);
       const p = mesh.userData.openProgress;
       const eased = p * p * (3 - 2 * p);
-      mesh.position.y = mesh.userData.baseY - eased * wallHeight * .92;
+      mesh.position.y = mesh.userData.baseY - eased * mesh.userData.doorHeight;
       if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
     }
   };
