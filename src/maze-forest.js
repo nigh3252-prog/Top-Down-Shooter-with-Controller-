@@ -168,7 +168,8 @@ function makeTree(THREE, placement, materials, cutHeight){
   const root = new THREE.Group();
   root.position.set(placement.x, .08, placement.z);
   root.rotation.y = placement.yaw;
-  root.scale.setScalar(placement.scale);
+  // Keep the visibility cut at one quiet, consistent world height while still varying tree width.
+  root.scale.set(placement.scale, 1, placement.scale);
 
   const baseHeight = Math.min(cutHeight, placement.trunkHeight - 1.2);
   const baseGeometry = new THREE.CylinderGeometry(
