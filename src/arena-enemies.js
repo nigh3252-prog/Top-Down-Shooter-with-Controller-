@@ -2,6 +2,7 @@ import {
   ARENA_ENEMY_ARCHETYPES,
   createArenaEnemySystem as createBaseArenaEnemySystem,
 } from './arena-enemies-base.js';
+import { FUSION_ATTACKS } from './fusion-enemies.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
@@ -9,12 +10,32 @@ const S = 4.3;
 const CHARGE_MIN = 1.65 * S;
 const CHARGE_MAX = 4.2 * S;
 const CHARGE_WAIT = 3.25 * S;
-const CHARGE_WAIT_BAND = .55 * S;
 const CHARGE_SPEED_MUL = 3.15;
 const CHARGE_BACKSTEP_MUL = .25;
+const CHARGE_HIT_RANGE = .28 * S;
+const BASE_ACTIVE_LUNGE_SPEED = .5 * S;
 const SCREAM_DURATION = 1.9;
 const SCREAM_RETRY_MIN = 5.5;
 const SCREAM_RETRY_MAX = 10.5;
+const MIN_RANGE_COOLDOWN_GUARD = .25;
+const CONTROLLED_CHARGE_MOVEMENT = 'antChargeControlled';
+
+const antCharge = FUSION_ATTACKS.antCharge;
+Object.assign(antCharge, {
+  // The base chooser adds .22*S to melee ranges. Store the remaining distance
+  // here so the outer edge of the initiation window is exactly CHARGE_MAX.
+  range:CHARGE_MAX - .22 * S,
+  tokenCost:1.4,
+  windup:.82,
+  active:2.30,
+  recovery:.72,
+  cooldown:2.35,
+  damage:16,
+  arc:.68,
+  knock:.9 * S,
+  movement:CONTROLLED_CHARGE_MOVEMENT,
+  wantsSolo:true,
+});
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
@@ -26,8 +47,12 @@ const normalized = (x, z) => {
 export function createArenaEnemySystem(options = {}){
   const system = createBaseArenaEnemySystem(options);
   const baseUpdate = system.update.bind(system);
-  const navigation = options.navigation || null;
+  const baseDirectorUpdate = system.director.update.bind(system.director);
   const antelopeState = new WeakMap();
+
+  function isAntelope(enemy){
+    return enemy?.kind === 'ant' && enemy.hp > 0;
+  }
 
   function stateFor(enemy){
     let state = antelopeState.get(enemy);
@@ -43,19 +68,11 @@ export function createArenaEnemySystem(options = {}){
     return state;
   }
 
-  function collisionRadius(enemy){
-    return enemy.radius * system.heightScale * (enemy.collisionScale || 1);
-  }
-
-  function moveResolved(enemy, from, dx, dz){
-    if(navigation?.resolveMovement){
-      const moved = navigation.resolveMovement(from, { x:dx, z:dz }, collisionRadius(enemy));
-      enemy.x = moved.x;
-      enemy.z = moved.z;
-    } else {
-      enemy.x = from.x + dx;
-      enemy.z = from.z + dz;
-    }
+  function configureAntelope(enemy){
+    enemy.stop = CHARGE_WAIT;
+    enemy.holdDist = CHARGE_WAIT;
+    enemy.preferredRange = CHARGE_WAIT;
+    enemy._pressureBasePreferredRange = CHARGE_WAIT;
   }
 
   function cancelScream(enemy, state, resetCooldown=true){
@@ -80,6 +97,8 @@ export function createArenaEnemySystem(options = {}){
       enemy.gestureTime = state.screamTime;
       enemy.gestureDuration = SCREAM_DURATION;
       enemy._antScreamActive = true;
+      enemy.vx = 0;
+      enemy.vz = 0;
       const face = normalized((player.x ?? 0) - enemy.x, (player.z ?? 0) - enemy.z);
       enemy.facing = face;
       enemy.facingAngle = Math.atan2(face.x, face.z);
@@ -107,128 +126,108 @@ export function createArenaEnemySystem(options = {}){
     }
   }
 
-  function keepAntelopeWaiting(enemy, previous, player, dt){
-    const rx = enemy.x - (player.x ?? 0);
-    const rz = enemy.z - (player.z ?? 0);
-    const distance = Math.hypot(rx, rz) || 1;
-    const radialX = rx / distance;
-    const radialZ = rz / distance;
-    const speed = enemy.speed * system.speedScale;
-    let dx = 0;
-    let dz = 0;
-
-    if(distance > CHARGE_WAIT + CHARGE_WAIT_BAND){
-      dx = -radialX * speed * dt;
-      dz = -radialZ * speed * dt;
-    } else if(distance < CHARGE_WAIT - CHARGE_WAIT_BAND){
-      dx = radialX * speed * dt;
-      dz = radialZ * speed * dt;
-    } else {
-      const orbit = (enemy.orbitDir || 1) * .38;
-      const radialCorrection = clamp((CHARGE_WAIT - distance) / CHARGE_WAIT_BAND, -1, 1) * .24;
-      dx = (-radialZ * orbit + radialX * radialCorrection) * speed * dt;
-      dz = ( radialX * orbit + radialZ * radialCorrection) * speed * dt;
-    }
-
-    moveResolved(enemy, previous, dx, dz);
-    enemy.vx = dx / Math.max(dt, .001);
-    enemy.vz = dz / Math.max(dt, .001);
-  }
-
-  function updateAntelopeAfter(enemy, state, previous, previousState, player, dt){
-    if(state.screaming && enemy._antScreamActive){
-      enemy.x = previous.x;
-      enemy.z = previous.z;
-      enemy.vx = 0;
-      enemy.vz = 0;
-      const face = normalized((player.x ?? 0) - enemy.x, (player.z ?? 0) - enemy.z);
-      enemy.facing = face;
-      enemy.facingAngle = Math.atan2(face.x, face.z);
-      return;
-    }
-
-    if(previousState === 'idle' && enemy.state === 'windup'){
-      const face = normalized((player.x ?? 0) - enemy.x, (player.z ?? 0) - enemy.z);
-      state.chargeVector = face;
-      enemy.facing = face;
-      enemy.facingAngle = Math.atan2(face.x, face.z);
-      enemy.knockX = 0;
-      enemy.knockZ = 0;
-      enemy.vyOff = 0;
-    }
-
+  function prepareChargeMovement(enemy, state, dt, player){
     if(enemy.state === 'windup'){
-      const face = normalized((player.x ?? 0) - previous.x, (player.z ?? 0) - previous.z);
-      if(enemy.stateTime < enemy.windup * .45){
-        state.chargeVector = face;
-        enemy.facing = face;
-        enemy.facingAngle = Math.atan2(face.x, face.z);
-      }
       if(enemy.stateTime < enemy.windup * .58){
-        const away = normalized(previous.x - (player.x ?? 0), previous.z - (player.z ?? 0));
-        const distance = enemy.speed * system.speedScale * CHARGE_BACKSTEP_MUL * dt;
-        moveResolved(enemy, previous, away.x * distance, away.z * distance);
-        enemy.vx = away.x * distance / Math.max(dt, .001);
-        enemy.vz = away.z * distance / Math.max(dt, .001);
+        const away = normalized(enemy.x - (player.x ?? 0), enemy.z - (player.z ?? 0));
+        const baseSpeed = enemy._pressureBaseSpeed || enemy.speed;
+        const backstepSpeed = baseSpeed * system.speedScale * CHARGE_BACKSTEP_MUL;
+        enemy.knockX = away.x * backstepSpeed;
+        enemy.knockZ = away.z * backstepSpeed;
       } else {
-        enemy.x = previous.x;
-        enemy.z = previous.z;
-        enemy.vx = 0;
-        enemy.vz = 0;
+        enemy.knockX = 0;
+        enemy.knockZ = 0;
       }
-      return;
-    }
-
-    if(previousState === 'windup' && enemy.state === 'active'){
-      state.chargeVector = { x:enemy.facing.x, z:enemy.facing.z };
-      enemy.vx = 0;
-      enemy.vz = 0;
       return;
     }
 
     if(enemy.state === 'active'){
       const direction = state.chargeVector || enemy.facing || { x:0, z:1 };
-      const distance = enemy.speed * system.speedScale * CHARGE_SPEED_MUL * dt;
-      moveResolved(enemy, previous, direction.x * distance, direction.z * distance);
       enemy.facing = { x:direction.x, z:direction.z };
       enemy.facingAngle = Math.atan2(direction.x, direction.z);
-      enemy.vx = direction.x * distance / Math.max(dt, .001);
-      enemy.vz = direction.z * distance / Math.max(dt, .001);
-      return;
+      const baseSpeed = enemy._pressureBaseSpeed || enemy.speed;
+      const desiredSpeed = baseSpeed * system.speedScale * CHARGE_SPEED_MUL;
+      const supplementalSpeed = Math.max(0, desiredSpeed - BASE_ACTIVE_LUNGE_SPEED);
+      enemy.knockX = direction.x * supplementalSpeed;
+      enemy.knockZ = direction.z * supplementalSpeed;
     }
-
-    if(enemy.state === 'idle') keepAntelopeWaiting(enemy, previous, player, dt);
   }
+
+  // The base update calls the director immediately before updating enemy state.
+  // Restore Antelope spacing and gates after pressure tuning, so the director can
+  // select one at the intended charge distance without collapsing it to 3.8 units.
+  system.director.update = function updateDirectorWithAntelopeRules(dt, context = {}){
+    baseDirectorUpdate(dt, context);
+    const player = context.player || { x:0, z:0 };
+    for(const enemy of context.enemies || system.enemies){
+      if(!isAntelope(enemy)) continue;
+      const state = stateFor(enemy);
+      configureAntelope(enemy);
+      if(state.screaming){
+        enemy.speed = 0;
+        enemy.cooldown = Math.max(enemy.cooldown || 0, MIN_RANGE_COOLDOWN_GUARD);
+        continue;
+      }
+      const distance = Math.hypot((player.x ?? 0) - enemy.x, (player.z ?? 0) - enemy.z);
+      if(enemy.state === 'idle' && distance < CHARGE_MIN){
+        enemy.cooldown = Math.max(enemy.cooldown || 0, MIN_RANGE_COOLDOWN_GUARD);
+      }
+    }
+  };
 
   system.update = function updateAntelopeTuning(dt, player){
     const target = player || { x:0, z:0, invulnerable:false };
     const snapshots = new Map();
 
     for(const enemy of system.enemies){
-      if(enemy.kind !== 'ant' || enemy.hp <= 0) continue;
+      if(!isAntelope(enemy)) continue;
       const state = stateFor(enemy);
+      configureAntelope(enemy);
       const distance = Math.hypot((target.x ?? 0) - enemy.x, (target.z ?? 0) - enemy.z);
       updateScreamBefore(enemy, state, dt, target, distance);
-      snapshots.set(enemy, { x:enemy.x, z:enemy.z, state:enemy.state });
+      prepareChargeMovement(enemy, state, dt, target);
+      snapshots.set(enemy, {
+        state:enemy.state,
+        role:enemy.role,
+      });
 
-      // PR #38 only grants the charge from a readable medium/long distance.
-      if(enemy.state === 'idle' && !state.screaming && (distance < CHARGE_MIN || distance > CHARGE_MAX)){
-        enemy.cooldown = Math.max(enemy.cooldown || 0, dt + .08);
-      }
+      // Reach-sentinel spacing supplies both halves missing from the generic charger:
+      // approach when far away and actively retreat when crowded inside the launch band.
+      enemy.role = 'reach sentinel';
     }
 
     baseUpdate(dt, target);
 
     for(const enemy of system.enemies){
-      if(enemy.kind !== 'ant' || enemy.hp <= 0) continue;
+      if(!isAntelope(enemy)) continue;
+      const state = stateFor(enemy);
       const previous = snapshots.get(enemy);
       if(!previous) continue;
-      updateAntelopeAfter(enemy, stateFor(enemy), previous, previous.state, target, dt);
-      // The base system has already rendered this frame; keep the root aligned with
-      // the wrapper's collision-safe movement correction immediately.
-      if(enemy.root){
-        enemy.root.position.x = enemy.x;
-        enemy.root.position.z = enemy.z;
+      enemy.role = previous.role;
+      configureAntelope(enemy);
+
+      if(previous.state === 'idle' && enemy.state === 'windup'){
+        state.chargeVector = { x:enemy.facing.x, z:enemy.facing.z };
+        // Remove the director's generic initiation hop/impulse. The Antelope owns
+        // its backstep and committed rush inside the regular movement/collision pass.
+        enemy.knockX = 0;
+        enemy.knockZ = 0;
+        enemy.vyOff = 0;
+        // Trigger range and contact range are deliberately separate. Clone the
+        // shared definition once the attack starts so it cannot damage from afar.
+        enemy.attack = { ...enemy.attack, range:CHARGE_HIT_RANGE };
+      } else if(previous.state === 'windup' && enemy.state === 'active'){
+        state.chargeVector = { x:enemy.facing.x, z:enemy.facing.z };
+        enemy.knockX = 0;
+        enemy.knockZ = 0;
+      }
+
+      // Supplemental velocity is injected before baseUpdate so wall and body
+      // collision resolution remains the final authority. Clear its decayed residue
+      // after the frame so it never leaks into recovery or later hit reactions.
+      if(previous.state === 'windup' || previous.state === 'active' || enemy.state === 'active'){
+        enemy.knockX = 0;
+        enemy.knockZ = 0;
       }
     }
   };
