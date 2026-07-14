@@ -1,9 +1,11 @@
 import { HEX_DIRECTIONS, cellKey, edgeKey, hasOpenEdge, openNeighborKeys } from './hex-maze.js';
+import { configuredHexSize } from './maze-runtime-settings.js';
 
 const SQRT3 = Math.sqrt(3);
 
 export function axialToWorld(q, r, hexSize = 2.6){
-  return { x:hexSize * SQRT3 * (q + r / 2), z:hexSize * 1.5 * r };
+  const size = configuredHexSize(hexSize);
+  return { x:size * SQRT3 * (q + r / 2), z:size * 1.5 * r };
 }
 
 function cubeRound(q, r){
@@ -16,7 +18,8 @@ function cubeRound(q, r){
 }
 
 export function worldToAxial(x, z, hexSize = 2.6){
-  return cubeRound((SQRT3 / 3 * x - z / 3) / hexSize, (2 / 3 * z) / hexSize);
+  const size = configuredHexSize(hexSize);
+  return cubeRound((SQRT3 / 3 * x - z / 3) / size, (2 / 3 * z) / size);
 }
 
 export function findCellAtPoint(maze, point, hexSize = 2.6){
@@ -25,21 +28,23 @@ export function findCellAtPoint(maze, point, hexSize = 2.6){
 }
 
 export function hexCorners(q, r, hexSize = 2.6){
-  const center = axialToWorld(q, r, hexSize);
+  const size = configuredHexSize(hexSize);
+  const center = axialToWorld(q, r, size);
   return Array.from({ length:6 }, (_, index) => {
     const angle = (30 + index * 60) * Math.PI / 180;
-    return { x:center.x + Math.cos(angle) * hexSize, z:center.z + Math.sin(angle) * hexSize };
+    return { x:center.x + Math.cos(angle) * size, z:center.z + Math.sin(angle) * size };
   });
 }
 
 function edgeEndpoints(cell, directionIndex, hexSize){
-  const center = axialToWorld(cell.q, cell.r, hexSize);
+  const size = configuredHexSize(hexSize);
+  const center = axialToWorld(cell.q, cell.r, size);
   const directionAngle = -directionIndex * Math.PI / 3;
   const first = directionAngle - Math.PI / 6;
   const second = directionAngle + Math.PI / 6;
   return [
-    { x:center.x + Math.cos(first) * hexSize, z:center.z + Math.sin(first) * hexSize },
-    { x:center.x + Math.cos(second) * hexSize, z:center.z + Math.sin(second) * hexSize },
+    { x:center.x + Math.cos(first) * size, z:center.z + Math.sin(first) * size },
+    { x:center.x + Math.cos(second) * size, z:center.z + Math.sin(second) * size },
   ];
 }
 
@@ -48,6 +53,7 @@ export function buildMazeEdges(maze, {
   sealedRoomIds = new Set(),
   closedDoorEdges = new Set(),
 } = {}){
+  const size = configuredHexSize(hexSize);
   const edges = [];
   for(const cell of maze.cells.values()){
     HEX_DIRECTIONS.forEach((direction, directionIndex) => {
@@ -58,7 +64,7 @@ export function buildMazeEdges(maze, {
       const door = open && cell.roomId !== next.roomId;
       const sealed = door && (sealedRoomIds.has(cell.roomId) || sealedRoomIds.has(next.roomId));
       const closed = door && closedDoorEdges.has(edgeKey(cell.key, nextKey));
-      const [a, b] = edgeEndpoints(cell, directionIndex, hexSize);
+      const [a, b] = edgeEndpoints(cell, directionIndex, size);
       edges.push({
         edge:next ? edgeKey(cell.key, nextKey) : `boundary:${cell.key}:${directionIndex}`,
         a, b, cellA:cell.key, cellB:next?.key ?? null,
@@ -157,22 +163,24 @@ export function findPath(maze, startKey, goalKey, { allowedCellKeys = null, bloc
 export function randomPointInRoom(maze, roomId, random = Math.random, hexSize = 2.6){
   const room = maze.rooms.find(candidate => candidate.id === roomId);
   if(!room?.cellKeys.length) return null;
+  const size = configuredHexSize(hexSize);
   const cell = maze.cells.get(room.cellKeys[Math.floor(random() * room.cellKeys.length)]);
-  const center = axialToWorld(cell.q, cell.r, hexSize);
+  const center = axialToWorld(cell.q, cell.r, size);
   const angle = random() * Math.PI * 2;
-  const radius = Math.sqrt(random()) * hexSize * .42;
+  const radius = Math.sqrt(random()) * size * .42;
   return { x:center.x + Math.cos(angle) * radius, z:center.z + Math.sin(angle) * radius, cellKey:cell.key };
 }
 
 export function projectToWalkable(maze, point, { roomId = null, hexSize = 2.6 } = {}){
-  const cell = findCellAtPoint(maze, point, hexSize);
+  const size = configuredHexSize(hexSize);
+  const cell = findCellAtPoint(maze, point, size);
   if(cell && (roomId === null || cell.roomId === roomId)) return { x:point.x, z:point.z, cellKey:cell.key };
   const candidates = [...maze.cells.values()].filter(candidate => roomId === null || candidate.roomId === roomId);
   candidates.sort((a, b) => {
-    const aw = axialToWorld(a.q, a.r, hexSize), bw = axialToWorld(b.q, b.r, hexSize);
+    const aw = axialToWorld(a.q, a.r, size), bw = axialToWorld(b.q, b.r, size);
     return Math.hypot(aw.x - point.x, aw.z - point.z) - Math.hypot(bw.x - point.x, bw.z - point.z);
   });
   if(!candidates.length) return null;
-  const center = axialToWorld(candidates[0].q, candidates[0].r, hexSize);
+  const center = axialToWorld(candidates[0].q, candidates[0].r, size);
   return { ...center, cellKey:candidates[0].key };
 }
