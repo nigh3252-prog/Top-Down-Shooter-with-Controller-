@@ -391,7 +391,21 @@ function buildHammer(ctx) {
     }
   });
 
-  Object.assign(weaponParts, { hammerHead: head, hammerFace: face, hammerTeeth: teeth, hammerCounterweight: hazard });
+  // The authored mesh points toward local +X. Spin the complete weapon root
+  // clockwise around its shaft so the striking face points toward local +Z.
+  // player-combat resets the authored attack quaternion immediately before this
+  // hook each frame, so the yaw does not accumulate. Because swept hit zones
+  // are transformed through the same weaponRoot, visuals and damage stay aligned.
+  const hammerYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+  const orientHammerFace = () => weaponRoot.quaternion.multiply(hammerYaw);
+
+  Object.assign(weaponParts, {
+    hammerHead: head,
+    hammerFace: face,
+    hammerTeeth: teeth,
+    hammerCounterweight: hazard,
+    visualUpdate: orientHammerFace
+  });
 }
 
 function buildAxe(ctx) {
