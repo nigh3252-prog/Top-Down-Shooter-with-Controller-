@@ -95,7 +95,7 @@ export const STONE_WEAPONS = {
     staminaClass: 'Heavy',
     kind: 'hammer',
     baseLength: 0.98,
-    profile: 'heavy blunt head; slow windup and huge hit feel',
+    profile: 'long-shafted standard hammer; broad hanging face, counterweight sign, and toothed striking edge',
     tune: { length: 0.98, weight: 0.88, pullback: 1.52, swingWidth: 1.08, windup: 1.42, follow: 1.55, recovery: 1.60, impact: 1.90, trailBoost: 0.92 }
   },
   claymore: {
@@ -142,7 +142,6 @@ export function normalizeStoneWeaponId(id) {
 export function getStoneWeapon(id) {
   return STONE_WEAPONS[normalizeStoneWeaponId(id)] || STONE_WEAPONS.longsword;
 }
-
 
 function numberOr(value, fallback) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -229,6 +228,7 @@ function rtBladeTexture(THREE) {
   for (let i = 0; i < 70; i++) { const x = Math.pow(Math.random(), 1.5) * 1024, y = Math.random() * 70; g.fillStyle = 'rgba(' + (100 + Math.random() * 50 | 0) + ',' + (16 + Math.random() * 14 | 0) + ',10,' + (0.2 + Math.random() * 0.4) + ')'; g.beginPath(); g.ellipse(x, y, 2 + Math.random() * 9, 1.5 + Math.random() * 5, Math.random() * 3, 0, 7); g.fill(); }
   g.fillStyle = 'rgba(58,52,44,0.35)'; g.fillRect(0, 496, 1024, 16); const t = new THREE.CanvasTexture(c); t.flipY = false; t.anisotropy = 4; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
 function rtGuardTexture(THREE) {
   const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), cx = 128, cy = 128;
   g.fillStyle = '#7c5f34'; g.fillRect(0, 0, 256, 256); [[118, '#5c4423', 7], [104, '#8d6d3c', 3], [86, '#54401f', 6], [66, '#8d6d3c', 3], [46, '#4c3a1c', 8], [26, '#8a6a38', 4]].forEach(q => { g.strokeStyle = q[1]; g.lineWidth = q[2]; g.beginPath(); g.arc(cx, cy, q[0], 0, 7); g.stroke(); });
@@ -236,27 +236,30 @@ function rtGuardTexture(THREE) {
   for (let i = 0; i < 380; i++) { g.fillStyle = 'rgba(' + (60 + Math.random() * 120 | 0) + ',' + (50 + Math.random() * 80 | 0) + ',30,' + (0.06 + Math.random() * 0.12) + ')'; g.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
 function rtWrapTexture(THREE) {
   const c = document.createElement('canvas'); c.width = 32; c.height = 64; const x = c.getContext('2d');
   x.fillStyle = '#b08a5e'; x.fillRect(0, 0, 32, 26); x.fillStyle = '#2c2622'; x.fillRect(0, 26, 32, 6); x.fillStyle = '#83291c'; x.fillRect(0, 32, 32, 26); x.fillStyle = '#2c2622'; x.fillRect(0, 58, 32, 6);
   for (let i = 0; i < 70; i++) { x.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.15) + ')'; x.fillRect(Math.random() * 32, Math.random() * 64, 2, 1); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 7); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
 function makeRedTollGreatsword(THREE) {
   const root = new THREE.Group(), L = 6.4, HALF_W = .975, BASE_T = .17, N = 30, pos = [], uv = [], idx = [];
-  const eF = t => HALF_W * (1 - t) + .015, eB = t => -(HALF_W * (1 - t) + .015), th = t => BASE_T * (1 - t) + .010, mid = t => 0;
+  const eF = t => HALF_W * (1 - t) + .015, eB = t => -(HALF_W * (1 - t) + .015), th = t => BASE_T * (1 - t) + .010, mid = () => 0;
   const strips = [{ a: t => [eF(t), t * L, 0], b: t => [mid(t), t * L, th(t)], va: 0, vb: .5 }, { a: t => [mid(t), t * L, th(t)], b: t => [eB(t), t * L, 0], va: .5, vb: 1 }, { a: t => [eB(t), t * L, 0], b: t => [mid(t), t * L, -th(t)], va: 1, vb: .5 }, { a: t => [mid(t), t * L, -th(t)], b: t => [eF(t), t * L, 0], va: .5, vb: 0 }];
-  for (const strip of strips) { const base = pos.length / 3; for (let r = 0; r <= N; r++) { const t = r / N; pos.push(...strip.a(t)); uv.push(t, strip.va); pos.push(...strip.b(t)); uv.push(t, strip.vb); } for (let r = 0; r < N; r++) { const i = base + r * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); } }
+  for (const strip of strips) { const start = pos.length / 3; for (let r = 0; r <= N; r++) { const t = r / N; pos.push(...strip.a(t)); uv.push(t, strip.va); pos.push(...strip.b(t)); uv.push(t, strip.vb); } for (let r = 0; r < N; r++) { const i = start + r * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); } }
   const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); bg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); bg.setIndex(idx); bg.computeVertexNormals();
   const blade = new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ map: rtBladeTexture(THREE), side: THREE.DoubleSide })); blade.position.y = .14; root.add(blade);
   const bronze = new THREE.MeshLambertMaterial({ color: 0x8a6a3a }), dark = new THREE.MeshLambertMaterial({ color: 0x53401f }), guard = new THREE.Group(), disc = new THREE.Mesh(new THREE.CylinderGeometry(.95, .95, .10, 40), new THREE.MeshLambertMaterial({ map: rtGuardTexture(THREE) }));
   disc.rotation.x = Math.PI / 2; guard.add(disc); guard.add(new THREE.Mesh(new THREE.TorusGeometry(.95, .06, 10, 44), dark)); guard.add(new THREE.Mesh(new THREE.TorusGeometry(.55, .045, 10, 36), bronze));
   for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2, sp = new THREE.Mesh(new THREE.BoxGeometry(.06, .60, .17), bronze); sp.position.set(Math.cos(a) * .58, Math.sin(a) * .58, 0); sp.rotation.z = a + Math.PI / 2; guard.add(sp); }
-  const boss = new THREE.Mesh(new THREE.CylinderGeometry(.20, .20, .17, 20), dark); boss.rotation.x = Math.PI / 2; guard.add(boss); const collar = new THREE.Mesh(new THREE.BoxGeometry(1.15, .30, .20), dark); collar.position.set(0, .16, 0); guard.add(collar); guard.scale.set(.70, .70, 1); guard.position.set(0, 0, 0); root.add(guard);
+  const boss = new THREE.Mesh(new THREE.CylinderGeometry(.20, .20, .17, 20), dark); boss.rotation.x = Math.PI / 2; guard.add(boss); const collar = new THREE.Mesh(new THREE.BoxGeometry(1.15, .30, .20), dark); collar.position.set(0, .16, 0); guard.add(collar); guard.scale.set(.70, .70, 1); root.add(guard);
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(.085, .092, 2.25, 10), new THREE.MeshLambertMaterial({ map: rtWrapTexture(THREE) })); handle.position.y = -1.375; root.add(handle);
   const pom = new THREE.Group(), ring = new THREE.Mesh(new THREE.TorusGeometry(.10, .022, 8, 20), dark); ring.rotation.x = Math.PI / 2; ring.position.y = -2.44; pom.add(ring); const pd = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, .07, 16), bronze); pd.position.y = -2.53; pom.add(pd); const pk = new THREE.Mesh(new THREE.SphereGeometry(.09, 12, 10), dark); pk.position.y = -2.61; pom.add(pk); root.add(pom);
   root.userData = { blade, guard, handle, pommel: pom, bladeLength: L }; root.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } }); return root;
 }
+
 function buildRedTollGreatsword(ctx) {
   const { THREE, weaponRoot, bladeLen, base, weaponParts = {} } = ctx;
   const sword = makeRedTollGreatsword(THREE), scale = Math.max(.001, bladeLen / (sword.userData.bladeLength || 6.4));
@@ -264,47 +267,204 @@ function buildRedTollGreatsword(ctx) {
   weaponRoot.add(sword); weaponParts.attackYawRoot = sword; weaponParts.visualUpdate = updateAttackYawOffsetVisual;
 }
 
-function buildMace(ctx) { const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalIco } = helpers; addGrip(.026, .50); addGuard(.22); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .023, bladeLen * .86, 7), matBronze); shaft.position.y = base + bladeLen * .43; weaponRoot.add(shaft); weaponRoot.add(meshLocalIco(.15, matSilver, [0, base + bladeLen * .92, 0])); }
-function buildHammer(ctx) { const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalBox } = helpers; addGrip(.028, .52); addGuard(.20); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.020, .026, bladeLen * .88, 7), matBronze); shaft.position.y = base + bladeLen * .44; weaponRoot.add(shaft); weaponRoot.add(meshLocalBox(.44, .18, .22, matSilver, .015, [0, base + bladeLen * .92, 0])); const pick = new THREE.Mesh(new THREE.ConeGeometry(.06, .24, 4), matSilver); pick.position.set(.31, base + bladeLen * .92, 0); pick.rotation.z = -Math.PI / 2; weaponRoot.add(pick); }
-function buildAxe(ctx) { const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalBox } = helpers; addGrip(.026, .50); addGuard(.18); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .024, bladeLen * .96, 7), matBronze); shaft.position.y = base + bladeLen * .48; weaponRoot.add(shaft); weaponRoot.add(meshLocalBox(.28, .27, .08, matSilver, .015, [.13, base + bladeLen * .88, 0])); const lip = new THREE.Mesh(new THREE.ConeGeometry(.12, .24, 4), matSilver); lip.position.set(.25, base + bladeLen * .88, 0); lip.rotation.z = -Math.PI / 2; lip.scale.z = .45; weaponRoot.add(lip); }
-function buildSpear(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip } = helpers; addGrip(.021, .46); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.014, .018, bladeLen * .84, 8), matBronze); shaft.position.y = base + bladeLen * .42; weaponRoot.add(shaft); const tip = new THREE.Mesh(new THREE.ConeGeometry(.06, bladeLen * .24, 4), matSilver); tip.position.y = base + bladeLen * .96; tip.scale.set(.65, 1, 1.35); weaponRoot.add(tip); }
-function buildRapier(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx; const { matSilver, matBronze } = materials, { addGrip } = helpers; addGrip(.019, .38); const guard = new THREE.Mesh(new THREE.TorusGeometry(.11, .008, 6, 24), matBronze); guard.position.y = base; guard.rotation.x = Math.PI / 2; weaponRoot.add(guard); const blade = new THREE.Mesh(new THREE.CylinderGeometry(.008, .014, bladeLen, 5), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.55, 1, .55); weaponRoot.add(blade); const tip = new THREE.Mesh(new THREE.ConeGeometry(.022, .10, 5), matSilver); tip.position.y = RIG.bladeTip + .02; weaponRoot.add(tip); }
+function makeHazardTexture(THREE) {
+  const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#8d95a2'; g.fillRect(0, 0, 128, 64);
+  g.save(); g.translate(16, 32); g.rotate(-.52); g.fillStyle = '#e8e5dc';
+  for (let x = -24; x < 154; x += 38) g.fillRect(x, -60, 14, 120);
+  g.restore();
+  g.strokeStyle = '#5c6470'; g.lineWidth = 5; g.strokeRect(2, 2, 124, 60);
+  const texture = new THREE.CanvasTexture(canvas); texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter; texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makeHammerCrestTexture(THREE) {
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d'); g.clearRect(0, 0, 64, 64);
+  g.fillStyle = '#c0a232'; g.beginPath(); g.moveTo(6, 4); g.lineTo(58, 4); g.lineTo(58, 38); g.quadraticCurveTo(58, 58, 32, 62); g.quadraticCurveTo(6, 58, 6, 38); g.closePath(); g.fill();
+  g.strokeStyle = '#6e5a14'; g.lineWidth = 3; g.stroke(); g.fillStyle = '#6e5a14'; g.fillRect(16, 14, 32, 6); g.fillRect(28, 20, 8, 26); g.fillRect(20, 44, 24, 5);
+  const texture = new THREE.CanvasTexture(canvas); texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter; texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function buildMace(ctx) {
+  const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx;
+  const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalIco } = helpers;
+  addGrip(.026, .50); addGuard(.22);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .023, bladeLen * .86, 7), matBronze); shaft.position.y = base + bladeLen * .43; weaponRoot.add(shaft);
+  weaponRoot.add(meshLocalIco(.15, matSilver, [0, base + bladeLen * .92, 0]));
+}
+
+// Extracted and rescaled from hammerist-beergoblin-tuned.html. The source's
+// one-piece L head, hanging striking face, hazard counterweight, crest and face
+// teeth are retained, while the complete silhouette is fitted to the existing
+// hammer-head and pick contact volumes used by player-combat.js.
+function buildHammer(ctx) {
+  const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {}, weaponParts = {} } = ctx;
+  const { matSilver, matBronze, matIron, matLeather } = materials;
+  const { addGrip } = helpers;
+  const darkMetal = matIron || matSilver;
+  addGrip(.030, .56);
+
+  const shaftHeight = bladeLen * .91;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.026, .031, shaftHeight, 8), matSilver);
+  shaft.position.y = base + shaftHeight * .5;
+  weaponRoot.add(shaft);
+
+  for (let i = 0; i < 5; i++) {
+    const wrap = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .035, 8), matLeather || matBronze);
+    wrap.position.y = base + bladeLen * (.25 + i * .045);
+    weaponRoot.add(wrap);
+  }
+
+  const headY = base + bladeLen * .91;
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.050, .056, .11, 8), darkMetal);
+  collar.position.y = headY - .12;
+  weaponRoot.add(collar);
+
+  // Normalized transcription of the HTML's one-piece L-shaped head profile.
+  const shape = new THREE.Shape();
+  shape.moveTo(-.05, .09);
+  shape.lineTo(.34, .09);
+  shape.lineTo(.34, -.29);
+  shape.lineTo(.20, -.29);
+  shape.lineTo(.20, -.09);
+  shape.lineTo(-.05, -.09);
+  shape.closePath();
+  const headGeometry = new THREE.ExtrudeGeometry(shape, {
+    depth: .16,
+    steps: 1,
+    curveSegments: 1,
+    bevelEnabled: true,
+    bevelSegments: 1,
+    bevelSize: .012,
+    bevelThickness: .012
+  });
+  headGeometry.translate(0, 0, -.08);
+  const head = new THREE.Mesh(headGeometry, matSilver);
+  head.position.set(-.03, headY, 0);
+  head.castShadow = head.receiveShadow = true;
+  weaponRoot.add(head);
+
+  const face = new THREE.Mesh(new THREE.BoxGeometry(.045, .37, .19), matSilver);
+  face.position.set(.335, headY - .10, 0);
+  face.castShadow = face.receiveShadow = true;
+  weaponRoot.add(face);
+
+  const toothYs = [-.26, -.19, -.12, -.05, .02, .08];
+  const teeth = [];
+  toothYs.forEach((offset, i) => {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(.024, .075, 5), darkMetal);
+    tooth.rotation.z = -Math.PI / 2;
+    tooth.position.set(.395, headY + offset, i % 2 ? .025 : -.025);
+    tooth.castShadow = tooth.receiveShadow = true;
+    weaponRoot.add(tooth); teeth.push(tooth);
+  });
+
+  const hazard = new THREE.Mesh(
+    new THREE.BoxGeometry(.34, .13, .07),
+    new THREE.MeshLambertMaterial({ map: makeHazardTexture(THREE) })
+  );
+  hazard.position.set(-.22, headY + .01, 0);
+  hazard.rotation.z = .06;
+  hazard.castShadow = hazard.receiveShadow = true;
+  weaponRoot.add(hazard);
+
+  const hinge = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .19, 8), darkMetal);
+  hinge.rotation.x = Math.PI / 2;
+  hinge.position.set(-.045, headY + .01, 0);
+  weaponRoot.add(hinge);
+
+  const crestMaterial = new THREE.MeshLambertMaterial({ map: makeHammerCrestTexture(THREE), transparent: true, side: THREE.DoubleSide });
+  const crestFront = new THREE.Mesh(new THREE.PlaneGeometry(.12, .13), crestMaterial);
+  crestFront.position.set(.235, headY + .005, .094);
+  weaponRoot.add(crestFront);
+  const crestBack = crestFront.clone(); crestBack.position.z = -.094; crestBack.rotation.y = Math.PI; weaponRoot.add(crestBack);
+
+  const rivetMaterial = darkMetal;
+  [[.03, .07], [.17, .06], [.28, .07], [.24, -.22]].forEach(([x, y]) => {
+    for (const z of [-.098, .098]) {
+      const rivet = new THREE.Mesh(new THREE.SphereGeometry(.012, 5, 4), rivetMaterial);
+      rivet.position.set(x, headY + y, z);
+      weaponRoot.add(rivet);
+    }
+  });
+
+  Object.assign(weaponParts, { hammerHead: head, hammerFace: face, hammerTeeth: teeth, hammerCounterweight: hazard });
+}
+
+function buildAxe(ctx) {
+  const { THREE, weaponRoot, bladeLen, base, materials = {}, helpers = {} } = ctx;
+  const { matSilver, matBronze } = materials, { addGrip, addGuard, meshLocalBox } = helpers;
+  addGrip(.026, .50); addGuard(.18);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.018, .024, bladeLen * .96, 7), matBronze); shaft.position.y = base + bladeLen * .48; weaponRoot.add(shaft);
+  weaponRoot.add(meshLocalBox(.28, .27, .08, matSilver, .015, [.13, base + bladeLen * .88, 0]));
+  const lip = new THREE.Mesh(new THREE.ConeGeometry(.12, .24, 4), matSilver); lip.position.set(.25, base + bladeLen * .88, 0); lip.rotation.z = -Math.PI / 2; lip.scale.z = .45; weaponRoot.add(lip);
+}
+
+function buildSpear(ctx) {
+  const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx;
+  const { matSilver, matBronze } = materials, { addGrip } = helpers;
+  addGrip(.021, .46);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.014, .018, bladeLen * .84, 8), matBronze); shaft.position.y = base + bladeLen * .42; weaponRoot.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.06, bladeLen * .24, 4), matSilver); tip.position.y = base + bladeLen * .96; tip.scale.set(.65, 1, 1.35); weaponRoot.add(tip);
+}
+
+function buildRapier(ctx) {
+  const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx;
+  const { matSilver, matBronze } = materials, { addGrip } = helpers;
+  addGrip(.019, .38);
+  const guard = new THREE.Mesh(new THREE.TorusGeometry(.11, .008, 6, 24), matBronze); guard.position.y = base; guard.rotation.x = Math.PI / 2; weaponRoot.add(guard);
+  const blade = new THREE.Mesh(new THREE.CylinderGeometry(.008, .014, bladeLen, 5), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.55, 1, .55); weaponRoot.add(blade);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.022, .10, 5), matSilver); tip.position.y = RIG.bladeTip + .02; weaponRoot.add(tip);
+}
+
 function buildKatana(ctx) {
   const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {} } = ctx;
   const { matSilver, matBronze, matIron } = materials, { addGrip } = helpers;
   addGrip(.024, .58);
-
-  // Compact tsuba and collar keep the silhouette distinct from the saber's
-  // broad hand guard while leaving enough room for the two-handed grip.
-  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(.14,.14,.026,12), matIron || matBronze);
-  tsuba.position.y=base; tsuba.rotation.x=Math.PI/2; tsuba.scale.x=1.18; weaponRoot.add(tsuba);
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.035,.040,.075,8), matBronze);
-  collar.position.y=base+.045; weaponRoot.add(collar);
-
-  // A short chain of overlapping tapered sections produces a readable curved
-  // single-edge profile without requiring a heavyweight custom skinned mesh.
-  const sections=7, curve=bladeLen*.115;
-  for(let i=0;i<sections;i++){
-    const t0=i/sections, t1=(i+1)/sections, mid=(t0+t1)*.5;
-    const y0=base+bladeLen*t0, y1=base+bladeLen*t1;
-    const x0=curve*t0*t0, x1=curve*t1*t1;
-    const len=Math.hypot(y1-y0,x1-x0)*1.08;
-    const width=.050*(1-mid*.58);
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(width,len,.026),matSilver);
-    seg.position.set((x0+x1)*.5,(y0+y1)*.5,0);
-    seg.rotation.z=-Math.atan2(x1-x0,y1-y0);
-    seg.scale.z=1.35;
+  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, .026, 12), matIron || matBronze);
+  tsuba.position.y = base; tsuba.rotation.x = Math.PI / 2; tsuba.scale.x = 1.18; weaponRoot.add(tsuba);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.035, .040, .075, 8), matBronze);
+  collar.position.y = base + .045; weaponRoot.add(collar);
+  const sections = 7, curve = bladeLen * .115;
+  for (let i = 0; i < sections; i++) {
+    const t0 = i / sections, t1 = (i + 1) / sections, mid = (t0 + t1) * .5;
+    const y0 = base + bladeLen * t0, y1 = base + bladeLen * t1;
+    const x0 = curve * t0 * t0, x1 = curve * t1 * t1;
+    const len = Math.hypot(y1 - y0, x1 - x0) * 1.08;
+    const width = .050 * (1 - mid * .58);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(width, len, .026), matSilver);
+    seg.position.set((x0 + x1) * .5, (y0 + y1) * .5, 0);
+    seg.rotation.z = -Math.atan2(x1 - x0, y1 - y0);
+    seg.scale.z = 1.35;
     weaponRoot.add(seg);
   }
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(.035,.13,5),matSilver);
-  tip.position.set(curve+.025,RIG.bladeTip+.035,0);
-  tip.rotation.z=-.20; tip.scale.set(.72,1,1.35); weaponRoot.add(tip);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.035, .13, 5), matSilver);
+  tip.position.set(curve + .025, RIG.bladeTip + .035, 0);
+  tip.rotation.z = -.20; tip.scale.set(.72, 1, 1.35); weaponRoot.add(tip);
 }
-function buildDefaultRigidBlade(ctx) { const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {}, weaponDef } = ctx; const { matSilver } = materials, { addGrip, addGuard } = helpers; addGrip(.023, .42); addGuard(weaponDef.weightClass === 'Heavy' ? .46 : .34); const blade = new THREE.Mesh(new THREE.CylinderGeometry(.012, .05, bladeLen, 4), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.5, 1, 1.7); weaponRoot.add(blade); const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .14, 4), matSilver); tip.position.y = RIG.bladeTip + .02; tip.scale.set(.5, 1, 1.7); weaponRoot.add(tip); }
+
+function buildDefaultRigidBlade(ctx) {
+  const { THREE, weaponRoot, RIG, bladeLen, base, materials = {}, helpers = {}, weaponDef } = ctx;
+  const { matSilver } = materials, { addGrip, addGuard } = helpers;
+  addGrip(.023, .42); addGuard(weaponDef.weightClass === 'Heavy' ? .46 : .34);
+  const blade = new THREE.Mesh(new THREE.CylinderGeometry(.012, .05, bladeLen, 4), matSilver); blade.position.y = base + bladeLen / 2; blade.scale.set(.5, 1, 1.7); weaponRoot.add(blade);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .14, 4), matSilver); tip.position.y = RIG.bladeTip + .02; tip.scale.set(.5, 1, 1.7); weaponRoot.add(tip);
+}
 
 export const WEAPON_MESH_BUILDERS = {
-  whip: buildWhip, mace: buildMace, hammer: buildHammer, axe: buildAxe, spear: buildSpear, rapier: buildRapier, katana: buildKatana, blade: buildDefaultRigidBlade,
-  defaultRigidBlade: buildDefaultRigidBlade, redTollGreatsword: buildRedTollGreatsword
+  whip: buildWhip,
+  mace: buildMace,
+  hammer: buildHammer,
+  axe: buildAxe,
+  spear: buildSpear,
+  rapier: buildRapier,
+  katana: buildKatana,
+  blade: buildDefaultRigidBlade,
+  defaultRigidBlade: buildDefaultRigidBlade,
+  redTollGreatsword: buildRedTollGreatsword
 };
 
 export function buildStoneWeaponMesh(ctx) {
