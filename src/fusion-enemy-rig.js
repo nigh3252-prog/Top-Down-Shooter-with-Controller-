@@ -41,6 +41,20 @@ function phaseProxy(enemy, phaseCuts){
   };
 }
 
+function advanceAntelopeChargeGait(handle, enemy, dt, heightScale){
+  if(enemy._antScreamActive || enemy.state !== 'active') return;
+  const groundSpeed = Math.max(0, Number(enemy.visualGroundSpeed) || 0);
+  if(groundSpeed <= .025) return;
+
+  // The base Fusion rig freezes gaitPhase outside idle even though ANT_CHARGE turns
+  // limb motion on. Advance the same authored gait clock here so the legs gallop
+  // instead of holding one pose while the gameplay root moves forward.
+  const strideScale = handle?.model?.chassis?.strideScale || 1;
+  const baseScale = handle?.baseScale || 1;
+  const strideWorld = Math.max(.65, 2.1 * strideScale * baseScale * heightScale);
+  handle.gaitPhase = (handle.gaitPhase || 0) + groundSpeed * dt / strideWorld * Math.PI * 2;
+}
+
 export function installFusionEnemyRig(THREE){
   const rig = installBaseFusionEnemyRig(THREE);
   const baseUpdate = rig.update.bind(rig);
@@ -51,6 +65,8 @@ export function installFusionEnemyRig(THREE){
     const animations = handle?.model?.bodyDef?.anims;
     const previousAnimation = animations?.[0];
     if(animations) animations[0] = enemy._antScreamActive ? 'ANT_SCREAM' : 'ANT_CHARGE';
+
+    advanceAntelopeChargeGait(handle, enemy, dt, heightScale);
 
     // Keep the lab animation's authored phase boundaries even when gameplay timing
     // changes, so the charge and scream retain their original readable poses.
