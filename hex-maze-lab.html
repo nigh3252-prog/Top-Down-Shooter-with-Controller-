@@ -10,7 +10,7 @@
 </head>
 <body>
 <canvas id="maze"></canvas>
-<div class="top"><div class="brand"><strong>HEX MAZE LAB</strong><span>geometry first · rooms second</span></div><button class="toggle" id="toggle">Controls</button></div>
+<div class="top"><div class="brand"><strong>HEX MAZE LAB</strong><span>rooms first · braided mazes second</span></div><button class="toggle" id="toggle">Controls</button></div>
 <section class="panel" id="panel">
   <div class="row"><label for="seed">Seed</label><input id="seed" value="stone-001"></div>
   <div class="row"><label for="radius">Radius</label><input id="radius" type="number" min="2" max="9" value="5"></div>
@@ -18,7 +18,7 @@
   <div class="buttons"><button class="action" id="generate">Regenerate</button><button class="action" id="random">Random seed</button></div>
   <div class="step"><label for="steps">Generation step</label><input id="steps" type="range" min="0" value="0"><div class="stepInfo" id="stepInfo"></div></div>
   <div class="metrics" id="metrics"></div>
-  <div class="legend"><span class="dot" style="--c:var(--red)">original dead end</span><span class="dot" style="--c:var(--cyan)">braid</span><span class="dot" style="--c:var(--gold)">door / room number</span></div>
+  <div class="legend"><span class="dot" style="--c:var(--red)">original room dead end</span><span class="dot" style="--c:var(--cyan)">braid</span><span class="dot" style="--c:var(--gold)">door / room number</span></div>
   <div class="validation" id="validation"></div>
 </section>
 <script type="module">
@@ -49,11 +49,13 @@ function draw(){
   stepInfo.textContent = describeStep(result.currentStep, Number(steps.value));
 }
 function generate(){
-  maze = createHexMaze({ seed:seed.value || 'stone-001', radius:Number(radius.value), minLoopLength:Number(loop.value), minRoomSize:4, maxRoomSize:7 });
+  maze = createHexMaze({ seed:seed.value || 'stone-001', radius:Number(radius.value), minLoopLength:Number(loop.value), minRoomSize:4, maxRoomSize:7, minDoorsPerRoom:2 });
   steps.max = maze.steps.length - 1; steps.value = maze.steps.length - 1;
-  metrics.innerHTML = `<span>Cells <b>${maze.cells.size}</b></span><span>Rooms <b>${maze.rooms.length}</b></span><span>Original ends <b>${maze.originalDeadEnds.length}</b></span><span>Braids <b>${maze.braidedEdges.size}</b></span><span>Doors <b>${maze.doors.length}</b></span><span>Seed <b>${maze.seed}</b></span>`;
+  const doorCounts = [...maze.validation.roomDoorCounts.values()];
+  const localEnds = [...maze.validation.roomLocalDeadEnds.values()].reduce((sum, keys) => sum + keys.length, 0);
+  metrics.innerHTML = `<span>Cells <b>${maze.cells.size}</b></span><span>Rooms <b>${maze.rooms.length}</b></span><span>Original ends <b>${maze.originalDeadEnds.length}</b></span><span>Remaining local ends <b>${localEnds}</b></span><span>Braids <b>${maze.braidedEdges.size}</b></span><span>Doors <b>${maze.doors.length}</b></span><span>Min doors/room <b>${Math.min(...doorCounts)}</b></span><span>Seed <b>${maze.seed}</b></span>`;
   validation.className = `validation ${maze.validation.valid ? 'ok' : 'bad'}`;
-  validation.textContent = maze.validation.valid ? 'PASS · all cells and rooms reachable · no dead ends · doors agree' : `FAIL · ${maze.validation.errors.join(' · ')}`;
+  validation.textContent = maze.validation.valid ? 'PASS · all cells and rooms reachable · no global dead ends · at least two doors per room' : `FAIL · ${maze.validation.errors.join(' · ')}`;
   draw(); window.__hexMazeLab = { maze, regenerate:generate };
 }
 document.getElementById('generate').addEventListener('click', generate);
@@ -63,4 +65,3 @@ steps.addEventListener('input', draw); addEventListener('resize', resize); gener
 </script>
 </body>
 </html>
-
