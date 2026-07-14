@@ -14,6 +14,8 @@ export const MAZE_ROOM_SIZE_OPTIONS = Object.freeze([
 
 const CELL_SIZE_KEY = 'arena.mazeCellSize';
 const ROOM_SIZE_KEY = 'arena.mazeRoomCells';
+const DEFAULT_CELL_SIZE_ID = 'compact';
+const DEFAULT_ROOM_SIZE_ID = 'medium';
 
 function storageGet(key){
   try { return globalThis.localStorage?.getItem(key) ?? null; }
@@ -31,28 +33,38 @@ function optionById(options, id, fallbackId){
     || options[0];
 }
 
+function isCombatArenaRuntime(){
+  return typeof document !== 'undefined' && /(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname || '');
+}
+
 export function getMazeRuntimeSettings(){
   return {
-    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS, storageGet(CELL_SIZE_KEY), 'current'),
-    roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS, storageGet(ROOM_SIZE_KEY), 'current'),
+    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS, storageGet(CELL_SIZE_KEY), DEFAULT_CELL_SIZE_ID),
+    roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS, storageGet(ROOM_SIZE_KEY), DEFAULT_ROOM_SIZE_ID),
   };
 }
 
 export function configuredHexSize(requestedHexSize){
   const requested = Number(requestedHexSize);
   if(!Number.isFinite(requested)) return requestedHexSize;
-  // The gameplay maze uses 20-unit cells. Lab/debug renderers use tiny values
-  // such as 1 or 2.6 and must not inherit the gameplay override.
-  return requested >= 10 ? getMazeRuntimeSettings().cellSize.value : requested;
+  // The gameplay maze uses large world-unit cells. Lab/debug renderers use tiny
+  // values such as 1 or 2.6 and must not inherit the gameplay override.
+  if(requested < 10) return requested;
+  const stored = storageGet(CELL_SIZE_KEY);
+  if(stored === null && !isCombatArenaRuntime()) return requested;
+  return optionById(MAZE_CELL_SIZE_OPTIONS, stored, DEFAULT_CELL_SIZE_ID).value;
 }
 
 export function configuredRoomSize(defaultMin, defaultMax, presetId = null){
-  const preset = presetId
-    ? optionById(MAZE_ROOM_SIZE_OPTIONS, presetId, 'current')
-    : getMazeRuntimeSettings().roomSize;
-  if(!presetId && storageGet(ROOM_SIZE_KEY) === null){
+  if(presetId){
+    const preset = optionById(MAZE_ROOM_SIZE_OPTIONS, presetId, DEFAULT_ROOM_SIZE_ID);
+    return { min:preset.min, max:preset.max, id:preset.id };
+  }
+  const stored = storageGet(ROOM_SIZE_KEY);
+  if(stored === null && !isCombatArenaRuntime()){
     return { min:Number(defaultMin), max:Number(defaultMax), id:'custom' };
   }
+  const preset = optionById(MAZE_ROOM_SIZE_OPTIONS, stored, DEFAULT_ROOM_SIZE_ID);
   return { min:preset.min, max:preset.max, id:preset.id };
 }
 
@@ -118,7 +130,7 @@ export function installMazeRuntimeControls(){
   });
   const note = document.createElement('div');
   note.className = 'mazeReloadNote';
-  note.textContent = 'Changing either option rebuilds the entire maze. Pair smaller cells with more cells per room to keep a similar physical arena size.';
+  note.textContent = 'Changing either option rebuilds the entire maze. Compact 12 + Medium 7–10 is now the default.';
   group.append(heading, cell.row, room.row, note);
   simBody.insertBefore(group, sliderRoot);
 
@@ -133,4 +145,5 @@ export function installMazeRuntimeControls(){
 
 if(typeof document !== 'undefined'){
   queueMicrotask(()=>installMazeRuntimeControls());
+  if(isCombatArenaRuntime()) import('./roadie-run.js').catch(error=>console.error('Roadie run failed to load', error));
 }
