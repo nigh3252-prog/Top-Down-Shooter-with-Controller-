@@ -84,6 +84,7 @@ export function installMazeRuntimeControls(){
   const style = document.createElement('style');
   style.id = 'mazePhonePanelStyle';
   style.textContent = `
+    #panel{padding-right:36px!important;scrollbar-width:auto!important}
     #panel::-webkit-scrollbar{width:34px!important}
     #panel::-webkit-scrollbar-track{border-left:2px solid #2c4a47!important}
     #panel::-webkit-scrollbar-thumb{border:7px solid #122426!important;min-height:72px!important;border-radius:16px!important}
