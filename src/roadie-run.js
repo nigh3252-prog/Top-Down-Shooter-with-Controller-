@@ -1,3 +1,5 @@
+export const ROADIE_GAMEPAD_BUTTON = 0; // Standard Gamepad mapping: PlayStation Cross / Xbox A.
+
 const HOLD_THRESHOLD = .17;
 const EXTRA_RUN_SPEED = 4.8;
 const SKID_DURATION = .34;
@@ -10,8 +12,6 @@ const wrapPi = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 export function createRoadieState(){
   return {
     held:false,
-    source:null,
-    pointerId:null,
     holdTime:0,
     engaged:false,
     sprint:0,
@@ -78,19 +78,19 @@ function installRoadieRun(){
   if(typeof window === 'undefined' || window.__roadieRun) return;
 
   const state = createRoadieState();
-  const keys = new Set();
   let lastFrameTime = performance.now();
   let lastAfterPosition = null;
-  let previousGamepadX = false;
+  let previousCross = false;
   let nativeGetGamepads = null;
   let gamepadMaskInstalled = false;
+  let installError = null;
 
   try {
     if(typeof navigator.getGamepads === 'function'){
       nativeGetGamepads = navigator.getGamepads.bind(navigator);
       const maskedGetGamepads = () => Array.from(nativeGetGamepads() || [], pad => {
         if(!pad) return pad;
-        const maskedButtons = Array.from(pad.buttons || [], (button, index) => index === 2
+        const maskedButtons = Array.from(pad.buttons || [], (button, index) => index === ROADIE_GAMEPAD_BUTTON
           ? { pressed:false, touched:false, value:0 }
           : button);
         return new Proxy(pad, {
@@ -109,102 +109,50 @@ function installRoadieRun(){
       gamepadMaskInstalled = true;
     }
   } catch(error){
-    console.warn('Roadie run could not reserve the gamepad X button; hold still works but may also begin a light attack.', error);
+    installError = error;
+  }
+
+  if(!gamepadMaskInstalled){
+    console.error('Roadie run did not load: unable to reserve the controller Cross button. Dodge remains unchanged.', installError);
+    window.__roadieRun = {
+      unavailable:true,
+      error:installError,
+      gamepadButton:ROADIE_GAMEPAD_BUTTON,
+    };
+    return;
   }
 
   function arenaApi(){ return window.__arena || null; }
 
-  function performTap(source){
-    const api = arenaApi();
-    if(!api) return;
-    if(source === 'keyboard') api.cycleWeapon?.();
-    else api.lightDown?.();
+  function performDodgeTap(){
+    arenaApi()?.triggerDodge?.();
   }
 
-  function beginHold(source, pointerId = null){
+  function beginHold(){
     if(state.held) return;
     state.held = true;
-    state.source = source;
-    state.pointerId = pointerId;
     state.holdTime = 0;
     state.engaged = false;
-    if(source === 'touch') document.getElementById('atkBtn')?.classList.add('held');
   }
 
-  function endHold(source, { cancelled = false } = {}){
-    if(!state.held || state.source !== source) return;
+  function endHold({ cancelled = false } = {}){
+    if(!state.held) return;
     const wasRoadie = state.engaged || state.sprint > .12;
     const wasTap = !cancelled && !wasRoadie && state.holdTime < HOLD_THRESHOLD + .045;
     state.held = false;
-    state.source = null;
-    state.pointerId = null;
     state.engaged = false;
     if(wasRoadie){
       state.skidT = 0;
       state.skidSide = Math.sin(state.phase) >= 0 ? 1 : -1;
     }
-    if(source === 'touch') document.getElementById('atkBtn')?.classList.remove('held');
-    if(wasTap) performTap(source);
+    if(wasTap) performDodgeTap();
   }
 
   function cancelHold(){
-    if(state.held) endHold(state.source, { cancelled:true });
+    if(state.held) endHold({ cancelled:true });
     state.engaged = false;
     state.sprint = 0;
     state.skidT = SKID_DURATION;
-  }
-
-  window.addEventListener('keydown', event => {
-    const key = event.key.toLowerCase();
-    keys.add(key);
-    if(key !== 'x') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if(!event.repeat) beginHold('keyboard');
-  }, true);
-
-  window.addEventListener('keyup', event => {
-    const key = event.key.toLowerCase();
-    keys.delete(key);
-    if(key !== 'x') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    endHold('keyboard');
-  }, true);
-
-  function installTouchCapture(){
-    const attackButton = document.getElementById('atkBtn');
-    if(!attackButton || attackButton.dataset.roadieCapture === '1') return;
-    attackButton.dataset.roadieCapture = '1';
-    attackButton.setAttribute('aria-label', 'Tap for light attack. Hold for roadie run.');
-    attackButton.title = 'Tap: Light attack · Hold: Roadie run';
-    attackButton.addEventListener('pointerdown', event => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      beginHold('touch', event.pointerId);
-      attackButton.setPointerCapture?.(event.pointerId);
-    }, true);
-    window.addEventListener('pointerup', event => {
-      if(state.source !== 'touch' || event.pointerId !== state.pointerId) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      endHold('touch');
-    }, true);
-    window.addEventListener('pointercancel', event => {
-      if(state.source !== 'touch' || event.pointerId !== state.pointerId) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      endHold('touch', { cancelled:true });
-    }, true);
-  }
-
-  function readKeyboardDirection(){
-    let x = 0, z = 0;
-    if(keys.has('a') || keys.has('arrowleft')) x -= 1;
-    if(keys.has('d') || keys.has('arrowright')) x += 1;
-    if(keys.has('w') || keys.has('arrowup')) z -= 1;
-    if(keys.has('s') || keys.has('arrowdown')) z += 1;
-    return normalizedDirection(x, z);
   }
 
   function readRawGamepad(){
@@ -222,12 +170,12 @@ function installRoadieRun(){
     return normalizedDirection(x, z);
   }
 
-  function pollGamepad(){
+  function pollCross(){
     const gamepad = readRawGamepad();
-    const pressed = !!gamepad?.buttons?.[2]?.pressed;
-    if(pressed && !previousGamepadX) beginHold('gamepad');
-    if(!pressed && previousGamepadX) endHold('gamepad');
-    previousGamepadX = pressed;
+    const pressed = !!gamepad?.buttons?.[ROADIE_GAMEPAD_BUTTON]?.pressed;
+    if(pressed && !previousCross) beginHold();
+    if(!pressed && previousCross) endHold();
+    previousCross = pressed;
     return gamepad;
   }
 
@@ -293,10 +241,9 @@ function installRoadieRun(){
 
   function frame(now){
     requestAnimationFrame(frame);
-    installTouchCapture();
     const dt = Math.min(.05, Math.max(0, (now - lastFrameTime) / 1000));
     lastFrameTime = now;
-    const gamepad = pollGamepad();
+    const gamepad = pollCross();
     const api = arenaApi();
     if(!api?.actorPos){
       lastAfterPosition = null;
@@ -308,13 +255,8 @@ function installRoadieRun(){
     const baseDelta = lastAfterPosition
       ? normalizedDirection(current.x - lastAfterPosition.x, current.z - lastAfterPosition.z)
       : { x:0, z:0, magnitude:0 };
-    const keyboardDirection = readKeyboardDirection();
     const gamepadDirection = readGamepadDirection(gamepad);
-    const direction = gamepadDirection.magnitude > .12
-      ? gamepadDirection
-      : keyboardDirection.magnitude > .12
-        ? keyboardDirection
-        : baseDelta;
+    const direction = gamepadDirection.magnitude > .12 ? gamepadDirection : baseDelta;
 
     const allowed = canRoadie(api);
     if(state.held) state.holdTime += dt;
@@ -356,6 +298,7 @@ function installRoadieRun(){
     beginHold,
     endHold,
     cancel:cancelHold,
+    gamepadButton:ROADIE_GAMEPAD_BUTTON,
     gamepadMaskInstalled,
     tuning:{ HOLD_THRESHOLD, EXTRA_RUN_SPEED, SKID_DURATION, SKID_START_SPEED },
   };
