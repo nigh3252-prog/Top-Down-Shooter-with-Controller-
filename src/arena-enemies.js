@@ -12,7 +12,8 @@ const CHARGE_MAX = 4.2 * S;
 const CHARGE_WAIT = 3.25 * S;
 const CHARGE_SPEED_MUL = 3.15;
 const CHARGE_BACKSTEP_MUL = .25;
-const CHARGE_HIT_RANGE = .28 * S;
+const CHARGE_MIN_HIT_RANGE = .28 * S;
+const CHARGE_CONTACT_PAD = .12;
 const BASE_ACTIVE_LUNGE_SPEED = .5 * S;
 const SCREAM_DURATION = 1.9;
 const SCREAM_RETRY_MIN = 5.5;
@@ -37,7 +38,6 @@ Object.assign(antCharge, {
   wantsSolo:true,
 });
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const normalized = (x, z) => {
   const length = Math.hypot(x, z) || 1;
@@ -73,6 +73,21 @@ export function createArenaEnemySystem(options = {}){
     enemy.holdDist = CHARGE_WAIT;
     enemy.preferredRange = CHARGE_WAIT;
     enemy._pressureBasePreferredRange = CHARGE_WAIT;
+  }
+
+  function chargeContactRange(enemy){
+    // Body collision keeps the player and enemy centers at least one scaled enemy
+    // radius plus PLAYER_R apart. Match that physical boundary instead of using the
+    // unscaled PR #38 number, otherwise the collision pass prevents contact damage.
+    const scaledCollisionRadius = enemy.radius * system.heightScale * (enemy.collisionScale || 1);
+    return Math.max(CHARGE_MIN_HIT_RANGE, scaledCollisionRadius + CHARGE_CONTACT_PAD);
+  }
+
+  function hideAntelopeDebugMarkers(enemy){
+    // The charge animation is the telegraph. The generic rings look like exposed
+    // rig controls here, and the telegraph ring becomes enormous at initiation range.
+    if(enemy.telegraph) enemy.telegraph.visible = false;
+    if(enemy.tokenRing) enemy.tokenRing.visible = false;
   }
 
   function cancelScream(enemy, state, resetCooldown=true){
@@ -205,6 +220,7 @@ export function createArenaEnemySystem(options = {}){
       if(!previous) continue;
       enemy.role = previous.role;
       configureAntelope(enemy);
+      hideAntelopeDebugMarkers(enemy);
 
       if(previous.state === 'idle' && enemy.state === 'windup'){
         state.chargeVector = { x:enemy.facing.x, z:enemy.facing.z };
@@ -213,9 +229,9 @@ export function createArenaEnemySystem(options = {}){
         enemy.knockX = 0;
         enemy.knockZ = 0;
         enemy.vyOff = 0;
-        // Trigger range and contact range are deliberately separate. Clone the
-        // shared definition once the attack starts so it cannot damage from afar.
-        enemy.attack = { ...enemy.attack, range:CHARGE_HIT_RANGE };
+        // Trigger range and contact range are deliberately separate. Contact range
+        // follows the scaled physical collider so touching charges can actually hit.
+        enemy.attack = { ...enemy.attack, range:chargeContactRange(enemy) };
       } else if(previous.state === 'windup' && enemy.state === 'active'){
         state.chargeVector = { x:enemy.facing.x, z:enemy.facing.z };
         enemy.knockX = 0;
