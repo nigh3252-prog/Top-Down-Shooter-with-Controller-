@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { createRoadieState, stepRoadieBlend } from '../src/roadie-run.js';
+import { ROADIE_GAMEPAD_BUTTON, createRoadieState, stepRoadieBlend } from '../src/roadie-run.js';
+
+assert.equal(ROADIE_GAMEPAD_BUTTON, 0, 'roadie run should use the standard bottom Cross/A dodge button');
 
 const state = createRoadieState();
 assert.equal(state.held, false);
@@ -16,4 +18,4 @@ for(let i = 0; i < 20; i++) sprint = stepRoadieBlend(sprint, 0, 1 / 60);
 assert.ok(sprint < built * .2, 'roadie run should shed speed quickly after release');
 assert.equal(stepRoadieBlend(.4, 1, 0), .4, 'zero dt should preserve the current blend');
 
-console.log('Validated roadie run state and acceleration curves.');
+console.log('Validated Cross-button roadie run state and acceleration curves.');
