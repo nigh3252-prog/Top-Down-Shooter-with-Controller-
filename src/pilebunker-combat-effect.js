@@ -1,38 +1,130 @@
 // Cyclone Strike + Shield Bash: One on One gameplay layer for Pilebunker.
 // The animation controller remains presentation-only; this module owns gathering,
-// primary-target lock, primary stun, and the secondary radial detonation.
+// target lock, guaranteed front-arc impact, stun, and secondary detonation.
+
+import { damageRegisteredArenaEnemy } from './arena-enemy-registry.js';
+
+const EFFECT_SCHEMA = 2;
+const STORAGE_PREFIX = 'arena.pilebunker.effect.';
+
+const PRESETS = Object.freeze({
+  heroic: Object.freeze({
+    label:'HEROIC (RECOMMENDED)',
+    description:'A strong all-purpose Pilebunker: kills light primary targets, visibly stuns survivors, and clears the front of the player.',
+    values:Object.freeze({
+      pullRadius:8.5,
+      pullStrength:15.5,
+      compressionDistance:2.2,
+      frontReach:8.5,
+      primaryDamage:145,
+      primaryStun:2.4,
+      primaryHitRadius:4.0,
+      secondaryDamage:48,
+      secondaryRadius:6.5,
+      secondaryKnock:14,
+      secondaryStun:.28,
+      eliteControl:.65,
+    }),
+  }),
+  duelist: Object.freeze({
+    label:'ONE ON ONE / DUELIST',
+    description:'Smaller crowd effect, but a devastating primary hit and long stun for the chosen victim.',
+    values:Object.freeze({
+      pullRadius:7,
+      pullStrength:13,
+      compressionDistance:2.0,
+      frontReach:7,
+      primaryDamage:190,
+      primaryStun:3.25,
+      primaryHitRadius:4.2,
+      secondaryDamage:28,
+      secondaryRadius:4.8,
+      secondaryKnock:10,
+      secondaryStun:.15,
+      eliteControl:.55,
+    }),
+  }),
+  crowd: Object.freeze({
+    label:'CROWD BREAKER',
+    description:'Wide, aggressive suction and a much stronger secondary detonation for clearing packed encounters.',
+    values:Object.freeze({
+      pullRadius:10,
+      pullStrength:19,
+      compressionDistance:2.4,
+      frontReach:10,
+      primaryDamage:125,
+      primaryStun:2.0,
+      primaryHitRadius:4.2,
+      secondaryDamage:65,
+      secondaryRadius:8,
+      secondaryKnock:18,
+      secondaryStun:.40,
+      eliteControl:.68,
+    }),
+  }),
+  original: Object.freeze({
+    label:'ORIGINAL PROTOTYPE',
+    description:'The initial conservative tuning retained for comparison.',
+    values:Object.freeze({
+      pullRadius:7.5,
+      pullStrength:13,
+      compressionDistance:2.4,
+      frontReach:7.5,
+      primaryDamage:60,
+      primaryStun:1.2,
+      primaryHitRadius:3.2,
+      secondaryDamage:18,
+      secondaryRadius:5.5,
+      secondaryKnock:11,
+      secondaryStun:.08,
+      eliteControl:.55,
+    }),
+  }),
+});
 
 export function createPilebunkerCombatEffect({
   THREE,
   scene,
   getEnemies = () => [],
   getPlayer = () => ({ x:0, z:0, forwardX:0, forwardZ:1 }),
-  hitEnemy = () => false,
+  hitEnemy = null,
 } = {}) {
   if (!THREE || !scene) throw new Error('[pilebunker-effect] THREE and scene are required.');
 
   const clamp = THREE.MathUtils.clamp;
   const lerp = THREE.MathUtils.lerp;
   const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
-  const tuning = {
-    pullRadius: 7.5,
-    pullStrength: 13,
-    compressionDistance: 2.4,
-    primaryDamage: 60,
-    primaryStun: 1.2,
-    primaryHitRadius: 3.2,
-    secondaryDamage: 18,
-    secondaryRadius: 5.5,
-    secondaryKnock: 11,
-    eliteControl: .55,
-  };
-  const STORAGE_PREFIX = 'arena.pilebunker.effect.';
-  for (const key of Object.keys(tuning)) {
+  const tuning = { ...PRESETS.heroic.values };
+  let activePreset = 'heroic';
+
+  function saveTuning() {
     try {
-      const saved = Number(localStorage.getItem(STORAGE_PREFIX + key));
-      if (Number.isFinite(saved)) tuning[key] = saved;
+      localStorage.setItem(STORAGE_PREFIX + 'schema', String(EFFECT_SCHEMA));
+      localStorage.setItem(STORAGE_PREFIX + 'preset', activePreset);
+      for (const [key, value] of Object.entries(tuning)) {
+        localStorage.setItem(STORAGE_PREFIX + key, String(value));
+      }
     } catch (_) {}
   }
+
+  function loadTuning() {
+    try {
+      const schema = Number(localStorage.getItem(STORAGE_PREFIX + 'schema'));
+      if (schema !== EFFECT_SCHEMA) {
+        activePreset = 'heroic';
+        Object.assign(tuning, PRESETS.heroic.values);
+        saveTuning();
+        return;
+      }
+      const savedPreset = localStorage.getItem(STORAGE_PREFIX + 'preset');
+      activePreset = PRESETS[savedPreset] ? savedPreset : 'custom';
+      for (const key of Object.keys(tuning)) {
+        const saved = Number(localStorage.getItem(STORAGE_PREFIX + key));
+        if (Number.isFinite(saved)) tuning[key] = saved;
+      }
+    } catch (_) {}
+  }
+  loadTuning();
 
   const state = {
     active:false,
@@ -98,9 +190,11 @@ export function createPilebunkerCombatEffect({
   function liveEnemies() {
     return getEnemies().filter(enemy => enemy && enemy.hp > 0 && enemy.root?.parent);
   }
+
   function controlMultiplier(enemy) {
     return enemy?.isElite ? tuning.eliteControl : 1;
   }
+
   function currentPlayer() {
     const p = getPlayer() || {};
     const fx = Number(p.forwardX) || 0;
@@ -113,6 +207,7 @@ export function createPilebunkerCombatEffect({
       forwardZ:fz/length,
     };
   }
+
   function updateCompression() {
     const p = currentPlayer();
     state.forward.set(p.forwardX, 0, p.forwardZ);
@@ -123,12 +218,34 @@ export function createPilebunkerCombatEffect({
     );
     return p;
   }
+
+  function frontMetrics(enemy, player) {
+    const dx = enemy.x - player.x;
+    const dz = enemy.z - player.z;
+    return {
+      dx,
+      dz,
+      distance:Math.hypot(dx, dz),
+      along:dx * player.forwardX + dz * player.forwardZ,
+      lateral:Math.abs(dx * player.forwardZ - dz * player.forwardX),
+    };
+  }
+
+  // The small negative allowance catches an enemy whose collision center has
+  // slipped just behind the player while its body is visibly touching the punch.
+  function isFrontAffected(enemy, player) {
+    const m = frontMetrics(enemy, player);
+    const closeAllowance = Math.max(.55, (enemy.radius || 1) * .72);
+    return m.distance <= tuning.frontReach && m.along >= -closeAllowance;
+  }
+
   function pullWeightForPhase(phase, progress) {
     if (phase === 'OVERHEAD RATCHET') return .28 + smooth(progress) * .16;
     if (phase === 'DEEP COIL') return .62 + smooth(progress) * .18;
     if (phase === 'FINAL HOLD') return 1;
     return 0;
   }
+
   function interruptForControl(enemy) {
     enemy.vx *= .12;
     enemy.vz *= .12;
@@ -139,6 +256,7 @@ export function createPilebunkerCombatEffect({
       enemy.hitDone = false;
     }
   }
+
   function applyPull(enemy, dt, weight) {
     const dx = state.compression.x - enemy.x;
     const dz = state.compression.z - enemy.z;
@@ -165,28 +283,21 @@ export function createPilebunkerCombatEffect({
   }
 
   function primaryScore(enemy, player) {
-    const px = enemy.x - player.x;
-    const pz = enemy.z - player.z;
-    const distanceFromPlayer = Math.hypot(px, pz) || 1;
-    const front = (px * player.forwardX + pz * player.forwardZ) / distanceFromPlayer;
-    const lateral = Math.abs(px * player.forwardZ - pz * player.forwardX);
-    const cx = enemy.x - state.compression.x;
-    const cz = enemy.z - state.compression.z;
-    const compressionDistance = Math.hypot(cx, cz);
-    return compressionDistance * 1.35 + lateral * .24 + distanceFromPlayer * .035 - front * 1.15;
+    const m = frontMetrics(enemy, player);
+    const desiredAlong = tuning.compressionDistance;
+    // Centre-line alignment matters most. Point-blank targets get a modest bonus
+    // so the move does not visually punch through someone touching the player.
+    const pointBlankBonus = m.distance < 2.1 ? 1.3 : 0;
+    return m.lateral * .92
+      + Math.abs(m.along - desiredAlong) * .54
+      + m.distance * .045
+      - pointBlankBonus;
   }
+
   function lockPrimary() {
     if (state.locked && state.primary?.hp > 0 && state.primary.root?.parent) return state.primary;
     const player = currentPlayer();
-    const candidates = liveEnemies().filter(enemy => {
-      const dx = enemy.x - state.compression.x;
-      const dz = enemy.z - state.compression.z;
-      const distance = Math.hypot(dx, dz);
-      const fromPlayerX = enemy.x - player.x;
-      const fromPlayerZ = enemy.z - player.z;
-      const front = fromPlayerX * player.forwardX + fromPlayerZ * player.forwardZ;
-      return distance <= tuning.pullRadius && front > -.75;
-    });
+    const candidates = liveEnemies().filter(enemy => isFrontAffected(enemy, player));
     candidates.sort((a, b) => primaryScore(a, player) - primaryScore(b, player));
     state.primary = candidates[0] || null;
     state.locked = !!state.primary;
@@ -205,6 +316,7 @@ export function createPilebunkerCombatEffect({
     targetRing.rotation.z += rawDt * 2.8;
     targetMaterial.opacity = .68 + Math.sin(performance.now() * .011) * .18;
   }
+
   function updatePullVisuals(rawDt) {
     const weight = state.pullWeight;
     pullRing.visible = state.active && weight > .01;
@@ -237,6 +349,7 @@ export function createPilebunkerCombatEffect({
       mesh.material.opacity = (.08 + weight * .34) * Math.sin(Math.PI * streak.phase);
     }
   }
+
   function updateBlastWaves(rawDt) {
     for (let i=blastWaves.length-1; i>=0; i--) {
       const wave = blastWaves[i];
@@ -251,6 +364,15 @@ export function createPilebunkerCombatEffect({
       }
       wave.mesh.scale.setScalar(lerp(.22, wave.radius, smooth(p)));
       wave.mesh.material.opacity = (1-p) * .9;
+    }
+  }
+
+  function dealEnemyHit(enemy, options) {
+    try {
+      return damageRegisteredArenaEnemy(enemy, options);
+    } catch (error) {
+      if (typeof hitEnemy === 'function') return !!hitEnemy(enemy, options);
+      throw error;
     }
   }
 
@@ -286,12 +408,13 @@ export function createPilebunkerCombatEffect({
 
   function impact({ point, forward } = {}) {
     if (!state.active) return { landed:false, primaryHit:false, secondaryHits:0 };
-    updateCompression();
+    const player = updateCompression();
     const primary = lockPrimary();
     const impactPoint = point?.isVector3
       ? point.clone()
       : new THREE.Vector3(state.compression.x, .8, state.compression.z);
     state.impactPoint.copy(impactPoint);
+
     const forward2 = forward?.isVector3 ? forward.clone() : state.forward.clone();
     forward2.y = 0;
     if (forward2.lengthSq() < 1e-6) forward2.copy(state.forward);
@@ -299,18 +422,24 @@ export function createPilebunkerCombatEffect({
 
     let primaryHit = false;
     let secondaryHits = 0;
-    const primaryStillValid = primary?.hp > 0 && primary.root?.parent
-      && Math.hypot(primary.x - state.compression.x, primary.z - state.compression.z) <= tuning.primaryHitRadius;
+    const primaryAtCompression = primary
+      ? Math.hypot(primary.x - state.compression.x, primary.z - state.compression.z)
+      : Infinity;
+    const primaryStillValid = primary?.hp > 0
+      && primary.root?.parent
+      && (primaryAtCompression <= tuning.primaryHitRadius || isFrontAffected(primary, player));
 
     if (primaryStillValid) {
       const control = controlMultiplier(primary);
-      primaryHit = !!hitEnemy(primary, {
+      primaryHit = dealEnemyHit(primary, {
         damage:tuning.primaryDamage,
         stun:tuning.primaryStun * control,
-        knock:.72 * control,
+        knock:1.15 * control,
         motion:{ x:forward2.x, z:forward2.z },
         point:new THREE.Vector3(primary.x, Math.max(.8, (primary.height || 2) * .48), primary.z),
         role:'primary',
+        power:2.8,
+        pop:1.35,
       });
     }
 
@@ -318,32 +447,51 @@ export function createPilebunkerCombatEffect({
     const centerZ = state.compression.z;
     for (const enemy of [...liveEnemies()]) {
       if (enemy === primary || enemy.hp <= 0) continue;
+
+      const frontCaught = isFrontAffected(enemy, player);
       let dx = enemy.x - centerX;
       let dz = enemy.z - centerZ;
-      let distance = Math.hypot(dx, dz);
-      if (distance > tuning.secondaryRadius) continue;
-      if (distance < .001) {
-        const angle = (enemy.id || 1) * 2.399963;
-        dx = Math.cos(angle);
-        dz = Math.sin(angle);
-        distance = 1;
+      let blastDistance = Math.hypot(dx, dz);
+      const inBlast = blastDistance <= tuning.secondaryRadius;
+      if (!frontCaught && !inBlast) continue;
+
+      let nx;
+      let nz;
+      let falloff;
+      if (frontCaught) {
+        // Guaranteed front coverage: even an enemy visually tucked behind the
+        // fist model is struck and sent in the player's forward direction.
+        nx = player.forwardX;
+        nz = player.forwardZ;
+        const playerDistance = frontMetrics(enemy, player).distance;
+        falloff = lerp(1, .82, clamp(playerDistance / tuning.frontReach, 0, 1));
+      } else {
+        if (blastDistance < .001) {
+          const angle = (enemy.id || 1) * 2.399963;
+          dx = Math.cos(angle);
+          dz = Math.sin(angle);
+          blastDistance = 1;
+        }
+        nx = dx / blastDistance;
+        nz = dz / blastDistance;
+        falloff = lerp(1, .72, clamp(blastDistance / tuning.secondaryRadius, 0, 1));
       }
+
       const control = controlMultiplier(enemy);
-      const falloff = lerp(1, .72, clamp(distance / tuning.secondaryRadius, 0, 1));
-      const nx = dx / distance;
-      const nz = dz / distance;
-      const landed = hitEnemy(enemy, {
+      const landed = dealEnemyHit(enemy, {
         damage:Math.max(1, Math.round(tuning.secondaryDamage * falloff)),
-        stun:.08 * control,
+        stun:tuning.secondaryStun * control,
         knock:tuning.secondaryKnock * falloff * control,
         motion:{ x:nx, z:nz },
         point:new THREE.Vector3(enemy.x, Math.max(.7, (enemy.height || 2) * .45), enemy.z),
         role:'secondary',
+        power:1.55,
+        pop:1.2,
       });
       if (landed) secondaryHits++;
     }
 
-    spawnBlastWave(state.compression, tuning.secondaryRadius);
+    spawnBlastWave(state.compression, Math.max(tuning.secondaryRadius, tuning.frontReach * .72));
     state.pullWeight = 0;
     pullRing.visible = false;
     for (const streak of streaks) streak.mesh.visible = false;
@@ -362,57 +510,151 @@ export function createPilebunkerCombatEffect({
     for (const streak of streaks) streak.mesh.visible = false;
   }
 
+  const panelState = {
+    inputs:new Map(),
+    presetSelect:null,
+    description:null,
+  };
+
+  function syncPanel() {
+    for (const [key, entry] of panelState.inputs) {
+      entry.input.value = tuning[key];
+      entry.value.textContent = Number(tuning[key]).toFixed(entry.digits);
+    }
+    if (panelState.presetSelect) panelState.presetSelect.value = PRESETS[activePreset] ? activePreset : 'custom';
+    if (panelState.description) {
+      panelState.description.textContent = PRESETS[activePreset]?.description
+        || 'Custom advanced tuning. Choose a preset to restore a designed package.';
+    }
+  }
+
+  function applyPreset(id, { persist=true } = {}) {
+    const preset = PRESETS[id];
+    if (!preset) return false;
+    Object.assign(tuning, preset.values);
+    activePreset = id;
+    if (persist) saveTuning();
+    syncPanel();
+    return true;
+  }
+
   function setTuning(key, value) {
     if (!(key in tuning)) return;
     const number = Number(value);
     if (!Number.isFinite(number)) return;
     tuning[key] = number;
-    try { localStorage.setItem(STORAGE_PREFIX + key, String(number)); } catch (_) {}
+    activePreset = 'custom';
+    saveTuning();
+    syncPanel();
   }
 
   function installPanel() {
     if (typeof document === 'undefined') return;
     const body = document.getElementById('body-powbunker');
     if (!body || document.getElementById('pilebunkerEffectControls')) return;
+
     const wrap = document.createElement('div');
     wrap.id = 'pilebunkerEffectControls';
+
     const heading = document.createElement('div');
     heading.className = 'ptitle';
     heading.textContent = 'CYCLONE + ONE ON ONE EFFECT';
     wrap.appendChild(heading);
-    const defs = [
-      ['pullRadius','PULL RADIUS',3,12,.1,1],
-      ['pullStrength','PULL STRENGTH',3,24,.25,2],
-      ['compressionDistance','COMPRESSION POINT',.5,5,.05,2],
-      ['primaryStun','PRIMARY STUN',.1,3,.05,2],
-      ['secondaryRadius','BLAST RADIUS',2,10,.1,1],
-      ['secondaryKnock','SECONDARY KNOCKBACK',2,22,.25,2],
-    ];
-    for (const [key,label,min,max,step,digits] of defs) {
-      const row = document.createElement('div'); row.className = 'srow';
-      const lab = document.createElement('div'); lab.className = 'slabel';
-      const val = document.createElement('span'); val.className = 'sval';
-      const input = document.createElement('input');
-      input.type = 'range'; input.min = min; input.max = max; input.step = step; input.value = tuning[key];
-      input.setAttribute('aria-label', label);
-      const sync = () => { val.textContent = Number(tuning[key]).toFixed(digits); };
-      lab.textContent = label + ' '; lab.appendChild(val);
-      input.addEventListener('input', () => { setTuning(key, input.value); sync(); });
-      sync(); row.append(lab, input); wrap.appendChild(row);
+
+    const presetRow = document.createElement('div');
+    presetRow.className = 'srow';
+    const presetLabel = document.createElement('div');
+    presetLabel.className = 'slabel';
+    presetLabel.textContent = 'EFFECT PRESET';
+    const presetSelect = document.createElement('select');
+    presetSelect.setAttribute('aria-label', 'Pilebunker effect preset');
+    presetSelect.style.cssText = 'width:100%;padding:8px;border:1px solid rgba(232,160,76,.45);border-radius:6px;background:#102426;color:#f0d7b1;font:inherit;';
+    for (const [id, preset] of Object.entries(PRESETS)) {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = preset.label;
+      presetSelect.appendChild(option);
     }
+    const customOption = document.createElement('option');
+    customOption.value = 'custom';
+    customOption.textContent = 'CUSTOM';
+    presetSelect.appendChild(customOption);
+    presetSelect.addEventListener('change', () => {
+      if (presetSelect.value !== 'custom') applyPreset(presetSelect.value);
+    });
+    presetRow.append(presetLabel, presetSelect);
+    wrap.appendChild(presetRow);
+    panelState.presetSelect = presetSelect;
+
+    const description = document.createElement('div');
+    description.className = 'ptitle';
+    description.style.cssText = 'line-height:1.4;opacity:.82;margin:5px 0 9px;';
+    wrap.appendChild(description);
+    panelState.description = description;
+
+    const details = document.createElement('details');
+    details.id = 'pilebunkerAdvancedTuning';
+    details.style.cssText = 'border-top:1px solid rgba(232,160,76,.20);padding-top:7px;';
+    const summary = document.createElement('summary');
+    summary.className = 'ptitle';
+    summary.style.cssText = 'cursor:pointer;user-select:none;padding:7px 0;';
+    summary.textContent = 'ADVANCED EFFECT TUNING';
+    details.appendChild(summary);
+
+    const defs = [
+      ['pullRadius','PULL RADIUS',3,14,.1,1],
+      ['pullStrength','PULL STRENGTH',3,26,.25,2],
+      ['compressionDistance','COMPRESSION POINT',.5,5,.05,2],
+      ['frontReach','GUARANTEED FRONT REACH',3,14,.1,1],
+      ['primaryDamage','PRIMARY DAMAGE',20,260,5,0],
+      ['primaryStun','PRIMARY STUN',.1,5,.05,2],
+      ['primaryHitRadius','PRIMARY CATCH RADIUS',1.5,7,.1,1],
+      ['secondaryDamage','SECONDARY DAMAGE',1,120,2,0],
+      ['secondaryRadius','BLAST RADIUS',2,12,.1,1],
+      ['secondaryKnock','SECONDARY KNOCKBACK',2,26,.25,2],
+      ['secondaryStun','SECONDARY STUN',0,1.5,.05,2],
+      ['eliteControl','ELITE CONTROL MULTIPLIER',.2,1,.05,2],
+    ];
+
+    for (const [key,label,min,max,step,digits] of defs) {
+      const row = document.createElement('div');
+      row.className = 'srow';
+      const lab = document.createElement('div');
+      lab.className = 'slabel';
+      const value = document.createElement('span');
+      value.className = 'sval';
+      lab.textContent = label + ' ';
+      lab.appendChild(value);
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = min;
+      input.max = max;
+      input.step = step;
+      input.setAttribute('aria-label', label);
+      input.addEventListener('input', () => setTuning(key, input.value));
+      panelState.inputs.set(key, { input, value, digits });
+      row.append(lab, input);
+      details.appendChild(row);
+    }
+
+    wrap.appendChild(details);
     body.appendChild(wrap);
+    syncPanel();
   }
 
   function dispose() {
     finish();
     scene.remove(pullRing, targetRing);
-    pullRing.geometry.dispose(); pullMaterial.dispose();
-    targetRing.geometry.dispose(); targetMaterial.dispose();
+    pullRing.geometry.dispose();
+    pullMaterial.dispose();
+    targetRing.geometry.dispose();
+    targetMaterial.dispose();
     for (const streak of streaks) {
       scene.remove(streak.mesh);
       streak.mesh.material.dispose();
     }
-    streakGeometry.dispose(); streakMaterial.dispose();
+    streakGeometry.dispose();
+    streakMaterial.dispose();
     for (const wave of blastWaves) {
       scene.remove(wave.mesh);
       wave.mesh.geometry.dispose();
@@ -422,7 +664,18 @@ export function createPilebunkerCombatEffect({
   }
 
   return {
-    start, update, impact, finish, installPanel, dispose, setTuning, tuning, state,
+    start,
+    update,
+    impact,
+    finish,
+    installPanel,
+    dispose,
+    setTuning,
+    applyPreset,
+    tuning,
+    state,
+    presets:PRESETS,
+    get activePreset(){ return activePreset; },
     get primary(){ return state.primary; },
   };
 }
