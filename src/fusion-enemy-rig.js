@@ -1,6 +1,196 @@
 import { installFusionEnemyRig as installBaseFusionEnemyRig } from './fusion-enemy-rig-base.js';
 
+const TAU = Math.PI * 2;
+const ANT_CHARGE_PHASE_MULTIPLIER = 3.2;
+const BOUND_CYCLES_PER_SECOND = 1.5;
+const BLOCK_SPEED_THRESHOLD = .35;
+const BLOCK_HOLD_TIME = .16;
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth01 = value => {
+  const t = clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const expStep = (current, target, response, dt) =>
+  lerp(current, target, 1 - Math.exp(-response * Math.max(0, dt)));
+const wrap01 = value => ((value % 1) + 1) % 1;
+
+// The combat simulation may split one visible frame into several high-speed charge
+// substeps. This independent RAF serial lets the procedural rig update once per
+// displayed frame instead of sampling a different leg pose on every physics substep.
+let visualFrameSerial = 0;
+if(typeof requestAnimationFrame === 'function'){
+  const markVisualFrame = ()=>{
+    visualFrameSerial++;
+    requestAnimationFrame(markVisualFrame);
+  };
+  requestAnimationFrame(markVisualFrame);
+}
+
+function sampleLoop4(values, cycle){
+  const position = wrap01(cycle) * 4;
+  const index = Math.floor(position) % 4;
+  const amount = smooth01(position - Math.floor(position));
+  return lerp(values[index], values[(index + 1) % 4], amount);
+}
+
+function firstGroupChild(object){
+  return object?.children?.find(child => child?.isGroup) || null;
+}
+
+function chainJoints(root, count=3){
+  const joints = [];
+  let current = root;
+  for(let index = 0; index < count && current; index++){
+    joints.push(current);
+    current = firstGroupChild(current);
+  }
+  return joints;
+}
+
+function ensureAntelopeBoundState(handle){
+  if(handle._antelopeBoundState) return handle._antelopeBoundState;
+
+  const body = handle?.model?.chassis?.body || null;
+  const legs = body?.children
+    ?.filter(child => child?.isGroup
+      && child.position.y < -.25
+      && Math.abs(child.position.x) > .2
+      && Math.abs(child.position.z) > .8)
+    .map(root => ({
+      root,
+      joints:chainJoints(root, 3),
+      rear:root.position.z < 0,
+      basePosition:root.position.clone(),
+    }))
+    .filter(leg => leg.joints.length === 3) || [];
+
+  const tailRoot = body?.children?.find(child => child?.isGroup
+    && Math.abs(child.position.x) < .15
+    && child.position.y > .1
+    && child.position.z < -1.5) || null;
+
+  handle._antelopeBoundState = {
+    body,
+    bodyScale:body?.scale?.clone?.() || null,
+    legs,
+    tailJoints:chainJoints(tailRoot, 2),
+    phase:0,
+    rate:0,
+    blend:0,
+    filteredSpeed:0,
+    blockedTime:0,
+    wasActive:false,
+    lastVisualFrame:-1,
+    lastVisualTime:null,
+  };
+  return handle._antelopeBoundState;
+}
+
+function resetBoundTransforms(state){
+  if(state.body && state.bodyScale) state.body.scale.copy(state.bodyScale);
+  for(const leg of state.legs) leg.root.position.copy(leg.basePosition);
+}
+
+function visualDelta(state, fallbackDt, time){
+  if(visualFrameSerial > 0 && state.lastVisualFrame === visualFrameSerial) return null;
+
+  let dt = Number(fallbackDt) || 0;
+  if(state.lastVisualTime !== null){
+    const elapsed = Number(time) - state.lastVisualTime;
+    if(Number.isFinite(elapsed) && elapsed > 0) dt = elapsed;
+  }
+  state.lastVisualFrame = visualFrameSerial;
+  state.lastVisualTime = Number(time) || 0;
+  return clamp(dt, 0, .05);
+}
+
+function updateBoundClock(state, enemy, dt){
+  const active = !enemy._antScreamActive && enemy.state === 'active';
+  const measuredSpeed = Math.max(0, Number(enemy.visualGroundSpeed) || 0);
+  state.filteredSpeed = expStep(state.filteredSpeed, measuredSpeed, 11, dt);
+
+  if(active){
+    if(!state.wasActive){
+      state.phase = 0;
+      state.rate = 0;
+      state.blockedTime = 0;
+      state.filteredSpeed = Math.max(state.filteredSpeed, measuredSpeed, 1);
+    }
+
+    if(state.filteredSpeed < BLOCK_SPEED_THRESHOLD) state.blockedTime += dt;
+    else state.blockedTime = Math.max(0, state.blockedTime - dt * 3);
+
+    // Hold a stable two-beat bounding rhythm through short collision corrections.
+    // Only a sustained block eases the legs toward a stop.
+    const targetRate = state.blockedTime >= BLOCK_HOLD_TIME ? 0 : TAU * BOUND_CYCLES_PER_SECOND;
+    state.rate = expStep(state.rate, targetRate, 8, dt);
+    state.phase += state.rate * dt;
+    state.blend = expStep(state.blend, 1, 12, dt);
+  } else {
+    state.blockedTime = 0;
+    state.rate = expStep(state.rate, 0, 10, dt);
+    state.blend = expStep(state.blend, 0, 10, dt);
+  }
+
+  state.wasActive = active;
+}
+
+function applyLongBoundPose(state){
+  const blend = state.blend;
+  if(blend <= .001 || !state.body || state.legs.length !== 4) return;
+
+  const cycle = state.phase / TAU;
+
+  // Four continuous keys: rear compression -> rear push -> long airborne reach ->
+  // front landing/rear recovery. Smooth interpolation keeps the loop free of snaps.
+  const bodyLift = sampleLoop4([-.08, .20, .38, .06], cycle);
+  const bodyPitch = sampleLoop4([.14, -.06, -.18, .08], cycle);
+  const bodyStretch = sampleLoop4([0, .48, 1, .34], cycle);
+
+  state.body.position.y += bodyLift * blend;
+  state.body.rotation.x += bodyPitch * blend;
+  state.body.rotation.z += Math.sin(state.phase) * .018 * blend;
+  if(state.bodyScale){
+    state.body.scale.set(
+      state.bodyScale.x * (1 - bodyStretch * .018 * blend),
+      state.bodyScale.y * (1 - bodyStretch * .055 * blend),
+      state.bodyScale.z * (1 + bodyStretch * .14 * blend),
+    );
+  }
+
+  for(const leg of state.legs){
+    const hip = leg.rear
+      ? sampleLoop4([.78, -.98, -.22, .58], cycle)
+      : sampleLoop4([-.18, .42, -1.30, -.55], cycle);
+    const knee = leg.rear
+      ? sampleLoop4([-1.45, -.12, -.72, -1.18], cycle)
+      : sampleLoop4([.42, 1.02, .26, 1.18], cycle);
+    const ankle = leg.rear
+      ? sampleLoop4([.56, .04, .34, .48], cycle)
+      : sampleLoop4([-.18, -.54, .14, -.48], cycle);
+
+    leg.root.position.z = leg.basePosition.z
+      + (leg.rear ? -.16 : .21) * bodyStretch * blend;
+    leg.joints[0].rotation.x = lerp(leg.joints[0].rotation.x, hip, blend);
+    leg.joints[1].rotation.x = lerp(leg.joints[1].rotation.x, knee, blend);
+    leg.joints[2].rotation.x = lerp(leg.joints[2].rotation.x, ankle, blend);
+  }
+
+  if(state.tailJoints.length >= 2){
+    state.tailJoints[0].rotation.x = lerp(
+      state.tailJoints[0].rotation.x,
+      2.42 + sampleLoop4([.08, -.18, -.28, .02], cycle),
+      blend,
+    );
+    state.tailJoints[1].rotation.x = lerp(
+      state.tailJoints[1].rotation.x,
+      sampleLoop4([.15, -.22, -.34, .05], cycle),
+      blend,
+    );
+  }
+}
 
 function phaseProxy(enemy, phaseCuts){
   const [windupCut, activeCut] = phaseCuts;
@@ -41,21 +231,6 @@ function phaseProxy(enemy, phaseCuts){
   };
 }
 
-function advanceAntelopeChargeGait(handle, enemy, dt, heightScale){
-  if(enemy._antScreamActive || enemy.state !== 'active') return;
-  const actualGroundSpeed = Math.max(0, Number(enemy.visualGroundSpeed) || 0);
-  if(actualGroundSpeed <= .025) return;
-  const groundSpeed = Math.max(.025, Number(enemy._antChargeGaitSpeed) || actualGroundSpeed);
-
-  // The Antelope can cover more ground without cycling its legs at the same linear
-  // multiplier. The gameplay wrapper supplies a deliberately slower loping cadence;
-  // actual movement is only used as a blocked/not-blocked gate here.
-  const strideScale = handle?.model?.chassis?.strideScale || 1;
-  const baseScale = handle?.baseScale || 1;
-  const strideWorld = Math.max(.65, 2.1 * strideScale * baseScale * heightScale);
-  handle.gaitPhase = (handle.gaitPhase || 0) + groundSpeed * dt / strideWorld * Math.PI * 2;
-}
-
 export function installFusionEnemyRig(THREE){
   const rig = installBaseFusionEnemyRig(THREE);
   const baseUpdate = rig.update.bind(rig);
@@ -63,16 +238,26 @@ export function installFusionEnemyRig(THREE){
   rig.update = function updateWithAntelopeAnimations(handle, enemy, dt, time, heightScale=1){
     if(enemy?.kind !== 'ant') return baseUpdate(handle, enemy, dt, time, heightScale);
 
+    const boundState = ensureAntelopeBoundState(handle);
+    const frameDt = visualDelta(boundState, dt, time);
+    if(frameDt === null) return;
+
+    resetBoundTransforms(boundState);
+    updateBoundClock(boundState, enemy, frameDt);
+
     const animations = handle?.model?.bodyDef?.anims;
     const previousAnimation = animations?.[0];
     if(animations) animations[0] = enemy._antScreamActive ? 'ANT_SCREAM' : 'ANT_CHARGE';
 
-    advanceAntelopeChargeGait(handle, enemy, dt, heightScale);
+    // ANT_CHARGE multiplies phase by 3.2 internally. Feed it the inverse-scaled
+    // stable visual clock so the authored body motion follows one smooth bound cycle.
+    if(!enemy._antScreamActive && enemy.state === 'active'){
+      handle.gaitPhase = boundState.phase / ANT_CHARGE_PHASE_MULTIPLIER;
+    }
 
-    // Keep the lab animation's authored phase boundaries even when gameplay timing
-    // changes, so the charge and scream retain their original readable poses.
     const proxy = phaseProxy(enemy, enemy._antScreamActive ? [.30, .75] : [.28, .68]);
-    baseUpdate(handle, proxy, dt, time, heightScale);
+    baseUpdate(handle, proxy, frameDt, time, heightScale);
+    applyLongBoundPose(boundState);
 
     if(animations) animations[0] = previousAnimation;
   };
