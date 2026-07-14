@@ -13,6 +13,7 @@ const CHARGE_MAX = 4.2 * S;
 const CHARGE_WAIT = 3.25 * S;
 const CHARGE_SPEED_MUL = 3.15;
 const CHARGE_BACKSTEP_MUL = .25;
+const CHARGE_GAIT_SPEED_EXPONENT = 1 / 3;
 const CHARGE_MIN_HIT_RANGE = .28 * S;
 const CHARGE_CONTACT_PAD = .12;
 const BASE_ACTIVE_LUNGE_SPEED = .5 * S;
@@ -56,6 +57,7 @@ const formatMultiplier = value => `${Number(value).toFixed(2)}×`;
 export function createArenaEnemySystem(options = {}){
   const system = createBaseArenaEnemySystem(options);
   const baseUpdate = system.update.bind(system);
+  const baseDamageEnemy = system.damageEnemy.bind(system);
   const baseDirectorUpdate = system.director.update.bind(system.director);
   const antelopeState = new WeakMap();
   let antelopeChargeSpeedScale = clampValue(
@@ -155,9 +157,20 @@ export function createArenaEnemySystem(options = {}){
     }
   }
 
-  function desiredChargeSpeed(enemy){
+  function baseChargeSpeed(enemy){
     const baseSpeed = enemy._pressureBaseSpeed || enemy.speed;
-    return baseSpeed * system.speedScale * CHARGE_SPEED_MUL * antelopeChargeSpeedScale;
+    return baseSpeed * system.speedScale * CHARGE_SPEED_MUL;
+  }
+
+  function desiredChargeSpeed(enemy){
+    return baseChargeSpeed(enemy) * antelopeChargeSpeedScale;
+  }
+
+  function desiredChargeGaitSpeed(enemy){
+    // Movement scales linearly, but leg cadence scales only by the cube root. At the
+    // tested 4× movement speed this is about 1.59× cadence, reading as a long lope
+    // rather than four-times-faster skittering.
+    return baseChargeSpeed(enemy) * Math.pow(antelopeChargeSpeedScale, CHARGE_GAIT_SPEED_EXPONENT);
   }
 
   function prepareChargeMovement(enemy, state, dt, player){
@@ -182,7 +195,7 @@ export function createArenaEnemySystem(options = {}){
       enemy.facingAngle = Math.atan2(direction.x, direction.z);
       const desiredSpeed = desiredChargeSpeed(enemy);
       const supplementalSpeed = Math.max(0, desiredSpeed - BASE_ACTIVE_LUNGE_SPEED);
-      enemy._antChargeGaitSpeed = desiredSpeed;
+      enemy._antChargeGaitSpeed = desiredChargeGaitSpeed(enemy);
       enemy.knockX = direction.x * supplementalSpeed;
       enemy.knockZ = direction.z * supplementalSpeed;
     }
@@ -285,6 +298,44 @@ export function createArenaEnemySystem(options = {}){
     const steps = chargeSubstepCount(dt);
     const stepDt = dt / steps;
     for(let step = 0; step < steps; step++) updateAntelopeStep(stepDt, target);
+  };
+
+  system.damageEnemy = function damageEnemyWithActiveChargeArmor(enemy, amount, knock = { x:0, z:0 }, opts = {}){
+    const activeChargeArmor = isAntelope(enemy) && enemy.state === 'active' && Number(amount) < enemy.hp;
+    if(!activeChargeArmor) return baseDamageEnemy(enemy, amount, knock, opts);
+
+    // Preserve the committed charge while still routing the hit through the shared
+    // damage system for HP loss, hit flash, damage numbers, audio, and kill accounting.
+    // Disguising the state prevents the base function from resetting it to idle; the
+    // temporary director override preserves the existing attack token.
+    const preserved = {
+      state:enemy.state,
+      stateTime:enemy.stateTime,
+      stunned:enemy.stunned,
+      knockX:enemy.knockX,
+      knockZ:enemy.knockZ,
+      yOff:enemy.yOff,
+      vyOff:enemy.vyOff,
+      spin:enemy.spin,
+      spinVel:enemy.spinVel,
+      squash:enemy.squash,
+      squashT:enemy.squashT,
+      squashMax:enemy.squashMax,
+    };
+    const releaseAllForEnemy = system.director.releaseAllForEnemy;
+    system.director.releaseAllForEnemy = ()=>{};
+    enemy.state = CONTROLLED_CHARGE_MOVEMENT;
+
+    let killed = false;
+    try {
+      killed = baseDamageEnemy(enemy, amount, knock, opts);
+    } finally {
+      system.director.releaseAllForEnemy = releaseAllForEnemy;
+    }
+    if(killed || enemy.hp <= 0) return killed;
+
+    Object.assign(enemy, preserved);
+    return false;
   };
 
   system.setAntelopeChargeSpeedScale = function setAntelopeChargeSpeedScale(value, { persist=true } = {}){
