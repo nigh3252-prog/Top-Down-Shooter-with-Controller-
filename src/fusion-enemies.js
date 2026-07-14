@@ -3,6 +3,7 @@
 // tall narrow enemy and a long low enemy should not share one circle.
 
 import { FLARE_ENEMY_OPTIONS } from './flare-enemies.js';
+import { HADES_ENEMY_OPTIONS } from './hades-enemies.js';
 
 const STANDARD_RADIUS = .94;
 const STANDARD_HEIGHT = 4.15;
@@ -66,6 +67,7 @@ export const FUSION_ENEMY_OPTIONS = [
   { id:'phx', label:'Phoenix' },
   { id:'croc', label:'Croc' },
   ...FLARE_ENEMY_OPTIONS,
+  ...HADES_ENEMY_OPTIONS,
 ];
 
 export function isFusionEnemy(kind){ return !!FUSION_ARCHETYPES[kind]; }
