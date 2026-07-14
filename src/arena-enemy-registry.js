@@ -1,54 +1,30 @@
-// Branch-local bridge for card abilities that need to address arena enemies.
-//
-// The current arena enemy factory keeps its enemy array inside combat-arena.html's
-// module closure and does not yet expose a control/status API. During arena boot we
-// briefly observe Array#push until the first unmistakable arena-enemy record is
-// inserted, retain that array reference, and immediately restore the native method.
-// This is intentionally isolated here so it can be deleted when the enemy system
-// gains an explicit ability-effects interface.
+// Explicit branch-local bridge for card abilities that need the arena enemy list.
+// The arena-enemies wrapper registers the real system immediately after creation;
+// no prototype patching, hidden discovery, or silent fallback is used.
 
 const registry = {
   enemies: null,
-  installed: false,
-  restore: null,
+  source: null,
+  registeredAt: 0,
 };
 
-function looksLikeArenaEnemy(value) {
-  return !!value
-    && typeof value === 'object'
-    && Number.isFinite(value.hp)
-    && Number.isFinite(value.x)
-    && Number.isFinite(value.z)
-    && 'knockX' in value
-    && 'knockZ' in value
-    && value.root?.isObject3D
-    && /arena enemy/i.test(value.root.name || '');
+export function setArenaEnemySource(source) {
+  const enemies = Array.isArray(source) ? source : source?.enemies;
+  if (!Array.isArray(enemies)) {
+    registry.enemies = null;
+    registry.source = null;
+    registry.registeredAt = 0;
+    throw new Error('[pilebunker-effect] Arena enemy system did not expose an enemies array.');
+  }
+  registry.enemies = enemies;
+  registry.source = source;
+  registry.registeredAt = performance.now?.() ?? Date.now();
+  return enemies;
 }
 
+// Kept as a no-op compatibility export for player-combat.js while older cached
+// module graphs finish expiring. Enemy registration is now explicit.
 export function installArenaEnemyRegistryProbe() {
-  if (registry.enemies || registry.installed || typeof Array === 'undefined') return registry;
-  registry.installed = true;
-
-  const nativePush = Array.prototype.push;
-  let restored = false;
-  const restore = () => {
-    if (restored) return;
-    restored = true;
-    if (Array.prototype.push === observedPush) Array.prototype.push = nativePush;
-    registry.installed = false;
-    registry.restore = null;
-  };
-  function observedPush(...items) {
-    const result = nativePush.apply(this, items);
-    if (!registry.enemies && items.some(looksLikeArenaEnemy)) {
-      registry.enemies = this;
-      restore();
-    }
-    return result;
-  }
-
-  registry.restore = restore;
-  Array.prototype.push = observedPush;
   return registry;
 }
 
@@ -56,7 +32,23 @@ export function getArenaEnemies() {
   return Array.isArray(registry.enemies) ? registry.enemies : [];
 }
 
+export function requireArenaEnemies() {
+  if (!Array.isArray(registry.enemies)) {
+    throw new Error('[pilebunker-effect] Arena enemy source was not registered.');
+  }
+  return registry.enemies;
+}
+
+export function getArenaEnemyRegistryStatus() {
+  return {
+    registered:Array.isArray(registry.enemies),
+    enemyCount:Array.isArray(registry.enemies) ? registry.enemies.length : 0,
+    registeredAt:registry.registeredAt,
+  };
+}
+
 export function clearArenaEnemyRegistry() {
-  registry.restore?.();
   registry.enemies = null;
+  registry.source = null;
+  registry.registeredAt = 0;
 }
