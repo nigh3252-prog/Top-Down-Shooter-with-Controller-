@@ -1,4 +1,5 @@
 import { axialToWorld, buildMazeEdges, hexCorners } from './hex-maze-navigation.js';
+import { createMazeForest } from './maze-forest.js';
 
 function roomColor(id, alpha = 1){
   const hue = (id * 67 + 195) % 360;
@@ -112,8 +113,8 @@ function splitDoorEdge(edge, doorWidth){
   return {
     door:{ ...edge, a:left, b:right, center },
     wings:[
-      { ...edge, door:false, blocked:true, a:edge.a, b:left, part:'door-wing' },
-      { ...edge, door:false, blocked:true, a:right, b:edge.b, part:'door-wing' },
+      { ...edge, edge:`${edge.edge}:left-wing`, door:false, blocked:true, a:edge.a, b:left, part:'door-wing' },
+      { ...edge, edge:`${edge.edge}:right-wing`, door:false, blocked:true, a:right, b:edge.b, part:'door-wing' },
     ],
   };
 }
@@ -163,20 +164,19 @@ export function createMazeWorld({
     floor.position.set(center.x, -.06, center.z); floor.rotation.y = Math.PI / 6; floor.receiveShadow = true; group.add(floor);
   }
 
-  const wallMaterial = new THREE.MeshStandardMaterial({ color:0x253e42, roughness:.88, metalness:.04 });
   const sealedDoorMaterial = new THREE.MeshStandardMaterial({ color:0x6e4a25, emissive:0x351407, roughness:.76 });
   const breakableDoorMaterial = new THREE.MeshStandardMaterial({ color:0xe8a04c, emissive:0x6e2f0b, emissiveIntensity:1.35, roughness:.58 });
   const allEdges = buildMazeEdges(maze, { hexSize });
   const runtimeEdges = allEdges.filter(edge => activeCellKeys.has(edge.cellA) || (edge.cellB && activeCellKeys.has(edge.cellB)));
-  for(const edge of runtimeEdges.filter(candidate => !candidate.open && !candidate.door)){
-    group.add(makeWallMesh(THREE, edge, wallMaterial, wallHeight, wallThickness));
-  }
+  const forestEdges = runtimeEdges.filter(candidate => !candidate.open && !candidate.door);
   const doorMeshes = new Map();
   const doorTargets = new Map();
+  const doorSplits = new Map();
   const doorHeight = wallHeight * 1.84;
   for(const edge of runtimeEdges.filter(candidate => candidate.door)){
     const split = splitDoorEdge(edge, doorWidth);
-    for(const wing of split.wings) group.add(makeWallMesh(THREE, wing, wallMaterial, wallHeight, wallThickness));
+    doorSplits.set(edge.edge, split);
+    forestEdges.push(...split.wings);
     const mesh = makeWallMesh(THREE, split.door, sealedDoorMaterial, doorHeight, wallThickness * 1.7);
     mesh.userData.edge = split.door;
     mesh.userData.baseY = mesh.position.y;
@@ -188,6 +188,10 @@ export function createMazeWorld({
     doorTargets.set(edge.edge, { ...target, mesh, state:'sealed', height:doorHeight });
     group.add(mesh);
   }
+
+  const forest = createMazeForest({ THREE, maze, roomId, wallEdges:forestEdges, hexSize, wallHeight });
+  group.add(forest.group);
+
   let sealedRoomIds = new Set();
   let openedEdges = new Set(openedDoorEdges || []);
   let activeRoomCleared = false;
@@ -234,16 +238,19 @@ export function createMazeWorld({
       mesh.position.y = mesh.userData.baseY - eased * mesh.userData.doorHeight;
       if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
     }
+    const actorPos = globalThis.__arena?.actorPos;
+    if(actorPos){
+      const player = { x:actorPos.x, z:actorPos.y };
+      forest.updateCutaways(dt, player);
+    }
   };
   const getCollisionSegments = () => {
-    const segments = [];
+    const segments = [...forest.collisionSegments];
     for(const edge of runtimeEdges){
-      if(edge.door){
-        const split = splitDoorEdge(edge, doorWidth);
-        segments.push(...split.wings);
-        const sealed = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
-        if(sealed || !openedEdges.has(edge.edge)) segments.push({ ...split.door, blocked:true, part:'door' });
-      } else if(edge.blocked) segments.push(edge);
+      if(!edge.door) continue;
+      const split = doorSplits.get(edge.edge) || splitDoorEdge(edge, doorWidth);
+      const sealed = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
+      if(sealed || !openedEdges.has(edge.edge)) segments.push({ ...split.door, blocked:true, part:'door' });
     }
     return segments;
   };
@@ -261,7 +268,7 @@ export function createMazeWorld({
   };
   setDoorStates({ openedDoorEdges:openedEdges, roomCleared:false });
   return {
-    group, roomId, activeCellKeys, center, doorMeshes, doorTargets,
+    group, roomId, activeCellKeys, center, doorMeshes, doorTargets, forest,
     setDoorStates, update, dispose,
     get sealedRoomIds(){ return new Set(sealedRoomIds); },
     get openedDoorEdges(){ return new Set(openedEdges); },
