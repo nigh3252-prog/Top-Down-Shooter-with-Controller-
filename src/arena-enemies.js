@@ -3,6 +3,7 @@ import {
   createArenaEnemySystem as createBaseArenaEnemySystem,
 } from './arena-enemies-base.js';
 import { FUSION_ATTACKS } from './fusion-enemies.js';
+import { StoneSettings } from './settings.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
@@ -20,6 +21,12 @@ const SCREAM_RETRY_MIN = 5.5;
 const SCREAM_RETRY_MAX = 10.5;
 const MIN_RANGE_COOLDOWN_GUARD = .25;
 const CONTROLLED_CHARGE_MOVEMENT = 'antChargeControlled';
+const CHARGE_SPEED_SETTING = 'arena.antelopeChargeSpeedScale';
+const CHARGE_SPEED_MIN = 1;
+const CHARGE_SPEED_MAX = 10;
+const CHARGE_SPEED_STEP = .25;
+const CHARGE_SUBSTEP_MAX_TRAVEL = 1;
+const CHARGE_SUBSTEP_LIMIT = 12;
 
 const antCharge = FUSION_ATTACKS.antCharge;
 Object.assign(antCharge, {
@@ -38,17 +45,24 @@ Object.assign(antCharge, {
   wantsSolo:true,
 });
 
+const clampValue = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const normalized = (x, z) => {
   const length = Math.hypot(x, z) || 1;
   return { x:x / length, z:z / length };
 };
+const formatMultiplier = value => `${Number(value).toFixed(2)}×`;
 
 export function createArenaEnemySystem(options = {}){
   const system = createBaseArenaEnemySystem(options);
   const baseUpdate = system.update.bind(system);
   const baseDirectorUpdate = system.director.update.bind(system.director);
   const antelopeState = new WeakMap();
+  let antelopeChargeSpeedScale = clampValue(
+    Number(StoneSettings.get(CHARGE_SPEED_SETTING, 1)) || 1,
+    CHARGE_SPEED_MIN,
+    CHARGE_SPEED_MAX,
+  );
 
   function isAntelope(enemy){
     return enemy?.kind === 'ant' && enemy.hp > 0;
@@ -141,7 +155,13 @@ export function createArenaEnemySystem(options = {}){
     }
   }
 
+  function desiredChargeSpeed(enemy){
+    const baseSpeed = enemy._pressureBaseSpeed || enemy.speed;
+    return baseSpeed * system.speedScale * CHARGE_SPEED_MUL * antelopeChargeSpeedScale;
+  }
+
   function prepareChargeMovement(enemy, state, dt, player){
+    enemy._antChargeGaitSpeed = 0;
     if(enemy.state === 'windup'){
       if(enemy.stateTime < enemy.windup * .58){
         const away = normalized(enemy.x - (player.x ?? 0), enemy.z - (player.z ?? 0));
@@ -160,9 +180,9 @@ export function createArenaEnemySystem(options = {}){
       const direction = state.chargeVector || enemy.facing || { x:0, z:1 };
       enemy.facing = { x:direction.x, z:direction.z };
       enemy.facingAngle = Math.atan2(direction.x, direction.z);
-      const baseSpeed = enemy._pressureBaseSpeed || enemy.speed;
-      const desiredSpeed = baseSpeed * system.speedScale * CHARGE_SPEED_MUL;
+      const desiredSpeed = desiredChargeSpeed(enemy);
       const supplementalSpeed = Math.max(0, desiredSpeed - BASE_ACTIVE_LUNGE_SPEED);
+      enemy._antChargeGaitSpeed = desiredSpeed;
       enemy.knockX = direction.x * supplementalSpeed;
       enemy.knockZ = direction.z * supplementalSpeed;
     }
@@ -190,8 +210,7 @@ export function createArenaEnemySystem(options = {}){
     }
   };
 
-  system.update = function updateAntelopeTuning(dt, player){
-    const target = player || { x:0, z:0, invulnerable:false };
+  function updateAntelopeStep(dt, target){
     const snapshots = new Map();
 
     for(const enemy of system.enemies){
@@ -238,6 +257,8 @@ export function createArenaEnemySystem(options = {}){
         enemy.knockZ = 0;
       }
 
+      if(enemy.state !== 'active') enemy._antChargeGaitSpeed = 0;
+
       // Supplemental velocity is injected before baseUpdate so wall and body
       // collision resolution remains the final authority. Clear its decayed residue
       // after the frame so it never leaks into recovery or later hit reactions.
@@ -246,7 +267,101 @@ export function createArenaEnemySystem(options = {}){
         enemy.knockZ = 0;
       }
     }
+  }
+
+  function chargeSubstepCount(dt){
+    let maxTravel = 0;
+    for(const enemy of system.enemies){
+      if(!isAntelope(enemy) || enemy.state !== 'active') continue;
+      maxTravel = Math.max(maxTravel, desiredChargeSpeed(enemy) * dt);
+    }
+    return clampValue(Math.ceil(maxTravel / CHARGE_SUBSTEP_MAX_TRAVEL), 1, CHARGE_SUBSTEP_LIMIT);
+  }
+
+  system.update = function updateAntelopeTuning(dt, player){
+    const target = player || { x:0, z:0, invulnerable:false };
+    // At high multipliers a full frame can cross the entire contact zone. Split only
+    // active-charge frames so the existing melee and wall checks still see the path.
+    const steps = chargeSubstepCount(dt);
+    const stepDt = dt / steps;
+    for(let step = 0; step < steps; step++) updateAntelopeStep(stepDt, target);
   };
 
+  system.setAntelopeChargeSpeedScale = function setAntelopeChargeSpeedScale(value, { persist=true } = {}){
+    antelopeChargeSpeedScale = clampValue(Number(value) || 1, CHARGE_SPEED_MIN, CHARGE_SPEED_MAX);
+    if(persist) StoneSettings.set(CHARGE_SPEED_SETTING, antelopeChargeSpeedScale);
+    return antelopeChargeSpeedScale;
+  };
+  Object.defineProperty(system, 'antelopeChargeSpeedScale', {
+    configurable:true,
+    enumerable:true,
+    get:()=>antelopeChargeSpeedScale,
+  });
+
+  function installAntelopeTuningControl(){
+    if(typeof document === 'undefined') return;
+    const dirTab = document.getElementById('dirTab');
+    const resetButton = document.getElementById('resetBtn');
+    if(!dirTab || !resetButton || document.getElementById('antelopeTuningHeader')) return;
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.id = 'antelopeTuningHeader';
+    header.className = 'ptitle';
+
+    const body = document.createElement('div');
+    body.id = 'body-antelopeTuning';
+    body.className = 'sbody';
+
+    const row = document.createElement('div');
+    row.className = 'srow';
+    const label = document.createElement('div');
+    label.className = 'slabel';
+    label.textContent = 'CHARGE RUN SPEED ';
+    const value = document.createElement('span');
+    value.className = 'sval';
+    value.textContent = formatMultiplier(antelopeChargeSpeedScale);
+    label.appendChild(value);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = CHARGE_SPEED_MIN;
+    slider.max = CHARGE_SPEED_MAX;
+    slider.step = CHARGE_SPEED_STEP;
+    slider.value = antelopeChargeSpeedScale;
+    slider.setAttribute('aria-label', 'Screaming Antelope charge run speed');
+    slider.addEventListener('input', ()=>{
+      const next = system.setAntelopeChargeSpeedScale(parseFloat(slider.value));
+      value.textContent = formatMultiplier(next);
+    });
+
+    const note = document.createElement('div');
+    note.className = 'ptitle';
+    note.style.marginTop = '-12px';
+    note.style.lineHeight = '1.4';
+    note.textContent = '1.00× = current speed · up to 10.00×';
+
+    row.appendChild(label);
+    row.appendChild(slider);
+    body.appendChild(row);
+    body.appendChild(note);
+    dirTab.insertBefore(header, resetButton);
+    dirTab.insertBefore(body, resetButton);
+
+    const sectionKey = 'arena.section.antelopeTuning';
+    let collapsed = !!StoneSettings.get(sectionKey, true);
+    const applyCollapsed = ()=>{
+      body.style.display = collapsed ? 'none' : 'block';
+      header.textContent = `${collapsed ? '▸' : '▾'} SCREAMING ANTELOPE`;
+    };
+    header.addEventListener('click', ()=>{
+      collapsed = !collapsed;
+      StoneSettings.set(sectionKey, collapsed);
+      applyCollapsed();
+    });
+    applyCollapsed();
+  }
+
+  installAntelopeTuningControl();
   return system;
 }
