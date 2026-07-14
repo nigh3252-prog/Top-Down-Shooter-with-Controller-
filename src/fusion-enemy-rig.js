@@ -43,12 +43,14 @@ function phaseProxy(enemy, phaseCuts){
 
 function advanceAntelopeChargeGait(handle, enemy, dt, heightScale){
   if(enemy._antScreamActive || enemy.state !== 'active') return;
-  const groundSpeed = Math.max(0, Number(enemy.visualGroundSpeed) || 0);
-  if(groundSpeed <= .025) return;
+  const actualGroundSpeed = Math.max(0, Number(enemy.visualGroundSpeed) || 0);
+  if(actualGroundSpeed <= .025) return;
+  const groundSpeed = Math.max(actualGroundSpeed, Number(enemy._antChargeGaitSpeed) || 0);
 
   // The base Fusion rig freezes gaitPhase outside idle even though ANT_CHARGE turns
   // limb motion on. Advance the same authored gait clock here so the legs gallop
-  // instead of holding one pose while the gameplay root moves forward.
+  // instead of holding one pose while the gameplay root moves forward. The wrapper's
+  // requested charge speed keeps animation cadence synchronized with the live slider.
   const strideScale = handle?.model?.chassis?.strideScale || 1;
   const baseScale = handle?.baseScale || 1;
   const strideWorld = Math.max(.65, 2.1 * strideScale * baseScale * heightScale);
