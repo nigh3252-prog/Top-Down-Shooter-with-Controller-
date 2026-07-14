@@ -22,14 +22,16 @@ assert.match(weaponsSource, /const toothYs = \[-\.26, -\.19, -\.12, -\.05, \.02,
 assert.match(weaponsSource, /makeHazardTexture\(THREE\)/, 'Counterweight retains the hazard-striped sign plate');
 assert.match(weaponsSource, /makeHammerCrestTexture\(THREE\)/, 'Both head faces retain the hammer crest');
 
-// The furthest tooth point is approximately x=.395 + half of the .075 cone
-// height after its 90-degree rotation. Keep it inside the existing swept pick
-// volume centered at x=.28 with radius .18, so the visible face cannot hit past
-// the gameplay contact volume.
+// Locally, the visible teeth and the pick zone share +X. The per-frame visual
+// hook rotates the entire weapon root from +X toward +Z, so geometry and swept
+// damage volumes receive the same clockwise 90-degree correction.
 const visualToothReach = 0.395 + 0.075 / 2;
 const pickVolumeReach = 0.28 + 0.18;
 assert.ok(visualToothReach <= pickVolumeReach, 'Toothed face remains inside the swept pick damage volume');
+assert.match(weaponsSource, /setFromAxisAngle\(new THREE\.Vector3\(0, 1, 0\), -Math\.PI \/ 2\)/, 'Hammer face rotates clockwise by 90 degrees around the shaft');
+assert.match(weaponsSource, /weaponRoot\.quaternion\.multiply\(hammerYaw\)/, 'The correction rotates the shared visual and hit-zone root');
+assert.match(combatSource, /weaponRoot\.quaternion\.copy\(weaponQ\); weaponRoot\.scale\.setScalar\(getCombatScale\(\)\);\s*updateWeaponDynamicVisual\(now,dt\); weaponRoot\.updateWorldMatrix/, 'Attack pose resets before the hammer yaw hook, preventing accumulated rotation');
 assert.match(combatSource, /add\('hammerPick','Hammer pick','pierce',\.90,1\.03,\.18,22,\.95,\.28,0,'swing'\)/, 'Expected hammer pick volume is still active');
 assert.match(combatSource, /add\('hammerHead','Hammer head','blunt',\.84,1\.02,\.31,38,1\.55,0,0,'any'\)/, 'Expected broad hammer-head volume is still active');
 
-console.log('Hammerist War Hammer contract and contact-volume fit verified.');
+console.log('Hammerist War Hammer orientation and contact-volume fit verified.');
