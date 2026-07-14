@@ -2,6 +2,8 @@
 // targeting, navigation, and crowd spacing have separate scales because a
 // tall narrow enemy and a long low enemy should not share one circle.
 
+import { FLARE_ENEMY_OPTIONS } from './flare-enemies.js';
+
 const STANDARD_RADIUS = .94;
 const STANDARD_HEIGHT = 4.15;
 
@@ -62,7 +64,8 @@ export const FUSION_ENEMY_OPTIONS = [
   { id:'stilt', label:'Stilt' },
   { id:'ant', label:'Antelope' },
   { id:'phx', label:'Phoenix' },
-  { id:'croc', label:'Croc' }
+  { id:'croc', label:'Croc' },
+  ...FLARE_ENEMY_OPTIONS,
 ];
 
 export function isFusionEnemy(kind){ return !!FUSION_ARCHETYPES[kind]; }

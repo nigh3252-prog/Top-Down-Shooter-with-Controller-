@@ -2,8 +2,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:combat && npm run test:maze:quick",
+    "test": "npm run test:combat && npm run test:flare && npm run test:maze:quick",
     "test:combat": "node tests/combat-pass.test.mjs",
+    "test:flare": "node tests/flare-enemies.test.mjs",
     "test:maze:quick": "node tests/hex-maze.test.mjs --iterations=20",
     "test:maze": "node tests/hex-maze.test.mjs --iterations=100",
     "test:maze:stress": "node tests/hex-maze.test.mjs --iterations=500"
