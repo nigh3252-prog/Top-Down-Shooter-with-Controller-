@@ -14,8 +14,10 @@ export const BING_BONG_CARD = Object.freeze({
   type:'stance',
   effectId:'bingBong',
   name:'S31 BING BONG',
-  chain:Object.freeze(['horizontal6','vertical10','stab6']),
-  guardId:'hangingRight',
+  // Copies Anvil Step's vertical, vertical, horizontal attack pattern without
+  // replacing or modifying the original Anvil Step stance card.
+  chain:Object.freeze(['vertical8','vertical10','horizontal5']),
+  guardId:'vomTagLeft',
   preferredWeapons:Object.freeze(['longsword','dagger','rapier','katana','mace','spear','battleaxe','warhammer','claymore','greatsword']),
-  styleTags:Object.freeze(['concussion','mixed','stun']),
+  styleTags:Object.freeze(['concussion','vertical','horizontal','stun']),
 });
