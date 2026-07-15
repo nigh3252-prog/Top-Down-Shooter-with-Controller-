@@ -1,13 +1,13 @@
-// Branch-local integration wrapper for the maze-combat Pilebunker card.
-// The untouched combat core is pinned to the exact commit this branch started
-// from; this wrapper adds the ability without rewriting or destabilising the
-// sword puppet. Non-arena pages receive the original combat core unchanged.
+// Branch-local integration wrapper for the maze-combat Pilebunker card and
+// deck-driven combat modifiers. The untouched combat core is pinned to the
+// exact commit this branch started from; non-arena pages receive it unchanged.
 
 import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@4b54d50cf7b686fbfa727656ce18b7e6471db9c8/src/player-combat.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker-ability.js';
-import { installArenaEnemyRegistryProbe, getArenaEnemies } from './arena-enemy-registry.js';
+import { installArenaEnemyRegistryProbe, getArenaEnemies, getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
+import { installCombatCardEffects } from './combat-card-effects.js';
 
 export function installPlayerCombat(api){
   const PC=installBasePlayerCombat(api);
@@ -108,6 +108,14 @@ export function installPlayerCombat(api){
     return[{id:zoneId,label:abilityHitSpec.role==='primary'?'Pilebunker One on One':'Pilebunker detonation',type:'blunt',from:new THREE.Vector3(0,-1.25,0),to:new THREE.Vector3(0,1.25,0),radius:abilityHitSpec.radius,damage,stagger:0,prefer:'any'}];
   };
 
+  const cardEffects=installCombatCardEffects({
+    THREE,scene:api.scene,PC,hooks:api.hooks,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getStance:()=>window.__arena?.arena?.stance||null,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+  });
+
   function hitArenaEnemy(enemy,options={}){
     const weaponRoot=PC.weaponRoot,parent=weaponRoot?.parent,enemies=getArenaEnemies();if(!enemy||enemy.hp<=0||!weaponRoot||!parent||!api.hooks?.detectHits)return false;
     const point=options.point?.isVector3?options.point:new THREE.Vector3(enemy.x,Math.max(.8,(enemy.height||2)*.48),enemy.z),motion=options.motion||{x:0,z:1},length=Math.hypot(motion.x||0,motion.z||0)||1,mx=(motion.x||0)/length,mz=(motion.z||0)/length,previousStun=enemy.stunned||0;
@@ -146,10 +154,12 @@ export function installPlayerCombat(api){
     if(ev.slam){state.hitStop=Math.max(state.hitStop,.07*1.35);state.wobble.vel+=(Math.random()<.5?-1:1)*7.4;}
     if(ev.hit){const result=combatEffect.impact(ev.hit),landed=!!result.landed;ability.impactFeedback(ev.hit,landed);if(landed){state.hitStop=Math.max(state.hitStop,.115);state.wobble.vel+=(Math.random()<.5?-1:1)*10.5;}}
     if(ev.finished){combatEffect.finish();endGuidedAim();if(PC.weaponRoot)PC.weaponRoot.visible=true;state.attack=null;state.attackKey=null;state.attackGroup='vertical';state.t=0;state.fired=false;state.pending=null;state.pendingGroup=null;state.pendingLabEvent=null;window.dispatchEvent(new CustomEvent('powbunker:finished'));}
+    cardEffects.update(dt,now);
     return out;
   };
 
   Object.defineProperty(PC,'powBunkerAbility',{value:ability,enumerable:true});
   Object.defineProperty(PC,'pilebunkerCombatEffect',{value:combatEffect,enumerable:true});
+  Object.defineProperty(PC,'combatCardEffects',{value:cardEffects,enumerable:true});
   return PC;
 }
