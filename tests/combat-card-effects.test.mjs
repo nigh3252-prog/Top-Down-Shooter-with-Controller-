@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   BLOOD_SLASH_MAX_CHARGES,
   BING_BONG_STANCE_ID,
+  bingBongImpactDirection,
   bingBongProfile,
   concussionCoefficient,
   pointInForwardCone,
@@ -22,8 +23,13 @@ assert.ok(mace.range<hammer.range);
 assert.ok(rapier.stun<shaft.stun&&shaft.stun<mace.stun&&mace.stun<hammer.stun);
 assert.ok(hammer.range<=11.5&&hammer.stun<=1.45);
 
-assert.equal(pointInForwardCone({playerX:0,playerZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:4,range:5,angle:Math.PI/2}),true);
-assert.equal(pointInForwardCone({playerX:0,playerZ:0,forwardX:0,forwardZ:1,targetX:4,targetZ:0,range:5,angle:Math.PI/2}),false);
-assert.equal(pointInForwardCone({playerX:0,playerZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:6,range:5,angle:Math.PI/2}),false);
+const impactDirection=bingBongImpactDirection({playerX:0,playerZ:0,impactX:3,impactZ:4});
+assert.ok(Math.abs(impactDirection.x-.6)<1e-9);
+assert.ok(Math.abs(impactDirection.z-.8)<1e-9);
+
+// The shockwave begins at the struck enemy (3,4), not at the player (0,0).
+assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:6,targetZ:8,range:6,angle:Math.PI/2}),true);
+assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:0,targetZ:0,range:6,angle:Math.PI/2}),false);
+assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:8,targetZ:4,range:6,angle:Math.PI/2}),false);
 
 console.log('combat-card-effects tests passed');
