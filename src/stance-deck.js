@@ -5,13 +5,12 @@
 // tosses the current hand and takes a countdown before the new hand arrives.
 // Pure logic — no DOM, no stamina (the page owns resources).
 //
-// Prototype addition: every weapon deck also receives one Pilebunker ability
-// card. The arena's existing playCard() function is stance-shaped, so this
-// module returns a proxy of the currently active stance after firing the
-// ability event. That preserves the stance/weapon while still allowing the
-// existing discard, draw, stamina-refill and card animation pipeline to run.
+// Ability and modifier cards return a proxy of the active stance after firing
+// their event. That preserves the stance/weapon while the existing discard,
+// draw, stamina-refill, announcement, and card-animation pipeline still runs.
 
 import { POW_BUNKER_CARD } from './powbunker-card.js';
+import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
 
 export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
   const s = {
@@ -42,28 +41,45 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
     const found = s.lastStance && s.stancePool.find(card => card.id === s.lastStance.id);
     return found || s.stancePool[0] || null;
   }
+  function proxyActiveStance(card, marker) {
+    const stance = activeStanceFallback();
+    return stance ? { ...stance, name:card.name, [marker]:true } : null;
+  }
 
   function decorateCards() {
     if (typeof document === 'undefined') return;
     for (let i=0;i<2;i++) {
       const el = document.getElementById(`card${i}`);
       if (!el) continue;
+      const card = s.hand[i];
       const icon = el.querySelector('.cicon');
-      const isAbility = s.hand[i]?.type === 'ability';
-      el.dataset.cardType = isAbility ? 'ability' : 'stance';
-      el.setAttribute('aria-label', isAbility ? 'Play Pilebunker ability card' : 'Play stance card');
+      const rows = el.querySelector('.crows');
+      const isAbility = card?.type === 'ability';
+      const isModifier = card?.type === 'modifier';
+      const isBingBong = card?.effectId === 'bingBong';
+      const type = isAbility ? 'ability' : (isModifier ? 'modifier' : 'stance');
+      el.dataset.cardType = type;
+      el.setAttribute('aria-label', card ? `Play ${card.name.replace(/^S\d+\s*/,'')} ${type} card` : 'Empty card slot');
+      if (rows) rows.style.display = isModifier ? 'none' : 'flex';
       if (icon) {
-        icon.textContent = isAbility ? 'PB' : '';
+        icon.textContent = isAbility ? 'PB' : (isModifier ? 'BLOOD\nSLASH' : (isBingBong ? 'BING\nBONG' : ''));
         icon.style.display = 'grid';
         icon.style.placeItems = 'center';
-        icon.style.fontWeight = '900';
-        icon.style.fontSize = isAbility ? '16px' : '';
-        icon.style.letterSpacing = isAbility ? '.08em' : '';
-        icon.style.color = isAbility ? '#ffb066' : '';
-        icon.style.borderColor = isAbility ? 'rgba(255,176,102,.72)' : '';
-        icon.style.background = isAbility ? 'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))' : '';
+        icon.style.textAlign = 'center';
+        icon.style.whiteSpace = 'pre-line';
+        icon.style.lineHeight = isModifier || isBingBong ? '1.02' : '';
+        icon.style.fontWeight = isAbility || isModifier || isBingBong ? '900' : '';
+        icon.style.fontSize = isAbility ? '16px' : (isModifier || isBingBong ? '10px' : '');
+        icon.style.letterSpacing = isAbility ? '.08em' : (isModifier || isBingBong ? '.04em' : '');
+        icon.style.color = isAbility ? '#ffb066' : (isModifier ? '#ff9aa7' : (isBingBong ? '#ffd07b' : ''));
+        icon.style.borderColor = isAbility ? 'rgba(255,176,102,.72)' : (isModifier ? 'rgba(216,59,77,.78)' : (isBingBong ? 'rgba(255,208,123,.72)' : ''));
+        icon.style.background = isAbility
+          ? 'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))'
+          : (isModifier
+            ? 'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))'
+            : (isBingBong ? 'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))' : ''));
       }
-      el.style.borderColor = isAbility ? '#a95b35' : '';
+      el.style.borderColor = isAbility ? '#a95b35' : (isModifier ? '#b62d43' : (isBingBong ? '#b98639' : ''));
     }
   }
   function scheduleDecoration() {
@@ -92,12 +108,12 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
     get shuffleTime() { return shuffleTime; },
 
     rebuild(cards) {
-      s.stancePool = cards.slice();
+      s.stancePool = cards.some(card => card.id === BING_BONG_CARD.id) ? cards.slice() : [...cards, BING_BONG_CARD];
       const previous = activeStanceFallback();
       s.lastStance = previous && s.stancePool.some(card => card.id === previous.id)
         ? s.stancePool.find(card => card.id === previous.id)
         : (s.stancePool[0] || null);
-      s.pool = [...s.stancePool, POW_BUNKER_CARD];
+      s.pool = [...s.stancePool, POW_BUNKER_CARD, BLOOD_SLASH_CARD];
       s.shuffleT = -1;
       dealFresh(s.pool);
       bindStanceButton();
@@ -113,16 +129,23 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
           ? window.__POWBUNKER_CAN_PLAY__()
           : false;
         if (!canPlay) return null;
-        const stance = activeStanceFallback();
-        if (!stance) return null;
+        const proxy = proxyActiveStance(card, '__abilityProxy');
+        if (!proxy) return null;
         consumeSlot(slot, card);
         const fire = () => window.dispatchEvent(new CustomEvent('powbunker:play', { detail:{ card } }));
         if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
         scheduleDecoration();
-        // Same id/chain as the active stance means combat-arena's existing
-        // stance selection simply reselects what was already active. The name
-        // remains PILEBUNKER so its normal announcement identifies the card.
-        return { ...stance, name:POW_BUNKER_CARD.name, __abilityProxy:true };
+        return proxy;
+      }
+
+      if (card.type === 'modifier') {
+        const proxy = proxyActiveStance(card, '__modifierProxy');
+        if (!proxy) return null;
+        consumeSlot(slot, card);
+        const fire = () => window.dispatchEvent(new CustomEvent('bloodslash:play', { detail:{ card } }));
+        if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
+        scheduleDecoration();
+        return proxy;
       }
 
       s.lastStance = card;
