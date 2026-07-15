@@ -1,9 +1,9 @@
 // Branch-local integration wrapper for the maze-combat Pilebunker card.
-// The untouched combat core is pinned to the exact commit this branch started
-// from; this wrapper adds the ability without rewriting or destabilising the
-// sword puppet. Non-arena pages receive the original combat core unchanged.
+// The untouched combat core is pinned to the validated Hammerist War Hammer
+// commit, so its relative weapon import resolves the approved detailed model.
+// This wrapper adds the ability without rewriting or destabilising the sword puppet.
 
-import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@4b54d50cf7b686fbfa727656ce18b7e6471db9c8/src/player-combat.js';
+import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@082823137f1a8d5f0ca0ff7a76548aa9fccb96fa/src/player-combat.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker-ability.js';
 import { installArenaEnemyRegistryProbe, getArenaEnemies } from './arena-enemy-registry.js';
