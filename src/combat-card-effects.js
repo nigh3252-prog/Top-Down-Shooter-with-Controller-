@@ -8,8 +8,11 @@ export const BLOOD_SLASH_BLEED = Object.freeze({
   damage:3,
 });
 export const BING_BONG_STANCE_ID = 'S31-BING-BONG';
+export const BING_BONG_STUN_DURATION = 3;
 
-const BING_BONG_FULL_ANGLE = 80 * Math.PI / 180;
+const BING_BONG_WAVE_LIFE = .52;
+const BING_BONG_MIN_RANGE = 4.5;
+const BING_BONG_MAX_RANGE = 14.5;
 const CONCUSSION_BY_ZONE = Object.freeze({
   rapierTip:.03,
   rapierSide:.12,
@@ -51,10 +54,40 @@ export function bingBongProfile(damage, coefficient = 1){
   const normalized = concussionPower / 28;
   return {
     concussionPower,
-    range:clamp(1.25 + 4.0 * Math.pow(normalized, 1.45), 1.25, 11.5),
-    stun:clamp(.10 + .58 * Math.pow(normalized, 1.35), .10, 1.45),
-    angle:BING_BONG_FULL_ANGLE,
+    // Even weak contacts make a visible local ring. Mace and hammer heads reach
+    // across a substantial portion of a room, while the hard cap keeps it readable.
+    range:clamp(BING_BONG_MIN_RANGE + 6.2 * Math.pow(normalized, 1.2), BING_BONG_MIN_RANGE, BING_BONG_MAX_RANGE),
+    stun:BING_BONG_STUN_DURATION,
   };
+}
+
+export function pointInRadius({ originX = 0, originZ = 0, targetX = 0, targetZ = 0, range = 0 } = {}){
+  return Math.hypot(targetX - originX, targetZ - originZ) <= Math.max(0, Number(range) || 0);
+}
+
+// Retained for compatibility with older test/debug callers. Bing Bong no longer
+// uses directional cones; gameplay uses pointInRadius and an expanding ring.
+export function pointInForwardCone({
+  originX,
+  originZ,
+  playerX,
+  playerZ,
+  forwardX,
+  forwardZ,
+  targetX,
+  targetZ,
+  range,
+  angle,
+}){
+  const ox = Number.isFinite(originX) ? originX : (Number(playerX) || 0);
+  const oz = Number.isFinite(originZ) ? originZ : (Number(playerZ) || 0);
+  const dx = targetX - ox;
+  const dz = targetZ - oz;
+  const distance = Math.hypot(dx, dz);
+  if(distance <= 1e-6 || distance > range) return false;
+  const forwardLength = Math.hypot(forwardX, forwardZ) || 1;
+  const dot = (dx * forwardX + dz * forwardZ) / (distance * forwardLength);
+  return dot >= Math.cos(angle * .5);
 }
 
 export function bingBongImpactDirection({
@@ -76,30 +109,6 @@ export function bingBongImpactDirection({
   return { x:dx / length, z:dz / length };
 }
 
-export function pointInForwardCone({
-  originX,
-  originZ,
-  playerX,
-  playerZ,
-  forwardX,
-  forwardZ,
-  targetX,
-  targetZ,
-  range,
-  angle,
-}){
-  // playerX/playerZ remain accepted for compatibility with the original helper.
-  const ox = Number.isFinite(originX) ? originX : (Number(playerX) || 0);
-  const oz = Number.isFinite(originZ) ? originZ : (Number(playerZ) || 0);
-  const dx = targetX - ox;
-  const dz = targetZ - oz;
-  const distance = Math.hypot(dx, dz);
-  if(distance <= 1e-6 || distance > range) return false;
-  const forwardLength = Math.hypot(forwardX, forwardZ) || 1;
-  const dot = (dx * forwardX + dz * forwardZ) / (distance * forwardLength);
-  return dot >= Math.cos(angle * .5);
-}
-
 export function expandBloodSlashZone(zone, gripCenter = -.14){
   const from = zone.from.clone();
   const to = zone.to.clone();
@@ -112,23 +121,6 @@ export function expandBloodSlashZone(zone, gripCenter = -.14){
     radius:zone.radius * Math.SQRT2,
     bloodSlashExpanded:true,
   };
-}
-
-function makeConeGeometry(THREE, range, angle){
-  const segments = 18;
-  const positions = [];
-  for(let i=0;i<segments;i++){
-    const a0 = -angle*.5 + angle * (i / segments);
-    const a1 = -angle*.5 + angle * ((i + 1) / segments);
-    positions.push(
-      0,0,0,
-      Math.sin(a0)*range,0,Math.cos(a0)*range,
-      Math.sin(a1)*range,0,Math.cos(a1)*range,
-    );
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  return geometry;
 }
 
 function segmentsIntersect(a,b,c,d){
@@ -163,13 +155,15 @@ export function installCombatCardEffects({
     boostedAttack:null,
     savedStaminaClass:null,
     bleeds:new Map(),
-    visuals:[],
+    shockwaves:[],
+    stunVisuals:new Map(),
     enemySystem:null,
     originalDamageEnemy:null,
     originalReset:null,
     bleedTicking:false,
     badge:null,
     lastStanceId:null,
+    starTexture:null,
   };
 
   function currentArenaSwing(){ return globalThis.window?.__arena?.arena?.swing || null; }
@@ -207,16 +201,46 @@ export function installCombatCardEffects({
     state.bleeds.clear();
   }
 
+  function clearShockwave(wave){
+    if(wave?.mesh?.parent) wave.mesh.parent.remove(wave.mesh);
+    wave?.mesh?.geometry?.dispose?.();
+    wave?.mesh?.material?.dispose?.();
+  }
+
+  function clearShockwaves(){
+    for(const wave of state.shockwaves) clearShockwave(wave);
+    state.shockwaves.length=0;
+  }
+
+  function clearStunVisual(entry){
+    if(!entry) return;
+    if(entry.group?.parent) entry.group.parent.remove(entry.group);
+    for(const sprite of entry.stars||[]) sprite.material?.dispose?.();
+    const enemy=entry.enemy;
+    if(enemy){
+      enemy.__bingBongStunned=false;
+      enemy.stunState=null;
+      enemy.stunStateRemaining=0;
+    }
+  }
+
+  function clearStunVisuals(){
+    for(const entry of state.stunVisuals.values()) clearStunVisual(entry);
+    state.stunVisuals.clear();
+  }
+
   function resetEffects(){
     restoreWeaponClass();
     state.charges=0;
     state.activeAttack=null;
     state.boostedAttack=null;
     clearBleeds();
+    clearShockwaves();
+    clearStunVisuals();
     syncBadge();
   }
 
-  function makeBleedVisual(enemy){
+  function makeBleedVisual(){
     const mesh=new THREE.Mesh(
       new THREE.OctahedronGeometry(.16,0),
       new THREE.MeshBasicMaterial({color:0xd83b4d,transparent:true,opacity:.92,depthWrite:false})
@@ -230,7 +254,7 @@ export function installCombatCardEffects({
     if(!enemy || enemy.hp<=0) return;
     let entry=state.bleeds.get(enemy);
     if(!entry){
-      entry={enemy,remaining:BLOOD_SLASH_BLEED.duration,tick:BLOOD_SLASH_BLEED.tickInterval,mesh:makeBleedVisual(enemy),phase:Math.random()*Math.PI*2};
+      entry={enemy,remaining:BLOOD_SLASH_BLEED.duration,tick:BLOOD_SLASH_BLEED.tickInterval,mesh:makeBleedVisual(),phase:Math.random()*Math.PI*2};
       state.bleeds.set(enemy,entry);
     }else{
       entry.remaining=BLOOD_SLASH_BLEED.duration;
@@ -301,16 +325,90 @@ export function installCombatCardEffects({
     return best?.zone||null;
   }
 
-  function showBingBongCone(profile, origin, yaw){
+  function makeStarTexture(){
+    if(state.starTexture || typeof document==='undefined') return state.starTexture;
+    const canvas=document.createElement('canvas');
+    canvas.width=canvas.height=64;
+    const ctx=canvas.getContext('2d');
+    ctx.translate(32,32);
+    ctx.beginPath();
+    for(let i=0;i<10;i++){
+      const angle=-Math.PI/2+i*Math.PI/5;
+      const radius=i%2===0?25:11;
+      const x=Math.cos(angle)*radius;
+      const y=Math.sin(angle)*radius;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.fillStyle='#ffe36e';
+    ctx.strokeStyle='#8b4e12';
+    ctx.lineWidth=4;
+    ctx.lineJoin='round';
+    ctx.stroke();
+    ctx.fill();
+    const texture=new THREE.CanvasTexture(canvas);
+    texture.colorSpace=THREE.SRGBColorSpace;
+    state.starTexture=texture;
+    return texture;
+  }
+
+  function makeStunVisual(enemy){
+    const group=new THREE.Group();
+    group.name='Bing Bong stun stars';
+    const texture=makeStarTexture();
+    const stars=[];
+    for(let i=0;i<3;i++){
+      const material=new THREE.SpriteMaterial({map:texture,color:0xffffff,transparent:true,depthWrite:false,depthTest:false});
+      const sprite=new THREE.Sprite(material);
+      sprite.scale.set(.72,.72,1);
+      group.add(sprite);
+      stars.push(sprite);
+    }
+    scene.add(group);
+    const entry={enemy,group,stars,phase:Math.random()*Math.PI*2};
+    state.stunVisuals.set(enemy,entry);
+    return entry;
+  }
+
+  function applyExplicitStun(enemy){
+    if(!enemy || enemy.hp<=0) return false;
+    // The Screaming Antelope keeps its established committed-charge immunity.
+    if(enemy.kind==='ant'&&enemy.state==='active') return false;
+    enemy.stunned=Math.max(enemy.stunned||0,BING_BONG_STUN_DURATION);
+    enemy.__bingBongStunned=true;
+    enemy.stunState='bingBong';
+    enemy.stunStateRemaining=enemy.stunned;
+    if(!state.stunVisuals.has(enemy)) makeStunVisual(enemy);
+    return true;
+  }
+
+  function makeShockwaveRing(profile, origin){
     const mesh=new THREE.Mesh(
-      makeConeGeometry(THREE,profile.range,profile.angle),
-      new THREE.MeshBasicMaterial({color:0xffb066,transparent:true,opacity:.38,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+      new THREE.RingGeometry(.965,1,72),
+      new THREE.MeshBasicMaterial({color:0xffc45f,transparent:true,opacity:.72,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,side:THREE.DoubleSide})
     );
-    mesh.position.set(origin.x,.08,origin.z);
-    mesh.rotation.y=yaw;
-    mesh.scale.setScalar(.08);
+    mesh.rotation.x=-Math.PI/2;
+    mesh.position.set(origin.x,.11,origin.z);
+    mesh.scale.setScalar(.04);
     scene.add(mesh);
-    state.visuals.push({mesh,age:0,life:.34,kind:'bingBong',baseOpacity:.38});
+    return mesh;
+  }
+
+  function startBingBongShockwave(primary, profile){
+    const origin={x:primary.x,z:primary.z};
+    const wave={
+      origin,
+      profile,
+      age:0,
+      life:BING_BONG_WAVE_LIFE,
+      previousRadius:0,
+      affected:new Set(),
+      walls:[...currentMazeSegments()],
+      mesh:makeShockwaveRing(profile,origin),
+    };
+    state.shockwaves.push(wave);
+    wave.affected.add(primary);
+    applyExplicitStun(primary);
   }
 
   function applyBingBong(primary, damage, zone){
@@ -318,45 +416,13 @@ export function installCombatCardEffects({
     if(!attack || zone?.id?.startsWith('pilebunker')) return;
     if(currentStance()?.id!==BING_BONG_STANCE_ID && currentStance()?.effectId!=='bingBong') return;
 
-    // Each enemy actually struck may emit one shockwave for this attack. A cleaving
-    // mace or hammer swing can therefore create several overlapping BING BONGS.
+    // Each enemy directly struck emits one full radial shockwave for this attack.
     attack.__bingBongPrimaries ||= new Set();
     if(attack.__bingBongPrimaries.has(primary)) return;
     attack.__bingBongPrimaries.add(primary);
 
-    const coefficient=concussionCoefficient(zone);
-    const profile=bingBongProfile(damage,coefficient);
-    const player=getPlayer?.()||{x:0,z:0,forwardX:0,forwardZ:1};
-    const committedYaw=Number.isFinite(PC.combatState.commitYaw)?PC.combatState.commitYaw:Math.atan2(player.forwardX||0,player.forwardZ||1);
-    const direction=bingBongImpactDirection({
-      playerX:player.x,
-      playerZ:player.z,
-      impactX:primary.x,
-      impactZ:primary.z,
-      fallbackX:Math.sin(committedYaw),
-      fallbackZ:Math.cos(committedYaw),
-    });
-    const yaw=Math.atan2(direction.x,direction.z);
-    const origin={x:primary.x,z:primary.z};
-    const walls=currentMazeSegments();
-
-    for(const enemy of [...(state.enemySystem?.enemies||[])]){
-      if(!enemy||enemy===primary||enemy.hp<=0) continue;
-      if(enemy.kind==='ant'&&enemy.state==='active') continue;
-      if(!pointInForwardCone({
-        originX:origin.x,
-        originZ:origin.z,
-        forwardX:direction.x,
-        forwardZ:direction.z,
-        targetX:enemy.x,
-        targetZ:enemy.z,
-        range:profile.range,
-        angle:profile.angle,
-      })) continue;
-      if(blockedByWall(origin,{x:enemy.x,z:enemy.z},walls)) continue;
-      enemy.stunned=Math.max(enemy.stunned||0,profile.stun);
-    }
-    showBingBongCone(profile,origin,yaw);
+    const profile=bingBongProfile(damage,concussionCoefficient(zone));
+    startBingBongShockwave(primary,profile);
   }
 
   function patchEnemySystem(){
@@ -410,34 +476,69 @@ export function installCombatCardEffects({
     }
   }
 
+  function updateShockwaves(dt){
+    const system=state.enemySystem;
+    if(!system) return;
+    for(let i=state.shockwaves.length-1;i>=0;i--){
+      const wave=state.shockwaves[i];
+      wave.age+=dt;
+      const k=clamp(wave.age/wave.life,0,1);
+      const outward=1-Math.pow(1-k,3);
+      const currentRadius=wave.profile.range*outward;
+      wave.mesh.scale.setScalar(Math.max(.04,currentRadius));
+      wave.mesh.material.opacity=.72*Math.pow(1-k,.68);
+
+      for(const enemy of [...(system.enemies||[])]){
+        if(!enemy||enemy.hp<=0||wave.affected.has(enemy)) continue;
+        const allowance=(enemy.radius||1)*(system.heightScale||1)*.35;
+        if(!pointInRadius({originX:wave.origin.x,originZ:wave.origin.z,targetX:enemy.x,targetZ:enemy.z,range:currentRadius+allowance})) continue;
+        wave.affected.add(enemy);
+        if(blockedByWall(wave.origin,{x:enemy.x,z:enemy.z},wave.walls)) continue;
+        applyExplicitStun(enemy);
+      }
+
+      wave.previousRadius=currentRadius;
+      if(k>=1){
+        clearShockwave(wave);
+        state.shockwaves.splice(i,1);
+      }
+    }
+  }
+
+  function updateStunVisuals(dt,now){
+    const system=state.enemySystem;
+    if(!system) return;
+    for(const [enemy,entry] of [...state.stunVisuals]){
+      if(!enemy||enemy.hp<=0||!system.enemies?.includes(enemy)||(enemy.stunned||0)<=0){
+        clearStunVisual(entry);
+        state.stunVisuals.delete(enemy);
+        continue;
+      }
+      enemy.__bingBongStunned=true;
+      enemy.stunState='bingBong';
+      enemy.stunStateRemaining=enemy.stunned;
+      entry.phase+=dt*4.4;
+      const heightScale=system.heightScale||1;
+      const targetScale=enemy.currentTargetScale||enemy.targetScale||1;
+      const height=(enemy.height||2)*heightScale*targetScale;
+      const y=(enemy.targetYOffset||enemy.rootLift||0)+height+.72;
+      const orbitRadius=Math.max(.72,(enemy.radius||1)*heightScale*.72);
+      entry.group.position.set(enemy.x,y,enemy.z);
+      entry.stars.forEach((star,index)=>{
+        const angle=entry.phase+index*Math.PI*2/entry.stars.length;
+        star.position.set(Math.cos(angle)*orbitRadius,Math.sin(now*7+angle)*.13,Math.sin(angle)*orbitRadius);
+        const pulse=.64+.13*Math.sin(now*8+index*2.1);
+        star.scale.set(pulse,pulse,1);
+        star.material.opacity=.82+.18*Math.sin(now*6+index);
+      });
+    }
+  }
+
   function syncBingBongReadyPose(){
     const stance=currentStance();
     if(!stance||stance.id===state.lastStanceId) return;
     state.lastStanceId=stance.id;
     if(stance.id===BING_BONG_STANCE_ID||stance.effectId==='bingBong') PC.setReadyPose?.(guardPoseFor(stance));
-  }
-
-  function updateVisuals(dt){
-    for(let i=state.visuals.length-1;i>=0;i--){
-      const fx=state.visuals[i];
-      fx.age+=dt;
-      if(fx.age>=fx.life){
-        scene.remove(fx.mesh);
-        fx.mesh.geometry?.dispose?.();
-        fx.mesh.material?.dispose?.();
-        state.visuals.splice(i,1);
-        continue;
-      }
-      const k=fx.age/fx.life;
-      if(fx.kind==='bingBong'){
-        const outward=1-Math.pow(1-k,3);
-        fx.mesh.scale.setScalar(.08+outward*.97);
-        fx.mesh.material.opacity=(fx.baseOpacity||.38)*Math.pow(1-k,1.15);
-      }else{
-        fx.mesh.scale.setScalar(1+k*.18);
-        fx.mesh.material.opacity=.28*(1-k);
-      }
-    }
   }
 
   const hookBag=hooks||{};
@@ -477,8 +578,11 @@ export function installCombatCardEffects({
       patchEnemySystem();
       syncBingBongReadyPose();
       if(state.savedStaminaClass&&PC.combatState.attack!==state.activeAttack) finishAttack();
-      updateBleeds(Math.max(0,Number(dt)||0),Number(now)||0);
-      updateVisuals(Math.max(0,Number(dt)||0));
+      const frameDt=Math.max(0,Number(dt)||0);
+      const time=Number(now)||0;
+      updateBleeds(frameDt,time);
+      updateShockwaves(frameDt);
+      updateStunVisuals(frameDt,time);
     },
   };
 }
