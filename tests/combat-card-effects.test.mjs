@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import {
   BLOOD_SLASH_MAX_CHARGES,
   BING_BONG_STANCE_ID,
-  bingBongImpactDirection,
+  BING_BONG_STUN_DURATION,
   bingBongProfile,
   concussionCoefficient,
-  pointInForwardCone,
+  pointInRadius,
 } from '../src/combat-card-effects.js';
 
 assert.equal(BLOOD_SLASH_MAX_CHARGES,3);
 assert.equal(BING_BONG_STANCE_ID,'S31-BING-BONG');
+assert.equal(BING_BONG_STUN_DURATION,3);
 assert.equal(concussionCoefficient({id:'hammerHead',type:'blunt'}),1);
 assert.ok(concussionCoefficient({id:'spearShaft',type:'blunt'})>concussionCoefficient({id:'rapierTip',type:'pierce'}));
 
@@ -20,16 +21,17 @@ const hammer=bingBongProfile(70,concussionCoefficient({id:'hammerHead',type:'blu
 assert.ok(rapier.range<shaft.range);
 assert.ok(shaft.range<mace.range);
 assert.ok(mace.range<hammer.range);
-assert.ok(rapier.stun<shaft.stun&&shaft.stun<mace.stun&&mace.stun<hammer.stun);
-assert.ok(hammer.range<=11.5&&hammer.stun<=1.45);
+assert.ok(mace.range>=10);
+assert.ok(rapier.range>=4.5);
+assert.ok(hammer.range<=14.5);
+assert.equal(rapier.stun,3);
+assert.equal(shaft.stun,3);
+assert.equal(mace.stun,3);
+assert.equal(hammer.stun,3);
 
-const impactDirection=bingBongImpactDirection({playerX:0,playerZ:0,impactX:3,impactZ:4});
-assert.ok(Math.abs(impactDirection.x-.6)<1e-9);
-assert.ok(Math.abs(impactDirection.z-.8)<1e-9);
-
-// The shockwave begins at the struck enemy (3,4), not at the player (0,0).
-assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:6,targetZ:8,range:6,angle:Math.PI/2}),true);
-assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:0,targetZ:0,range:6,angle:Math.PI/2}),false);
-assert.equal(pointInForwardCone({originX:3,originZ:4,forwardX:.6,forwardZ:.8,targetX:8,targetZ:4,range:6,angle:Math.PI/2}),false);
+assert.equal(pointInRadius({originX:3,originZ:4,targetX:3,targetZ:4,range:10}),true);
+assert.equal(pointInRadius({originX:3,originZ:4,targetX:9,targetZ:12,range:10}),true);
+assert.equal(pointInRadius({originX:3,originZ:4,targetX:9.1,targetZ:12.1,range:10}),false);
+assert.equal(pointInRadius({originX:3,originZ:4,targetX:-3,targetZ:4,range:6}),true);
 
 console.log('combat-card-effects tests passed');
