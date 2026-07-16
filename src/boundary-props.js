@@ -1,4 +1,4 @@
-import { cylinderBetween, edgeFrame, pointAlongEdge } from './boundary-geometry.js';
+import { cylinderBetween } from './boundary-geometry.js';
 
 export function createBoundaryMaterials(THREE){
   return {
@@ -206,21 +206,49 @@ export function makeBuildingCluster(THREE, frame, materials, random){
       panel.rotation.y = building.rotation.y; root.add(panel);
     }
   }
+  if(random() > .52){
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 2.4, 12), materials.building);
+    tank.position.set((random() - .5) * 2.4, 7.5 + random() * 1.5, -1.2 - random() * 2.8);
+    root.add(tank);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.23, .55, 12), materials.redPanel);
+    cap.position.set(tank.position.x, tank.position.y + 1.46, tank.position.z);
+    root.add(cap);
+    for(const side of [-1, 1]){
+      const legX = tank.position.x + side * .72;
+      root.add(cylinderBetween(THREE,
+        { x:legX, y:1.2, z:tank.position.z - .5 },
+        { x:legX * .99, y:tank.position.y - 1.2, z:tank.position.z - .35 },
+        .07, materials.ink, 6));
+      root.add(cylinderBetween(THREE,
+        { x:legX, y:1.2, z:tank.position.z + .5 },
+        { x:legX * .99, y:tank.position.y - 1.2, z:tank.position.z + .35 },
+        .07, materials.ink, 6));
+    }
+  }
   return root;
 }
 
 export function makeOverheadCable(THREE, a, b, materials){
   const root = new THREE.Group();
+  const cablePoint = t => ({
+    x:a.x + (b.x - a.x) * t,
+    y:a.y + (b.y - a.y) * t - Math.sin(Math.PI * t) * .55,
+    z:a.z + (b.z - a.z) * t,
+  });
   let previous = a;
   for(let index = 1; index <= 8; index++){
-    const t = index / 8;
-    const next = {
-      x:a.x + (b.x - a.x) * t,
-      y:a.y + (b.y - a.y) * t - Math.sin(Math.PI * t) * .55,
-      z:a.z + (b.z - a.z) * t,
-    };
+    const next = cablePoint(index / 8);
     root.add(cylinderBetween(THREE, previous, next, .018, materials.cable, 5));
     previous = next;
+  }
+  for(const t of [.32, .68]){
+    const hook = cablePoint(t);
+    const drop = .55 + Math.sin(t * 17) * .12;
+    const bulb = { x:hook.x, y:hook.y - drop, z:hook.z };
+    root.add(cylinderBetween(THREE, hook, bulb, .014, materials.cable, 5));
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(.21, 10, 8), materials.lamp);
+    globe.position.set(bulb.x, bulb.y - .08, bulb.z);
+    root.add(globe);
   }
   return root;
 }
