@@ -25,13 +25,19 @@ import {
 
 function registerOccluder(root, x, z, crownRadius, light = null){
   const faders = [];
+  const materialClones = new Map();
   root.traverse(object => {
     if(!object.isMesh || !object.material) return;
-    const material = object.material.clone();
-    material.transparent = true;
-    material.opacity = object.material.opacity ?? 1;
+    const original = object.material;
+    let material = materialClones.get(original);
+    if(!material){
+      material = original.clone();
+      material.transparent = true;
+      material.opacity = original.opacity ?? 1;
+      materialClones.set(original, material);
+      faders.push({ material, baseOpacity:material.opacity });
+    }
     object.material = material;
-    faders.push({ material, baseOpacity:material.opacity });
   });
   return {
     root, x, z, crownRadius, faders, light,
