@@ -1,21 +1,48 @@
 import * as THREE from 'three';
+import { createWardenAbilityPrimitives } from './warden-ability-primitives.js';
 
-const RESOURCE = Object.freeze({ max:100, regenPerSecond:18, regenDelay:.8 });
+const SETTINGS_KEY = 'wardenAbilitySettings.v2';
+const DEFAULT_SETTINGS = Object.freeze({
+  staminaMax:100,
+  regenPerSecond:5,
+  regenDelay:.8,
+  cooldownMode:'oneSecond',
+});
 const GUARD_MAX = 100;
 const STATUS_COLOR = Object.freeze({ stun:0xd9b8ff, combo:0xffd06a, taunt:0xff8b6a });
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const arenaApi = () => typeof window !== 'undefined' ? window.__arena || null : null;
+const primitives = createWardenAbilityPrimitives({ THREE });
+
+function loadSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return {
+      staminaMax:clamp(Number(parsed.staminaMax) || DEFAULT_SETTINGS.staminaMax, 40, 250),
+      regenPerSecond:clamp(Number(parsed.regenPerSecond) || DEFAULT_SETTINGS.regenPerSecond, .5, 30),
+      regenDelay:clamp(Number(parsed.regenDelay) || DEFAULT_SETTINGS.regenDelay, 0, 3),
+      cooldownMode:parsed.cooldownMode === 'card' ? 'card' : 'oneSecond',
+    };
+  } catch (_) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
 
 const state = {
-  stamina: RESOURCE.max,
-  regenDelay: 0,
-  guard: 0,
-  hookedSystem: null,
-  effects: [],
-  styleInstalled: false,
-  hudInstalled: false,
+  settings:loadSettings(),
+  stamina:DEFAULT_SETTINGS.staminaMax,
+  regenDelay:0,
+  guard:0,
+  hookedSystem:null,
+  styleInstalled:false,
+  hudInstalled:false,
+  panelInstalled:false,
 };
+state.stamina = state.settings.staminaMax;
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const arenaApi = () => window.__arena || null;
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); } catch (_) {}
+}
 
 function installStyle() {
   if (state.styleInstalled || typeof document === 'undefined') return;
@@ -33,10 +60,13 @@ function installStyle() {
     .scard[data-card-type="ability"] .crows{font-size:8px;color:#d7b6ff;gap:1px}
     .scard[data-card-type="ability"] .crow{justify-content:space-between}
     .scard[data-card-type="ability"] .crow b{color:#8f78aa;font-size:7px}
+    .scard[data-card-type="stance"]{border-color:#2c4a47;color:#9fd2c9}
     .scard.cooling{filter:saturate(.45);cursor:wait}
     .scard .abilityCooldownShade{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(5,8,14,.78);pointer-events:none;z-index:3;transition:height .08s linear}
     .scard .abilityCooldownText{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:4;color:#fff;font-size:17px;font-weight:900;text-shadow:0 2px 5px #000;pointer-events:none}
     .scard.cooling .abilityCooldownText{display:flex}
+    #wardenAbilitySettings{margin:12px 0 2px;padding-top:9px;border-top:1px solid rgba(44,74,71,.55)}
+    #wardenAbilitySettings .abilityNote{color:#4a6f6a;font-size:8px;line-height:1.4;margin:-10px 0 12px}
   `;
   document.head.appendChild(style);
 }
@@ -55,9 +85,51 @@ function installHud() {
   hp.insertAdjacentElement('afterend', guardWrap);
   const abilityWrap = document.createElement('div');
   abilityWrap.id = 'abilityStaminaWrap';
-  abilityWrap.title = 'Ability Stamina';
+  abilityWrap.title = 'D-Stamina';
   abilityWrap.innerHTML = '<div id="abilityStaminaFill"></div>';
   stamina.insertAdjacentElement('afterend', abilityWrap);
+}
+
+function sliderRow(id, label, min, max, step, value) {
+  return `<div class="srow"><div class="slabel"><span>${label}</span><span class="sval" id="${id}Value"></span></div><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}"></div>`;
+}
+
+function installSettingsPanel() {
+  if (state.panelInstalled || typeof document === 'undefined') return;
+  const host = document.getElementById('body-loadout');
+  if (!host) return;
+  state.panelInstalled = true;
+  installStyle();
+  const section = document.createElement('div');
+  section.id = 'wardenAbilitySettings';
+  section.innerHTML = `
+    <div class="ptitle">WARDEN ABILITIES</div>
+    <div class="selectRow"><label for="wardenCooldownMode">ABILITY COOLDOWNS</label><select id="wardenCooldownMode"><option value="oneSecond">FORCE ALL TO 1 SECOND</option><option value="card">USE EACH CARD VALUE</option></select></div>
+    ${sliderRow('wardenStaminaMax', 'D-STAMINA MAX', 40, 200, 5, state.settings.staminaMax)}
+    ${sliderRow('wardenStaminaRegen', 'D-STAMINA REGEN / SEC', .5, 20, .5, state.settings.regenPerSecond)}
+    <div class="abilityNote">The one-second mode makes D-Stamina recovery the main limiter. Manual shuffle discards cooling abilities and may redraw them.</div>
+  `;
+  host.appendChild(section);
+
+  const cooldown = section.querySelector('#wardenCooldownMode');
+  const max = section.querySelector('#wardenStaminaMax');
+  const regen = section.querySelector('#wardenStaminaRegen');
+  cooldown.value = state.settings.cooldownMode;
+
+  function sync() {
+    state.settings.cooldownMode = cooldown.value === 'card' ? 'card' : 'oneSecond';
+    state.settings.staminaMax = clamp(Number(max.value) || 100, 40, 200);
+    state.settings.regenPerSecond = clamp(Number(regen.value) || 5, .5, 20);
+    state.stamina = Math.min(state.stamina, state.settings.staminaMax);
+    section.querySelector('#wardenStaminaMaxValue').textContent = String(Math.round(state.settings.staminaMax));
+    section.querySelector('#wardenStaminaRegenValue').textContent = state.settings.regenPerSecond.toFixed(1);
+    saveSettings();
+    renderWardenAbilityHud();
+  }
+  cooldown.addEventListener('change', sync);
+  max.addEventListener('input', sync);
+  regen.addEventListener('input', sync);
+  sync();
 }
 
 function flashAbilityStamina() {
@@ -72,73 +144,21 @@ function flashAbilityStamina() {
 
 function announce(text, seconds = .9) {
   if (typeof document === 'undefined') return;
-  const el = document.getElementById('msg');
-  if (!el) return;
-  el.textContent = text;
-  el.style.opacity = 1;
+  const element = document.getElementById('msg');
+  if (!element) return;
+  element.textContent = text;
+  element.style.opacity = 1;
   clearTimeout(announce.timer);
-  announce.timer = setTimeout(() => { el.style.opacity = 0; }, seconds * 1000);
-}
-
-function getWorldRoot(api) {
-  return api?.enemySystem?.group?.parent || api?.enemySystem?.group || null;
-}
-
-function spawnRing(api, x, z, color, radius = 3.2, life = .45) {
-  const parent = getWorldRoot(api);
-  if (!parent?.add) return;
-  const material = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.88, blending:THREE.AdditiveBlending, depthWrite:false });
-  const mesh = new THREE.Mesh(new THREE.RingGeometry(.76, .90, 48), material);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(x, .12, z);
-  mesh.scale.setScalar(.25);
-  parent.add(mesh);
-  state.effects.push({ mesh, age:0, life, radius });
-}
-
-function updateEffects(dt) {
-  for (let i = state.effects.length - 1; i >= 0; i--) {
-    const effect = state.effects[i];
-    effect.age += dt;
-    const u = clamp(effect.age / effect.life, 0, 1);
-    effect.mesh.scale.setScalar(.25 + effect.radius * (1 - Math.pow(1 - u, 3)));
-    effect.mesh.material.opacity = .88 * (1 - u);
-    if (u >= 1) {
-      effect.mesh.parent?.remove(effect.mesh);
-      effect.mesh.geometry?.dispose?.();
-      effect.mesh.material?.dispose?.();
-      state.effects.splice(i, 1);
-    }
-  }
-}
-
-function currentPlayer(api) {
-  return { x:api.actorPos?.x || 0, z:api.actorPos?.y || 0 };
+  announce.timer = setTimeout(() => { element.style.opacity = 0; }, seconds * 1000);
 }
 
 function livingEnemies(api) {
   return (api?.enemySystem?.enemies || []).filter(enemy => enemy && enemy.hp > 0);
 }
 
-function nearestEnemy(api, range = Infinity) {
-  const player = currentPlayer(api);
-  let best = null;
-  let bestDistance = range;
-  for (const enemy of livingEnemies(api)) {
-    const distance = Math.hypot(enemy.x - player.x, enemy.z - player.z);
-    if (distance < bestDistance) { best = enemy; bestDistance = distance; }
-  }
-  return best;
-}
-
-function enemiesInRadius(api, radius) {
-  const player = currentPlayer(api);
-  return livingEnemies(api).filter(enemy => Math.hypot(enemy.x - player.x, enemy.z - player.z) <= radius);
-}
-
-function hitEnemy(api, enemy, amount, knock = 0, power = null) {
+function hitEnemy(api, enemy, amount, knock = 0, power = null, origin = null) {
   if (!enemy || enemy.hp <= 0) return false;
-  const player = currentPlayer(api);
+  const player = origin || primitives.currentPlayer(api);
   const dx = enemy.x - player.x;
   const dz = enemy.z - player.z;
   const length = Math.hypot(dx, dz) || 1;
@@ -148,7 +168,7 @@ function hitEnemy(api, enemy, amount, knock = 0, power = null) {
     { x:dx / length * knock, z:dz / length * knock },
     power == null ? {} : { power }
   );
-  spawnRing(api, enemy.x, enemy.z, killed ? 0xff7b56 : 0xffc36a, 1.05, .25);
+  primitives.burst(api, { origin:{ x:enemy.x, z:enemy.z }, radius:killed ? 2.2 : 1.25, color:killed ? 0xff7b56 : 0xffc36a, life:.24 });
   return killed;
 }
 
@@ -162,7 +182,7 @@ function primeStun(api, enemy, seconds) {
   const statuses = statusBag(enemy);
   statuses.stunPrimer = Math.max(statuses.stunPrimer || 0, seconds);
   enemy.stunned = Math.max(enemy.stunned || 0, seconds);
-  spawnRing(api, enemy.x, enemy.z, STATUS_COLOR.stun, 1.4, .55);
+  primitives.marker(api, enemy, { radius:1.45, color:STATUS_COLOR.stun, life:.55 });
 }
 
 function consumePrimer(enemy) {
@@ -172,12 +192,12 @@ function consumePrimer(enemy) {
   return true;
 }
 
-function impactDetonate(api, enemy, baseDamage, knock) {
+function impactDetonate(api, enemy, baseDamage, knock, origin = null) {
   const combo = consumePrimer(enemy);
-  const killed = hitEnemy(api, enemy, baseDamage + (combo ? 42 : 0), knock, combo ? 1.65 : 1.1);
+  const killed = hitEnemy(api, enemy, baseDamage + (combo ? 42 : 0), knock, combo ? 1.65 : 1.1, origin);
   if (combo && !killed) enemy.stunned = Math.max(enemy.stunned || 0, .65);
   if (combo) {
-    spawnRing(api, enemy.x, enemy.z, STATUS_COLOR.combo, 2.3, .42);
+    primitives.ring(api, { origin:{ x:enemy.x, z:enemy.z }, radius:3.2, color:STATUS_COLOR.combo, life:.42 });
     announce('IMPACT COMBO', .7);
   }
   return killed;
@@ -212,21 +232,14 @@ function ensureEnemySystemHook(api) {
   const baseUpdate = system.update.bind(system);
   system.update = function guardedUpdate(dt, player) {
     const guardActive = state.guard > 0 && !player?.invulnerable;
-    const before = guardActive
-      ? new Map(system.enemies.map(enemy => [enemy, !!enemy.hitDone]))
-      : null;
+    const before = guardActive ? new Map(system.enemies.map(enemy => [enemy, !!enemy.hitDone])) : null;
     const guardProbe = { attempts:0 };
-    const guardedPlayer = guardActive
-      ? { ...player, get invulnerable(){ guardProbe.attempts++; return true; } }
-      : player;
+    const guardedPlayer = guardActive ? { ...player, get invulnerable(){ guardProbe.attempts++; return true; } } : player;
     const out = baseUpdate(dt, guardedPlayer);
     if (guardActive && guardProbe.attempts > 0) {
-      let damage = 8; // fallback for a projectile collision, whose projectile is private to the enemy system
+      let damage = 8;
       for (const enemy of system.enemies) {
-        if (before.get(enemy) === false && enemy.hitDone) {
-          damage = enemy.attack?.damage || 10;
-          break;
-        }
+        if (before.get(enemy) === false && enemy.hitDone) { damage = enemy.attack?.damage || 10; break; }
       }
       absorbGuardDamage(damage);
     }
@@ -244,11 +257,7 @@ function suppressAttackStaminaFlash() {
 function preserveAttackStamina(api) {
   const resource = api?.arena?.stamina;
   if (!resource) return;
-  const snapshot = {
-    v: resource.v,
-    pending: resource.pending,
-    recoverDelayT: resource.recoverDelayT,
-  };
+  const snapshot = { v:resource.v, pending:resource.pending, recoverDelayT:resource.recoverDelayT };
   const restore = () => {
     const current = api?.arena?.stamina;
     if (!current) return;
@@ -263,94 +272,137 @@ function preserveAttackStamina(api) {
 function spendAbilityStamina(cost) {
   if (state.stamina + 1e-6 < cost) {
     flashAbilityStamina();
-    announce('NOT ENOUGH ABILITY STAMINA', .75);
+    announce('NOT ENOUGH D-STAMINA', .75);
     return false;
   }
   state.stamina = Math.max(0, state.stamina - cost);
-  state.regenDelay = RESOURCE.regenDelay;
+  state.regenDelay = state.settings.regenDelay;
   return true;
 }
 
-function requireTarget(api, range) {
-  const target = nearestEnemy(api, range);
-  if (!target) announce('NO TARGET', .6);
+function requireFrontTarget(api, options) {
+  const target = primitives.nearestInFront(api, options);
+  if (!target) announce('NO TARGET IN FRONT', .65);
   return target;
 }
 
-function playCombatRoll(api) {
+function playCombatRoll(api, card) {
   if (typeof api.triggerDodge !== 'function') return false;
+  const origin = primitives.currentPlayer(api);
+  const direction = primitives.forward(api);
   api.triggerDodge();
-  return api.arena?.dodge?.t >= 0;
+  if ((api.arena?.dodge?.t ?? -1) < 0) return false;
+  primitives.present('roll', .34, { direction });
+  primitives.trail(api, { origin, direction, distance:card.effect?.travel || 5.5, color:0xaed9ff });
+  return true;
 }
 
-function playChallenge(api) {
-  const enemy = requireTarget(api, 14);
-  if (!enemy) return false;
-  const statuses = statusBag(enemy);
+function playChallenge(api, card) {
+  const target = requireFrontTarget(api, { range:card.effect?.range || 14, angle:card.effect?.angle || 2.35 });
+  if (!target) return false;
+  const statuses = statusBag(target);
   statuses.taunt = Math.max(statuses.taunt || 0, 8);
-  enemy.cooldown = 0;
+  target.cooldown = 0;
   gainGuard(30);
-  spawnRing(api, enemy.x, enemy.z, STATUS_COLOR.taunt, 1.9, .6);
+  primitives.present('challenge', .48);
+  primitives.marker(api, target, { radius:2.2, color:STATUS_COLOR.taunt, life:.72 });
+  primitives.tether(api, target, { color:STATUS_COLOR.taunt, life:.58 });
   announce('CHALLENGE · +30 GUARD', .85);
   return true;
 }
 
-function playShieldBash(api) {
-  const enemy = requireTarget(api, 5.4);
-  if (!enemy) return false;
-  const player = currentPlayer(api);
-  const dx = enemy.x - player.x;
-  const dz = enemy.z - player.z;
-  const distance = Math.hypot(dx, dz) || 1;
-  api.actorPos.x += dx / distance * Math.min(1.05, Math.max(0, distance - 1.8));
-  api.actorPos.y += dz / distance * Math.min(1.05, Math.max(0, distance - 1.8));
-  impactDetonate(api, enemy, 48, 7.5);
+function playShieldBash(api, card) {
+  const targets = primitives.targetsInFront(api, { range:card.effect?.range || 9, width:card.effect?.width || 3.4, angle:1.7, maxTargets:3 });
+  const primary = targets[0];
+  if (!primary) { announce('NO TARGET IN FRONT', .65); return false; }
+  const origin = primitives.currentPlayer(api);
+  const direction = primitives.directionTo(api, primary);
+  const distance = Math.hypot(primary.x - origin.x, primary.z - origin.z);
+  primitives.startMotion(api, { type:'bash', presentation:'bash', direction, distance:Math.min(card.effect?.travel || 3.8, Math.max(0, distance - 1.55)), duration:.22 });
+  primitives.wedge(api, { origin, direction, range:card.effect?.range || 9, angle:1.35, color:0x8fd8ff, life:.32, opacity:.42 });
+  primitives.schedule(.12, () => {
+    impactDetonate(api, primary, 52, 8.5, origin);
+    for (const enemy of targets.slice(1)) if (enemy.hp > 0) hitEnemy(api, enemy, 24, 5, .8, origin);
+  });
   return true;
 }
 
-function playPommelStrike(api) {
-  const enemy = requireTarget(api, 4.8);
-  if (!enemy) return false;
-  hitEnemy(api, enemy, 20, 1.2, .75);
-  if (enemy.hp > 0) primeStun(api, enemy, 3);
-  announce('STUN PRIMER', .7);
+function playPommelStrike(api, card) {
+  const target = requireFrontTarget(api, { range:card.effect?.range || 8, angle:card.effect?.angle || 1.45 });
+  if (!target) return false;
+  const origin = primitives.currentPlayer(api);
+  const direction = primitives.directionTo(api, target);
+  const distance = Math.hypot(target.x - origin.x, target.z - origin.z);
+  primitives.startMotion(api, { type:'jab', presentation:'jab', direction, distance:Math.min(card.effect?.travel || 2.2, Math.max(0, distance - 1.4)), duration:.16 });
+  primitives.slash(api, { origin, direction, radius:4.2, angle:.72, color:0xd7b6ff, life:.24 });
+  primitives.schedule(.09, () => {
+    hitEnemy(api, target, 22, 1.4, .75, origin);
+    if (target.hp > 0) primeStun(api, target, 3);
+    announce('STUN PRIMER', .7);
+  });
   return true;
 }
 
-function playMightyBlow(api) {
-  const enemy = requireTarget(api, 5.2);
-  if (!enemy) return false;
-  const killed = impactDetonate(api, enemy, 72, 13);
-  if (!killed) enemy.stunned = Math.max(enemy.stunned || 0, 1.2);
+function playMightyBlow(api, card) {
+  const target = primitives.nearestInFront(api, { range:card.effect?.range || 10, angle:1.7 });
+  const origin = primitives.currentPlayer(api);
+  const facing = target ? primitives.directionTo(api, target) : primitives.forward(api);
+  const intended = target ? { x:target.x, z:target.z } : primitives.pointAhead(api, 6.2);
+  const impact = {
+    x:origin.x + facing.x * Math.min(6.2, Math.hypot(intended.x - origin.x, intended.z - origin.z)),
+    z:origin.z + facing.z * Math.min(6.2, Math.hypot(intended.x - origin.x, intended.z - origin.z)),
+  };
+  primitives.startMotion(api, { type:'slam', presentation:'slam', direction:facing, distance:card.effect?.travel || 3.2, duration:.28 });
+  primitives.slash(api, { origin, direction:facing, radius:7.2, angle:1.05, color:0xffcf7b, life:.32 });
+  primitives.disc(api, { origin:impact, radius:card.effect?.radius || 5.2, color:0xffb45f, life:.48, opacity:.30 });
+  primitives.schedule(.19, () => {
+    const targets = primitives.targetsInRadius(api, impact, card.effect?.radius || 5.2);
+    targets.sort((a, b) => Math.hypot(a.x - impact.x, a.z - impact.z) - Math.hypot(b.x - impact.x, b.z - impact.z));
+    targets.forEach((enemy, index) => {
+      const killed = index === 0
+        ? impactDetonate(api, enemy, 74, 13, impact)
+        : hitEnemy(api, enemy, 42, 9, 1.05, impact);
+      if (!killed && enemy.hp > 0) enemy.stunned = Math.max(enemy.stunned || 0, 1.2);
+    });
+    primitives.burst(api, { origin:impact, radius:4.4, color:0xffc36a, life:.30 });
+  });
   return true;
 }
 
-function playWrathOfHeaven(api) {
-  const targets = enemiesInRadius(api, 6.2);
-  if (!targets.length) { announce('NO TARGETS IN RANGE', .6); return false; }
-  const player = currentPlayer(api);
-  spawnRing(api, player.x, player.z, 0xf7e59a, 5.4, .7);
-  for (const enemy of targets) {
-    hitEnemy(api, enemy, 28, 1, .8);
-    if (enemy.hp > 0) primeStun(api, enemy, 3.2);
-  }
-  announce(`${targets.length} STUN PRIMER${targets.length === 1 ? '' : 'S'}`, .8);
+function playWrathOfHeaven(api, card) {
+  const player = primitives.currentPlayer(api);
+  const radius = card.effect?.radius || 11.5;
+  primitives.present('cast', .62);
+  primitives.disc(api, { origin:player, radius, color:0xf7e59a, life:.62, opacity:.24 });
+  primitives.ring(api, { origin:player, radius, color:0xf7e59a, life:.76 });
+  primitives.schedule(.18, () => {
+    const targets = primitives.targetsInRadius(api, player, radius);
+    for (const enemy of targets) {
+      hitEnemy(api, enemy, 30, 1.4, .8, player);
+      if (enemy.hp > 0) primeStun(api, enemy, 3.2);
+    }
+    announce(`${targets.length} STUN PRIMER${targets.length === 1 ? '' : 'S'}`, .8);
+  });
   return true;
 }
 
-function playSpellPurge(api) {
-  const targets = enemiesInRadius(api, 6.2);
-  if (!targets.length) { announce('NO TARGETS IN RANGE', .6); return false; }
-  const player = currentPlayer(api);
-  spawnRing(api, player.x, player.z, 0x9ee8ff, 5.7, .65);
-  let combos = 0;
-  for (const enemy of [...targets]) {
-    const combo = consumePrimer(enemy);
-    if (combo) combos++;
-    hitEnemy(api, enemy, combo ? 82 : 18, combo ? 7 : 2, combo ? 1.8 : .65);
-    if (combo && enemy.hp > 0) enemy.stunned = Math.max(enemy.stunned || 0, .8);
-  }
-  announce(combos ? `${combos} ELDRITCH COMBO${combos === 1 ? '' : 'S'}` : 'SPELL PURGE', .85);
+function playSpellPurge(api, card) {
+  const player = primitives.currentPlayer(api);
+  const radius = card.effect?.radius || 11.5;
+  primitives.present('purge', .55);
+  primitives.ring(api, { origin:player, radius, color:0x9ee8ff, life:.72 });
+  primitives.disc(api, { origin:player, radius, color:0x72cfff, life:.55, opacity:.18 });
+  primitives.schedule(.16, () => {
+    const targets = primitives.targetsInRadius(api, player, radius);
+    let combos = 0;
+    for (const enemy of [...targets]) {
+      const combo = consumePrimer(enemy);
+      if (combo) combos++;
+      hitEnemy(api, enemy, combo ? 84 : 20, combo ? 8 : 2.5, combo ? 1.8 : .65, player);
+      if (combo && enemy.hp > 0) enemy.stunned = Math.max(enemy.stunned || 0, .8);
+    }
+    announce(combos ? `${combos} ELDRITCH COMBO${combos === 1 ? '' : 'S'}` : 'SPELL PURGE', .85);
+  });
   return true;
 }
 
@@ -361,15 +413,20 @@ function playPilebunker() {
 }
 
 const PLAYERS = Object.freeze({
-  'A10-COMBAT-ROLL': playCombatRoll,
-  'A11-CHALLENGE': playChallenge,
-  'A12-SHIELD-BASH': playShieldBash,
-  'A13-POMMEL-STRIKE': playPommelStrike,
-  'A14-MIGHTY-BLOW': playMightyBlow,
-  'A15-WRATH-OF-HEAVEN': playWrathOfHeaven,
-  'A16-SPELL-PURGE': playSpellPurge,
-  'A01-PILEBUNKER': playPilebunker,
+  'A10-COMBAT-ROLL':playCombatRoll,
+  'A11-CHALLENGE':playChallenge,
+  'A12-SHIELD-BASH':playShieldBash,
+  'A13-POMMEL-STRIKE':playPommelStrike,
+  'A14-MIGHTY-BLOW':playMightyBlow,
+  'A15-WRATH-OF-HEAVEN':playWrathOfHeaven,
+  'A16-SPELL-PURGE':playSpellPurge,
+  'A01-PILEBUNKER':playPilebunker,
 });
+
+export function effectiveWardenAbilityCooldown(card) {
+  if (!card || card.type !== 'ability') return 0;
+  return state.settings.cooldownMode === 'oneSecond' ? 1 : Math.max(.05, Number(card.cooldown) || 1);
+}
 
 export function canPlayWardenAbility(card) {
   const api = arenaApi();
@@ -388,7 +445,7 @@ export function playWardenAbility(card) {
   }
   if (state.stamina + 1e-6 < (card.cost || 0)) {
     flashAbilityStamina();
-    announce('NOT ENOUGH ABILITY STAMINA', .75);
+    announce('NOT ENOUGH D-STAMINA', .75);
     suppressAttackStaminaFlash();
     return false;
   }
@@ -397,7 +454,7 @@ export function playWardenAbility(card) {
     return false;
   }
   const preserveAttackResource = !!api.arena?.stamina;
-  if (!player(api)) {
+  if (!player(api, card)) {
     suppressAttackStaminaFlash();
     return false;
   }
@@ -410,28 +467,24 @@ export function playWardenAbility(card) {
 }
 
 export function resetWardenAbilityRuntime() {
-  state.stamina = RESOURCE.max;
+  state.stamina = state.settings.staminaMax;
   state.regenDelay = 0;
   state.guard = 0;
-  for (const effect of state.effects) {
-    effect.mesh.parent?.remove(effect.mesh);
-    effect.mesh.geometry?.dispose?.();
-    effect.mesh.material?.dispose?.();
-  }
-  state.effects.length = 0;
+  primitives.clear();
   renderWardenAbilityHud();
 }
 
 export function updateWardenAbilityRuntime(dt) {
   installHud();
+  installSettingsPanel();
   const api = arenaApi();
   if (api) {
     ensureEnemySystemHook(api);
     updateEnemyStatuses(dt, api);
   }
   if (state.regenDelay > 0) state.regenDelay = Math.max(0, state.regenDelay - dt);
-  else state.stamina = Math.min(RESOURCE.max, state.stamina + RESOURCE.regenPerSecond * dt);
-  updateEffects(dt);
+  else state.stamina = Math.min(state.settings.staminaMax, state.stamina + state.settings.regenPerSecond * dt);
+  primitives.update(dt, api);
   renderWardenAbilityHud();
 }
 
@@ -440,10 +493,17 @@ export function renderWardenAbilityHud() {
   installHud();
   const staminaFill = document.getElementById('abilityStaminaFill');
   const guardFill = document.getElementById('guardFill');
-  if (staminaFill) staminaFill.style.width = `${clamp(state.stamina / RESOURCE.max, 0, 1) * 100}%`;
+  if (staminaFill) staminaFill.style.width = `${clamp(state.stamina / state.settings.staminaMax, 0, 1) * 100}%`;
   if (guardFill) guardFill.style.width = `${clamp(state.guard / GUARD_MAX, 0, 1) * 100}%`;
 }
 
 export function getWardenAbilityRuntimeState() {
-  return { stamina:state.stamina, staminaMax:RESOURCE.max, guard:state.guard, guardMax:GUARD_MAX };
+  return {
+    stamina:state.stamina,
+    staminaMax:state.settings.staminaMax,
+    staminaRegen:state.settings.regenPerSecond,
+    cooldownMode:state.settings.cooldownMode,
+    guard:state.guard,
+    guardMax:GUARD_MAX,
+  };
 }
