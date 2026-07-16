@@ -1,13 +1,46 @@
 // Branch-local integration wrapper for the maze-combat Pilebunker card.
-// The untouched combat core is pinned to the exact commit this branch started
-// from; this wrapper adds the ability without rewriting or destabilising the
-// sword puppet. Non-arena pages receive the original combat core unchanged.
+// The untouched combat core is pinned to the validated Hammerist War Hammer
+// commit, so its relative weapon import resolves the approved detailed model.
+// This wrapper adds the ability without rewriting or destabilising the sword puppet.
 
-import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@4b54d50cf7b686fbfa727656ce18b7e6471db9c8/src/player-combat.js';
+import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@082823137f1a8d5f0ca0ff7a76548aa9fccb96fa/src/player-combat.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker-ability.js';
 import { installArenaEnemyRegistryProbe, getArenaEnemies } from './arena-enemy-registry.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
+
+const PILEBUNKER_GAME_DEFAULTS_SCHEMA=1;
+const PILEBUNKER_GAME_DEFAULTS_STORAGE='arena.pilebunker.gameDefaultsSchema';
+const PILEBUNKER_SECTION_STORAGE='stoneWandererSettings.v1.arena.section.powbunker';
+const PILEBUNKER_EFFECT_MAX=Object.freeze({
+  pullRadius:14,
+  pullStrength:26,
+  compressionDistance:5,
+  frontReach:14,
+  primaryDamage:260,
+  primaryStun:5,
+  primaryHitRadius:7,
+  secondaryDamage:120,
+  secondaryRadius:12,
+  secondaryKnock:26,
+  secondaryStun:1.5,
+  eliteControl:1,
+  aimMoveMultiplier:.60,
+});
+
+function needsPilebunkerGameDefaults(){
+  try{return Number(localStorage.getItem(PILEBUNKER_GAME_DEFAULTS_STORAGE))!==PILEBUNKER_GAME_DEFAULTS_SCHEMA;}
+  catch(_){return true;}
+}
+function markPilebunkerGameDefaultsApplied(){
+  try{localStorage.setItem(PILEBUNKER_GAME_DEFAULTS_STORAGE,String(PILEBUNKER_GAME_DEFAULTS_SCHEMA));}catch(_){}
+}
+function closePilebunkerSectionForNextPanelInit(){
+  // The arena's accordion reads this after installPlayerCombat returns. Writing
+  // it on every page load means the Pilebunker field always starts closed, but
+  // the player can still open and use it normally during the current session.
+  try{localStorage.setItem(PILEBUNKER_SECTION_STORAGE,'true');}catch(_){}
+}
 
 export function installPlayerCombat(api){
   const PC=installBasePlayerCombat(api);
@@ -17,8 +50,13 @@ export function installPlayerCombat(api){
   const {THREE}=api;
   const UP=new THREE.Vector3(0,1,0),shoulder=new THREE.Vector3(),localPoint=new THREE.Vector3(),worldTip=new THREE.Vector3(),worldBase=new THREE.Vector3();
   const playerWorld=new THREE.Vector3(),playerForward=new THREE.Vector3(0,0,1),identityQ=new THREE.Quaternion();
+  const applyGameDefaults=needsPilebunkerGameDefaults();
   const ability=createPowBunkerAbility({THREE,scene:api.scene});
+  if(applyGameDefaults){ability.setSize(.300);ability.setArmHeight(3);ability.setWeaponMode('right');}
   installPowBunkerTuningPanel(ability);
+  const tuningNote=document.querySelector('#body-powbunker > .ptitle');
+  if(tuningNote)tuningNote.textContent='SMASH 64 · SIZE 0.300 · ARM HEIGHT 3.00 · RIGHT-HAND CARRY · APPROVED LEFT-HAND PILEBUNKER VISUAL';
+  closePilebunkerSectionForNextPanelInit();
   installArenaEnemyRegistryProbe();
 
   const original={attach:PC.attachCombatToActiveModel,update:PC.updateCombat,start:PC.startCombatAttack,trigger:PC.triggerCombatAttack,zones:PC.getWeaponHitZones,movePenalty:PC.combatMovePenalty};
@@ -33,6 +71,7 @@ export function installPlayerCombat(api){
   }
 
   const combatEffect=createPilebunkerCombatEffect({THREE,scene:api.scene,getEnemies:getArenaEnemies,getPlayer:getPlayerTransform,hitEnemy:hitArenaEnemy});
+  if(applyGameDefaults){for(const [key,value] of Object.entries(PILEBUNKER_EFFECT_MAX))combatEffect.setTuning(key,value);markPilebunkerGameDefaultsApplied();}
   combatEffect.installPanel();
 
   /* guided Pilebunker aim: movement-stick direction, retained when centred */
