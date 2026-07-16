@@ -16,6 +16,38 @@ import {
   splitDoorEdge,
 } from './boundary-doors.js';
 
+function applyBoundaryScenePalette(group, THREE){
+  const apply = () => {
+    let root = group;
+    while(root?.parent && !root.isScene) root = root.parent;
+    if(!root?.isScene) return false;
+    root.background = new THREE.Color(0x245d66);
+    if(root.fog){
+      root.fog.color.setHex(0x245d66);
+      root.fog.near = 31;
+      root.fog.far = 76;
+    }
+    for(const light of root.children){
+      if(light.isHemisphereLight){
+        light.color.setHex(0x9bdce0);
+        light.groundColor.setHex(0x091419);
+        light.intensity = Math.max(light.intensity, 1.85);
+      } else if(light.isDirectionalLight){
+        light.color.setHex(0xffe7c2);
+        light.intensity = Math.max(light.intensity, 2.35);
+      } else if(light.isAmbientLight){
+        light.color.setHex(0xb9dfe0);
+        light.intensity = Math.max(light.intensity, .42);
+      }
+    }
+    return true;
+  };
+  if(!apply()){
+    const schedule = globalThis.requestAnimationFrame || (callback => globalThis.setTimeout(callback, 0));
+    schedule(apply);
+  }
+}
+
 export function createMazeWorld({
   THREE, maze, roomId = null, hexSize = 2.6, wallHeight = 1.8,
   wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(),
@@ -29,6 +61,7 @@ export function createMazeWorld({
   const activeCells = [...activeCellKeys].map(key => maze.cells.get(key)).filter(Boolean);
   const group = new THREE.Group();
   group.name = room ? `boundary district room ${roomId}` : 'boundary district world';
+  applyBoundaryScenePalette(group, THREE);
 
   const floorGeometry = new THREE.CylinderGeometry(hexSize * .965, hexSize * .965, .14, 6);
   const floorMaterials = makeFloorMaterials(THREE, maze);
