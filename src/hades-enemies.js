@@ -10,10 +10,16 @@ const enemy = ({
   label, hp, sourceHealth, sourceArmor, sourceDamage, combatStyle,
   radius, height, speed, preferredRange, role, color, secondaryColor,
   accentColor, attackId = null, thrower = false, flying = false,
-  score = 16, ...extra
+  score = 16, encounterCost = 8, activeWeight = 1,
+  territoryMode = 'frontliner', homeRadius = 7, leashRadius = 11,
+  pursuitWeight = 1, introductionDepth = 1, maxActive = 3,
+  needsPartner = false, pairingTags = [], avoidPairTags = [], ...extra
 }) => ({
   label, hp, radius, height, speed, preferredRange, role,
   color, secondaryColor, accentColor, attackId, thrower, flying, score,
+  encounterCost, activeWeight, territoryMode, homeRadius, leashRadius,
+  pursuitWeight, introductionDepth, maxActive, needsPartner,
+  pairingTags, avoidPairTags,
   source: {
     region: 'Tartarus', health: sourceHealth, armor: sourceArmor,
     baseDamage: sourceDamage, combatStyle,
@@ -67,6 +73,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     sourceDamage:10, combatStyle:'Mid-range melee', radius:1.12, height:4.45,
     speed:2.35, preferredRange:4.0, role:'bruiser', attackId:'hadesThugSwing',
     color:0x6d5c63, secondaryColor:0x3a3038, accentColor:0xd64545, score:20,
+    encounterCost:10, activeWeight:1.3, territoryMode:'frontliner',
+    homeRadius:7.5, leashRadius:11, pursuitWeight:1.3, maxActive:2,
+    pairingTags:['frontline','anchor'],
   }),
   hadesWretchedWitch: enemy({
     label:'Wretched Witch', hp:38, sourceHealth:80, sourceArmor:120,
@@ -74,6 +83,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:2.75, preferredRange:9.0, role:'ranged', attackId:'hadesWitchOrb',
     thrower:true, flying:true, color:0x75618f, secondaryColor:0x322544,
     accentColor:0xc467ff, score:18,
+    encounterCost:5, activeWeight:1, territoryMode:'skirmisher',
+    homeRadius:5.5, leashRadius:8, pursuitWeight:0, maxActive:3,
+    pairingTags:['ranged','support'],
   }),
   hadesWretchedLout: enemy({
     label:'Wretched Lout', hp:88, sourceHealth:210, sourceArmor:310,
@@ -81,6 +93,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:2.15, preferredRange:6.4, role:'charger', attackId:'hadesLoutCharge',
     color:0x735b55, secondaryColor:0x3d2e2b, accentColor:0xe45e46,
     score:24, uninterruptibleCharge:true,
+    encounterCost:15, activeWeight:1.8, territoryMode:'frontliner',
+    homeRadius:8, leashRadius:12, pursuitWeight:1.8,
+    introductionDepth:4, maxActive:2, pairingTags:['frontline','anchor'],
   }),
   hadesWretchedPest: enemy({
     label:'Wretched Pest', hp:28, sourceHealth:40, sourceArmor:60,
@@ -88,6 +103,10 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:3.0, preferredRange:8.0, role:'trapper', attackId:'hadesPestMine',
     thrower:true, color:0x8c765f, secondaryColor:0x44352c,
     accentColor:0xf0a84d, score:14,
+    encounterCost:8, activeWeight:1, territoryMode:'trapper',
+    homeRadius:6, leashRadius:8.5, pursuitWeight:0,
+    introductionDepth:3, maxActive:2, needsPartner:true,
+    pairingTags:['area-denial','support'], avoidPairTags:['hard-control'],
   }),
   hadesNumbskull: enemy({
     label:'Numbskull', hp:24, sourceHealth:30, sourceArmor:50,
@@ -95,6 +114,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:4.2, preferredRange:3.9, role:'charger', attackId:'hadesNumbskullLunge',
     flying:true, color:0xd5c7a3, secondaryColor:0x4a3b39,
     accentColor:0xe55645, score:10,
+    encounterCost:3, activeWeight:.5, territoryMode:'pursuer',
+    homeRadius:10, leashRadius:18, pursuitWeight:.5, maxActive:8,
+    pairingTags:['swarm','pursuer'],
   }),
   hadesSkullomat: enemy({
     label:'Skullomat', hp:72, sourceHealth:120, sourceArmor:500,
@@ -102,6 +124,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:0, preferredRange:10, role:'spawner', attackId:null,
     color:0xc4b993, secondaryColor:0x342d32, accentColor:0xe55349,
     score:28, summonId:'hadesNumbskull', summonInterval:3.15, summonCap:3,
+    encounterCost:18, activeWeight:2, territoryMode:'sentry',
+    homeRadius:1.5, leashRadius:2, pursuitWeight:0,
+    introductionDepth:5, maxActive:1, pairingTags:['anchor','summoner'],
   }),
   hadesWringer: enemy({
     label:'Wringer', hp:58, sourceHealth:140, sourceArmor:230,
@@ -109,6 +134,10 @@ export const HADES_ENEMY_ARCHETYPES = {
     speed:2.7, preferredRange:3.4, role:'grabber', attackId:'hadesWringerGrab',
     flying:true, color:0xa49a8b, secondaryColor:0x3c3435,
     accentColor:0xd5544d, score:20,
+    encounterCost:11, activeWeight:1.2, territoryMode:'frontliner',
+    homeRadius:7, leashRadius:10.5, pursuitWeight:1.2,
+    introductionDepth:6, maxActive:1,
+    pairingTags:['hard-control','frontline'], avoidPairTags:['area-denial'],
   }),
   hadesBrimstone: enemy({
     label:'Brimstone', hp:34, sourceHealth:60, sourceArmor:90,
@@ -117,6 +146,9 @@ export const HADES_ENEMY_ARCHETYPES = {
     attackId:'hadesBrimstoneBeam', thrower:true, flying:true,
     color:0x8b4558, secondaryColor:0x342332, accentColor:0xff6955,
     score:18,
+    encounterCost:8, activeWeight:1, territoryMode:'sentry',
+    homeRadius:4.5, leashRadius:6, pursuitWeight:0,
+    introductionDepth:4, maxActive:2, pairingTags:['ranged','area-denial'],
   }),
 };
 
