@@ -74,6 +74,7 @@ export function createArenaEnemySystem(options={}){
     activeKey=key;
     active=system;
     system.group.visible=true;
+    system.setWaveSize?.(manualWaveSize);
   }
 
   function activateCombined(){
@@ -204,7 +205,7 @@ export function createArenaEnemySystem(options={}){
 
   function setWaveSize(value){
     manualWaveSize=clamp(Math.round(Number(value)||6),1,20);
-    for(const system of systems)system.setWaveSize?.(manualWaveSize);
+    if(!combinedMode)for(const system of systems)system.setWaveSize?.(manualWaveSize);
   }
 
   return {
