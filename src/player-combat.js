@@ -6,7 +6,8 @@
 import { installPlayerCombat as installBasePlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@082823137f1a8d5f0ca0ff7a76548aa9fccb96fa/src/player-combat.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker-ability.js';
-import { installArenaEnemyRegistryProbe, getArenaEnemies } from './arena-enemy-registry.js';
+import { installArenaEnemyRegistryProbe, getArenaEnemies, getArenaEnemySystem } from './arena-enemy-registry.js';
+import { isVerticalAimGroup, selectVerticalAimTarget, correctionForSegmentY, verticalAimPhaseWeight } from './vertical-melee-aim.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
 
 const PILEBUNKER_GAME_DEFAULTS_SCHEMA=1;
@@ -68,6 +69,59 @@ export function installPlayerCombat(api){
     if(root?.getWorldPosition)root.getWorldPosition(playerWorld);else playerWorld.set(0,0,0);
     playerForward.set(0,0,1).applyQuaternion(api.yawQ||identityQ);playerForward.y=0;if(playerForward.lengthSq()<1e-6)playerForward.set(0,0,1);playerForward.normalize();
     return{x:playerWorld.x,z:playerWorld.z,forwardX:playerForward.x,forwardZ:playerForward.z};
+  }
+
+  /* restrained vertical aim assist for horizontal slices and thrusts */
+  const verticalAim={attackKey:null,group:null,lastT:0,target:null,targetY:0,current:0,desired:0};
+  const aimA=new THREE.Vector3(),aimB=new THREE.Vector3(),aimShR=new THREE.Vector3(),aimShL=new THREE.Vector3(),aimER=new THREE.Vector3(),aimEL=new THREE.Vector3(),aimDir=new THREE.Vector3(),aimRightElbowOffset=new THREE.Vector3(.18,-.18,.05),aimLeftElbowOffset=new THREE.Vector3(-.18,-.18,.05);
+  function resetVerticalAim(){verticalAim.attackKey=null;verticalAim.group=null;verticalAim.lastT=0;verticalAim.target=null;verticalAim.targetY=0;verticalAim.current=0;verticalAim.desired=0;}
+  function arenaEnemyHeightScale(){try{return Math.max(.01,Number(getArenaEnemySystem().heightScale)||1);}catch(_){return 1;}}
+  function acquireVerticalAimTarget(){
+    const state=PC.combatState,group=state.attackGroup;
+    verticalAim.attackKey=state.attackKey;verticalAim.group=group;verticalAim.lastT=state.t||0;verticalAim.target=null;verticalAim.targetY=0;verticalAim.current=0;verticalAim.desired=0;
+    if(!state.attack||!isVerticalAimGroup(group)||ability.active)return;
+    const player=getPlayerTransform();
+    const picked=selectVerticalAimTarget({enemies:getArenaEnemies(),playerX:player.x,playerZ:player.z,committedYaw:state.commitYaw,heightScale:arenaEnemyHeightScale()});
+    if(picked){verticalAim.target=picked.enemy;verticalAim.targetY=picked.targetY;}
+  }
+  function syncVerticalAimTarget(){
+    const state=PC.combatState;
+    if(!state.attack||!isVerticalAimGroup(state.attackGroup)||ability.active){if(verticalAim.attackKey!==null)resetVerticalAim();return;}
+    const restarted=state.attackKey!==verticalAim.attackKey||state.attackGroup!==verticalAim.group||(state.t||0)+1e-4<verticalAim.lastT;
+    if(restarted)acquireVerticalAimTarget();else verticalAim.lastT=state.t||0;
+  }
+  function verticalAimOffset(){
+    const state=PC.combatState;
+    if(!verticalAim.target||!state.attack||!isVerticalAimGroup(state.attackGroup))return 0;
+    return verticalAim.current*verticalAimPhaseWeight({t:state.t,contactAt:state.attack.contactAt,total:state.attack.total});
+  }
+  function updateVerticalAimDesired(rawDt){
+    const root=PC.weaponRoot,state=PC.combatState;
+    if(!verticalAim.target||!root||!state.attack||!isVerticalAimGroup(state.attackGroup)){verticalAim.desired=0;verticalAim.current+=(0-verticalAim.current)*Math.min(1,Math.max(0,rawDt)*14);return;}
+    if(verticalAim.target.hp<=0){verticalAim.target=null;verticalAim.desired=0;verticalAim.current=0;return;}
+    root.updateWorldMatrix(true,false);
+    const zones=original.zones();const zone=zones&&zones[0];
+    if(!zone)return;
+    aimA.copy(zone.from);aimB.copy(zone.to);root.localToWorld(aimA);root.localToWorld(aimB);
+    const cap=state.attackGroup==='stab'?.65:.75;
+    verticalAim.desired=correctionForSegmentY(verticalAim.targetY,aimA.y,aimB.y,cap);
+    verticalAim.current+=(verticalAim.desired-verticalAim.current)*Math.min(1,Math.max(0,rawDt)*12);
+  }
+  function placeAimSegment(mesh,a,b,r){
+    if(!mesh)return;aimDir.subVectors(b,a);const len=aimDir.length();if(len<1e-5)return;aimDir.normalize();mesh.position.copy(a).addScaledVector(aimDir,len*.5);mesh.quaternion.setFromUnitVectors(UP,aimDir);mesh.scale.set(r,len,r);
+  }
+  function applyVerticalAimVisual(offset){
+    if(Math.abs(offset)<1e-4)return;
+    const layer=PC.combatLayer,root=PC.weaponRoot;if(!layer||!root)return;
+    const i=layer.children.indexOf(root);if(i<0)return;const rightArmA=layer.children[i+1],rightArmB=layer.children[i+2],leftArmA=layer.children[i+3],leftArmB=layer.children[i+4],rightHand=layer.children[i+5],leftHand=layer.children[i+6];
+    root.position.y+=offset;
+    if(!rightHand||!leftHand){root.updateWorldMatrix(true,false);return;}
+    rightHand.position.y+=offset;leftHand.position.y+=offset;
+    const drop=PC.getCombatShoulderDrop();aimShR.set(.72,1.20-drop,.36);aimShL.set(-.72,1.20-drop,.36);
+    aimER.copy(aimShR).lerp(rightHand.position,.55).add(aimRightElbowOffset);
+    aimEL.copy(aimShL).lerp(leftHand.position,.55).add(aimLeftElbowOffset);
+    placeAimSegment(rightArmA,aimShR,aimER,.070);placeAimSegment(rightArmB,aimER,rightHand.position,.060);placeAimSegment(leftArmA,aimShL,aimEL,.070);placeAimSegment(leftArmB,aimEL,leftHand.position,.060);
+    root.updateWorldMatrix(true,false);
   }
 
   const combatEffect=createPilebunkerCombatEffect({THREE,scene:api.scene,getEnemies:getArenaEnemies,getPlayer:getPlayerTransform,hitEnemy:hitArenaEnemy});
@@ -172,10 +226,15 @@ export function installPlayerCombat(api){
   window.addEventListener('powbunker:play',playFromCard);
 
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
-    const state=PC.combatState,wasAbilityActive=ability.active;
+    const state=PC.combatState,wasAbilityActive=ability.active,layer=PC.combatLayer;
     if(wasAbilityActive){state.attack=null;state.pending=null;state.pendingGroup=null;state.pendingLabEvent=null;}
+    syncVerticalAimTarget();
+    const frameAimOffset=wasAbilityActive?0:verticalAimOffset();
+    if(layer)layer.position.y=frameAimOffset;
     const out=original.update(dt,now,sway,rawDt);
+    if(layer){layer.position.y=0;layer.updateWorldMatrix(true,true);}
     if(wasAbilityActive){state.attack=abilityBlocker;state.attackKey='powBunker';state.attackGroup='ability';state.t=0;state.fired=true;state.hitIds||=new Set();}
+    else{syncVerticalAimTarget();updateVerticalAimDesired(rawDt);if(state.attack)applyVerticalAimVisual(frameAimOffset);}
     ensureAttached();if(ability.active)updateGuidedAim(rawDt);
     const model=api.activeModel,actorVisual=api.actorVisual;
     if(model&&actorVisual){shoulder.set(.72,1.20-PC.getCombatShoulderDrop(),.36);model.updateMatrixWorld(true);model.localToWorld(shoulder);actorVisual.updateMatrixWorld(true);actorVisual.worldToLocal(shoulder);ability.update(dt,{anchor:shoulder,time:now,rawDt});applyAbilityWeaponPresentation();ability.applyHostPose(model,api.W);}

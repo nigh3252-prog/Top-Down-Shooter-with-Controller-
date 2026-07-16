@@ -1,477 +1,253 @@
-// Branch-local arena-enemy wrapper for the Pilebunker gameplay effect.
-// The combat implementation is pinned to the current main enemy system so this
-// wrapper preserves later enemy tuning while adding a goblin-only rigid capsule
-// state that retains the exact existing goblin model.
+// Enemy-system router. Manual test selections still run one isolated roster.
+// The combined budget mode coordinates original, FLARE, and Hades simulations
+// so one encounter can contain enemies from multiple sources without merging
+// their individual combat implementations.
 
-import {
-  ARENA_ENEMY_ARCHETYPES,
-  createArenaEnemySystem as createBaseArenaEnemySystem,
-} from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@a256b089bf912aff434f5b1263a29ec060507b5d/src/arena-enemies.js';
+import { createArenaEnemySystem as createOriginalArenaEnemySystem } from './arena-enemies-original.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
+import { createFlareArenaEnemySystem } from './flare-arena-enemies.js';
+import { isFlareSpawnKind } from './flare-enemies.js';
+import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
+import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
+import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
+import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 
-export { ARENA_ENEMY_ARCHETYPES };
+export { ARENA_ENEMY_ARCHETYPES } from './arena-enemies-original.js';
 
-const RIGID = Object.freeze({
-  gravity:20,
-  floorRestitution:.43,
-  wallRestitution:.58,
-  airDrag:.78,
-  groundDrag:.10,
-  angularAirDrag:.58,
-  angularGroundDrag:.12,
-  settleSpeed:1.15,
-  settleAngular:1.35,
-  settleTime:.42,
-  maxTime:4.2,
-  recoveryStun:.62,
-});
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
-export function createArenaEnemySystem(options = {}) {
-  const system = createBaseArenaEnemySystem(options);
-  const { THREE, navigation = null, arenaRadius = 18 } = options;
-  if (!THREE) throw new Error('[rigid-goblins] THREE is required.');
+export function createArenaEnemySystem(options={}){
+  const externalEncounterCleared=options.onEncounterCleared;
+  let combinedMode=false;
+  let selectedSpawnKind='mixed';
+  let activeKey='original';
+  let active=null;
+  let encounterDepth=0;
+  let currentRoomId=null;
+  let currentEncounterPlan=null;
+  let manualWaveSize=6;
+  let globalPlayerHp=100;
+  let combinedLastHit='';
+  let combinedLastHitDir=null;
+  const participatingKeys=new Set();
+  const clearedKeys=new Set();
+  const hpSnapshots=new Map();
 
-  const rigidBodies = new Map();
-  const baseUpdate = system.update.bind(system);
-  const baseDamageEnemy = system.damageEnemy.bind(system);
-  const baseReset = system.reset.bind(system);
-  const baseStartRoomEncounter = system.startRoomEncounter?.bind(system);
-  const baseClearRoomRuntime = system.clearRoomRuntime?.bind(system);
-  const axis = new THREE.Vector3();
-  const deltaQ = new THREE.Quaternion();
-
-  function isGoblin(enemy) {
-    return !!enemy && enemy.role === 'goblin' && !enemy.fusion && enemy.root?.isObject3D;
-  }
-
-  function finiteOr(value, fallback = 0) {
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  function repairCorruptEnemy(enemy) {
-    if (!enemy) return;
-    if (!Number.isFinite(enemy.hp)) enemy.hp = Number.isFinite(enemy.maxHp) ? enemy.maxHp : 1;
-    enemy.x = finiteOr(enemy.x);
-    enemy.z = finiteOr(enemy.z);
-    enemy.knockX = finiteOr(enemy.knockX);
-    enemy.knockZ = finiteOr(enemy.knockZ);
-    enemy.yOff = finiteOr(enemy.yOff);
-    enemy.vyOff = finiteOr(enemy.vyOff);
-    if (enemy.root) {
-      enemy.root.visible = true;
-      if (![enemy.root.scale.x, enemy.root.scale.y, enemy.root.scale.z].every(Number.isFinite)) {
-        enemy.root.scale.set(1, 1, 1);
-      }
-    }
-  }
-
-  function captureFrozenPose(root) {
-    const frozen = [];
-    root.traverse(object => {
-      if (object === root) return;
-      frozen.push({
-        object,
-        position:object.position.clone(),
-        quaternion:object.quaternion.clone(),
-        scale:object.scale.clone(),
-        visible:object.visible,
-      });
-    });
-    return frozen;
-  }
-
-  function restoreFrozenPose(body) {
-    for (const item of body.frozen) {
-      const object = item.object;
-      if (!object) continue;
-      object.position.copy(item.position);
-      object.quaternion.copy(item.quaternion);
-      object.scale.copy(item.scale);
-      object.visible = item.visible;
-    }
-    for (const marker of body.markers) {
-      if (marker) marker.visible = false;
-    }
-  }
-
-  function markerList(enemy) {
-    return [enemy.bar, enemy.barBg, enemy.telegraph, enemy.tokenRing].filter(Boolean);
-  }
-
-  function makeRigidBody(enemy, launch = {}) {
-    repairCorruptEnemy(enemy);
-    if (!isGoblin(enemy) || enemy.hp <= 0) return null;
-
-    const existing = rigidBodies.get(enemy);
-    if (existing) {
-      existing.vx += finiteOr(launch.velocityX);
-      existing.vz += finiteOr(launch.velocityZ);
-      existing.vy = Math.max(existing.vy, finiteOr(launch.verticalVelocity, 5));
-      const extraSpin = finiteOr(launch.spin, 7);
-      existing.angular.x += (Math.random() * 2 - 1) * extraSpin * .55;
-      existing.angular.y += (Math.random() * 2 - 1) * extraSpin * .35;
-      existing.angular.z += (Math.random() * 2 - 1) * extraSpin;
-      existing.settle = 0;
-      return existing;
-    }
-
-    const root = enemy.root;
-    const originalParent = root.parent;
-    if (!originalParent) return null;
-
-    root.updateWorldMatrix(true, true);
-    const pivot = new THREE.Group();
-    pivot.name = `${enemy.kind || 'goblin'} rigid capsule pivot`;
-    originalParent.add(pivot);
-
-    const frozen = captureFrozenPose(root);
-    const markers = markerList(enemy);
-    const markerVisibility = new Map(markers.map(marker => [marker, marker.visible]));
-    const rootScale = root.scale.clone();
-    const rootFacing = root.quaternion.clone();
-    const heightScale = Math.max(.5, finiteOr(system.heightScale, 1));
-    const visualHeight = Math.max(1.2, finiteOr(enemy.height, 3) * heightScale);
-    const centerY = visualHeight * .50;
-    // The model stays unchanged. Physics uses this invisible upright capsule radius.
-    const capsuleRadius = Math.max(.62, finiteOr(enemy.radius, 1) * heightScale * .82);
-
-    originalParent.remove(root);
-    pivot.add(root);
-    pivot.position.set(enemy.x, centerY, enemy.z);
-    pivot.quaternion.copy(rootFacing);
-    root.position.set(0, -centerY, 0);
-    root.quaternion.identity();
-    root.scale.copy(rootScale);
-    for (const marker of markers) marker.visible = false;
-
-    const speed = Math.hypot(finiteOr(launch.velocityX), finiteOr(launch.velocityZ));
-    const spin = Math.max(4, finiteOr(launch.spin, 7));
-    const body = {
-      enemy,
-      root,
-      pivot,
-      originalParent,
-      frozen,
-      markers,
-      markerVisibility,
-      rootScale,
-      centerY,
-      capsuleRadius,
-      x:enemy.x,
-      z:enemy.z,
-      airY:0,
-      vx:finiteOr(launch.velocityX),
-      vz:finiteOr(launch.velocityZ),
-      vy:Math.max(3.5, finiteOr(launch.verticalVelocity, 5.5)),
-      angular:new THREE.Vector3(
-        (Math.random() * 2 - 1) * spin * .62,
-        (Math.random() * 2 - 1) * spin * .38,
-        (Math.random() * 2 - 1 || 1) * (spin + speed * .15)
-      ),
-      age:0,
-      settle:0,
-      bounces:0,
-      originalCollisionScale:enemy.collisionScale,
-      originalSeparationScale:enemy.separationScale,
-    };
-
-    enemy.collisionScale = .02;
-    enemy.separationScale = .02;
-    enemy.vx = 0;
-    enemy.vz = 0;
-    enemy.knockX = 0;
-    enemy.knockZ = 0;
-    enemy.yOff = 0;
-    enemy.vyOff = 0;
-    enemy.state = 'idle';
-    enemy.stateTime = 0;
-    enemy.attack = null;
-    enemy.hitDone = false;
-    enemy.stunned = Math.max(enemy.stunned || 0, .3);
-    system.director?.releaseAllForEnemy?.(enemy);
-
-    rigidBodies.set(enemy, body);
-    restoreFrozenPose(body);
-    return body;
-  }
-
-  function removeRigidContainer(body) {
-    if (!body) return;
-    const { pivot, originalParent } = body;
-    if (pivot?.parent) pivot.parent.remove(pivot);
-    else if (originalParent && pivot) originalParent.remove(pivot);
-    rigidBodies.delete(body.enemy);
-  }
-
-  function recoverRigidBody(body, { immediate = false } = {}) {
-    if (!body || !rigidBodies.has(body.enemy)) return;
-    const enemy = body.enemy;
-    const root = body.root;
-
-    if (!root?.parent || enemy.hp <= 0) {
-      removeRigidContainer(body);
+  const childCleared=key=>roomId=>{
+    if(!combinedMode){
+      if(key===activeKey)externalEncounterCleared?.(roomId);
       return;
     }
-
-    body.pivot.remove(root);
-    if (body.originalParent) body.originalParent.add(root);
-    if (body.pivot.parent) body.pivot.parent.remove(body.pivot);
-
-    for (const item of body.frozen) {
-      if (!item.object) continue;
-      item.object.position.copy(item.position);
-      item.object.quaternion.copy(item.quaternion);
-      item.object.scale.copy(item.scale);
-      item.object.visible = item.visible;
+    if(roomId!==currentRoomId||!participatingKeys.has(key))return;
+    clearedKeys.add(key);
+    if([...participatingKeys].every(participant=>clearedKeys.has(participant))){
+      const clearedRoom=currentRoomId;
+      currentRoomId=null;
+      externalEncounterCleared?.(clearedRoom);
     }
-    for (const marker of body.markers) {
-      marker.visible = body.markerVisibility.get(marker) ?? false;
-    }
+  };
 
-    root.position.set(body.x, 0, body.z);
-    root.rotation.set(0, finiteOr(enemy.facingAngle), 0);
-    root.scale.copy(body.rootScale);
-    root.visible = true;
-    enemy.x = body.x;
-    enemy.z = body.z;
-    enemy.yOff = 0;
-    enemy.vyOff = 0;
-    enemy.knockX = 0;
-    enemy.knockZ = 0;
-    enemy.vx = 0;
-    enemy.vz = 0;
-    enemy.spin = 0;
-    enemy.spinVel = 0;
-    enemy.squash = 0;
-    enemy.squashT = 0;
-    enemy.state = 'idle';
-    enemy.stateTime = 0;
-    enemy.attack = null;
-    enemy.hitDone = false;
-    enemy.collisionScale = body.originalCollisionScale;
-    enemy.separationScale = body.originalSeparationScale;
-    if (!immediate) enemy.stunned = Math.max(enemy.stunned || 0, RIGID.recoveryStun);
+  const original=createOriginalArenaEnemySystem({...options,onEncounterCleared:childCleared('original')});
+  const flare=createFlareArenaEnemySystem({...options,onEncounterCleared:childCleared('flare')});
+  const hades=createHadesArenaEnemySystem({...options,onEncounterCleared:childCleared('hades')});
+  const systemsByKey={original,flare,hades};
+  const systems=Object.values(systemsByKey);
+  active=original;
+  manualWaveSize=original.waveSize;
+  hades.setEncounterPlanningEnabled?.(false);
+  for(const system of [flare,hades]){system.clearRoomRuntime();system.group.visible=false;}
 
-    rigidBodies.delete(enemy);
+  const all=method=>(...args)=>{for(const system of systems)system[method]?.(...args);};
+  const systemForKind=kind=>isHadesSpawnKind(kind)?['hades',hades]:isFlareSpawnKind(kind)?['flare',flare]:['original',original];
+  const combinedSystems=()=>[...participatingKeys].map(key=>systemsByKey[key]);
+  const visibleSystems=()=>combinedMode?combinedSystems():[active];
+  const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;
+
+  function clearCombinedRuntime(){
+    for(const system of systems){system.clearRoomRuntime?.();system.group.visible=false;}
+    participatingKeys.clear();
+    clearedKeys.clear();
+    hpSnapshots.clear();
+    currentRoomId=null;
   }
 
-  function clearRigidBodies() {
-    for (const body of [...rigidBodies.values()]) recoverRigidBody(body, { immediate:true });
-    rigidBodies.clear();
+  function activateSingle(key,system){
+    clearCombinedRuntime();
+    combinedMode=false;
+    activeKey=key;
+    active=system;
+    system.group.visible=true;
+    system.setWaveSize?.(manualWaveSize);
   }
 
-  function resolveHorizontal(body, step) {
-    const dx = body.vx * step;
-    const dz = body.vz * step;
-    const desiredX = body.x + dx;
-    const desiredZ = body.z + dz;
-    let moved = { x:desiredX, z:desiredZ };
-
-    if (navigation?.resolveMovement) {
-      moved = navigation.resolveMovement(
-        { x:body.x, z:body.z },
-        { x:dx, z:dz },
-        body.capsuleRadius
-      ) || moved;
-    } else {
-      const rr = Math.hypot(desiredX, desiredZ);
-      const limit = Math.max(1, arenaRadius - body.capsuleRadius - 1);
-      if (rr > limit) moved = { x:desiredX * limit / rr, z:desiredZ * limit / rr };
-    }
-
-    const blockedX = desiredX - finiteOr(moved.x, body.x);
-    const blockedZ = desiredZ - finiteOr(moved.z, body.z);
-    const blocked = Math.hypot(blockedX, blockedZ);
-    body.x = finiteOr(moved.x, body.x);
-    body.z = finiteOr(moved.z, body.z);
-
-    if (blocked > .008) {
-      const nx = blockedX / blocked;
-      const nz = blockedZ / blocked;
-      const intoWall = body.vx * nx + body.vz * nz;
-      if (intoWall > 0) {
-        body.vx -= (1 + RIGID.wallRestitution) * intoWall * nx;
-        body.vz -= (1 + RIGID.wallRestitution) * intoWall * nz;
-      } else {
-        body.vx *= -RIGID.wallRestitution;
-        body.vz *= -RIGID.wallRestitution;
-      }
-      body.angular.x += nz * 3.2;
-      body.angular.z -= nx * 3.2;
-      body.angular.y += (Math.random() * 2 - 1) * 1.8;
-      body.bounces++;
-      body.settle = 0;
-    }
+  function activateCombined(){
+    clearCombinedRuntime();
+    combinedMode=true;
+    activeKey='original';
+    active=original;
+    selectedSpawnKind=ALL_ENEMIES_BUDGET_ID;
+    globalPlayerHp=100;
+    combinedLastHit='';
+    combinedLastHitDir=null;
+    hades.setEncounterPlanningEnabled?.(false);
   }
 
-  function rotateRigidBody(body, step) {
-    const angularSpeed = body.angular.length();
-    if (angularSpeed <= 1e-5) return;
-    axis.copy(body.angular).multiplyScalar(1 / angularSpeed);
-    deltaQ.setFromAxisAngle(axis, angularSpeed * step);
-    body.pivot.quaternion.premultiply(deltaQ).normalize();
-  }
-
-  function updateRigidBody(body, dt) {
-    const enemy = body.enemy;
-    if (!enemy || enemy.hp <= 0 || !body.root?.parent) {
-      removeRigidContainer(body);
+  function setSpawnKind(kind){
+    if(kind===ALL_ENEMIES_BUDGET_ID||kind===HADES_TARTARUS_POOL_ID){
+      activateCombined();
       return;
     }
+    const [key,next]=systemForKind(kind);
+    activateSingle(key,next);
+    next.setSpawnKind(kind);
+    selectedSpawnKind=next.spawnKind;
+  }
 
-    const frameDt = Math.min(.08, Math.max(0, dt));
-    const steps = Math.max(1, Math.min(5, Math.ceil(frameDt / (1 / 60))));
-    const step = frameDt / steps;
+  function startCombinedEncounter(roomId){
+    for(const system of systems){system.clearRoomRuntime?.();system.group.visible=false;}
+    participatingKeys.clear();
+    clearedKeys.clear();
+    hpSnapshots.clear();
+    encounterDepth++;
+    currentRoomId=roomId;
+    currentEncounterPlan=createCombinedEncounterPlan({depth:encounterDepth});
 
-    for (let i = 0; i < steps; i++) {
-      body.age += step;
-      resolveHorizontal(body, step);
+    for(const groupPlan of currentEncounterPlan.groups){
+      const system=systemsByKey[groupPlan.system];
+      if(!system)continue;
+      participatingKeys.add(groupPlan.system);
+      system.group.visible=true;
+      system.setEncounterPlanningEnabled?.(false);
+      system.setSpawnKind(groupPlan.spawnKind);
+      system.setWaveSize(groupPlan.count);
+      system.startRoomEncounter(roomId);
+      hpSnapshots.set(system,system.playerHp);
+    }
 
-      body.vy -= RIGID.gravity * step;
-      body.airY += body.vy * step;
-      let grounded = false;
-      if (body.airY <= 0) {
-        body.airY = 0;
-        grounded = true;
-        if (body.vy < -1.1) {
-          body.vy = -body.vy * RIGID.floorRestitution;
-          body.vx *= .86;
-          body.vz *= .86;
-          body.angular.x += (Math.random() * 2 - 1) * 1.6;
-          body.angular.z += (Math.random() * 2 - 1) * 1.6;
-          body.bounces++;
-          body.settle = 0;
-        } else {
-          body.vy = 0;
+    if(!participatingKeys.size){
+      participatingKeys.add('original');
+      original.group.visible=true;
+      original.setSpawnKind('goblins');
+      original.setWaveSize(4);
+      original.startRoomEncounter(roomId);
+      hpSnapshots.set(original,original.playerHp);
+    }
+  }
+
+  function startRoomEncounter(roomId){
+    if(combinedMode)startCombinedEncounter(roomId);
+    else active.startRoomEncounter(roomId);
+  }
+
+  function resolveCrossSystemBodies(){
+    const entries=[];
+    for(const key of participatingKeys){
+      for(const enemy of systemsByKey[key].enemies)entries.push({key,enemy});
+    }
+    for(let pass=0;pass<2;pass++){
+      for(let i=0;i<entries.length;i++){
+        const a=entries[i];
+        if(a.enemy.hp<=0)continue;
+        for(let j=i+1;j<entries.length;j++){
+          const b=entries[j];
+          if(a.key===b.key||b.enemy.hp<=0)continue;
+          let dx=b.enemy.x-a.enemy.x,dz=b.enemy.z-a.enemy.z,d=Math.hypot(dx,dz);
+          const ar=a.enemy.radius*(a.enemy.collisionScale||1),br=b.enemy.radius*(b.enemy.collisionScale||1);
+          const minimum=ar+br+.18;
+          if(d>=minimum)continue;
+          if(d<.001){dx=1;dz=0;d=1;}
+          const push=(minimum-d)*.5/d;
+          a.enemy.x-=dx*push;a.enemy.z-=dz*push;b.enemy.x+=dx*push;b.enemy.z+=dz*push;
         }
       }
+    }
+  }
 
-      const horizontalDrag = grounded ? RIGID.groundDrag : RIGID.airDrag;
-      const angularDrag = grounded ? RIGID.angularGroundDrag : RIGID.angularAirDrag;
-      body.vx *= Math.pow(horizontalDrag, step);
-      body.vz *= Math.pow(horizontalDrag, step);
-      body.angular.multiplyScalar(Math.pow(angularDrag, step));
-      rotateRigidBody(body, step);
-
-      const speed = Math.hypot(body.vx, body.vz);
-      if (grounded && body.vy === 0 && speed < RIGID.settleSpeed && body.angular.length() < RIGID.settleAngular) {
-        body.settle += step;
-      } else {
-        body.settle = 0;
+  function updateCombined(dt,player){
+    for(const system of combinedSystems()){
+      const previousHp=hpSnapshots.get(system)??system.playerHp;
+      const safePlayer={...(player||{}),invulnerable:!!player?.invulnerable||globalPlayerHp<=0};
+      system.update(dt,safePlayer);
+      const nextHp=system.playerHp;
+      const damage=Math.max(0,previousHp-nextHp);
+      if(damage>0){
+        globalPlayerHp=Math.max(0,globalPlayerHp-damage);
+        combinedLastHit=system.lastPlayerHit||combinedLastHit;
+        combinedLastHitDir=system.lastPlayerHitDir||null;
       }
+      hpSnapshots.set(system,nextHp);
     }
-
-    enemy.x = body.x;
-    enemy.z = body.z;
-    enemy.vx = 0;
-    enemy.vz = 0;
-    enemy.knockX = 0;
-    enemy.knockZ = 0;
-    enemy.yOff = 0;
-    enemy.vyOff = 0;
-    enemy.stunned = Math.max(enemy.stunned || 0, .25);
-
-    restoreFrozenPose(body);
-    body.root.position.set(0, -body.centerY, 0);
-    body.root.quaternion.identity();
-    body.root.scale.copy(body.rootScale);
-    body.root.visible = true;
-    body.pivot.position.set(body.x, body.centerY + body.airY, body.z);
-    body.pivot.updateMatrixWorld(true);
-
-    if (body.settle >= RIGID.settleTime || body.age >= RIGID.maxTime) {
-      recoverRigidBody(body);
-    }
+    resolveCrossSystemBodies();
   }
 
-  function prepareRigidBodiesForBaseUpdate() {
-    for (const [enemy, body] of [...rigidBodies]) {
-      if (!enemy || enemy.hp <= 0 || !body.root?.parent) {
-        removeRigidContainer(body);
-        continue;
-      }
-      repairCorruptEnemy(enemy);
-      enemy.x = body.x;
-      enemy.z = body.z;
-      enemy.vx = 0;
-      enemy.vz = 0;
-      enemy.knockX = 0;
-      enemy.knockZ = 0;
-      enemy.yOff = 0;
-      enemy.vyOff = 0;
-      enemy.state = 'idle';
-      enemy.stateTime = 0;
-      enemy.attack = null;
-      enemy.hitDone = false;
-      enemy.stunned = Math.max(enemy.stunned || 0, .3);
-      enemy.collisionScale = .02;
-      enemy.separationScale = .02;
-    }
+  function update(dt,player){
+    if(combinedMode)updateCombined(dt,player);
+    else active.update(dt,player);
   }
 
-  system.launchRigidBody = function launchRigidBody(enemy, launch = {}) {
-    return !!makeRigidBody(enemy, launch);
-  };
-
-  system.isRigidBodyActive = function isRigidBodyActive(enemy) {
-    return rigidBodies.has(enemy);
-  };
-
-  system.update = function updateWithRigidGoblins(dt, player) {
-    for (const enemy of system.enemies) repairCorruptEnemy(enemy);
-    prepareRigidBodiesForBaseUpdate();
-    baseUpdate(dt, player);
-    for (const body of [...rigidBodies.values()]) updateRigidBody(body, dt);
-  };
-
-  system.damageEnemy = function damageEnemyWithRigidState(enemy, amount, knock = { x:0, z:0 }, opts = {}) {
-    repairCorruptEnemy(enemy);
-    const body = rigidBodies.get(enemy);
-    const result = baseDamageEnemy(enemy, amount, knock, opts);
-    if (!body) return result;
-
-    if (enemy.hp <= 0 || !enemy.root?.parent) {
-      removeRigidContainer(body);
-      return result;
-    }
-
-    // Additional hits transfer their impulse into the capsule rather than being
-    // consumed by the suspended upright enemy controller.
-    body.vx += finiteOr(knock.x) * .65;
-    body.vz += finiteOr(knock.z) * .65;
-    body.vy = Math.max(body.vy, 2.8 + Math.hypot(finiteOr(knock.x), finiteOr(knock.z)) * .12);
-    body.angular.x += (Math.random() * 2 - 1) * 2.2;
-    body.angular.z += (Math.random() * 2 - 1) * 3.4;
-    body.settle = 0;
-    enemy.knockX = 0;
-    enemy.knockZ = 0;
-    return result;
-  };
-
-  system.reset = function resetWithRigidCleanup() {
-    clearRigidBodies();
-    return baseReset();
-  };
-
-  if (baseStartRoomEncounter) {
-    system.startRoomEncounter = function startRoomEncounterWithRigidCleanup(roomId) {
-      clearRigidBodies();
-      return baseStartRoomEncounter(roomId);
-    };
+  function damageEnemy(enemy,...args){
+    if(!combinedMode)return active.damageEnemy(enemy,...args);
+    const owner=owningSystem(enemy);
+    return owner?.damageEnemy(enemy,...args)??false;
   }
 
-  if (baseClearRoomRuntime) {
-    system.clearRoomRuntime = function clearRoomRuntimeWithRigidCleanup() {
-      clearRigidBodies();
-      return baseClearRoomRuntime();
-    };
+  function launchRigidBody(enemy,launch={}){
+    return !!owningSystem(enemy)?.launchRigidBody?.(enemy,launch);
   }
 
-  Object.defineProperty(system, 'rigidBodyCount', {
-    enumerable:true,
-    get:() => rigidBodies.size,
-  });
+  function isRigidBodyActive(enemy){
+    return !!owningSystem(enemy)?.isRigidBodyActive?.(enemy);
+  }
 
-  setArenaEnemySource(system);
-  return system;
+  function reset(){
+    if(combinedMode){
+      for(const system of systems){system.reset();system.group.visible=false;hpSnapshots.set(system,system.playerHp);}
+      participatingKeys.clear();
+      clearedKeys.clear();
+      hpSnapshots.clear();
+      encounterDepth=0;
+      currentRoomId=null;
+      currentEncounterPlan=null;
+      globalPlayerHp=100;
+      combinedLastHit='';
+      combinedLastHitDir=null;
+    }else active.reset();
+  }
+
+  function clearRoomRuntime(){
+    if(combinedMode)clearCombinedRuntime();
+    else active.clearRoomRuntime();
+  }
+
+  function setWaveSize(value){
+    manualWaveSize=clamp(Math.round(Number(value)||6),1,20);
+    if(!combinedMode)for(const system of systems)system.setWaveSize?.(manualWaveSize);
+  }
+
+  const api={
+    get enemies(){return visibleSystems().flatMap(system=>system.enemies);},
+    get group(){return active.group;},
+    get director(){return active.director;},
+    update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,clearRoomRuntime,setSpawnKind,
+    setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
+    setCycleOnWaveClear:all('setCycleOnWaveClear'),setWaveSize,setSpeedScale:all('setSpeedScale'),
+    setHeightScale:all('setHeightScale'),setHpScale:all('setHpScale'),setIdleRangeScale:all('setIdleRangeScale'),
+    setTerritoryEnabled:all('setTerritoryEnabled'),setTelegraphedSpawns:all('setTelegraphedSpawns'),
+    setEncounterPlanningEnabled:all('setEncounterPlanningEnabled'),setPursuitBudgetScale:all('setPursuitBudgetScale'),
+    setGoblinColors:(...args)=>active.setGoblinColors?.(...args),setGoblinRigDebug:(...args)=>active.setGoblinRigDebug?.(...args),setSpawnGoblins:(...args)=>active.setSpawnGoblins?.(...args),
+    get heightScale(){return active.heightScale;},get speedScale(){return active.speedScale;},get hpScale(){return active.hpScale;},
+    get waveSize(){return manualWaveSize;},get idleRangeScale(){return active.idleRangeScale;},get aggression(){return active.aggression;},get spawnKind(){return combinedMode?ALL_ENEMIES_BUDGET_ID:selectedSpawnKind;},
+    get wave(){return combinedMode?encounterDepth:active.wave;},get waveKills(){return combinedMode?combinedSystems().reduce((sum,system)=>sum+system.waveKills,0):active.waveKills;},
+    get kills(){return combinedMode?systems.reduce((sum,system)=>sum+system.kills,0):active.kills;},get playerHp(){return combinedMode?globalPlayerHp:active.playerHp;},
+    get lastPlayerHit(){return combinedMode?combinedLastHit:active.lastPlayerHit;},get lastPlayerHitDir(){return combinedMode?combinedLastHitDir:active.lastPlayerHitDir;},
+    get activeEncounterRoomId(){return combinedMode?currentRoomId:active.activeEncounterRoomId;},
+    get playerActionLocked(){return visibleSystems().some(system=>!!system.playerActionLocked);},get playerMoveScale(){const list=visibleSystems();return list.length?Math.min(...list.map(system=>system.playerMoveScale??1)):1;},
+    get currentEncounterPlan(){return combinedMode?currentEncounterPlan:(active.currentEncounterPlan??null);},
+    get queuedSpawnCount(){return visibleSystems().reduce((sum,system)=>sum+(system.queuedSpawnCount??0),0);},
+    get telegraphCount(){return visibleSystems().reduce((sum,system)=>sum+(system.telegraphCount??0),0);},
+    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},
+    originalSystem:original,flareSystem:flare,hadesSystem:hades,
+  };
+  setArenaEnemySource(api);
+  return api;
 }
