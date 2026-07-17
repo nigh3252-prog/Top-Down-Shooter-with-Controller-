@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Carapace Stalker Viewer</title>
+<style>
+  html,body{margin:0;height:100%;background:#2b2622;overflow:hidden;font-family:ui-monospace,Menlo,monospace}
+  #hud{position:fixed;top:10px;left:10px;color:#efe7dc;text-shadow:0 1px 2px #000a;z-index:2}
+  #hud h1{font-size:15px;margin:0 0 2px;letter-spacing:.08em}
+  #hud p{font-size:11px;margin:0;opacity:.7}
+  #btns{position:fixed;bottom:14px;left:0;right:0;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;z-index:2}
+  button{background:#3a2622;color:#f0c0a8;border:1px solid #7a4a3c;border-radius:10px;padding:12px 18px;font:600 13px ui-monospace,monospace;letter-spacing:.04em;cursor:pointer}
+  button:active{background:#502c26}
+  button.on{background:#7a2a1c;color:#ffe0d0;border-color:#c25a3c}
+  #loading{position:fixed;inset:0;display:grid;place-items:center;color:#c9a;z-index:3;font-size:13px}
+</style>
+</head>
+<body>
+<div id="hud"><h1>CARAPACE STALKER</h1><p>drag to orbit &middot; pinch/scroll to zoom &middot; procedural low-poly biped</p></div>
+<div id="loading">summoning&hellip;</div>
+<div id="btns">
+  <button id="bIdle" class="on">IDLE</button>
+  <button id="bLunge">LUNGE</button>
+  <button id="bSpin">TURNTABLE</button>
+  <button id="bReset">RESET VIEW</button>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { installCarapaceStalkerRig } from './src/carapace-stalker-rig.js';
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x2b2622);
+  scene.fog = new THREE.Fog(0x2b2622, 12, 30);
+
+  const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .1, 80);
+  const CAM_START = new THREE.Vector3(0.4, 3.4, 8.2);
+  const TARGET = new THREE.Vector3(0, 1.9, 0);
+  camera.position.copy(CAM_START);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(TARGET);
+  controls.enableDamping = true; controls.dampingFactor = .08;
+  controls.minDistance = 4; controls.maxDistance = 18;
+  controls.maxPolarAngle = Math.PI * .52;   // keep camera above the ground
+  controls.update();
+
+  // moody dust-scene lighting: cool fill + warm key
+  scene.add(new THREE.HemisphereLight(0x8a94a0, 0x241c18, .75));
+  const sun = new THREE.DirectionalLight(0xffe6c4, 1.7);
+  sun.position.set(5, 8, 4); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -7; sun.shadow.camera.right = 7;
+  sun.shadow.camera.top = 7; sun.shadow.camera.bottom = -7;
+  sun.shadow.bias = -.0004;
+  scene.add(sun);
+  const rim = new THREE.DirectionalLight(0xff6a3a, .5);   // red rim to echo the sinew
+  rim.position.set(-5, 3, -4); scene.add(rim);
+
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(11, 32),
+    new THREE.MeshStandardMaterial({ color: 0x3a332c, roughness: .98 })
+  );
+  ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+  const rig = installCarapaceStalkerRig(THREE);
+  const mats = rig.buildStalkerMaterials();
+  const worldRoot = new THREE.Group(); scene.add(worldRoot);
+  const stalker = rig.makeStalkerRig({ root: worldRoot, mats, scale: 1 });
+
+  // --- UI state ---
+  let pose = rig.POSE.idle;
+  let spinning = false;
+  let lungeAmt = 0;                 // eased 0..1 blend into the lunge pose
+  const bIdle = document.getElementById('bIdle');
+  const bLunge = document.getElementById('bLunge');
+  const bSpin = document.getElementById('bSpin');
+
+  function setPose(p){
+    pose = p;
+    bIdle.classList.toggle('on', p === rig.POSE.idle);
+    bLunge.classList.toggle('on', p === rig.POSE.lunge);
+  }
+  bIdle.onclick = () => setPose(rig.POSE.idle);
+  bLunge.onclick = () => setPose(rig.POSE.lunge);
+  bSpin.onclick = () => { spinning = !spinning; bSpin.classList.toggle('on', spinning); };
+  document.getElementById('bReset').onclick = () => {
+    camera.position.copy(CAM_START); controls.target.copy(TARGET); controls.update();
+  };
+
+  document.getElementById('loading').remove();
+
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    const t = now / 1000;
+
+    // ease the lunge blend toward the active pose, then drive it in one call
+    const target = pose === rig.POSE.lunge ? 1 : 0;
+    lungeAmt += (target - lungeAmt) * Math.min(1, dt * 6);
+    rig.poseStalker(stalker, t, lungeAmt);
+
+    if(spinning) stalker.model.rotation.y += dt * .5;
+
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+</script>
+</body>
+</html>
