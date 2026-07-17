@@ -8,8 +8,6 @@ import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker
 import { installArenaEnemyRegistryProbe, getArenaEnemies, getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
-import { installCombatSwingInstances } from './combat-swing-instances.js';
-import { installBloodSlashStatusV2 } from './blood-slash-status.js';
 
 export function installPlayerCombat(api){
   const PC=installBasePlayerCombat(api);
@@ -110,15 +108,13 @@ export function installPlayerCombat(api){
     return[{id:zoneId,label:abilityHitSpec.role==='primary'?'Pilebunker One on One':'Pilebunker detonation',type:'blunt',from:new THREE.Vector3(0,-1.25,0),to:new THREE.Vector3(0,1.25,0),radius:abilityHitSpec.radius,damage,stagger:0,prefer:'any'}];
   };
 
-  const cardEffects=installCombatCardEffects({
+  const combatEffectRuntime=installCombatCardEffects({
     THREE,scene:api.scene,PC,hooks:api.hooks,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getStance:()=>window.__arena?.arena?.stance||null,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
-  const combatSwingInstances=installCombatSwingInstances({PC,hooks:api.hooks,cardEffects});
-  const bloodSlashStatus=installBloodSlashStatusV2({THREE,scene:api.scene,PC,cardEffects,getEnemySystem:getArenaEnemySystem});
 
   function hitArenaEnemy(enemy,options={}){
     const weaponRoot=PC.weaponRoot,parent=weaponRoot?.parent,enemies=getArenaEnemies();if(!enemy||enemy.hp<=0||!weaponRoot||!parent||!api.hooks?.detectHits)return false;
@@ -131,7 +127,7 @@ export function installPlayerCombat(api){
       worldTip.copy(point).add(new THREE.Vector3(mx,0,mz));worldBase.copy(point).add(new THREE.Vector3(-mx,0,-mz));api.hooks.detectHits(.016,worldTip,worldBase,42);landed=PC.combatState.hitIds.has(enemy);
       if(landed&&enemy.hp>0){enemy.stunned=Math.max(previousStun,Number(options.stun)||0);const knock=Number(options.knock)||0;enemy.knockX=(enemy.knockX||0)+mx*knock;enemy.knockZ=(enemy.knockZ||0)+mz*knock;}
     }finally{
-      abilityHitSpec=null;PC.combatState.attack=old.attack;PC.combatState.attackKey=old.attackKey;PC.combatState.attackGroup=old.attackGroup;PC.combatState.weapon=old.weapon;PC.combatState.hitIds=old.hitIds;PC.combatState.singleTargetEnemy=old.singleTargetEnemy;PC.combatState.fired=old.fired;weaponRoot.position.copy(old.position);weaponRoot.quaternion.copy(old.quaternion);weaponRoot.scale.copy(old.scale);weaponRoot.visible=old.visible;weaponRoot.updateMatrixWorld(true);
+      abilityHitSpec=null;PC.combatState.attack=old.attack;PC.combatState.attackKey=old.attackKey;PC.combatState.attackGroup=old.attackGroup;PC.combatState.weapon=old.weapon;PC.combatState.hitIds=old.hitIds;PC.combatState.singleTargetEnemy=old.singleTargetEnemy;PC.combatState.fired=old.fired;weaponRoot.position.copy(old.position);weaponRoot.quaternion.copy(old.quaternion);weaponRoot.scale.copy(old.scale);weaponRoot.visible=old.visible;weaponRoot.updateWorldMatrix(true,false);
     }
     return landed;
   }
@@ -158,16 +154,16 @@ export function installPlayerCombat(api){
     if(ev.slam){state.hitStop=Math.max(state.hitStop,.07*1.35);state.wobble.vel+=(Math.random()<.5?-1:1)*7.4;}
     if(ev.hit){const result=combatEffect.impact(ev.hit),landed=!!result.landed;ability.impactFeedback(ev.hit,landed);if(landed){state.hitStop=Math.max(state.hitStop,.115);state.wobble.vel+=(Math.random()<.5?-1:1)*10.5;}}
     if(ev.finished){combatEffect.finish();endGuidedAim();if(PC.weaponRoot)PC.weaponRoot.visible=true;state.attack=null;state.attackKey=null;state.attackGroup='vertical';state.t=0;state.fired=false;state.pending=null;state.pendingGroup=null;state.pendingLabEvent=null;window.dispatchEvent(new CustomEvent('powbunker:finished'));}
-    combatSwingInstances.update();
-    cardEffects.update(dt,now);
-    bloodSlashStatus.update(dt,now);
+    combatEffectRuntime.update(dt,now);
     return out;
   };
 
   Object.defineProperty(PC,'powBunkerAbility',{value:ability,enumerable:true});
   Object.defineProperty(PC,'pilebunkerCombatEffect',{value:combatEffect,enumerable:true});
-  Object.defineProperty(PC,'combatCardEffects',{value:cardEffects,enumerable:true});
-  Object.defineProperty(PC,'combatSwingInstances',{value:combatSwingInstances,enumerable:true});
-  Object.defineProperty(PC,'bloodSlashStatus',{value:bloodSlashStatus,enumerable:true});
+  Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
+  // Compatibility aliases for existing debug callers on this branch.
+  Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
+  Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});
+  Object.defineProperty(PC,'bloodSlashStatus',{value:{state:combatEffectRuntime.state,entries:combatEffectRuntime.state.bleeds,update(){},reset(){}},enumerable:true});
   return PC;
 }
