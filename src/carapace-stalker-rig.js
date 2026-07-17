@@ -1,18 +1,25 @@
-// Carapace Stalker visual rig — a procedural Phyrexian-style biped built from
-// flat-shaded three.js primitives, matching the low-poly "PSX carve" look of the
-// other rigs in this repo (see src/pot-goblin-rig.js). Original design; not tied
-// to any trademarked creature.
+// Carapace Stalker visual rig — a procedural creature built from flat-shaded
+// three.js primitives, matching the low-poly "PSX carve" look of the other rigs
+// in this repo (see src/pot-goblin-rig.js). Original design; not tied to any
+// trademarked creature.
 //
-// Silhouette (from the reference art): a hunched, forward-crouched horror carried
-// on two big splayed digitigrade legs of raw pink-red muscle banded with pale
-// bone. Its back is a huge curved cream carapace of stacked rib segments that
-// sweeps up from the hips and curls back over. A red exposed-muscle core with
-// white rib bones sits under the shell; a small red hook juts from the top; and
-// a red serrated arm on one side ends in a chitinous beetle.
+// Built component-by-component from the model sheets:
+//  - HIND LEG: digitigrade Z-leg of ivory plates over gold sinew, gold "zipper"
+//    ridge down the shin, splayed gold talons.
+//  - TORSO: gold-filled ivory ribcage chest, a ribbed carapace curl sweeping up
+//    the back and hooking forward over the shoulders, an ivory head-cap plate,
+//    twin gold ports at the rear hips.
+//  - FOREARM (the signature): a long limb whose length is BIFURCATED into two
+//    ivory pod-halves with gold teeth lining the inner edges and a gold
+//    vertebra column between — the whole forearm can gape open like a jaw.
+//    An elbow leaf-wing plate sweeps back; gold claw digits plant the ground.
+//  - BEETLE: pale-gold chitin beetle clinging to one forearm.
+// Stance: bipedal humanoid frame moving on all fours — hunched, arms planted.
+// Palette: pearl ivory + gold "gore" (per the reference sheets).
 //
 // Same injection pattern as the goblin rigs: pass THREE in, build materials once,
 // then makeStalkerRig() to instantiate. Exposed sub-groups let the viewer pose
-// and animate the creature (idle breathing / attack lunge / turntable).
+// and animate (idle breathing / rearing lunge with jaw-arms gaping / turntable).
 //
 // Usage: const rig = installCarapaceStalkerRig(THREE);
 
@@ -36,15 +43,12 @@ export function installCarapaceStalkerRig(THREE){
   // Non-per-kind materials with defaults, override-able like buildGoblinMaterials.
   function buildStalkerMaterials(materials = {}){
     return {
-      bone:     materials.bone     || new THREE.MeshStandardMaterial({ color: 0xe9e2cf, roughness: .66, metalness: .04, flatShading: true }),
-      shell:    materials.shell    || new THREE.MeshStandardMaterial({ color: 0xded3ba, roughness: .72, metalness: .03, flatShading: true }),
-      flesh:    materials.flesh    || new THREE.MeshStandardMaterial({ color: 0xc4574a, roughness: .62, emissive: 0x2c0806, emissiveIntensity: .28, flatShading: true }),
-      muscle:   materials.muscle   || new THREE.MeshStandardMaterial({ color: 0xa8332b, roughness: .58, emissive: 0x320604, emissiveIntensity: .35, flatShading: true }),
-      fleshDark:materials.fleshDark|| new THREE.MeshStandardMaterial({ color: 0x7c281f, roughness: .6,  flatShading: true }),
-      tooth:    materials.tooth    || new THREE.MeshStandardMaterial({ color: 0xf1ebd9, roughness: .55, flatShading: true }),
-      claw:     materials.claw     || new THREE.MeshStandardMaterial({ color: 0xd8c9ac, roughness: .5,  metalness: .08, flatShading: true }),
-      chitin:   materials.chitin   || new THREE.MeshStandardMaterial({ color: 0x2b211c, roughness: .5,  metalness: .18, flatShading: true }),
-      eye:      materials.eye      || new THREE.MeshStandardMaterial({ color: 0xff5a2a, emissive: 0xff3a10, emissiveIntensity: 1.7, roughness: .4, flatShading: true })
+      pearl:    materials.pearl    || new THREE.MeshStandardMaterial({ color: 0xf1ece0, roughness: .42, metalness: .1,  flatShading: true }),
+      pearlDull:materials.pearlDull|| new THREE.MeshStandardMaterial({ color: 0xe0d8c4, roughness: .55, metalness: .08, flatShading: true }),
+      gold:     materials.gold     || new THREE.MeshStandardMaterial({ color: 0xd9b23f, roughness: .34, metalness: .75, emissive: 0x3a2604, emissiveIntensity: .35, flatShading: true }),
+      goldDark: materials.goldDark || new THREE.MeshStandardMaterial({ color: 0xa87f28, roughness: .42, metalness: .7,  emissive: 0x2a1c04, emissiveIntensity: .3,  flatShading: true }),
+      claw:     materials.claw     || new THREE.MeshStandardMaterial({ color: 0xecc95e, roughness: .24, metalness: .85, emissive: 0x4a3206, emissiveIntensity: .4,  flatShading: true }),
+      chitin:   materials.chitin   || new THREE.MeshStandardMaterial({ color: 0xc4b083, roughness: .5,  metalness: .45, flatShading: true })
     };
   }
 
@@ -61,24 +65,17 @@ export function installCarapaceStalkerRig(THREE){
     return g;
   }
 
-  // Pale band ring around a limb — a thin flat-shaded torus.
-  function band(radius, mat){
-    const t = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * .16, 4, 10), mat);
-    t.rotation.x = Math.PI / 2; t.castShadow = true;
-    return t;
-  }
-
-  // Row of little bone teeth on a red sinew strip — the "zipper" ridge from the
-  // art. Runs down local -Y, teeth pointing +Z (front). Add to a limb/torso group.
-  function boneRidge(len, count, mats, teethScale = 1){
+  // Row of gold teeth on a gold sinew strip — the "zipper" of exposed gore that
+  // runs down limbs. Local -Y, teeth pointing +Z. Add to a limb group.
+  function goldRidge(len, count, mats, teethScale = 1){
     const grp = new THREE.Group();
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(len * .1, len, len * .05), mats.fleshDark);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(len * .09, len, len * .05), mats.goldDark);
     strip.position.set(0, -len / 2, len * .05); strip.castShadow = strip.receiveShadow = true;
     grp.add(strip);
-    const th = len * .14 * teethScale;
+    const th = len * .13 * teethScale;
     for(let i = 0; i < count; i++){
-      const t = new THREE.Mesh(new THREE.ConeGeometry(len * .055 * teethScale, th, 4), mats.tooth);
-      t.rotation.x = Math.PI / 2;                       // tip points +Z
+      const t = new THREE.Mesh(new THREE.ConeGeometry(len * .05 * teethScale, th, 4), mats.gold);
+      t.rotation.x = Math.PI / 2;
       const f = i / (count - 1 || 1);
       t.position.set(0, -f * (len * .9) - len * .05, len * .08);
       t.castShadow = true;
@@ -87,220 +84,294 @@ export function installCarapaceStalkerRig(THREE){
     return grp;
   }
 
-  // The hero shape: a big curved cream carapace of stacked rib arches sweeping up
-  // from the hips and curling back, with a red muscle core showing beneath.
-  function buildCarapace(mats){
-    const g = new THREE.Group();
-    // a raised arc that leans back and tapers to a point (not a full coil)
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0,  .00,  .20),
-      new THREE.Vector3(0,  .50,  .30),
-      new THREE.Vector3(0, 1.00,  .22),
-      new THREE.Vector3(0, 1.42,  .00),
-      new THREE.Vector3(0, 1.72, -.38),
-      new THREE.Vector3(0, 1.88, -.82),
-      new THREE.Vector3(0, 1.86,-1.24)
-    ]);
-    const width = u => (.28 + .48 * Math.sin(Math.PI * (0.10 + 0.80 * u))) * (1 - .34 * u);
-
-    // red muscle core tube running the length of the shell (exposed under the ribs)
-    const core = new THREE.Mesh(
-      crumple(new THREE.TubeGeometry(curve, 26, .17, 6, false).toNonIndexed(), .02), mats.muscle);
-    core.castShadow = core.receiveShadow = true; g.add(core);
-
-    // cream base shell just outside the core — flattened into a wide plate
-    const base = new THREE.Mesh(
-      crumple(new THREE.TubeGeometry(curve, 26, .26, 6, false).toNonIndexed(), .02), mats.shell);
-    base.castShadow = base.receiveShadow = true;
-    base.scale.set(1.2, 1, .82);                        // wide + shallow, like a curved plate
-    g.add(base);
-
-    // stacked rib arches — half-tori oriented to the curve tangent, wrapping the
-    // front a little (arc > PI) and tapering to the tip
-    const RIBS = 16, up = new THREE.Vector3(0, 0, 1);
-    for(let i = 0; i < RIBS; i++){
-      const u = i / (RIBS - 1);
-      const p = curve.getPointAt(u), tan = curve.getTangentAt(u);
-      const rib = new THREE.Mesh(
-        crumple(new THREE.TorusGeometry(width(u), .075, 4, 9, Math.PI * 1.25).toNonIndexed(), .02), mats.bone);
-      rib.quaternion.setFromUnitVectors(up, tan);       // hole-axis (+Z) -> tangent
-      rib.rotation.z += Math.PI * .125;                 // centre the wider arc over the back
-      rib.position.copy(p);
-      rib.scale.set(1.12, .8, 1);
-      rib.castShadow = rib.receiveShadow = true;
-      g.add(rib);
-    }
-    return g;
+  // Gold talon — polished curved claw cone.
+  function talon(len, r, mats){
+    const c = new THREE.Mesh(crumple(new THREE.ConeGeometry(r, len, 5).toNonIndexed(), r * .06), mats.claw);
+    c.castShadow = true;
+    return c;
   }
 
-  // One big digitigrade hind leg of red muscle, pale banding, bone-tooth ridge,
-  // clawed foot. Returns { group, thigh, shin, foot } for posing.
+  // HIND LEG (leg model sheet): ivory-plated digitigrade Z-leg with a gold
+  // ridge down the shin and three big gold talons + rear dewclaw.
+  // Returns { group, thigh, shin, foot } for posing.
   function buildLeg(side, mats){
     const group = new THREE.Group();
 
-    const thigh = limbSegment(.72, .32, .24, mats.flesh, 8);
-    thigh.rotation.x = .62;                              // knee forward (bird leg)
+    // thigh: big teardrop ivory plate over a gold inner core
+    const thigh = limbSegment(.85, .3, .2, mats.pearl, 8);
+    thigh.rotation.x = .55;
     group.add(thigh);
-    thigh.add(band(.29, mats.tooth)); const tb = band(.24, mats.tooth); tb.position.y = -.5; thigh.add(tb);
+    const thighPlate = new THREE.Mesh(crumple(new THREE.ConeGeometry(.3, .9, 6).toNonIndexed(), .03), mats.pearl);
+    thighPlate.rotation.x = Math.PI; thighPlate.scale.set(1, 1, .55);
+    thighPlate.position.set(0, -.38, -.06); thighPlate.castShadow = true; thigh.add(thighPlate);
+    const thighGore = goldRidge(.6, 5, mats, .9); thighGore.position.set(0, -.1, .17); thigh.add(thighGore);
+    const knee = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .1, 8), mats.gold);
+    knee.rotation.z = Math.PI / 2; knee.position.y = -.85; thigh.add(knee);
 
-    const shin = limbSegment(.8, .22, .14, mats.flesh, 8);
-    shin.rotation.x = -1.15;                             // ankle tucks back under body
+    // shin: slim ivory with the gold zipper down the front
+    const shin = limbSegment(.95, .16, .1, mats.pearl, 7);
+    shin.rotation.x = -1.3;
     thigh.userData.end.add(shin);
-    const sb = band(.18, mats.tooth); sb.position.y = -.4; shin.add(sb);
+    const sRidge = goldRidge(.8, 8, mats, .85); sRidge.position.set(0, -.05, .1); shin.add(sRidge);
 
+    // digitigrade foot: short metatarsal + three splayed gold talons + dewclaw
     const foot = new THREE.Group();
-    const meta = limbSegment(.5, .12, .09, mats.flesh, 6);
-    foot.rotation.x = .78;                               // toes forward onto the ground
+    foot.rotation.x = .85;
+    const meta = limbSegment(.42, .11, .09, mats.pearlDull, 6);
     foot.add(meta);
-    [-.2, 0, .2].forEach(dx => {
-      const toe = limbSegment(.4, .08, .025, mats.claw, 5);
-      toe.position.set(dx, 0, 0); toe.rotation.x = 1.15; toe.rotation.z = dx * .7;
-      meta.userData.end.add(toe);
+    [-.16, 0, .16].forEach(dx => {
+      const t = talon(.44, .075, mats);
+      t.rotation.x = 1.35 + Math.abs(dx) * .4; t.rotation.z = dx * 2.2;
+      t.position.set(dx * 1.4, -.42, .12);
+      foot.add(t);
     });
-    const dew = limbSegment(.26, .06, .02, mats.claw, 5);
-    dew.rotation.x = -1.4; meta.add(dew);
+    const dew = talon(.26, .05, mats);
+    dew.rotation.x = -2.4; dew.position.set(0, -.3, -.1); foot.add(dew);
     shin.userData.end.add(foot);
 
-    // exposed red sinew + bone-tooth ridge down the front of thigh and shin
-    const tRidge = boneRidge(.66, 6, mats); tRidge.position.z = .18; thigh.add(tRidge);
-    const sRidge = boneRidge(.72, 7, mats); sRidge.position.z = .12; shin.add(sRidge);
-
-    group.scale.x = side;                                // mirror left/right
+    group.scale.x = side;
     return { group, thigh, shin, foot };
   }
 
-  // Chitinous beetle on a red serrated arm — the segmented appendage on one side.
-  function buildBeetle(mats){
-    const arm = new THREE.Group();
-    let parent = arm, r = .15;
-    for(let i = 0; i < 3; i++){                          // red serrated arm segments
-      const s = limbSegment(.5, r, r * .78, mats.flesh, 6);
-      s.rotation.z = (i === 0 ? .35 : -.28);
-      s.rotation.x = .12;
-      parent.add(s);
-      const ridge = boneRidge(.44, 4, mats, .8); ridge.position.z = r * .8; s.add(ridge);
-      parent = s.userData.end; r *= .8;
+  // BIFURCATED FOREARM (forearm model sheet): two ivory pod-halves hinged at the
+  // shoulder/elbow, gold teeth lining the inner edges, gold vertebra column in
+  // the split, elbow leaf-wing plate, gold claw digits at the tip.
+  // jawA/jawB rotate around local Y to gape the arm open like a jaw.
+  // Returns { group, jawA, jawB, wing } — group pivots at the shoulder.
+  function buildForearm(side, mats){
+    const group = new THREE.Group();
+    const LEN = 1.85;
+
+    // one pod-half: elongated lathe leaf-pod (round, tapers both ends) + teeth.
+    function half(sign){
+      const h = new THREE.Group();
+      const prof = [
+        [.02, 0], [.11, -.12], [.18, -.45], [.21, -.85], [.17, -1.3], [.1, -1.62], [.02, -1.85]
+      ].map(([r, y]) => new THREE.Vector2(r, y * (LEN / 1.85)));
+      const pod = new THREE.Mesh(crumple(new THREE.LatheGeometry(prof, 7).toNonIndexed(), .015), mats.pearl);
+      pod.scale.set(.62, 1, 1);
+      pod.position.set(sign * .12, 0, 0);
+      pod.castShadow = pod.receiveShadow = true;
+      h.add(pod);
+      // gold teeth on the inner face, pointing across the split
+      const N = 9;
+      for(let i = 0; i < N; i++){
+        const f = (i + .5) / N;
+        const t = new THREE.Mesh(new THREE.ConeGeometry(.035, .11, 4), mats.gold);
+        t.rotation.z = sign * Math.PI / 2;               // tip points inward
+        t.position.set(sign * .05, -f * LEN * .82 - .12, 0);
+        t.castShadow = true;
+        h.add(t);
+      }
+      // two gold claw digits at the pod tip
+      [.3, -.1].forEach((rx, k) => {
+        const c = talon(.34, .055, mats);
+        c.rotation.x = 1.45 - rx; c.position.set(sign * .09, -LEN + .06 + k * .02, .14 - k * .16);
+        h.add(c);
+      });
+      return h;
     }
-    // beetle body: rounded dark carapace + a split wing seam + legs + little head
-    const beetle = new THREE.Group(); parent.add(beetle);
-    const body = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.3, 0).toNonIndexed(), .03), mats.chitin);
-    body.scale.set(1, .62, 1.35); body.castShadow = true; beetle.add(body);
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(.02, .06, .55), mats.fleshDark);
-    seam.position.set(0, .18, 0); beetle.add(seam);
-    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.12, 0), mats.chitin);
-    head.position.set(0, 0, .38); head.castShadow = true; beetle.add(head);
+    const jawA = half(1), jawB = half(-1);
+    group.add(jawA); group.add(jawB);
+
+    // gold vertebra column running in the split
+    const spine = new THREE.Group();
+    const M = 11;
+    for(let i = 0; i < M; i++){
+      const f = (i + .5) / M;
+      const v = new THREE.Mesh(new THREE.TorusGeometry(.055, .028, 4, 7), mats.goldDark);
+      v.rotation.x = Math.PI / 2;
+      v.position.y = -f * LEN * .9;
+      v.castShadow = true;
+      spine.add(v);
+    }
+    group.add(spine);
+
+    // elbow leaf-wing: flattened ivory blade sweeping up-back from the shoulder
+    const wing = new THREE.Group();
+    const wb = new THREE.Mesh(crumple(new THREE.ConeGeometry(.24, 1.05, 5).toNonIndexed(), .03), mats.pearl);
+    wb.scale.set(1, 1, .3); wb.position.y = .5; wb.castShadow = true;
+    wing.add(wb);
+    wing.position.set(0, -.05, -.12); wing.rotation.x = -2.55;   // point up and back
+    group.add(wing);
+
+    group.scale.x = side;
+    return { group, jawA, jawB, wing };
+  }
+
+  // TORSO (torso model sheet): gold-filled ivory ribcage, carapace curl hooking
+  // forward over the shoulders, ivory head-cap, twin gold ports at the rear.
+  function buildTorso(mats){
+    const g = new THREE.Group();
+
+    // chest ribcage: ivory ellipsoid core with gold rib arches wrapped around it
+    const chest = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.52, 1).toNonIndexed(), .04), mats.goldDark);
+    chest.scale.set(.78, 1.05, .8); chest.castShadow = chest.receiveShadow = true;
+    g.add(chest);
+    for(let i = 0; i < 7; i++){
+      const f = i / 6, y = -.42 + f * .95;
+      const r = .3 * Math.sin(Math.PI * (.18 + .64 * f)) + .17;
+      const ribG = new THREE.Mesh(
+        crumple(new THREE.TorusGeometry(r, .05, 4, 9, Math.PI * 1.6).toNonIndexed(), .012), mats.pearl);
+      ribG.rotation.set(Math.PI / 2, 0, -Math.PI * .3);
+      ribG.position.y = y; ribG.scale.set(1.1, .9, 1);
+      ribG.castShadow = true;
+      g.add(ribG);
+      const ribIn = new THREE.Mesh(new THREE.TorusGeometry(r * .8, .028, 4, 9, Math.PI * 1.5), mats.gold);
+      ribIn.rotation.copy(ribG.rotation); ribIn.position.y = y; ribIn.scale.copy(ribG.scale);
+      g.add(ribIn);
+    }
+
+    // carapace curl: ribbed shell sweeping up the back, hooking forward over top
+    const curl = new THREE.Group(); curl.position.set(0, .28, -.14);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, -.12, -.36),
+      new THREE.Vector3(0,  .32, -.34),
+      new THREE.Vector3(0,  .60, -.14),
+      new THREE.Vector3(0,  .72,  .14),
+      new THREE.Vector3(0,  .56,  .38),
+      new THREE.Vector3(0,  .34,  .44)
+    ]);
+    const core = new THREE.Mesh(
+      crumple(new THREE.TubeGeometry(curve, 22, .17, 6, false).toNonIndexed(), .015), mats.gold);
+    core.castShadow = true; curl.add(core);
+    const SEGS = 13, up = new THREE.Vector3(0, 0, 1);
+    for(let i = 0; i < SEGS; i++){
+      const u = i / (SEGS - 1);
+      const p = curve.getPointAt(u), tan = curve.getTangentAt(u);
+      const w = (.24 + .1 * Math.sin(Math.PI * (.2 + .6 * u))) * (1 - .3 * u);
+      const rib = new THREE.Mesh(
+        crumple(new THREE.TorusGeometry(w, .07, 4, 8, Math.PI * 1.6).toNonIndexed(), .012), mats.pearl);
+      rib.quaternion.setFromUnitVectors(up, tan);
+      rib.rotation.z += Math.PI * .2;
+      rib.position.copy(p);
+      rib.scale.set(1.08, .85, 1);
+      rib.castShadow = true;
+      curl.add(rib);
+    }
+    g.add(curl);
+
+    // head-cap: smooth ivory oval plate at the front of the curl, tilted forward
+    const cap = new THREE.Group(); cap.position.set(0, .82, .46); cap.rotation.x = .8;
+    const capM = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.4, 1).toNonIndexed(), .02), mats.pearl);
+    capM.scale.set(.72, .28, 1); capM.castShadow = true;
+    cap.add(capM);
+    const capRim = new THREE.Mesh(new THREE.TorusGeometry(.3, .025, 4, 10), mats.gold);
+    capRim.rotation.x = Math.PI / 2; capRim.scale.set(.85, 1.15, 1); capRim.position.y = .06;
+    cap.add(capRim);
+    g.add(cap);
+
+    // twin gold ports at the rear hips
+    [-.16, .16].forEach(dx => {
+      const port = new THREE.Mesh(new THREE.CylinderGeometry(.11, .13, .22, 8, 1, true), mats.gold);
+      port.rotation.x = 1.2; port.position.set(dx, -.5, -.3);
+      g.add(port);
+      const inner = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .2, 7), mats.goldDark);
+      inner.rotation.x = 1.2; inner.position.set(dx, -.5, -.3);
+      g.add(inner);
+    });
+
+    return { group: g, cap, curl };
+  }
+
+  // BEETLE: pale-gold chitin beetle clinging to a forearm.
+  function buildBeetle(mats){
+    const beetle = new THREE.Group();
+    const body = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.24, 0).toNonIndexed(), .025), mats.chitin);
+    body.scale.set(1, .58, 1.4); body.castShadow = true; beetle.add(body);
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(.016, .05, .48), mats.goldDark);
+    seam.position.y = .13; beetle.add(seam);
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.1, 0), mats.chitin);
+    head.position.set(0, -.02, .32); head.castShadow = true; beetle.add(head);
     for(let s = -1; s <= 1; s += 2){
       for(let k = 0; k < 3; k++){
-        const leg = limbSegment(.34, .04, .015, mats.chitin, 4);
-        leg.position.set(s * .22, -.05, .22 - k * .24);
-        leg.rotation.z = s * 1.15; leg.rotation.x = .3 - k * .3;
+        const leg = limbSegment(.3, .028, .01, mats.goldDark, 4);
+        leg.position.set(s * .18, -.04, .18 - k * .2);
+        leg.rotation.z = s * 1.2; leg.rotation.x = .25 - k * .25;
         beetle.add(leg);
       }
     }
-    return arm;
+    return beetle;
   }
 
-  // Small curved red hook that juts from the top of the shell.
-  function buildHook(mats){
-    const g = new THREE.Group();
-    const s1 = new THREE.Mesh(crumple(new THREE.ConeGeometry(.09, .6, 4).toNonIndexed(), .015), mats.flesh);
-    s1.scale.set(1, 1, .55); s1.position.y = .3; s1.castShadow = true; g.add(s1);
-    const j = new THREE.Group(); j.position.y = .58; j.rotation.z = -.9; g.add(j);
-    const s2 = new THREE.Mesh(crumple(new THREE.ConeGeometry(.055, .45, 4).toNonIndexed(), .012), mats.muscle);
-    s2.scale.set(1, 1, .5); s2.position.y = .22; s2.castShadow = true; j.add(s2);
-    return g;
-  }
-
-  // Build the full creature under `root`. Returns named groups for the viewer.
+  // Assemble the full creature under `root` in its all-fours stance.
   function makeStalkerRig({ root, mats, scale = 1 }){
     const model = new THREE.Group(); model.name = 'stalker'; model.scale.setScalar(scale);
     root.add(model);
 
-    // low hips carry a hunched, forward-leaning body over the big legs
+    // hips carry the whole frame; the body leans forward onto the planted arms
     const hipRoot = new THREE.Group(); hipRoot.name = 'stalker hipRoot';
-    hipRoot.position.y = 1.18; model.add(hipRoot);
+    hipRoot.position.set(0, 1.5, -.55); model.add(hipRoot);
 
-    const hips = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.4, 0).toNonIndexed(), .05), mats.muscle);
-    hips.scale.set(1.5, .8, 1.05); hips.castShadow = hips.receiveShadow = true; hipRoot.add(hips);
-
-    // torso core + carapace pivot, leaning forward off the hips
     const torsoRoot = new THREE.Group(); torsoRoot.name = 'stalker torsoRoot';
-    torsoRoot.position.set(0, .12, .05); torsoRoot.rotation.x = .12; hipRoot.add(torsoRoot);
+    torsoRoot.position.set(0, .28, .3); torsoRoot.rotation.x = .5;   // hunch forward
+    hipRoot.add(torsoRoot);
+    const torso = buildTorso(mats);
+    torsoRoot.add(torso.group);
 
-    // red exposed muscle core at the front-lower torso, striped with dark red +
-    // a couple of pale rib bones (the exposed ribcage in the art)
-    const chest = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.5, 0).toNonIndexed(), .05), mats.flesh);
-    chest.scale.set(1.15, 1.1, .95); chest.position.set(0, .35, .28); chest.castShadow = chest.receiveShadow = true;
-    torsoRoot.add(chest);
-    for(let i = 0; i < 4; i++){
-      const rib = new THREE.Mesh(new THREE.TorusGeometry(.34 - i * .015, .035, 4, 8, Math.PI * 1.1), mats.tooth);
-      rib.rotation.set(Math.PI / 2, 0, .1); rib.position.set(0, .12 + i * .2, .5);
-      torsoRoot.add(rib);
-    }
+    // shoulders at the front-top of the chest; arms plant down-forward
+    const armL = buildForearm(1, mats);
+    armL.group.position.set(-.52, .32, .48); armL.group.rotation.set(-.32, 0, .22);
+    torsoRoot.add(armL.group);
+    const armR = buildForearm(-1, mats);
+    armR.group.position.set(.52, .32, .48); armR.group.rotation.set(-.32, 0, -.22);
+    torsoRoot.add(armR.group);
 
-    const carapaceRoot = new THREE.Group(); carapaceRoot.name = 'stalker carapaceRoot';
-    carapaceRoot.position.set(0, .2, .0); carapaceRoot.rotation.x = -.12; carapaceRoot.scale.setScalar(.95);
-    torsoRoot.add(carapaceRoot);
-    carapaceRoot.add(buildCarapace(mats));
+    // beetle clings to the right forearm's outer pod
+    const beetle = buildBeetle(mats);
+    beetle.position.set(.2, -.75, .1); beetle.rotation.set(.2, .5, 1.5);
+    armR.group.add(beetle);
 
-    // small forward maw with glowing eyes, tucked low at the front of the core
-    const headRoot = new THREE.Group(); headRoot.name = 'stalker headRoot';
-    headRoot.position.set(0, .2, .7); torsoRoot.add(headRoot);
-    const skull = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(.24, 0).toNonIndexed(), .04), mats.chitin);
-    skull.scale.set(.95, .8, 1.2); skull.castShadow = true; headRoot.add(skull);
-    const jaw = new THREE.Mesh(new THREE.ConeGeometry(.16, .38, 5), mats.bone);
-    jaw.rotation.x = -Math.PI / 2; jaw.position.set(0, -.08, .22); headRoot.add(jaw);
-    [-.1, .1].forEach(dx => {
-      const eye = new THREE.Mesh(new THREE.ConeGeometry(.05, .12, 4), mats.eye);
-      eye.rotation.x = -Math.PI / 2; eye.position.set(dx, .05, .2); headRoot.add(eye);
-    });
+    // hind legs from the hips
+    const L = buildLeg(1, mats);  L.group.position.set(-.42, 0, -.1); L.group.rotation.set(0,  .1, .06);  hipRoot.add(L.group);
+    const R = buildLeg(-1, mats); R.group.position.set(.42, 0, -.1);  R.group.rotation.set(0, -.1, -.06); hipRoot.add(R.group);
 
-    // small red hook off the upper back of the shell
-    const hook = new THREE.Group(); hook.name = 'stalker hook';
-    hook.position.set(.12, 1.25, -.15); hook.rotation.set(-.3, 0, .2); carapaceRoot.add(hook);
-    hook.add(buildHook(mats));
-
-    // beetle arm off the right of the torso
-    const beetle = new THREE.Group(); beetle.name = 'stalker beetle';
-    beetle.position.set(.62, .5, .25); beetle.rotation.set(.1, -.3, -.7); torsoRoot.add(beetle);
-    beetle.add(buildBeetle(mats));
-
-    // the two splayed hind legs
-    const L = buildLeg(1, mats);  L.group.position.set(-.4, 0, 0); L.group.rotation.set(0,  .14, .12);  hipRoot.add(L.group);
-    const R = buildLeg(-1, mats); R.group.position.set(.4, 0, 0);  R.group.rotation.set(0, -.14, -.12); hipRoot.add(R.group);
-
-    return { model, hipRoot, torsoRoot, carapaceRoot, headRoot, hook, beetle, legL: L, legR: R };
+    return {
+      model, hipRoot, torsoRoot,
+      cap: torso.cap, curl: torso.curl,
+      armL, armR, beetle, legL: L, legR: R
+    };
   }
 
-  // Drive the creature. `t` is seconds; `amt` 0..1 eases the idle stance into the
-  // attack lunge, so callers get smooth two-way transitions by animating `amt`.
+  // Drive the creature. `t` is seconds; `amt` 0..1 eases the all-fours idle into
+  // the rearing lunge with both jaw-arms gaping open.
   const POSE = { idle: 'idle', lunge: 'lunge' };
   function poseStalker(rig, t, amt = 0){
-    const bob = Math.sin(t * 1.8) * .03;
+    const bob = Math.sin(t * 1.7) * .03;
     const sway = Math.sin(t * 1.05) * .04;
 
-    // breathing on the shell + idle flourishes (fade out as the lunge takes over)
-    rig.carapaceRoot.scale.setScalar(1 + Math.sin(t * 1.8) * .012);
-    rig.headRoot.rotation.z = Math.sin(t * 1.3) * .06 * (1 - amt);
-    rig.beetle.rotation.z = -.7 + Math.sin(t * 1.6) * .12 * (1 - amt);
-    rig.hook.rotation.z = lerp(.2 + Math.sin(t * .9) * .06, .8, amt);
+    // breathing through the ribcage + cap nod
+    rig.torsoRoot.scale.setScalar(1 + Math.sin(t * 1.7) * .012);
+    rig.cap.rotation.x = .75 + Math.sin(t * 1.2) * .04 * (1 - amt) + .35 * amt;
+    rig.beetle.rotation.y = .5 + Math.sin(t * 1.5) * .1 * (1 - amt);
 
-    // hips: idle bob -> deeper crouch and forward pitch (the lunge)
-    rig.hipRoot.position.y = lerp(1.18 + bob, .92 + bob * .3, amt);
-    rig.hipRoot.rotation.x = lerp(0, .28, amt);
-    rig.torsoRoot.rotation.x = lerp(.12 + Math.sin(t * .9) * .025, -.12, amt);
-    rig.headRoot.rotation.x = lerp(0, .5, amt);          // maw thrusts forward/down
+    // hips: all-fours -> rear up and back
+    rig.hipRoot.position.y = lerp(1.5 + bob, 1.72 + bob * .4, amt);
+    rig.hipRoot.rotation.x = lerp(0, -.34, amt);
+    rig.torsoRoot.rotation.x = lerp(.5 + Math.sin(t * .85) * .02, .16, amt);
 
-    const stance = (leg, tS, sS, k) => {
-      leg.thigh.rotation.x = lerp(.62 + tS, .95, amt);
-      leg.shin.rotation.x  = lerp(-1.15 - sS, -1.5, amt);
-      leg.foot.rotation.x  = lerp(.78, .95, amt) + Math.sin(t * 2 + k) * .02 * (1 - amt);
+    // arms: planted -> lifted and spread, jaws gaping with a hungry tremble
+    const gape = amt * (.5 + Math.sin(t * 6) * .04 * amt);
+    for(const [arm, s] of [[rig.armL, 1], [rig.armR, -1]]){
+      arm.group.rotation.x = lerp(-.32 + sway * .3 * s, -1.05, amt);
+      arm.group.rotation.z = s * lerp(.16, .5, amt);
+      arm.jawA.rotation.y =  gape;                       // halves swing apart
+      arm.jawB.rotation.y = -gape;
+      arm.jawA.position.x =  gape * .22;
+      arm.jawB.position.x = -gape * .22;
+    }
+
+    // legs: standing stance deepens to a coiled crouch as it rears
+    const stance = (leg, k) => {
+      leg.thigh.rotation.x = lerp(.55 + sway * k, .9, amt);
+      leg.shin.rotation.x  = lerp(-1.3 - sway * k, -1.6, amt);
+      leg.foot.rotation.x  = lerp(.85, 1.0, amt) + Math.sin(t * 2 + k) * .02 * (1 - amt);
     };
-    stance(rig.legL,  sway, sway, 0);
-    stance(rig.legR, -sway, -sway, 1);
+    stance(rig.legL, 1);
+    stance(rig.legR, -1);
   }
 
-  return { buildStalkerMaterials, makeStalkerRig, poseStalker, POSE, crumple, limbSegment, boneRidge };
+  return { buildStalkerMaterials, makeStalkerRig, poseStalker, POSE, crumple, limbSegment, goldRidge };
 }
 
 export default installCarapaceStalkerRig;

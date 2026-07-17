@@ -17,7 +17,7 @@
 </style>
 </head>
 <body>
-<div id="hud"><h1>CARAPACE STALKER</h1><p>drag to orbit &middot; pinch/scroll to zoom &middot; procedural low-poly biped</p></div>
+<div id="hud"><h1>CARAPACE STALKER</h1><p>drag to orbit &middot; pinch/scroll to zoom &middot; ivory + gold &middot; lunge gapes the jaw-arms</p></div>
 <div id="loading">summoning&hellip;</div>
 <div id="btns">
   <button id="bIdle" class="on">IDLE</button>
@@ -48,8 +48,8 @@
   scene.fog = new THREE.Fog(0x2b2622, 12, 30);
 
   const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .1, 80);
-  const CAM_START = new THREE.Vector3(-4.8, 3.0, 6.4);   // 3/4 view showing the ribbed carapace curl
-  const TARGET = new THREE.Vector3(0, 1.5, -0.2);
+  const CAM_START = new THREE.Vector3(-5.4, 2.6, 6.0);   // 3/4 view of the all-fours stance
+  const TARGET = new THREE.Vector3(0, 1.3, 0);
   camera.position.copy(CAM_START);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -59,9 +59,9 @@
   controls.maxPolarAngle = Math.PI * .52;   // keep camera above the ground
   controls.update();
 
-  // moody dust-scene lighting: cool fill + warm key
-  scene.add(new THREE.HemisphereLight(0x8a94a0, 0x241c18, .75));
-  const sun = new THREE.DirectionalLight(0xffe6c4, 1.7);
+  // moody dust-scene lighting: cool fill + warm key (bright enough for ivory+gold)
+  scene.add(new THREE.HemisphereLight(0xb8bec6, 0x2c241c, 1.05));
+  const sun = new THREE.DirectionalLight(0xffe9c8, 2.2);
   sun.position.set(5, 8, 4); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -7; sun.shadow.camera.right = 7;
