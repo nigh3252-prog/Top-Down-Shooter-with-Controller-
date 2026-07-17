@@ -1,22 +1,28 @@
-// One Step From Eden-style stance-card deck: a shuffled draw pile feeds two
-// hand slots; playing a card discards it and draws its replacement into the
-// same slot. When every card has been played (both slots empty, draw pile
-// dry) the discard instantly reshuffles into a fresh hand. A manual shuffle
-// tosses the current hand and takes a countdown before the new hand arrives.
-// Pure logic — no DOM, no stamina (the page owns resources).
-//
-// Prototype addition: every weapon deck also receives one Pilebunker ability
-// card. The arena's existing playCard() function is stance-shaped, so this
-// module returns a proxy of the currently active stance after firing the
-// ability event. That preserves the stance/weapon while still allowing the
-// existing discard, draw, stamina-refill and card animation pipeline to run.
+// One Step From Eden-style card deck: a shuffled draw pile feeds two hand
+// slots; playing a card discards it and draws its replacement into the same
+// slot. When every card has been played, the discard reshuffles immediately.
+// A manual shuffle tosses the current hand and takes a countdown before the
+// new hand arrives. Pure deck logic; the arena owns combat resources.
 
-import { POW_BUNKER_CARD } from './powbunker-card.js';
+function isNonStanceCard(card) {
+  return !!card?.type && card.type !== 'stance';
+}
+
+function cardInitials(card) {
+  if (card?.icon) return String(card.icon).slice(0, 3).toUpperCase();
+  return String(card?.name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(word => word[0])
+    .join('')
+    .toUpperCase();
+}
 
 export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
   const s = {
     draw: [], discard: [], hand: [null, null], pool: [], stancePool: [],
-    shuffleT: -1, lastStance: null, stanceButtonBound:false,
+    shuffleT: -1, lastStance: null, stanceButtonBound:false, runLocked:false,
   };
 
   function shuffle(a) {
@@ -42,23 +48,36 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
     const found = s.lastStance && s.stancePool.find(card => card.id === s.lastStance.id);
     return found || s.stancePool[0] || null;
   }
+  function applyPool(cards) {
+    const next = cards.slice();
+    s.stancePool = next.filter(card => !isNonStanceCard(card));
+    const previous = activeStanceFallback();
+    s.lastStance = previous && s.stancePool.some(card => card.id === previous.id)
+      ? s.stancePool.find(card => card.id === previous.id)
+      : (s.stancePool[0] || null);
+    s.pool = next;
+    s.shuffleT = -1;
+    dealFresh(s.pool);
+    bindStanceButton();
+  }
 
   function decorateCards() {
     if (typeof document === 'undefined') return;
     for (let i=0;i<2;i++) {
       const el = document.getElementById(`card${i}`);
       if (!el) continue;
+      const card = s.hand[i];
       const icon = el.querySelector('.cicon');
-      const isAbility = s.hand[i]?.type === 'ability';
-      el.dataset.cardType = isAbility ? 'ability' : 'stance';
-      el.setAttribute('aria-label', isAbility ? 'Play Pilebunker ability card' : 'Play stance card');
+      const isAbility = isNonStanceCard(card);
+      el.dataset.cardType = !card ? 'empty' : (isAbility ? card.type : 'stance');
+      el.setAttribute('aria-label', !card ? 'Empty card slot' : `Play ${card.name} ${isAbility ? 'card' : 'stance card'}`);
       if (icon) {
-        icon.textContent = isAbility ? 'PB' : '';
+        icon.textContent = isAbility ? cardInitials(card) : '';
         icon.style.display = 'grid';
         icon.style.placeItems = 'center';
-        icon.style.fontWeight = '900';
-        icon.style.fontSize = isAbility ? '16px' : '';
-        icon.style.letterSpacing = isAbility ? '.08em' : '';
+        icon.style.fontWeight = isAbility ? '900' : '';
+        icon.style.fontSize = isAbility ? '14px' : '';
+        icon.style.letterSpacing = isAbility ? '.06em' : '';
         icon.style.color = isAbility ? '#ffb066' : '';
         icon.style.borderColor = isAbility ? 'rgba(255,176,102,.72)' : '';
         icon.style.background = isAbility ? 'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))' : '';
@@ -82,7 +101,7 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
     });
   }
 
-  return {
+  const api = {
     get hand() { return s.hand; },
     get upcoming() { return s.draw.slice(0, 4); },
     get drawCount() { return s.draw.length; },
@@ -90,17 +109,31 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
     get shuffling() { return s.shuffleT >= 0; },
     get shuffleT() { return s.shuffleT; },
     get shuffleTime() { return shuffleTime; },
+    get pool() { return s.pool.slice(); },
+    get runLocked() { return s.runLocked; },
 
     rebuild(cards) {
-      s.stancePool = cards.slice();
-      const previous = activeStanceFallback();
-      s.lastStance = previous && s.stancePool.some(card => card.id === previous.id)
-        ? s.stancePool.find(card => card.id === previous.id)
-        : (s.stancePool[0] || null);
-      s.pool = [...s.stancePool, POW_BUNKER_CARD];
-      s.shuffleT = -1;
-      dealFresh(s.pool);
-      bindStanceButton();
+      // Once a run loadout is chosen, arena respawns and dev weapon swaps keep
+      // that run deck instead of rebuilding a weapon-filtered stance pool.
+      applyPool(s.runLocked ? s.pool : cards);
+    },
+
+    beginRun(cards, { openingStanceId = 'S24' } = {}) {
+      s.runLocked = true;
+      applyPool(cards);
+      const opening = s.stancePool.find(card => card.id === openingStanceId);
+      if (opening) s.lastStance = opening;
+    },
+
+    unlockRun() { s.runLocked = false; },
+
+    addCard(card) {
+      if (!card) return false;
+      s.pool.push(card);
+      if (!isNonStanceCard(card)) s.stancePool.push(card);
+      // Rewards join the discard so they enter naturally on the next reshuffle.
+      s.discard.push(card);
+      return true;
     },
 
     play(slot) {
@@ -108,21 +141,24 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
       const card = s.hand[slot];
       if (!card) return null;
 
-      if (card.type === 'ability') {
-        const canPlay = typeof window !== 'undefined' && typeof window.__POWBUNKER_CAN_PLAY__ === 'function'
-          ? window.__POWBUNKER_CAN_PLAY__()
-          : false;
-        if (!canPlay) return null;
+      if (isNonStanceCard(card)) {
+        const canPlayHook = card.canPlayGlobal && typeof window !== 'undefined'
+          ? window[card.canPlayGlobal]
+          : null;
+        if (typeof canPlayHook === 'function' && !canPlayHook(card)) return null;
         const stance = activeStanceFallback();
         if (!stance) return null;
         consumeSlot(slot, card);
-        const fire = () => window.dispatchEvent(new CustomEvent('powbunker:play', { detail:{ card } }));
+        const fire = () => {
+          if (typeof window === 'undefined') return;
+          const eventName = card.playEvent || 'arena-card:play';
+          window.dispatchEvent(new CustomEvent(eventName, { detail:{ card } }));
+        };
         if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
         scheduleDecoration();
-        // Same id/chain as the active stance means combat-arena's existing
-        // stance selection simply reselects what was already active. The name
-        // remains PILEBUNKER so its normal announcement identifies the card.
-        return { ...stance, name:POW_BUNKER_CARD.name, __abilityProxy:true };
+        // The arena's playCard() function is stance-shaped. Returning a proxy
+        // preserves the active stance while the dedicated card event resolves.
+        return { ...stance, name:card.name, __abilityProxy:true, __card:card };
       }
 
       s.lastStance = card;
@@ -151,6 +187,17 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
       scheduleDecoration();
     },
   };
+
+  // The arena already imports this module, so install the run-draft UI lazily
+  // without forcing the large combat page to own another integration layer.
+  if (typeof document !== 'undefined' && document.getElementById('startGate')) {
+    const install = () => import('./run-draft.js')
+      .then(module => module.installRunDraft(api))
+      .catch(error => console.error('Run draft UI failed to install', error));
+    if (typeof queueMicrotask === 'function') queueMicrotask(install); else setTimeout(install,0);
+  }
+
+  return api;
 }
 
 // Directional glyph for a chain move, from its ATTACKS entry { group, label }:
