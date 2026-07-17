@@ -317,9 +317,11 @@ export function installCarapaceStalkerRig(THREE){
     armR.group.position.set(.52, .32, .48); armR.group.rotation.set(-.32, 0, -.22);
     torsoRoot.add(armR.group);
 
-    // beetle clings to the right forearm's outer pod
+    // beetle prey: hidden until the grab snaps shut, then clamped in the right
+    // arm's jaw-split with its legs sticking out
     const beetle = buildBeetle(mats);
-    beetle.position.set(.2, -.75, .1); beetle.rotation.set(.2, .5, 1.5);
+    beetle.position.set(0, -.95, .16); beetle.rotation.set(1.15, .25, .35);
+    beetle.visible = false;
     armR.group.add(beetle);
 
     // hind legs from the hips
@@ -333,42 +335,72 @@ export function installCarapaceStalkerRig(THREE){
     };
   }
 
-  // Drive the creature. `t` is seconds; `amt` 0..1 eases the all-fours idle into
-  // the rearing lunge with both jaw-arms gaping open.
-  const POSE = { idle: 'idle', lunge: 'lunge' };
-  function poseStalker(rig, t, amt = 0){
+  // Drive the creature. `t` is seconds. `s` is the animation state:
+  //   walk  0..1 — blend of the all-fours walking gait (diagonal step cycle)
+  //   lunge 0..1 — blend of the reared-up lunge posture
+  //   grabT       — seconds since the lunge-and-grab was triggered (< 0 = none).
+  //                 Timeline: 0-.35 rear + gape, .45-.7 strike + snap shut,
+  //                 > .6 the beetle prey appears clamped in the right jaw-arm
+  //                 and struggles. Releasing (grabT < 0) hides the prey.
+  const POSE = { idle: 'idle', walk: 'walk', lunge: 'lunge' };
+  const clamp01 = x => Math.max(0, Math.min(1, x));
+  const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
+  function poseStalker(rig, t, s = {}){
+    const walk = s.walk ?? 0, amt = s.lunge ?? 0;
+    const grabT = s.grabT ?? -1;
     const bob = Math.sin(t * 1.7) * .03;
     const sway = Math.sin(t * 1.05) * .04;
+    const ph = t * 4.2;                                  // walk cycle phase
+
+    // grab timeline envelopes (only meaningful while lunging)
+    const gape   = amt * (grabT < 0 ? .5 + Math.sin(t * 6) * .04
+                 : lerp(smooth(grabT / .35), .14, smooth((grabT - .45) / .22)));
+    const strike = amt * smooth((grabT - .4) / .28);     // arms whip forward at the snap
+    const held   = grabT > .6 && amt > .05;              // prey clamped in the jaws
 
     // breathing through the ribcage + cap nod
     rig.torsoRoot.scale.setScalar(1 + Math.sin(t * 1.7) * .012);
-    rig.cap.rotation.x = .75 + Math.sin(t * 1.2) * .04 * (1 - amt) + .35 * amt;
-    rig.beetle.rotation.y = .5 + Math.sin(t * 1.5) * .1 * (1 - amt);
+    rig.cap.rotation.x = .75 + Math.sin(t * 1.2) * .04 * (1 - amt) + .35 * amt
+                       + Math.sin(ph * 2) * .03 * walk;
 
-    // hips: all-fours -> rear up and back
-    rig.hipRoot.position.y = lerp(1.5 + bob, 1.72 + bob * .4, amt);
-    rig.hipRoot.rotation.x = lerp(0, -.34, amt);
-    rig.torsoRoot.rotation.x = lerp(.5 + Math.sin(t * .85) * .02, .16, amt);
+    // hips: all-fours (bobbing with the gait) -> rear up, then pitch into the strike
+    rig.hipRoot.position.y = lerp(1.5 + bob + Math.sin(ph * 2) * .05 * walk,
+                                  1.72 + bob * .4 - .12 * strike, amt);
+    rig.hipRoot.position.z = -.55 + .22 * strike;
+    rig.hipRoot.rotation.x = lerp(0, -.34 + .3 * strike, amt);
+    rig.hipRoot.rotation.z = Math.sin(ph) * .045 * walk * (1 - amt);
+    rig.torsoRoot.rotation.x = lerp(.5 + Math.sin(t * .85) * .02, .16 + .22 * strike, amt);
+    rig.torsoRoot.rotation.y = Math.sin(ph) * .06 * walk * (1 - amt);
 
-    // arms: planted -> lifted and spread, jaws gaping with a hungry tremble
-    const gape = amt * (.5 + Math.sin(t * 6) * .04 * amt);
-    for(const [arm, s] of [[rig.armL, 1], [rig.armR, -1]]){
-      arm.group.rotation.x = lerp(-.32 + sway * .3 * s, -1.05, amt);
-      arm.group.rotation.z = s * lerp(.16, .5, amt);
+    // arms: planted (stepping opposite the legs) -> raised, then whipped forward
+    for(const [arm, k, phase] of [[rig.armL, 1, Math.PI], [rig.armR, -1, 0]]){
+      const step = Math.sin(ph + phase) * .2 * walk;
+      arm.group.rotation.x = lerp(-.32 + sway * .3 * k + step, -1.05 + .45 * strike, amt);
+      arm.group.rotation.z = k * lerp(.22, .5 - .22 * strike, amt);
       arm.jawA.rotation.y =  gape;                       // halves swing apart
       arm.jawB.rotation.y = -gape;
       arm.jawA.position.x =  gape * .22;
       arm.jawB.position.x = -gape * .22;
     }
 
-    // legs: standing stance deepens to a coiled crouch as it rears
-    const stance = (leg, k) => {
-      leg.thigh.rotation.x = lerp(.55 + sway * k, .9, amt);
-      leg.shin.rotation.x  = lerp(-1.3 - sway * k, -1.6, amt);
-      leg.foot.rotation.x  = lerp(.85, 1.0, amt) + Math.sin(t * 2 + k) * .02 * (1 - amt);
+    // prey: appears at the snap, struggles in the clamp, vanishes on release
+    rig.beetle.visible = held;
+    if(held){
+      const struggle = Math.max(.25, 1 - (grabT - .6) * .35);   // tires out slowly
+      rig.beetle.rotation.y = .25 + Math.sin(t * 16) * .1 * struggle;
+      rig.beetle.rotation.z = .35 + Math.sin(t * 21 + 1) * .08 * struggle;
+    }
+
+    // legs: gait swing / coiled crouch when reared
+    const stance = (leg, k, phase) => {
+      const sw = Math.sin(ph + phase) * walk;
+      const lift = Math.max(0, Math.sin(ph + phase + Math.PI / 2)) * walk;
+      leg.thigh.rotation.x = lerp(.55 + sway * k + sw * .3, .9, amt);
+      leg.shin.rotation.x  = lerp(-1.3 - sway * k - sw * .28, -1.6, amt);
+      leg.foot.rotation.x  = lerp(.85 - lift * .3, 1.0, amt) + Math.sin(t * 2 + k) * .02 * (1 - amt - walk * .5);
     };
-    stance(rig.legL, 1);
-    stance(rig.legR, -1);
+    stance(rig.legL, 1, 0);
+    stance(rig.legR, -1, Math.PI);
   }
 
   return { buildStalkerMaterials, makeStalkerRig, poseStalker, POSE, crumple, limbSegment, goldRidge };

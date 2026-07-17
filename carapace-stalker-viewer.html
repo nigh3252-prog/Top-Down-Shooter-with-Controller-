@@ -17,11 +17,12 @@
 </style>
 </head>
 <body>
-<div id="hud"><h1>CARAPACE STALKER</h1><p>drag to orbit &middot; pinch/scroll to zoom &middot; ivory + gold &middot; lunge gapes the jaw-arms</p></div>
+<div id="hud"><h1>CARAPACE STALKER</h1><p>drag to orbit &middot; pinch/scroll to zoom &middot; ivory + gold &middot; lunge snaps the jaw-arms shut on prey</p></div>
 <div id="loading">summoning&hellip;</div>
 <div id="btns">
   <button id="bIdle" class="on">IDLE</button>
-  <button id="bLunge">LUNGE</button>
+  <button id="bWalk">WALK</button>
+  <button id="bLunge">LUNGE + GRAB</button>
   <button id="bSpin">TURNTABLE</button>
   <button id="bReset">RESET VIEW</button>
 </div>
@@ -85,17 +86,22 @@
   // --- UI state ---
   let pose = rig.POSE.idle;
   let spinning = false;
-  let lungeAmt = 0;                 // eased 0..1 blend into the lunge pose
+  let walkAmt = 0, lungeAmt = 0;    // eased 0..1 blends into each pose
+  let grabStart = -1;               // performance.now() when LUNGE+GRAB pressed
   const bIdle = document.getElementById('bIdle');
+  const bWalk = document.getElementById('bWalk');
   const bLunge = document.getElementById('bLunge');
   const bSpin = document.getElementById('bSpin');
 
   function setPose(p){
     pose = p;
+    grabStart = p === rig.POSE.lunge ? performance.now() : -1;
     bIdle.classList.toggle('on', p === rig.POSE.idle);
+    bWalk.classList.toggle('on', p === rig.POSE.walk);
     bLunge.classList.toggle('on', p === rig.POSE.lunge);
   }
   bIdle.onclick = () => setPose(rig.POSE.idle);
+  bWalk.onclick = () => setPose(rig.POSE.walk);
   bLunge.onclick = () => setPose(rig.POSE.lunge);
   bSpin.onclick = () => { spinning = !spinning; bSpin.classList.toggle('on', spinning); };
   document.getElementById('bReset').onclick = () => {
@@ -109,10 +115,16 @@
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     const t = now / 1000;
 
-    // ease the lunge blend toward the active pose, then drive it in one call
-    const target = pose === rig.POSE.lunge ? 1 : 0;
-    lungeAmt += (target - lungeAmt) * Math.min(1, dt * 6);
-    rig.poseStalker(stalker, t, lungeAmt);
+    // ease the pose blends, then drive the rig with the full animation state
+    const walkTarget = pose === rig.POSE.walk ? 1 : 0;
+    const lungeTarget = pose === rig.POSE.lunge ? 1 : 0;
+    walkAmt += (walkTarget - walkAmt) * Math.min(1, dt * 5);
+    lungeAmt += (lungeTarget - lungeAmt) * Math.min(1, dt * 6);
+    rig.poseStalker(stalker, t, {
+      walk: walkAmt,
+      lunge: lungeAmt,
+      grabT: grabStart >= 0 ? (now - grabStart) / 1000 : -1
+    });
 
     if(spinning) stalker.model.rotation.y += dt * .5;
 
