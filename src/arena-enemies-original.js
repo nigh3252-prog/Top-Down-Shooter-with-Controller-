@@ -1,12 +1,11 @@
 // Branch-local arena-enemy wrapper for the Pilebunker gameplay effect.
-// The combat implementation is pinned to the current main enemy system so this
-// wrapper preserves later enemy tuning while adding a goblin-only rigid capsule
-// state that retains the exact existing goblin model.
+// The combat implementation is localized from the pinned source so this branch
+// uses its own no-director combat behavior while preserving rigid goblin physics.
 
 import {
   ARENA_ENEMY_ARCHETYPES,
   createArenaEnemySystem as createBaseArenaEnemySystem,
-} from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@a256b089bf912aff434f5b1263a29ec060507b5d/src/arena-enemies.js';
+} from './arena-enemies-original-source.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
