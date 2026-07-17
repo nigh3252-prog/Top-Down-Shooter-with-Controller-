@@ -2,11 +2,12 @@
 //
 // This module deliberately sits above each roster's authored AI. It adds a
 // diagnostic "Avalanche" director mode without flattening the individual enemy
-// implementations, applies instance-level timing scales, and separates physical
-// knockback from attack-canceling stagger.
+// implementations, applies instance-level timing scales, separates physical
+// knockback from attack-canceling stagger, and strengthens the arena dodge.
 
 import { DIRECTOR_MODES } from './combat-director.js';
 import { getLastCombatHitContext } from './combat-balance.js';
+import { resolveCircleMovement } from './hex-maze-navigation.js';
 
 export const AVALANCHE_MODE_ID = 'avalanche';
 
@@ -17,9 +18,14 @@ if (!DIRECTOR_MODES.some(mode => mode.id === AVALANCHE_MODE_ID)) {
 const STORAGE_PREFIX = 'arena.pressureLab.';
 const DEFAULTS = Object.freeze({
   windupScale:1,
-  cooldownScale:.2,
-  recoveryScale:.55,
-  pursuitScale:1.4,
+  cooldownScale:0,
+  recoveryScale:.18,
+  pursuitScale:1.45,
+});
+const DODGE = Object.freeze({
+  duration:.26,
+  extraDistance:2.15,
+  playerRadius:1.05,
 });
 
 const WEAPON_STAGGER_WEIGHT = Object.freeze({
@@ -61,8 +67,8 @@ function saveNumber(key, value) {
 export function createPressureLabSettings(overrides={}) {
   return {
     windupScale:clamp(finite(overrides.windupScale, loadNumber('windupScale', DEFAULTS.windupScale)), .5, 3),
-    cooldownScale:clamp(finite(overrides.cooldownScale, loadNumber('cooldownScale', DEFAULTS.cooldownScale)), .05, 1.5),
-    recoveryScale:clamp(finite(overrides.recoveryScale, loadNumber('recoveryScale', DEFAULTS.recoveryScale)), .1, 2),
+    cooldownScale:clamp(finite(overrides.cooldownScale, loadNumber('cooldownScale', DEFAULTS.cooldownScale)), 0, 1.5),
+    recoveryScale:clamp(finite(overrides.recoveryScale, loadNumber('recoveryScale', DEFAULTS.recoveryScale)), .05, 2),
     pursuitScale:clamp(finite(overrides.pursuitScale, loadNumber('pursuitScale', DEFAULTS.pursuitScale)), .5, 2.5),
   };
 }
@@ -217,12 +223,51 @@ function installDodgeTouchButton() {
     event.preventDefault();
     button.classList.add('held');
     globalThis.dispatchEvent?.(new CustomEvent('stone:dodge-request', { detail:{ source:'touch' } }));
-    globalThis.dispatchEvent?.(new KeyboardEvent('keydown', { key:'k', bubbles:true }));
+    if (typeof globalThis.__arena?.triggerDodge === 'function') globalThis.__arena.triggerDodge();
+    else globalThis.dispatchEvent?.(new KeyboardEvent('keydown', { key:'k', bubbles:true }));
   });
   for (const eventName of ['pointerup','pointercancel','pointerleave']) {
     button.addEventListener(eventName, () => button.classList.remove('held'));
   }
   row.insertBefore(button, row.firstChild);
+}
+
+function installDodgeDisplacement() {
+  if (typeof requestAnimationFrame !== 'function' || globalThis.__pressureLabDodgeInstalled) return;
+  globalThis.__pressureLabDodgeInstalled = true;
+
+  let active = false;
+  let lastProgress = 0;
+  let lastT = -1;
+
+  const tick = () => {
+    const handle = globalThis.__arena;
+    const dodge = handle?.arena?.dodge;
+    const actorPos = handle?.actorPos;
+    if (dodge && actorPos && dodge.t >= 0) {
+      if (!active || dodge.t < lastT) {
+        active = true;
+        lastProgress = 0;
+      }
+      const progress = 1 - Math.pow(1 - clamp(dodge.t / DODGE.duration, 0, 1), 3);
+      const extra = Math.max(0, progress - lastProgress) * DODGE.extraDistance;
+      if (extra > 0) {
+        const start = { x:actorPos.x, z:actorPos.y };
+        const delta = { x:finite(dodge.dirX, 0) * extra, z:finite(dodge.dirZ, 0) * extra };
+        const segments = handle.mazeWorld?.getCollisionSegments?.() || [];
+        const resolved = resolveCircleMovement(start, delta, DODGE.playerRadius, segments);
+        actorPos.set(resolved.x, resolved.z);
+      }
+      lastProgress = progress;
+      lastT = dodge.t;
+    } else {
+      active = false;
+      lastProgress = 0;
+      lastT = -1;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 function addSlider(container, label, config, settings, onChange) {
@@ -256,6 +301,7 @@ function addSlider(container, label, config, settings, onChange) {
 function installControls(api, labState) {
   if (typeof document === 'undefined') return;
   installDodgeTouchButton();
+  installDodgeDisplacement();
 
   const container = document.getElementById('dirSliders');
   if (container && !document.getElementById('pressureLabHeader')) {
@@ -265,8 +311,8 @@ function installControls(api, labState) {
     header.textContent = 'AVALANCHE / REACTION TEST';
     container.appendChild(header);
     addSlider(container, 'ENEMY WINDUP', {key:'windupScale',min:.5,max:3,step:.05,decimals:2}, labState.settings);
-    addSlider(container, 'AVALANCHE COOLDOWN', {key:'cooldownScale',min:.05,max:1.5,step:.05,decimals:2}, labState.settings);
-    addSlider(container, 'AVALANCHE RECOVERY', {key:'recoveryScale',min:.1,max:2,step:.05,decimals:2}, labState.settings);
+    addSlider(container, 'AVALANCHE COOLDOWN', {key:'cooldownScale',min:0,max:1.5,step:.05,decimals:2}, labState.settings);
+    addSlider(container, 'AVALANCHE RECOVERY', {key:'recoveryScale',min:.05,max:2,step:.05,decimals:2}, labState.settings);
     addSlider(container, 'AVALANCHE PURSUIT', {key:'pursuitScale',min:.5,max:2.5,step:.05,decimals:2}, labState.settings);
   }
 
@@ -304,7 +350,7 @@ function applyAttackTimings(enemy, attack, settings, avalanche) {
   enemy._pressureLabWindupAppliedAt = nowMs();
   if (avalanche) {
     const baseRecovery = Math.max(.01, finite(enemy.recovery, finite(attack.recovery, .1)));
-    enemy.recovery = Math.max(.04, baseRecovery * settings.recoveryScale);
+    enemy.recovery = Math.max(.025, baseRecovery * settings.recoveryScale);
   }
 }
 
@@ -328,10 +374,11 @@ function patchDirector(system, key, labState) {
 
   director.setMode = mode => {
     avalanche = mode === AVALANCHE_MODE_ID;
-    if (avalanche) {
-      for (const enemy of system.enemies || []) director.releaseAllForEnemy?.(enemy);
-      return base.setMode('chaos');
+    for (const enemy of system.enemies || []) {
+      delete enemy._avalancheBaseSpeed;
+      if (avalanche) director.releaseAllForEnemy?.(enemy);
     }
+    if (avalanche) return base.setMode('chaos');
     return base.setMode(mode);
   };
   director.getMode = () => avalanche ? AVALANCHE_MODE_ID : base.getMode();
@@ -348,22 +395,26 @@ function patchDirector(system, key, labState) {
       enemy.directEngaged = true;
       enemy.directEngageReadyAt = 0;
       enemy.directEngageCooldownCap = 0;
-      enemy.attackAlign = Math.PI;
+      // attackAlign is a normalized facing-dot threshold, not radians. The former
+      // Math.PI value made attacks impossible because a dot product never reaches 3.14.
+      enemy.attackAlign = 0;
+      enemy.cooldown = 0;
       if (enemy.gesture === 'rally') {
         enemy.gesture = null;
         enemy.gestureTime = 0;
       }
-      if (finite(enemy.cooldown, 0) > 0) {
-        const baseCooldown = Math.max(.04, finite(enemy.attack?.cooldown, enemy.cooldown));
-        enemy.cooldown = Math.min(enemy.cooldown, baseCooldown * labState.settings.cooldownScale);
+      if (!Number.isFinite(enemy._avalancheBaseSpeed)) {
+        enemy._avalancheBaseSpeed = finite(enemy._pressureBaseSpeed, finite(enemy.speed, 0));
       }
-      if (Number.isFinite(enemy.speed)) enemy.speed *= labState.settings.pursuitScale;
+      if (Number.isFinite(enemy.speed)) {
+        enemy.speed = Math.max(enemy.speed, enemy._avalancheBaseSpeed * labState.settings.pursuitScale);
+      }
     }
   };
 
-  director.canGrant = (enemy, attack, context={}) => {
+  director.canGrant = (enemy, attack) => {
     if (avalanche) return liveEnemy(enemy) && !!attack && finite(enemy.stunned, 0) <= 0;
-    return base.canGrant(enemy, attack, context);
+    return base.canGrant(enemy, attack);
   };
 
   director.grant = (enemy, attack) => {
@@ -395,7 +446,7 @@ function patchDirector(system, key, labState) {
   if (system.setDirectorMode) system.setDirectorMode = mode => director.setMode(mode);
 }
 
-function patchDamage(system, labState) {
+function patchDamage(system) {
   if (!system?.damageEnemy || system._pressureLabDamagePatched) return;
   system._pressureLabDamagePatched = true;
   const baseDamage = system.damageEnemy.bind(system);
@@ -433,7 +484,7 @@ function patchSystem(system, key, labState) {
   if (!system || system._pressureLabPatched) return;
   system._pressureLabPatched = true;
   patchDirector(system, key, labState);
-  patchDamage(system, labState);
+  patchDamage(system);
 
   const baseUpdate = system.update.bind(system);
   system.update = (dt, player) => {
@@ -455,9 +506,12 @@ function patchSystem(system, key, labState) {
       if (previous.state !== 'windup' && enemy.state === 'windup'
           && nowMs() - finite(enemy._pressureLabWindupAppliedAt, -Infinity) > 50) {
         applyAttackTimings(enemy, enemy.attack, labState.settings, avalanche);
+        labState.attackStarts.push({ at:nowMs(), key, kind:enemy.attack?.kind || 'unknown' });
       }
-      if (avalanche && previous.state === 'recovery' && enemy.state === 'idle' && enemy.cooldown > 0) {
-        enemy.cooldown = Math.max(.02, enemy.cooldown * labState.settings.cooldownScale);
+      if (avalanche) {
+        // No post-attack waiting. As soon as authored recovery finishes, the enemy
+        // is eligible to start its next windup on the following simulation step.
+        enemy.cooldown = 0;
       }
     }
 
@@ -521,17 +575,17 @@ export function installEnemyPressureLab({ api, systemsByKey, getVisibleSystems }
     return labState.settings.windupScale;
   };
   api.setAvalancheCooldownScale = value => {
-    labState.settings.cooldownScale = clamp(finite(value, .2), .05, 1.5);
+    labState.settings.cooldownScale = clamp(finite(value, 0), 0, 1.5);
     saveNumber('cooldownScale', labState.settings.cooldownScale);
     return labState.settings.cooldownScale;
   };
   api.setAvalancheRecoveryScale = value => {
-    labState.settings.recoveryScale = clamp(finite(value, .55), .1, 2);
+    labState.settings.recoveryScale = clamp(finite(value, DEFAULTS.recoveryScale), .05, 2);
     saveNumber('recoveryScale', labState.settings.recoveryScale);
     return labState.settings.recoveryScale;
   };
   api.setAvalanchePursuitScale = value => {
-    labState.settings.pursuitScale = clamp(finite(value, 1.4), .5, 2.5);
+    labState.settings.pursuitScale = clamp(finite(value, DEFAULTS.pursuitScale), .5, 2.5);
     saveNumber('pursuitScale', labState.settings.pursuitScale);
     return labState.settings.pursuitScale;
   };
