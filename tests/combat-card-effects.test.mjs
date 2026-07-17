@@ -51,7 +51,7 @@ assert.notEqual(finalExecution.hitTargets,nextExecution.hitTargets);
 assert.notEqual(finalExecution.bingBongPrimaries,nextExecution.bingBongPrimaries);
 
 // Candidate selection reproduces the collision loop's highest-damage contact
-// from the distances captured during that exact pass.
+// from distances captured during that exact pass.
 const enemy={radius:1,collisionScale:1};
 const enemySystem={heightScale:1};
 const shaft={id:'spearShaft',type:'blunt',radius:.1,damage:8};
@@ -61,8 +61,9 @@ const selected=selectCapturedHitCandidate({
   enemy,enemySystem,weaponId:'mace',weaponDef:{},attackKey:'horizontal5',attackGroup:'horizontal',swingDamageMult:1,
 });
 assert.equal(selected.zone.id,'maceHead');
+assert.equal(selected.zone,head);
 
 assert.equal(pointInRadius({originX:3,originZ:4,targetX:9,targetZ:12,range:10}),true);
 assert.equal(pointInRadius({originX:3,originZ:4,targetX:9.1,targetZ:12.1,range:10}),false);
 
-console.log('combat-card-effects tests passed');
+console.log('central combat effect runtime tests passed');
