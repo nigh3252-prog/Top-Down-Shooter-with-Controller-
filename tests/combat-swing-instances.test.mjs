@@ -12,11 +12,13 @@ const authored={
   __bloodSlashBoosted:true,
   __bloodSlashSpent:true,
   __bingBongPrimaries:new Set([{id:'old'}]),
+  __combatSwingId:99,
 };
 clearTransientAttackState(authored);
 assert.equal(authored.__bloodSlashBoosted,undefined);
 assert.equal(authored.__bloodSlashSpent,undefined);
 assert.equal(authored.__bingBongPrimaries,undefined);
+assert.equal(authored.__combatSwingId,undefined);
 
 const direct=createCombatSwingInstance(authored,{swingId:4,boosted:true,spent:true});
 assert.notEqual(direct,authored);
@@ -72,6 +74,7 @@ assert.equal(effects.state.boostedAttack,null);
 assert.equal(runtime.isCurrentBoosted(),false);
 assert.equal(authored.__bloodSlashBoosted,undefined);
 assert.equal(authored.__bingBongPrimaries,undefined);
+assert.equal(authored.__combatSwingId,undefined);
 
 PC.combatState.attack=null;
 runtime.update();
