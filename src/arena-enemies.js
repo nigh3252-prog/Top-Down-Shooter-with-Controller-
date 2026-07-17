@@ -8,8 +8,8 @@ export { ARENA_ENEMY_ARCHETYPES };
 function enemyLabParentDocument(){
   try{
     if(window.parent===window||window.frameElement?.id!=='arenaFrame')return null;
-    const parentDocument=window.parent.document;
-    return parentDocument.getElementById('labBtn')?parentDocument:null;
+    const parentPath=window.parent.location.pathname||'';
+    return /(?:^|\/)enemy-lab\.html$/.test(parentPath)?window.parent.document:null;
   }catch{
     return null;
   }
