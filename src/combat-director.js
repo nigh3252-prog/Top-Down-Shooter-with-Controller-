@@ -25,15 +25,18 @@ export const DEFAULT_DIRECTOR_SETTINGS = {
   directEngageDelay:0
 };
 
+// enemies.js multiplies stop distance by as much as 2.5 before deciding whether
+// to keep approaching. Keep these targets below the physical collision ring so
+// enemies continue closing until spacing, rather than idling just outside their
+// attack trigger. This gives every attacker a comfortable range margin.
 const ATTACK_ALL_STOP_DISTANCE = {
-  chaser:.72,
-  brute:.88,
-  maceGoblin:.74,
-  spearGoblin:1.30
+  chaser:.45,
+  brute:.58,
+  maceGoblin:.45,
+  spearGoblin:.55
 };
 
 const live = enemy => enemy && enemy.hp > 0 && enemy.state !== 'dead';
-const ranged = enemy => !!enemy?.thrower || enemy?.attackId === 'rockThrow';
 
 export function createCombatDirector(options = {}){
   const settings = { ...DEFAULT_DIRECTOR_SETTINGS, ...options, mode:'attackAll' };
