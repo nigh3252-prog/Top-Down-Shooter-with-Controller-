@@ -132,9 +132,13 @@ direct.api.setEnemyWindupScale(2);
 direct.api.setAvalancheRecoveryScale(.5);
 direct.system.setDirectorMode(AVALANCHE_MODE_ID);
 assert.equal(direct.director.getMode(), AVALANCHE_MODE_ID);
+direct.target.cooldown = 2;
+direct.target.attackAlign = .92;
 direct.director.update(.016, { enemies:direct.system.enemies, player:{x:0,z:0} });
 assert.equal(direct.target.approachPermit, true, 'Avalanche permits every live enemy to approach');
 assert.equal(direct.target.directEngaged, true, 'Avalanche marks every live enemy as actively engaging');
+assert.equal(direct.target.cooldown, 0, 'Avalanche removes post-attack cooldown downtime');
+assert.equal(direct.target.attackAlign, 0, 'Avalanche uses a permissive normalized facing threshold');
 assert.equal(direct.director.hasApproachPermit(direct.target), true);
 assert.equal(direct.director.canGrant(direct.target, { kind:'melee' }), true);
 
