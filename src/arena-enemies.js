@@ -11,6 +11,7 @@ import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
 import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
+import { installEnemyPressureLab } from './enemy-pressure-lab.js';
 
 export { ARENA_ENEMY_ARCHETYPES } from './arena-enemies-original.js';
 
@@ -248,6 +249,8 @@ export function createArenaEnemySystem(options={}){
     get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},
     originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
+
+  installEnemyPressureLab({ api, systemsByKey, getVisibleSystems:visibleSystems });
   setArenaEnemySource(api);
   return api;
 }
