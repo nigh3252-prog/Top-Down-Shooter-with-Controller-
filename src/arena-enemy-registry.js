@@ -8,6 +8,11 @@ const registry = {
   registeredAt: 0,
 };
 
+function sourceEnemies() {
+  const enemies = Array.isArray(registry.source) ? registry.source : registry.source?.enemies;
+  return Array.isArray(enemies) ? enemies : null;
+}
+
 export function setArenaEnemySource(source) {
   const enemies = Array.isArray(source) ? source : source?.enemies;
   if (!Array.isArray(enemies)) {
@@ -28,14 +33,15 @@ export function installArenaEnemyRegistryProbe() {
 }
 
 export function getArenaEnemies() {
-  return Array.isArray(registry.enemies) ? registry.enemies : [];
+  return sourceEnemies() || [];
 }
 
 export function requireArenaEnemies() {
-  if (!Array.isArray(registry.enemies)) {
+  const enemies = sourceEnemies();
+  if (!enemies) {
     throw new Error('[pilebunker-effect] Arena enemy source was not registered.');
   }
-  return registry.enemies;
+  return enemies;
 }
 
 export function getArenaEnemySystem() {
@@ -102,9 +108,10 @@ export function damageRegisteredArenaEnemy(enemy, {
 }
 
 export function getArenaEnemyRegistryStatus() {
+  const enemies = getArenaEnemies();
   return {
-    registered:Array.isArray(registry.enemies),
-    enemyCount:Array.isArray(registry.enemies) ? registry.enemies.length : 0,
+    registered:!!sourceEnemies(),
+    enemyCount:enemies.length,
     hasDamageApi:typeof registry.source?.damageEnemy === 'function',
     hasRigidLaunchApi:typeof registry.source?.launchRigidBody === 'function',
     registeredAt:registry.registeredAt,
