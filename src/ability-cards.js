@@ -1,3 +1,4 @@
+import './run-draft-compact-styles.js';
 import { POW_BUNKER_CARD } from './powbunker-card.js';
 
 // The single-character prototype uses one unrestricted non-stance card pool.
