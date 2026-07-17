@@ -10,6 +10,7 @@ import {
 } from './arena-enemies-base.js';
 import { installRigidGoblinBodies } from './rigid-goblin-bodies.js';
 import { installOriginalEnemyCombatRefactor } from './original-enemy-combat-refactor.js';
+import { scheduleAggressionPresetControls } from './aggression-preset-controls.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
@@ -24,5 +25,9 @@ export function createArenaEnemySystem(options={}){
   // before the first animation frame, making this coordinator the final authority.
   if(typeof queueMicrotask==='function') queueMicrotask(installCombatBrain);
   else Promise.resolve().then(installCombatBrain);
+
+  // The Combat Arena builds its base SIM sliders later in the same module turn.
+  // Install the preset UI after those and the pressure-lab sliders both exist.
+  scheduleAggressionPresetControls();
   return system;
 }
