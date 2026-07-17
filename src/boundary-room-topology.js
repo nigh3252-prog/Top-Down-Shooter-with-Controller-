@@ -5,7 +5,7 @@ import {
   createSeededRandom,
 } from './hex-maze.js';
 
-const PASS_ID = 'boundary-half-internal-walls-v1';
+const PASS_ID = 'boundary-half-internal-walls-gapped-v2';
 
 function shuffled(values, random){
   const result = [...values];
@@ -35,40 +35,51 @@ export function closedInternalEdgesForRoom(maze, roomId){
 }
 
 /**
- * Opens floor(50%) of the closed same-room edges in every room. The maze is
- * mutated intentionally so the renderer, collision, raycasts, and cell
- * pathfinder all use the same new openings. Room boundaries and doors are not
- * candidates because their two cells have different room ids.
+ * Selects floor(50%) of the closed same-room walls for a centered navigation
+ * gap. The selected edge is opened in the cell graph so enemy pathfinding can
+ * use that passage, while boundary-room-wall-gaps.js restores two solid wall
+ * segments on either side of the opening for rendering and collision.
+ *
+ * Cross-room boundaries, doors, and exterior perimeter walls are never
+ * candidates because both cells must belong to the same room.
  */
-export function openHalfInternalWalls(maze){
+export function replaceHalfInternalWallsWithGaps(maze){
   if(!maze?.rooms || !maze?.cells || !maze?.openEdges){
-    return { pass:PASS_ID, opened:new Set(), byRoom:new Map() };
+    return { pass:PASS_ID, gapped:new Set(), opened:new Set(), byRoom:new Map() };
   }
   if(maze.boundaryInteriorWallPass?.pass === PASS_ID) return maze.boundaryInteriorWallPass;
 
-  const opened = new Set();
+  const gapped = new Set();
   const byRoom = new Map();
   for(const room of maze.rooms){
     const candidates = closedInternalEdgesForRoom(maze, room.id);
     const random = createSeededRandom(`${maze.seed}:${room.id}:${PASS_ID}`);
     const selected = shuffled(candidates, random).slice(0, Math.floor(candidates.length * .5));
     for(const edge of selected){
+      // Open only the abstract cell connection. The visual/collision pass adds
+      // the two remaining wall pieces back around a real traversable gap.
       maze.openEdges.add(edge);
-      opened.add(edge);
+      gapped.add(edge);
     }
     byRoom.set(room.id, Object.freeze({
       originalClosed:candidates.length,
-      removed:selected.length,
-      remaining:candidates.length - selected.length,
+      gapped:selected.length,
+      solid:candidates.length - selected.length,
       edges:Object.freeze([...selected]),
     }));
   }
 
-  const pass = { pass:PASS_ID, opened, byRoom };
+  // `opened` remains as a compatibility alias for earlier branch code/tests.
+  const pass = { pass:PASS_ID, gapped, opened:gapped, byRoom };
   Object.defineProperty(maze, 'boundaryInteriorWallPass', {
     value:pass,
     enumerable:false,
     configurable:true,
   });
   return pass;
+}
+
+/** @deprecated Use replaceHalfInternalWallsWithGaps. */
+export function openHalfInternalWalls(maze){
+  return replaceHalfInternalWallsWithGaps(maze);
 }
