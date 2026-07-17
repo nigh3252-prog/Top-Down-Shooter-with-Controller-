@@ -1,9 +1,15 @@
 // Merge-forward integration wrapper. The complete current-main combat module
 // keeps Pilebunker defaults, vertical melee aim, and the approved weapon core;
 // this layer adds the centralized Blood Slash / Bing Bong effect runtime.
+//
+// The pinned module has its own relative-import module graph, including its own
+// arena-enemy registry instance. Bridge the local router into that registry so
+// Pilebunker sees and damages the same enemies rendered by this branch.
 
 import { installPlayerCombat as installMainPlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/player-combat.js';
+import { setArenaEnemySource as setPinnedArenaEnemySource } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/arena-enemy-registry.js';
 import { getArenaEnemySystem } from './arena-enemy-registry.js';
+import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
 
 export function installPlayerCombat(api){
@@ -15,6 +21,10 @@ export function installPlayerCombat(api){
   const playerWorld=new THREE.Vector3();
   const playerForward=new THREE.Vector3(0,0,1);
   const identityQ=new THREE.Quaternion();
+  const enemyRegistryBridge=createArenaEnemyRegistryBridge({
+    getLocalSystem:getArenaEnemySystem,
+    setPinnedSource:setPinnedArenaEnemySource,
+  });
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -34,13 +44,20 @@ export function installPlayerCombat(api){
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
 
+  // Update syncing normally establishes the bridge before the player can use a
+  // card. The required play-time check prevents a visual-only Pilebunker if the
+  // arena registry ever changes or fails to initialize in a future merge.
+  window.addEventListener('powbunker:play',()=>enemyRegistryBridge.sync({required:true}));
+
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
+    enemyRegistryBridge.sync();
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
     return out;
   };
 
+  Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
