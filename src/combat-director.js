@@ -1,7 +1,7 @@
 // Experimental attack-all compatibility layer.
 //
 // This branch intentionally removes combat-director decision making from the
-// enemy attack path. The module keeps the old public API so the arena/debug UI
+// enemy attack path. The module keeps the old public API so older arena systems
 // can load unchanged, but it never allocates attack tokens, limits attackers,
 // sequences impacts, assigns approach slots, or chooses a featured enemy.
 
@@ -25,18 +25,35 @@ export const DEFAULT_DIRECTOR_SETTINGS = {
   directEngageDelay:0
 };
 
-// enemies.js multiplies stop distance by as much as 2.5 before deciding whether
-// to keep approaching. Keep these targets below the physical collision ring so
-// enemies continue closing until spacing, rather than idling just outside their
-// attack trigger. This gives every attacker a comfortable range margin.
-const ATTACK_ALL_STOP_DISTANCE = {
-  chaser:.45,
-  brute:.58,
-  maceGoblin:.45,
-  spearGoblin:.55
-};
+// Pressure is no longer a user-tuned system on this branch. Remove those rows
+// after combat-arena creates them while retaining population, speed, health,
+// and physical-size controls.
+const REMOVED_PRESSURE_SLIDERS = ['PRESSURE BUDGET', 'AGGRESSION', 'IDLE RANGE'];
+function removePressureSliders(){
+  if(typeof document === 'undefined') return;
+  const box = document.getElementById('dirSliders');
+  if(!box) return;
+  for(const row of [...box.querySelectorAll('.srow')]){
+    const text = row.querySelector('.slabel')?.textContent?.trim() || '';
+    if(REMOVED_PRESSURE_SLIDERS.some(label => text.startsWith(label))) row.remove();
+  }
+}
+if(typeof document !== 'undefined'){
+  // Imported modules execute before combat-arena's inline module body. Waiting a
+  // task lets the arena finish constructing its slider rows before we remove them.
+  setTimeout(removePressureSliders, 0);
+  setTimeout(removePressureSliders, 100);
+}
+
+// Keep melee enemies pressing into their physical collision ring. Ranged rock
+// throwers stop just outside their point-blank exclusion so they can still fire.
+const CONTACT_HOLD_DISTANCE = 0;
+const RANGED_CLOSE_DISTANCE = 5.6;
+const EXTRA_COOLDOWN_DRAIN = 3;
+const INWARD_SPEED_MULTIPLIER = 1.35;
 
 const live = enemy => enemy && enemy.hp > 0 && enemy.state !== 'dead';
+const ranged = enemy => !!enemy?.thrower || enemy?.attackId === 'rockThrow';
 
 export function createCombatDirector(options = {}){
   const settings = { ...DEFAULT_DIRECTOR_SETTINGS, ...options, mode:'attackAll' };
@@ -64,13 +81,44 @@ export function createCombatDirector(options = {}){
     if(enemy.gesture === 'rally') enemy.gesture = null;
   }
 
-  function applyAttackAllMovement(enemy){
+  function applyAttackAllProfile(enemy, dt, player){
     if(!live(enemy)) return;
     clearEnemyDirectorState(enemy);
-    enemy.attackAlign = Math.max(1, Number(enemy.attackAlign) || 0);
-    if(!Number.isFinite(enemy._attackAllBaseStop)) enemy._attackAllBaseStop = Number(enemy.stop) || 1;
-    const targetStop = ATTACK_ALL_STOP_DISTANCE[enemy.kind];
-    if(Number.isFinite(targetStop)) enemy.stop = Math.min(enemy._attackAllBaseStop, targetStop);
+
+    // Any enemy whose personal attack is ready may begin it. Facing should never
+    // become a second hidden permission gate in the attack-all experiment.
+    enemy.attackAlign = Math.PI;
+    enemy.facingBias = 0;
+
+    // Fixed cadence rather than an aggression slider: normal animation recovery
+    // remains readable, but personal post-attack cooldowns drain four times as fast
+    // once the enemy system's own one-times drain is included.
+    if(Number.isFinite(enemy.cooldown) && enemy.cooldown > 0){
+      enemy.cooldown = Math.max(0, enemy.cooldown - dt * EXTRA_COOLDOWN_DRAIN);
+    }
+
+    // Normal melee goblins used a hold distance derived from their longest move,
+    // which could leave the next shorter move out of range. Aim inside the collision
+    // ring so body collision—not an orbit radius—decides how close they get.
+    if(!ranged(enemy)){
+      enemy.stop = CONTACT_HOLD_DISTANCE;
+      enemy.holdDist = CONTACT_HOLD_DISTANCE;
+      if(Number.isFinite(enemy.preferredRange)) enemy.preferredRange = CONTACT_HOLD_DISTANCE;
+    }
+
+    if(!player || enemy.state !== 'idle' || enemy.stunned > 0) return;
+    const dx = (player.x ?? 0) - enemy.x;
+    const dz = (player.z ?? 0) - enemy.z;
+    const distance = Math.hypot(dx, dz);
+    const targetDistance = ranged(enemy) ? RANGED_CLOSE_DISTANCE : CONTACT_HOLD_DISTANCE;
+    if(distance <= targetDistance + .05 || distance <= 1e-5) return;
+
+    // Seed a strong inward velocity before the enemy's own steering step. Its normal
+    // movement and wall collision still resolve the final position, but orbit logic
+    // can no longer leave it parked just outside attack range.
+    const speed = Math.max(2.5, Number(enemy.speed) || 0) * INWARD_SPEED_MULTIPLIER;
+    enemy.vx = dx / distance * speed;
+    enemy.vz = dz / distance * speed;
   }
 
   function reset(){
@@ -86,9 +134,10 @@ export function createCombatDirector(options = {}){
   function nextMode(){ return 'attackAll'; }
 
   function update(dt, context = {}){
-    state.time += Math.max(0, Number(dt) || 0);
+    const step = Math.max(0, Number(dt) || 0);
+    state.time += step;
     state.grantTimes = state.grantTimes.filter(entry => state.time - entry.time <= 10);
-    for(const enemy of context.enemies || []) applyAttackAllMovement(enemy);
+    for(const enemy of context.enemies || []) applyAttackAllProfile(enemy, step, context.player);
   }
 
   function canGrant(enemy, attack){
@@ -133,7 +182,7 @@ export function createCombatDirector(options = {}){
       activeRally:null,
       activeCost:0,
       cooldownPressure:0,
-      pressureBudget:settings.pressureBudget,
+      pressureBudget:'unlimited',
       attacksStarted10s:state.grantTimes.length,
       meleeStarted10s:state.grantTimes.filter(entry => entry.kind !== 'ranged').length,
       rangedStarted10s:state.grantTimes.filter(entry => entry.kind === 'ranged').length,
