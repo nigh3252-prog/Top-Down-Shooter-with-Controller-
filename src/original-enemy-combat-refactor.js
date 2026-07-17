@@ -268,7 +268,6 @@ export function installOriginalEnemyCombatRefactor(system,{navigation=null}={}){
 
   system.update=function updateWithOriginalCombatBrain(dt,player={x:0,z:0}){
     const starts=new Map(system.enemies.map(enemy=>[enemy,{x:enemy.x,z:enemy.z,state:enemy.state}]));
-    coordinator.update(dt,{enemies:system.enemies,player});
     baseUpdate(dt,player);
     for(const enemy of system.enemies){
       if(!live(enemy)) continue;
