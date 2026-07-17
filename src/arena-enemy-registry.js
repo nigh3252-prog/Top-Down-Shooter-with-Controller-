@@ -13,6 +13,23 @@ function sourceEnemies() {
   return Array.isArray(enemies) ? enemies : null;
 }
 
+function installAvalancheCycleBridge(source) {
+  const systems = [source?.originalSystem, source?.flareSystem, source?.hadesSystem].filter(Boolean);
+  for (const system of systems) {
+    const director = system.director;
+    if (!director?.onWaveClear || director._avalancheCycleBridgeInstalled) continue;
+    director._avalancheCycleBridgeInstalled = true;
+    const baseOnWaveClear = director.onWaveClear.bind(director);
+    director.onWaveClear = (...args) => {
+      const result = baseOnWaveClear(...args);
+      // Cycle All advances inside the original director closure. Re-select through
+      // the public wrapper so its Avalanche-specific overrides become active too.
+      if (director.getMode?.() === 'avalanche') director.setMode?.('avalanche');
+      return director.getMode?.() ?? result;
+    };
+  }
+}
+
 export function setArenaEnemySource(source) {
   const enemies = Array.isArray(source) ? source : source?.enemies;
   if (!Array.isArray(enemies)) {
@@ -24,6 +41,7 @@ export function setArenaEnemySource(source) {
   registry.enemies = enemies;
   registry.source = source;
   registry.registeredAt = performance.now?.() ?? Date.now();
+  installAvalancheCycleBridge(source);
   return enemies;
 }
 
