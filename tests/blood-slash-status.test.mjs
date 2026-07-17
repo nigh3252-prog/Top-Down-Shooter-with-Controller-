@@ -5,7 +5,7 @@ import {
   createBleedPool,
   releaseBleedByMovement,
   stackBleed,
-} from '../src/blood-slash-status.js';
+} from '../src/combat-card-effects.js';
 
 assert.equal(MOVEMENT_BLEED.duration,5);
 
@@ -37,4 +37,4 @@ assert.equal(expiring.storedDamage,40);
 assert.equal(advanceBleed(expiring,.02),true);
 assert.equal(expiring.storedDamage,0);
 
-console.log('blood-slash-status tests passed');
+console.log('central movement bleed tests passed');
