@@ -8,6 +8,7 @@ import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker
 import { installArenaEnemyRegistryProbe, getArenaEnemies, getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
+import { installCombatSwingInstances } from './combat-swing-instances.js';
 import { installBloodSlashStatusV2 } from './blood-slash-status.js';
 
 export function installPlayerCombat(api){
@@ -116,6 +117,7 @@ export function installPlayerCombat(api){
     getStance:()=>window.__arena?.arena?.stance||null,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
+  const combatSwingInstances=installCombatSwingInstances({PC,hooks:api.hooks,cardEffects});
   const bloodSlashStatus=installBloodSlashStatusV2({THREE,scene:api.scene,PC,cardEffects,getEnemySystem:getArenaEnemySystem});
 
   function hitArenaEnemy(enemy,options={}){
@@ -156,6 +158,7 @@ export function installPlayerCombat(api){
     if(ev.slam){state.hitStop=Math.max(state.hitStop,.07*1.35);state.wobble.vel+=(Math.random()<.5?-1:1)*7.4;}
     if(ev.hit){const result=combatEffect.impact(ev.hit),landed=!!result.landed;ability.impactFeedback(ev.hit,landed);if(landed){state.hitStop=Math.max(state.hitStop,.115);state.wobble.vel+=(Math.random()<.5?-1:1)*10.5;}}
     if(ev.finished){combatEffect.finish();endGuidedAim();if(PC.weaponRoot)PC.weaponRoot.visible=true;state.attack=null;state.attackKey=null;state.attackGroup='vertical';state.t=0;state.fired=false;state.pending=null;state.pendingGroup=null;state.pendingLabEvent=null;window.dispatchEvent(new CustomEvent('powbunker:finished'));}
+    combatSwingInstances.update();
     cardEffects.update(dt,now);
     bloodSlashStatus.update(dt,now);
     return out;
@@ -164,6 +167,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'powBunkerAbility',{value:ability,enumerable:true});
   Object.defineProperty(PC,'pilebunkerCombatEffect',{value:combatEffect,enumerable:true});
   Object.defineProperty(PC,'combatCardEffects',{value:cardEffects,enumerable:true});
+  Object.defineProperty(PC,'combatSwingInstances',{value:combatSwingInstances,enumerable:true});
   Object.defineProperty(PC,'bloodSlashStatus',{value:bloodSlashStatus,enumerable:true});
   return PC;
 }
