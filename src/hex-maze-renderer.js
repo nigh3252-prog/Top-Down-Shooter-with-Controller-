@@ -5,7 +5,8 @@ import { configuredHexSize } from './maze-runtime-settings.js';
 import { applyAkaiMazeStyle, installAkaiInterfaceStyle } from './akai-visual-style.js';
 import { installAkaiCompactInterface } from './akai-compact-interface.js';
 import { applyBoundaryDistrictExtensions } from './boundary-districts.js';
-import { openHalfInternalWalls } from './boundary-room-topology.js';
+import { replaceHalfInternalWallsWithGaps } from './boundary-room-topology.js';
+import { applyBoundaryRoomWallGaps } from './boundary-room-wall-gaps.js';
 import { applyBoundaryRoomFloor } from './boundary-room-floor.js';
 import { applyBoundaryRoomProps } from './boundary-room-props.js';
 
@@ -17,8 +18,9 @@ export function createMazeWorld(options = {}){
     ...options,
     hexSize:configuredHexSize(options.hexSize ?? 2.6),
   };
-  openHalfInternalWalls(configuredOptions.maze);
+  replaceHalfInternalWallsWithGaps(configuredOptions.maze);
   const world = createBaseMazeWorld(configuredOptions);
+  applyBoundaryRoomWallGaps({ ...configuredOptions, world });
   applyAkaiMazeStyle({ ...configuredOptions, world });
   applyBoundaryDistrictExtensions({ ...configuredOptions, world });
   applyBoundaryRoomFloor({ ...configuredOptions, world });
