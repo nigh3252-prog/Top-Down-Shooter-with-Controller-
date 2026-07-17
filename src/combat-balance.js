@@ -111,6 +111,16 @@ export const ATTACK_DAMAGE_MODIFIERS = {
   vertical16: 0.925
 };
 
+let lastCombatHitContext = null;
+
+function combatClock() {
+  return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+}
+
+export function getLastCombatHitContext() {
+  return lastCombatHitContext ? { ...lastCombatHitContext } : null;
+}
+
 function balanceConfigError(message, details = {}) {
   const detailText = Object.entries(details)
     .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
@@ -181,5 +191,13 @@ export function getWeaponDamageMultiplier({
   const attackMult = requireFiniteMultiplier('attack', attackKey, ATTACK_DAMAGE_MODIFIERS[attackKey], {
     knownAttacks: Object.keys(ATTACK_DAMAGE_MODIFIERS)
   });
+  lastCombatHitContext = {
+    at:combatClock(),
+    weaponId:resolvedWeaponId,
+    attackKey,
+    attackGroup,
+    hitType,
+    zoneId,
+  };
   return groupMult * typeMult * attackMult;
 }
