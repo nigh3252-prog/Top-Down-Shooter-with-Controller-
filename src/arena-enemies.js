@@ -3,7 +3,10 @@
 // so one encounter can contain enemies from multiple sources without merging
 // their individual combat implementations.
 
-import { createArenaEnemySystem as createOriginalArenaEnemySystem } from './arena-enemies-original.js';
+import {
+  ARENA_ENEMY_ARCHETYPES,
+  createArenaEnemySystem as createOriginalArenaEnemySystem,
+} from './arena-enemies-original.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 import { createFlareArenaEnemySystem } from './flare-arena-enemies.js';
 import { isFlareSpawnKind } from './flare-enemies.js';
@@ -12,13 +15,15 @@ import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 
-export { ARENA_ENEMY_ARCHETYPES } from './arena-enemies-original.js';
+export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES));
 
 export function createArenaEnemySystem(options={}){
   const externalEncounterCleared=options.onEncounterCleared;
   let combinedMode=false;
+  let labMode=false;
   let selectedSpawnKind='mixed';
   let activeKey='original';
   let active=null;
@@ -43,7 +48,7 @@ export function createArenaEnemySystem(options={}){
     if([...participatingKeys].every(participant=>clearedKeys.has(participant))){
       const clearedRoom=currentRoomId;
       currentRoomId=null;
-      externalEncounterCleared?.(clearedRoom);
+      if(!labMode)externalEncounterCleared?.(clearedRoom);
     }
   };
 
@@ -69,11 +74,13 @@ export function createArenaEnemySystem(options={}){
     clearedKeys.clear();
     hpSnapshots.clear();
     currentRoomId=null;
+    labMode=false;
   }
 
   function activateSingle(key,system){
     clearCombinedRuntime();
     combinedMode=false;
+    labMode=false;
     activeKey=key;
     active=system;
     system.group.visible=true;
@@ -83,6 +90,7 @@ export function createArenaEnemySystem(options={}){
   function activateCombined(){
     clearCombinedRuntime();
     combinedMode=true;
+    labMode=false;
     activeKey='original';
     active=original;
     selectedSpawnKind=ALL_ENEMIES_BUDGET_ID;
@@ -104,6 +112,7 @@ export function createArenaEnemySystem(options={}){
   }
 
   function startCombinedEncounter(roomId){
+    labMode=false;
     for(const system of systems){system.clearRoomRuntime?.();system.group.visible=false;}
     participatingKeys.clear();
     clearedKeys.clear();
@@ -134,7 +143,89 @@ export function createArenaEnemySystem(options={}){
     }
   }
 
+  function removeEnemyImmediately(system,enemy){
+    const index=system.enemies.indexOf(enemy);
+    if(index>=0)system.enemies.splice(index,1);
+    if(enemy?.root?.parent)enemy.root.parent.remove(enemy.root);
+  }
+
+  function retainOriginalGoblinKind(system,kind,count){
+    let retained=0;
+    for(const enemy of [...system.enemies]){
+      if(enemy.kind===kind&&retained<count){retained++;continue;}
+      removeEnemyImmediately(system,enemy);
+    }
+    return retained;
+  }
+
+  function normalizeLabGroups(groups=[]){
+    const normalized=[];
+    const claimedSystems=new Set();
+    for(const raw of groups){
+      const spawnKind=String(raw?.spawnKind||raw?.kind||'').trim();
+      if(!spawnKind)continue;
+      const [systemKey]=systemForKind(spawnKind);
+      if(claimedSystems.has(systemKey)){
+        return {ok:false,error:`Enemy Lab needs groups from different enemy systems; ${systemKey} was selected twice.`};
+      }
+      claimedSystems.add(systemKey);
+      normalized.push({
+        system:systemKey,
+        spawnKind,
+        count:clamp(Math.round(Number(raw?.count)||1),1,20),
+      });
+    }
+    if(!normalized.length)return {ok:false,error:'Enemy Lab scenario did not contain any valid enemy groups.'};
+    return {ok:true,groups:normalized};
+  }
+
+  function startLabScenario(roomId=-1,scenario={}){
+    const normalized=normalizeLabGroups(scenario.groups);
+    if(!normalized.ok)return normalized;
+
+    clearCombinedRuntime();
+    combinedMode=true;
+    labMode=true;
+    activeKey='original';
+    active=original;
+    globalPlayerHp=100;
+    combinedLastHit='';
+    combinedLastHitDir=null;
+    participatingKeys.clear();
+    clearedKeys.clear();
+    hpSnapshots.clear();
+    currentRoomId=roomId;
+    currentEncounterPlan={
+      mode:'enemy-lab',
+      label:scenario.label||'Enemy Lab Test',
+      groups:normalized.groups.map(group=>({...group})),
+    };
+
+    for(const groupPlan of normalized.groups){
+      const system=systemsByKey[groupPlan.system];
+      participatingKeys.add(groupPlan.system);
+      system.reset?.();
+      system.clearRoomRuntime?.();
+      system.group.visible=true;
+      system.setEncounterPlanningEnabled?.(false);
+
+      const originalGoblin=groupPlan.system==='original'&&ORIGINAL_GOBLIN_IDS.has(groupPlan.spawnKind);
+      system.setSpawnKind(originalGoblin?'goblins':groupPlan.spawnKind);
+      const spawnCount=originalGoblin
+        ? clamp(groupPlan.count*ORIGINAL_GOBLIN_IDS.size,1,20)
+        : groupPlan.count;
+      system.setWaveSize(spawnCount);
+      system.startRoomEncounter(roomId);
+      if(originalGoblin)retainOriginalGoblinKind(system,groupPlan.spawnKind,groupPlan.count);
+      hpSnapshots.set(system,system.playerHp);
+    }
+
+    selectedSpawnKind=normalized.groups[0].spawnKind;
+    return {ok:true,plan:currentEncounterPlan};
+  }
+
   function startRoomEncounter(roomId){
+    labMode=false;
     if(combinedMode)startCombinedEncounter(roomId);
     else active.startRoomEncounter(roomId);
   }
@@ -200,6 +291,7 @@ export function createArenaEnemySystem(options={}){
   }
 
   function reset(){
+    labMode=false;
     if(combinedMode){
       for(const system of systems){system.reset();system.group.visible=false;hpSnapshots.set(system,system.playerHp);}
       participatingKeys.clear();
@@ -228,7 +320,7 @@ export function createArenaEnemySystem(options={}){
     get enemies(){return visibleSystems().flatMap(system=>system.enemies);},
     get group(){return active.group;},
     get director(){return active.director;},
-    update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,clearRoomRuntime,setSpawnKind,
+    update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
     setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
     setCycleOnWaveClear:all('setCycleOnWaveClear'),setWaveSize,setSpeedScale:all('setSpeedScale'),
     setHeightScale:all('setHeightScale'),setHpScale:all('setHpScale'),setIdleRangeScale:all('setIdleRangeScale'),
@@ -246,8 +338,10 @@ export function createArenaEnemySystem(options={}){
     get queuedSpawnCount(){return visibleSystems().reduce((sum,system)=>sum+(system.queuedSpawnCount??0),0);},
     get telegraphCount(){return visibleSystems().reduce((sum,system)=>sum+(system.telegraphCount??0),0);},
     get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},
+    get labMode(){return labMode;},
     originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);
+  globalThis.__enemyLabEnemySystem=api;
   return api;
 }
