@@ -17,6 +17,20 @@ export { ARENA_ENEMY_ARCHETYPES } from './arena-enemies-original.js';
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
+function migrateRelentlessAvalancheDefaults(){
+  try{
+    const versionKey='arena.pressureLab.relentlessDefaults';
+    if(globalThis.localStorage?.getItem(versionKey)==='2')return;
+    // Preserve the player's windup choice, but clear the old high cooldown and
+    // recovery values that made the first Avalanche pass feel intermittent.
+    globalThis.localStorage?.setItem('arena.pressureLab.cooldownScale','0');
+    globalThis.localStorage?.setItem('arena.pressureLab.recoveryScale','.18');
+    globalThis.localStorage?.setItem(versionKey,'2');
+  }catch{
+    // localStorage is optional in tests and privacy-restricted browsers.
+  }
+}
+
 export function createArenaEnemySystem(options={}){
   const externalEncounterCleared=options.onEncounterCleared;
   let combinedMode=false;
@@ -246,10 +260,11 @@ export function createArenaEnemySystem(options={}){
     get currentEncounterPlan(){return combinedMode?currentEncounterPlan:(active.currentEncounterPlan??null);},
     get queuedSpawnCount(){return visibleSystems().reduce((sum,system)=>sum+(system.queuedSpawnCount??0),0);},
     get telegraphCount(){return visibleSystems().reduce((sum,system)=>sum+(system.telegraphCount??0),0);},
-    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},
+    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'original':'original';},
     originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
 
+  migrateRelentlessAvalancheDefaults();
   installEnemyPressureLab({ api, systemsByKey, getVisibleSystems:visibleSystems });
   setArenaEnemySource(api);
   return api;
