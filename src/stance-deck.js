@@ -3,14 +3,52 @@
 // same slot. When every card has been played (both slots empty, draw pile
 // dry) the discard instantly reshuffles into a fresh hand. A manual shuffle
 // tosses the current hand and takes a countdown before the new hand arrives.
-// Pure logic — no DOM, no stamina (the page owns resources).
 //
 // Ability and modifier cards return a proxy of the active stance after firing
 // their event. That preserves the stance/weapon while the existing discard,
-// draw, stamina-refill, announcement, and card-animation pipeline still runs.
+// draw, announcement, and card-animation pipeline still runs. The current
+// arena refills after every successful deck.play(), so non-stance cards restore
+// the pre-play stamina snapshot in their already-queued effect microtask.
 
 import { POW_BUNKER_CARD } from './powbunker-card.js';
 import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
+
+export function cardRestoresStamina(card) {
+  if (!card) return false;
+  if (typeof card.__restoresStamina === 'boolean') return card.__restoresStamina;
+  return card.type !== 'ability' && card.type !== 'modifier';
+}
+
+export function captureStaminaState(stamina) {
+  if (!stamina || typeof stamina !== 'object') return null;
+  return {
+    v:Number.isFinite(stamina.v) ? stamina.v : 0,
+    pending:Number.isFinite(stamina.pending) ? stamina.pending : 0,
+    recoverDelayT:Number.isFinite(stamina.recoverDelayT) ? stamina.recoverDelayT : 0,
+  };
+}
+
+export function restoreStaminaState(stamina, snapshot) {
+  if (!stamina || !snapshot) return false;
+  stamina.v = snapshot.v;
+  stamina.pending = snapshot.pending;
+  stamina.recoverDelayT = snapshot.recoverDelayT;
+  return true;
+}
+
+function currentArenaStamina() {
+  return typeof window !== 'undefined' ? window.__arena?.arena?.stamina || null : null;
+}
+
+function queueNonStanceEffect(eventName, card, staminaSnapshot) {
+  const fire = () => {
+    // combat-arena currently refills immediately after deck.play(). Restore the
+    // exact pre-play economy before the ability/modifier event resolves.
+    restoreStaminaState(currentArenaStamina(), staminaSnapshot);
+    window.dispatchEvent(new CustomEvent(eventName, { detail:{ card } }));
+  };
+  if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
+}
 
 export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
   const s = {
@@ -43,7 +81,13 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
   }
   function proxyActiveStance(card, marker) {
     const stance = activeStanceFallback();
-    return stance ? { ...stance, name:card.name, [marker]:true } : null;
+    return stance ? {
+      ...stance,
+      name:card.name,
+      __sourceCardType:card.type,
+      __restoresStamina:false,
+      [marker]:true,
+    } : null;
   }
 
   function decorateCards() {
@@ -131,9 +175,9 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
         if (!canPlay) return null;
         const proxy = proxyActiveStance(card, '__abilityProxy');
         if (!proxy) return null;
+        const staminaSnapshot = captureStaminaState(currentArenaStamina());
         consumeSlot(slot, card);
-        const fire = () => window.dispatchEvent(new CustomEvent('powbunker:play', { detail:{ card } }));
-        if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
+        queueNonStanceEffect('powbunker:play', card, staminaSnapshot);
         scheduleDecoration();
         return proxy;
       }
@@ -141,9 +185,9 @@ export function createStanceDeck({ rng = Math.random, shuffleTime = 2 } = {}) {
       if (card.type === 'modifier') {
         const proxy = proxyActiveStance(card, '__modifierProxy');
         if (!proxy) return null;
+        const staminaSnapshot = captureStaminaState(currentArenaStamina());
         consumeSlot(slot, card);
-        const fire = () => window.dispatchEvent(new CustomEvent('bloodslash:play', { detail:{ card } }));
-        if (typeof queueMicrotask === 'function') queueMicrotask(fire); else setTimeout(fire, 0);
+        queueNonStanceEffect('bloodslash:play', card, staminaSnapshot);
         scheduleDecoration();
         return proxy;
       }
