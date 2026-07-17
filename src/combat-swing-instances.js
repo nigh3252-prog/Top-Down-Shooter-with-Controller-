@@ -2,6 +2,7 @@ const TRANSIENT_ATTACK_KEYS = Object.freeze([
   '__bloodSlashBoosted',
   '__bloodSlashSpent',
   '__bingBongPrimaries',
+  '__combatSwingId',
 ]);
 
 export function clearTransientAttackState(attack){
