@@ -111,14 +111,20 @@ export function createCombatDirector(options = {}){
     const dz = (player.z ?? 0) - enemy.z;
     const distance = Math.hypot(dx, dz);
     const targetDistance = ranged(enemy) ? RANGED_CLOSE_DISTANCE : CONTACT_HOLD_DISTANCE;
-    if(distance <= targetDistance + .05 || distance <= 1e-5) return;
+    if(distance <= 1e-5) return;
 
-    // Seed a strong inward velocity before the enemy's own steering step. Its normal
+    // Seed a strong radial velocity before the enemy's own steering step. Its normal
     // movement and wall collision still resolve the final position, but orbit logic
-    // can no longer leave it parked just outside attack range.
+    // can no longer leave melee parked outside range. Rock throwers use a narrow hold
+    // band just beyond their point-blank exclusion so they remain able to fire.
     const speed = Math.max(2.5, Number(enemy.speed) || 0) * INWARD_SPEED_MULTIPLIER;
-    enemy.vx = dx / distance * speed;
-    enemy.vz = dz / distance * speed;
+    let direction = 1;
+    if(ranged(enemy)){
+      if(distance < targetDistance - .15) direction = -1;
+      else if(distance <= targetDistance + .15){ enemy.vx = 0; enemy.vz = 0; return; }
+    }
+    enemy.vx = dx / distance * speed * direction;
+    enemy.vz = dz / distance * speed * direction;
   }
 
   function reset(){
