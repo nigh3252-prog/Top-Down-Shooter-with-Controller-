@@ -260,7 +260,7 @@ export function createArenaEnemySystem(options={}){
     get currentEncounterPlan(){return combinedMode?currentEncounterPlan:(active.currentEncounterPlan??null);},
     get queuedSpawnCount(){return visibleSystems().reduce((sum,system)=>sum+(system.queuedSpawnCount??0),0);},
     get telegraphCount(){return visibleSystems().reduce((sum,system)=>sum+(system.telegraphCount??0),0);},
-    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'original':'original';},
+    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},
     originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
 
