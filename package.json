@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:dash && npm run test:combat && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick",
-    "test:dash": "node tests/basic-dash.test.mjs",
+    "test:dash": "node tests/basic-dash.test.mjs && node tests/basic-dash-runtime.test.mjs",
     "test:combat": "node tests/combat-pass.test.mjs",
     "test:flare": "node tests/flare-enemies.test.mjs",
     "test:hades": "node tests/hades-enemies.test.mjs",
