@@ -1,4 +1,4 @@
-import { RED_DASH_MAGIC } from './magic-brush-presets.js';
+import { ORANGE_DASH_MAGIC } from './magic-brush-presets.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
@@ -11,11 +11,11 @@ function pointSegmentDistance(px,pz,a,b){
 }
 
 export function createMagicFluidField(options={}){
-  const config={...RED_DASH_MAGIC,...options};
-  const width=Math.max(1,Number(config.patchWidth)||14);
-  const depth=Math.max(1,Number(config.patchDepth)||12);
+  const config={...ORANGE_DASH_MAGIC,...options};
+  const width=Math.max(1,Number(config.patchWidth)||24);
+  const depth=Math.max(1,Number(config.patchDepth)||24);
   const columns=Math.max(8,Math.round(config.columns||36));
-  const rows=Math.max(8,Math.round(config.rows||30));
+  const rows=Math.max(8,Math.round(config.rows||36));
   const count=columns*rows;
   const u=new Float32Array(count),v=new Float32Array(count);
   const u0=new Float32Array(count),v0=new Float32Array(count);
@@ -26,8 +26,8 @@ export function createMagicFluidField(options={}){
   const state={centerX:Number(options.centerX)||0,centerZ:Number(options.centerZ)||0,active:false,idleFor:0,accumulator:0,maxMaterial:0};
 
   const index=(x,y)=>x+y*columns;
-  const gridX=worldX=>(worldX-(state.centerX-width*.5))/width*(columns-1);
-  const gridY=worldZ=>(worldZ-(state.centerZ-depth*.5))/depth*(rows-1);
+  const gridX=worldXValue=>(worldXValue-(state.centerX-width*.5))/width*(columns-1);
+  const gridY=worldZValue=>(worldZValue-(state.centerZ-depth*.5))/depth*(rows-1);
   const worldX=x=>state.centerX-width*.5+x/(columns-1)*width;
   const worldZ=y=>state.centerZ-depth*.5+y/(rows-1)*depth;
 
@@ -39,6 +39,10 @@ export function createMagicFluidField(options={}){
     return a*(1-sy)+b*sy;
   }
 
+  function sampleWorld(field,worldXValue,worldZValue){
+    return sample(field,gridX(worldXValue),gridY(worldZValue));
+  }
+
   function clear(){
     for(const field of[u,v,u0,v0,dye,dye0,heat,heat0,pressure,divergence,curlField])field.fill(0);
     state.active=false;state.idleFor=0;state.accumulator=0;state.maxMaterial=0;
@@ -48,7 +52,7 @@ export function createMagicFluidField(options={}){
 
   function rebuildSolids(segments=[]){
     solid.fill(0);
-    const radius=Math.max(.01,Number(config.wallRadius)||.28);
+    const radius=Math.max(.01,Number(config.wallRadius)||.55);
     for(let y=1;y<rows-1;y++)for(let x=1;x<columns-1;x++){
       const wx=worldX(x),wz=worldZ(y);
       for(const segment of segments||[]){
@@ -58,7 +62,7 @@ export function createMagicFluidField(options={}){
     }
   }
 
-  function injectWorld(x,z,dx,dz,{radius=.48,material=1.25,heatAmount=1.6,curl=1}={}){
+  function injectWorld(x,z,dx,dz,{radius=1.55,material=.26,heatAmount=.40,curl=1}={}){
     const gx=gridX(x),gy=gridY(z);
     if(gx<-2||gx>columns+1||gy<-2||gy>rows+1)return false;
     const radiusGrid=Math.max(1.4,radius/width*columns);
@@ -86,20 +90,20 @@ export function createMagicFluidField(options={}){
     return touched;
   }
 
-  function injectBurst({origin,direction,length=1.55,radius=.48,steps=6,push=.34,material=1.35,heat:heatAmount=1.75}={}){
+  function injectBurst({origin,direction,length=.72,radius=1.55,steps=3,push=.52,material=.26,heat:heatAmount=.40}={}){
     const len=Math.hypot(direction?.x||0,direction?.z||0)||1;
     const dirX=(direction?.x||0)/len,dirZ=(direction?.z||0)/len;
     const total=Math.max(1,Math.round(steps));
     let touched=false;
     for(let step=0;step<total;step++){
       const t=total===1?0:step/(total-1);
-      const taper=1-t*.42;
+      const taper=1-t*.52;
       touched=injectWorld(
         (origin?.x||0)+dirX*length*t,
         (origin?.z||0)+dirZ*length*t,
         dirX*push*taper,
         dirZ*push*taper,
-        {radius:radius*(1+t*.36),material:material*taper/total*2.4,heatAmount:heatAmount*taper/total*2.4,curl:1},
+        {radius:radius*(1+t*.22),material:material*taper/total*2.25,heatAmount:heatAmount*taper/total*2.25,curl:1},
       )||touched;
     }
     return touched;
@@ -194,8 +198,8 @@ export function createMagicFluidField(options={}){
   }
 
   return{
-    config,state,columns,rows,width,depth,u,v,dye,heat,solid,index,
+    config,state,columns,rows,width,depth,u,v,dye,heat,curlField,solid,index,
     clear,setCenter,rebuildSolids,injectWorld,injectBurst,update,materialCentroid,
-    worldX,worldZ,
+    worldX,worldZ,gridX,gridY,sampleWorld,
   };
 }
