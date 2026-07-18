@@ -33,7 +33,7 @@ export function installPlayerCombat(api){
     getWorldKey:()=>window.__arena?.mazeWorld||null,
   });
   const basicDashRuntime=installBasicDashRuntime(api,undefined,{
-    onDashLaunch:payload=>magicFluidRuntime.emitDashBurst(payload),
+    onDashLaunch:payload=>magicFluidRuntime.beginDashJet(payload),
   });
 
   function getPlayerTransform(){
@@ -62,7 +62,16 @@ export function installPlayerCombat(api){
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
+    const wasDashing=basicDashRuntime.state.active;
     basicDashRuntime.update(dt);
+    if(basicDashRuntime.state.active){
+      magicFluidRuntime.updateDashJet({
+        position:basicDashRuntime.state.position,
+        dashDirection:basicDashRuntime.state.direction,
+      });
+    }else if(wasDashing){
+      magicFluidRuntime.endDashJet({position:basicDashRuntime.state.position});
+    }
     magicFluidRuntime.update(dt);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
