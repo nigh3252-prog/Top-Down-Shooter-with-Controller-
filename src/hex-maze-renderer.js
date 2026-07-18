@@ -9,6 +9,8 @@ export function createMazeWorld(options = {}){
     hexSize:configuredHexSize(options.hexSize ?? 2.6),
   });
   if(options.maze?.options?.layout === 'arena' && world.forest?.group){
+    // Keep the forest collision segments as the arena perimeter, but suppress
+    // every tree, shrub, and forest-region visual in the Enemy Lab chamber.
     world.forest.group.visible = false;
     world.forest.trees.length = 0;
   }
