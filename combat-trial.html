@@ -161,46 +161,50 @@ function resetCooldowns() {
 }
 
 function combatCellDungeonPatch() {
-  return `function createCombatCellMaze(){
-  const maze = createHexMaze({ seed:\`${MAZE_SEED}:combat-cell\`, radius:2, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
-  const kept = new Set(['0,0','1,0','1,-1','0,-1','-1,0','-1,1','0,1']);
-  for(const key of [...maze.cells.keys()]) if(!kept.has(key)) maze.cells.delete(key);
-  const edge = (a,b) => a < b ? \`${a}|${b}\` : \`${b}|${a}\`;
-  const directions = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
-  maze.openEdges = new Set();
-  for(const cell of maze.cells.values()){
-    cell.roomId = 0;
-    for(const [dq,dr] of directions){
-      const next = \`${cell.q+dq},${cell.r+dr}\`;
-      if(maze.cells.has(next)) maze.openEdges.add(edge(cell.key,next));
-    }
-  }
-  const cellKeys = [...maze.cells.keys()].sort();
-  maze.rooms = [{ id:0, type:'combat', cellKeys, size:cellKeys.length }];
-  maze.doors = [];
-  maze.braidedEdges = new Set(maze.openEdges);
-  maze.originalDeadEnds = [];
-  maze.startCellKey = '0,0';
-  maze.startRoomId = 0;
-  maze.options = { ...maze.options, radius:1, minRoomSize:cellKeys.length, maxRoomSize:cellKeys.length, minDoorsPerRoom:0 };
-  maze.validation = { valid:true, errors:[], warnings:[], deadEnds:[], roomLocalDeadEnds:new Map(), roomDoorCounts:new Map([[0,0]]), reachableCells:cellKeys.length, reachableRooms:1 };
-  return maze;
-}
-const IS_COMBAT_CELL = true;
-const dungeon = createCombatCellMaze();
-let activeRoomId = dungeon.startRoomId;
-let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });
-worldRoot.add(mazeWorld.group);
-const startPoint = axialToWorld(0, 0, HEX_SIZE);`;
+  return [
+    "function createCombatCellMaze(){",
+    "  const maze = createHexMaze({ seed:String(MAZE_SEED)+':combat-cell', radius:2, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });",
+    "  const kept = new Set(['0,0','1,0','1,-1','0,-1','-1,0','-1,1','0,1']);",
+    "  for(const key of [...maze.cells.keys()]) if(!kept.has(key)) maze.cells.delete(key);",
+    "  const edge = (a,b) => a < b ? a+'|'+b : b+'|'+a;",
+    "  const directions = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];",
+    "  maze.openEdges = new Set();",
+    "  for(const cell of maze.cells.values()){",
+    "    cell.roomId = 0;",
+    "    for(const [dq,dr] of directions){",
+    "      const next = (cell.q+dq)+','+(cell.r+dr);",
+    "      if(maze.cells.has(next)) maze.openEdges.add(edge(cell.key,next));",
+    "    }",
+    "  }",
+    "  const cellKeys = [...maze.cells.keys()].sort();",
+    "  maze.rooms = [{ id:0, type:'combat', cellKeys, size:cellKeys.length }];",
+    "  maze.doors = [];",
+    "  maze.braidedEdges = new Set(maze.openEdges);",
+    "  maze.originalDeadEnds = [];",
+    "  maze.startCellKey = '0,0';",
+    "  maze.startRoomId = 0;",
+    "  maze.options = { ...maze.options, radius:1, minRoomSize:cellKeys.length, maxRoomSize:cellKeys.length, minDoorsPerRoom:0 };",
+    "  maze.validation = { valid:true, errors:[], warnings:[], deadEnds:[], roomLocalDeadEnds:new Map(), roomDoorCounts:new Map([[0,0]]), reachableCells:cellKeys.length, reachableRooms:1 };",
+    "  return maze;",
+    "}",
+    "const IS_COMBAT_CELL = true;",
+    "const dungeon = createCombatCellMaze();",
+    "let activeRoomId = dungeon.startRoomId;",
+    "let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });",
+    "worldRoot.add(mazeWorld.group);",
+    "const startPoint = axialToWorld(0, 0, HEX_SIZE);",
+  ].join('\n');
 }
 
 function patchArenaForCombatCell(source) {
-  const originalDungeon = `const dungeon = createHexMaze({ seed:MAZE_SEED, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
-if(!dungeon.validation.valid) throw new Error(\`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}\`);
-let activeRoomId = dungeon.startRoomId;
-let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });
-worldRoot.add(mazeWorld.group);
-const startPoint = axialToWorld(0, 0, HEX_SIZE);`;
+  const originalDungeon = [
+    "const dungeon = createHexMaze({ seed:MAZE_SEED, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });",
+    "if(!dungeon.validation.valid) throw new Error(`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}`);",
+    "let activeRoomId = dungeon.startRoomId;",
+    "let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });",
+    "worldRoot.add(mazeWorld.group);",
+    "const startPoint = axialToWorld(0, 0, HEX_SIZE);",
+  ].join('\n');
   if (!source.includes(originalDungeon)) throw new Error('Combat Cell patch failed: arena dungeon boot block was not found.');
   let patched = source.replace(originalDungeon, combatCellDungeonPatch());
 
