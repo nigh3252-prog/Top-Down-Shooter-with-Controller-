@@ -321,7 +321,7 @@ const THIRD_PERSON_CAMERA = {
   fov:54, distance:12, lockDistance:13, shoulder:.32, pivotHeight:2.35,
   minPitch:11*Math.PI/180, maxPitch:40*Math.PI/180, startPitch:25*Math.PI/180,
   yawSpeed:2.45, pitchSpeed:1.65, touchYaw:.0062, touchPitch:.0052,
-  lookAhead:5, lookHeight:1.15, lockRise:.35,
+  lookAhead:7, lookHeight:2.05, lockRise:.35,
   collisionPadding:.045, wallHeight:3.2, softAimDegrees:38,
 };
 /* stamina economy: swings drain it, playing a stance card is the only refill */
@@ -1760,9 +1760,9 @@ function updateCamera(rawDt){
   if(cameraRig.lockTarget){
     const target=cameraRig.lockTarget;
     scratchCamera.lookAt.set(
-      lerp(actorPos.x,target.x,.38),
-      lerp(THIRD_PERSON_CAMERA.lookHeight,enemyTargetHeight(target),.18),
-      lerp(actorPos.y,target.z,.38),
+      lerp(actorPos.x,target.x,.46),
+      lerp(THIRD_PERSON_CAMERA.lookHeight,enemyTargetHeight(target),.28),
+      lerp(actorPos.y,target.z,.46),
     );
   } else {
     scratchCamera.lookAt.set(
