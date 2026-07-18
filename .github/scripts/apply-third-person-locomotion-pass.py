@@ -362,7 +362,9 @@ replace_once(
       : THIRD_PERSON_LOCOMOTION.freeTurnRate;
   actorFacing = wrapPi(actorFacing + wrapPi(goal - actorFacing)*(1-Math.exp(-dt*turnRate)));
   const turnMix = 1-Math.exp(-dt*(arena.locomotion.combatReady?18:12));
-""",'facing turn behavior')
+""",
+'facing turn behavior')
 
 path.write_text(text, encoding='utf-8')
 print('Applied researched third-person locomotion and landscape camera pass')
+# Triggered after the workflow file was present so GitHub Actions sees the push.
