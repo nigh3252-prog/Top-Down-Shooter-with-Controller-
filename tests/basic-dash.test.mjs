@@ -8,9 +8,11 @@ import {
   selectDashDirection,
 } from '../src/basic-dash-logic.js';
 
-assert.equal(dashDistance(), 10.5, 'dash should cover exactly five player diameters');
+assert.equal(dashDistance(), 8.4, 'dash should cover exactly four player diameters');
+assert.equal(BASIC_DASH.duration, .24, 'shorter distance should make the moving burst 20% slower without stretching it');
+assert.equal(BASIC_DASH.leadInDuration, .06, 'dash should have a brief anticipation lead-in');
 assert.equal(dashDistanceAt(0), 0);
-assert.ok(Math.abs(dashDistanceAt(BASIC_DASH.duration) - 10.5) < 1e-9);
+assert.ok(Math.abs(dashDistanceAt(BASIC_DASH.duration) - 8.4) < 1e-9);
 
 let previous = -Infinity;
 for(let i = 0; i <= 24; i++){
