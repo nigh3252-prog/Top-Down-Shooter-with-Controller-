@@ -10,6 +10,7 @@ import { installPlayerCombat as installMainPlayerCombat } from 'https://cdn.jsde
 import { setArenaEnemySource as setPinnedArenaEnemySource } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/arena-enemy-registry.js';
 import { getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
+import { installBasicDashRuntime } from './basic-dash.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
 
 export function installPlayerCombat(api){
@@ -25,6 +26,7 @@ export function installPlayerCombat(api){
     getLocalSystem:getArenaEnemySystem,
     setPinnedSource:setPinnedArenaEnemySource,
   });
+  const basicDashRuntime=installBasicDashRuntime(api);
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -52,11 +54,13 @@ export function installPlayerCombat(api){
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
+    basicDashRuntime.update(dt);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
     return out;
   };
 
+  Object.defineProperty(PC,'basicDashRuntime',{value:basicDashRuntime,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
