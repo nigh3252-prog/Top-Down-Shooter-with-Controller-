@@ -1,24 +1,11 @@
 import { createMagicFluidField } from './magic-fluid-sim.js';
-import { RED_DASH_MAGIC, createRedDashBurst } from './magic-brush-presets.js';
+import { ORANGE_DASH_MAGIC, createOrangeDashJet, emberPaletteRGBA } from './magic-brush-presets.js';
 
-function redPalette(dye,heat){
-  const body=Math.min(1,Math.pow(Math.max(0,dye)*1.25,.72));
-  const hot=Math.min(1,Math.pow(Math.min(Math.max(0,dye),Math.max(0,heat))*1.45,.78));
-  if(body<.025)return[0,0,0,0];
-  let r,g,b;
-  if(hot>.72){const t=(hot-.72)/.28;r=1;g=.58+.38*t;b=.12+.78*t;}
-  else if(hot>.38){const t=(hot-.38)/.34;r=1;g=.12+.46*t;b=.045+.075*t;}
-  else{const t=hot/.38;r=.24+.76*t;g=.015+.105*t;b=.035+.01*t;}
-  const alpha=Math.min(1,body*.82+hot*.28);
-  const brightness=.42+body*.78+hot*.42;
-  return[Math.min(1,r*brightness),Math.min(1,g*brightness),Math.min(1,b*brightness),alpha];
-}
-
-export function installMagicFluidRuntime({THREE,scene,getMazeSegments=()=>[],getWorldKey=()=>null,poolSize=2,preset=RED_DASH_MAGIC}={}){
+export function installMagicFluidRuntime({THREE,scene,getMazeSegments=()=>[],getWorldKey=()=>null,poolSize=2,preset=ORANGE_DASH_MAGIC}={}){
   if(!THREE||!scene)throw new Error('[magic-fluid-runtime] THREE and scene are required.');
   if(typeof document==='undefined')throw new Error('[magic-fluid-runtime] document is required for the fluid texture.');
   const patches=[];
-  let serial=0,lastWorldKey=getWorldKey?.()||null;
+  let serial=0,lastWorldKey=getWorldKey?.()||null,dashJet=null;
 
   function createPatch(){
     const field=createMagicFluidField(preset);
@@ -32,7 +19,7 @@ export function installMagicFluidRuntime({THREE,scene,getMazeSegments=()=>[],get
     const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:true,side:THREE.DoubleSide});
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(field.width,field.depth),material);
     mesh.rotation.x=-Math.PI/2;mesh.position.y=preset.renderHeight;mesh.visible=false;mesh.frustumCulled=false;mesh.renderOrder=2;
-    mesh.name='Magic fluid middle slice';scene.add(mesh);
+    mesh.name='Magic fluid orange middle slice';scene.add(mesh);
     return{field,canvas,context,image,texture,material,mesh,lastUsed:0};
   }
 
@@ -62,19 +49,60 @@ export function installMagicFluidRuntime({THREE,scene,getMazeSegments=()=>[],get
     return patch;
   }
 
-  function emitDashBurst(payload){return emitBurst(createRedDashBurst(payload));}
+  function emitDashJet(payload){return emitBurst(createOrangeDashJet(payload));}
+
+  function beginDashJet(payload={}){
+    const position={x:Number(payload.position?.x)||0,z:Number(payload.position?.z)||0};
+    const dashDirection={x:Number(payload.dashDirection?.x)||0,z:Number(payload.dashDirection?.z)||-1};
+    dashJet={position,dashDirection,carry:0};
+    emitDashJet({position,dashDirection});
+  }
+
+  function updateDashJet(payload={}){
+    const to={x:Number(payload.position?.x)||0,z:Number(payload.position?.z)||0};
+    const dashDirection={x:Number(payload.dashDirection?.x)||0,z:Number(payload.dashDirection?.z)||-1};
+    if(!dashJet){beginDashJet({position:to,dashDirection});return;}
+    const from=dashJet.position;
+    const dx=to.x-from.x,dz=to.z-from.z,distance=Math.hypot(dx,dz);
+    const spacing=Math.max(.08,Number(preset.jetSpacing)||.42);
+    if(distance>1e-6){
+      let advanced=0,remaining=distance;
+      while(dashJet.carry+remaining>=spacing){
+        const needed=spacing-dashJet.carry;
+        advanced+=needed;
+        const t=Math.min(1,advanced/distance);
+        emitDashJet({
+          position:{x:from.x+dx*t,z:from.z+dz*t},
+          dashDirection,
+        });
+        remaining=Math.max(0,distance-advanced);
+        dashJet.carry=0;
+      }
+      dashJet.carry+=remaining;
+    }
+    dashJet.position=to;
+    dashJet.dashDirection=dashDirection;
+  }
+
+  function endDashJet(payload={}){
+    if(!dashJet)return;
+    const position={x:Number(payload.position?.x)||dashJet.position.x,z:Number(payload.position?.z)||dashJet.position.z};
+    if(dashJet.carry>Math.max(.08,(Number(preset.jetSpacing)||.42)*.35))emitDashJet({position,dashDirection:dashJet.dashDirection,intensity:.72});
+    dashJet=null;
+  }
 
   function renderPatch(patch){
     const{field,image,context,texture,mesh}=patch,pixels=image.data;
     for(let i=0,p=0;i<field.dye.length;i++,p+=4){
       if(field.solid[i]){pixels[p]=pixels[p+1]=pixels[p+2]=pixels[p+3]=0;continue;}
-      const[r,g,b,a]=redPalette(field.dye[i],field.heat[i]);
+      const[r,g,b,a]=emberPaletteRGBA(field.dye[i],field.heat[i]);
       pixels[p]=Math.round(r*255);pixels[p+1]=Math.round(g*255);pixels[p+2]=Math.round(b*255);pixels[p+3]=Math.round(a*255);
     }
     context.putImageData(image,0,0);texture.needsUpdate=true;mesh.visible=field.state.active;
   }
 
   function clear(){
+    dashJet=null;
     for(const patch of patches){patch.field.clear();patch.mesh.visible=false;}
   }
 
@@ -89,8 +117,9 @@ export function installMagicFluidRuntime({THREE,scene,getMazeSegments=()=>[],get
   }
 
   function dispose(){
+    dashJet=null;
     for(const patch of patches){scene.remove(patch.mesh);patch.mesh.geometry?.dispose?.();patch.material?.dispose?.();patch.texture?.dispose?.();}
   }
 
-  return{patches,emitBurst,emitDashBurst,update,clear,dispose,preset};
+  return{patches,emitBurst,emitDashJet,beginDashJet,updateDashJet,endDashJet,update,clear,dispose,preset};
 }
