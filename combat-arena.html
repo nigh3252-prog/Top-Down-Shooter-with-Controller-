@@ -938,7 +938,8 @@ function resolveDesiredFacing({ forAttack=false }={}){
     return { angle:Math.atan2(l.moveX,l.moveZ), source:'run' };
   }
   return { angle:actorFacing, source:'idle' };
-}function attackCommitWeight(){
+}
+function attackCommitWeight(){
   if(!combatState.attack) return 0;
   const contact = Math.max(.001, combatState.attack.contactAt || .001);
   const t = clamp((combatState.t - contact*.18) / Math.max(1e-5, contact*.95 - contact*.18), 0, 1);
