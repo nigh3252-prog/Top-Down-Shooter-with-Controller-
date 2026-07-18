@@ -11,18 +11,15 @@ import {
 const Y_AXIS_FALLBACK = { x:0, y:1, z:0 };
 const clamp01 = value => Math.max(0, Math.min(1, value));
 const smoothstep01 = value => { const u=clamp01(value); return u*u*(3-2*u); };
-const lerp = (a,b,t) => a + (b-a)*t;
 
-export function installBasicDashRuntime(api, config = BASIC_DASH){
+export function installBasicDashRuntime(api, config = BASIC_DASH, hooks = {}){
   const { THREE } = api;
   const keyState = Object.create(null);
   const forwardVector = new THREE.Vector3(0, 0, 1);
   const yAxis = THREE.Vector3 ? new THREE.Vector3(0, 1, 0) : Y_AXIS_FALLBACK;
   const state = {
-    leadInActive:false,
     active:false,
     postActive:false,
-    leadInElapsed:0,
     elapsed:0,
     postElapsed:0,
     plannedDistance:0,
@@ -161,10 +158,8 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     const facing = normalizeDirection(state.lastForward.x, state.lastForward.z) || { x:0, z:1 };
     const direction = selectDashDirection({ input:movementInput(), forward:facing, config });
     const current = handle.actorPos;
-    state.leadInActive = true;
-    state.active = false;
+    state.active = true;
     state.postActive = false;
-    state.leadInElapsed = 0;
     state.elapsed = 0;
     state.postElapsed = 0;
     state.plannedDistance = 0;
@@ -178,23 +173,11 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     syncPosition(handle, state.position);
     holdFacing(handle);
     applyPose();
-  }
-
-  function updateLeadIn(handle, dt){
-    state.leadInElapsed = Math.min(config.leadInDuration, state.leadInElapsed + dt);
-    const u = smoothstep01(state.leadInElapsed / Math.max(.001, config.leadInDuration));
-    syncPosition(handle, state.position);
-    holdFacing(handle);
-    applyPose({
-      lean:-config.anticipationLean * u,
-      crouch:config.anticipationCrouch * u,
-      recoil:config.anticipationRecoil * u,
+    hooks.onDashLaunch?.({
+      position:{ ...state.position },
+      dashDirection:{ ...state.direction },
+      facingDirection:{ ...state.facingForward },
     });
-    if(state.leadInElapsed >= config.leadInDuration - 1e-6){
-      state.leadInActive = false;
-      state.active = true;
-      state.elapsed = 0;
-    }
   }
 
   function updateActiveDash(handle, dt){
@@ -207,13 +190,13 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     holdFacing(handle);
 
     const u = clamp01(state.elapsed / Math.max(.001, config.duration));
-    const launchMix = smoothstep01(u / .20);
-    const launchFade = 1 - smoothstep01((u - .20) / .80);
-    const lean = lerp(-config.anticipationLean, config.launchLean, launchMix) * launchFade;
+    const anticipationWindow=Math.max(.01,config.movingAnticipationFraction||.18);
+    const anticipation=1-smoothstep01(u/anticipationWindow);
+    const launch=smoothstep01(u/Math.min(1,anticipationWindow+.10))*(1-smoothstep01((u-.28)/.72));
     applyPose({
-      lean,
-      crouch:config.anticipationCrouch * (1 - smoothstep01(u / .24)),
-      recoil:config.anticipationRecoil * (1 - smoothstep01(u / .20)),
+      lean:-config.anticipationLean*anticipation+config.launchLean*launch,
+      crouch:config.anticipationCrouch*anticipation,
+      recoil:config.anticipationRecoil*anticipation,
     });
 
     if(state.elapsed >= config.duration - 1e-6){
@@ -244,7 +227,6 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   }
 
   function cancel(handle){
-    state.leadInActive = false;
     state.active = false;
     state.postActive = false;
     state.position = null;
@@ -265,18 +247,15 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     }
 
     const arenaDashActive = dodge.t >= 0;
-    if(arenaDashActive && !state.leadInActive && !state.active && !state.postActive && !state.sawArenaDash){
+    if(arenaDashActive && !state.active && !state.postActive && !state.sawArenaDash){
       beginDash(handle);
     }
 
-    if(state.leadInActive) updateLeadIn(handle, dt);
-    else if(state.active) updateActiveDash(handle, dt);
+    if(state.active) updateActiveDash(handle, dt);
     else if(state.postActive) updatePostDash(handle, dt);
-    else {
-      state.lastStablePosition = { x:handle.actorPos.x, z:handle.actorPos.y };
-    }
+    else state.lastStablePosition = { x:handle.actorPos.x, z:handle.actorPos.y };
 
-    if(!state.leadInActive && !state.active) state.lastForward = currentForward();
+    if(!state.active) state.lastForward = currentForward();
     state.sawArenaDash = dodge.t >= 0;
   }
 
