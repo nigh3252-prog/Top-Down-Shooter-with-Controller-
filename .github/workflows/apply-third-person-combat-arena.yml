@@ -1,0 +1,37 @@
+name: Apply third-person combat arena conversion
+
+on:
+  push:
+    branches:
+      - agent/combat-arena-third-person
+
+permissions:
+  contents: write
+
+jobs:
+  apply-conversion:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/combat-arena-third-person
+          fetch-depth: 0
+
+      - name: Apply third-person conversion
+        run: python .github/scripts/apply-third-person-combat-arena.py
+
+      - name: Remove one-time conversion helpers
+        run: |
+          rm .github/scripts/apply-third-person-combat-arena.py
+          rm .github/workflows/apply-third-person-combat-arena.yml
+
+      - name: Commit converted combat arena
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add combat-arena.html .github/scripts/apply-third-person-combat-arena.py .github/workflows/apply-third-person-combat-arena.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Convert combat arena to third-person controls"
+          git push origin HEAD:agent/combat-arena-third-person
