@@ -12,6 +12,7 @@ import { getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
+import { installMagicFluidRuntime } from './magic-fluid-runtime.js';
 
 export function installPlayerCombat(api){
   const PC=installMainPlayerCombat(api);
@@ -26,7 +27,14 @@ export function installPlayerCombat(api){
     getLocalSystem:getArenaEnemySystem,
     setPinnedSource:setPinnedArenaEnemySource,
   });
-  const basicDashRuntime=installBasicDashRuntime(api);
+  const magicFluidRuntime=installMagicFluidRuntime({
+    THREE,scene:api.scene,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getWorldKey:()=>window.__arena?.mazeWorld||null,
+  });
+  const basicDashRuntime=installBasicDashRuntime(api,undefined,{
+    onDashLaunch:payload=>magicFluidRuntime.emitDashBurst(payload),
+  });
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -55,12 +63,14 @@ export function installPlayerCombat(api){
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
     basicDashRuntime.update(dt);
+    magicFluidRuntime.update(dt);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
     return out;
   };
 
   Object.defineProperty(PC,'basicDashRuntime',{value:basicDashRuntime,enumerable:true});
+  Object.defineProperty(PC,'magicFluidRuntime',{value:magicFluidRuntime,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
