@@ -1,8 +1,8 @@
 export const BASIC_DASH = Object.freeze({
   playerRadius:1.05,
   playerWidths:4,
-  leadInDuration:.06,
   duration:.24,
+  movingAnticipationFraction:.18,
   postLockDuration:.22,
   fullDirectionLock:.10,
   poseRecoverDuration:.12,
