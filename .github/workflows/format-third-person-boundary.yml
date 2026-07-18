@@ -1,0 +1,44 @@
+name: Format third-person locomotion boundary
+
+on:
+  push:
+    branches:
+      - agent/combat-arena-third-person
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/combat-arena-third-person
+          fetch-depth: 0
+      - name: Format and validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path=Path('combat-arena.html')
+          source=path.read_text(encoding='utf-8')
+          bad='}\nfunction attackCommitWeight(){' if '}\nfunction attackCommitWeight(){' in source else '}function attackCommitWeight(){'
+          if bad not in source:
+              raise SystemExit('attackCommitWeight boundary not found')
+          source=source.replace(bad,'}\nfunction attackCommitWeight(){',1)
+          path.write_text(source,encoding='utf-8')
+          scripts=re.findall(r'<script type="module">(.*?)</script>',source,flags=re.S)
+          if len(scripts)!=1: raise SystemExit('module extraction failed')
+          Path('/tmp/combat-arena.mjs').write_text(scripts[0],encoding='utf-8')
+          PY
+          node --check /tmp/combat-arena.mjs
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/format-third-person-boundary.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add combat-arena.html .github/workflows/format-third-person-boundary.yml
+          git commit -m "Format third-person locomotion code"
+          git push origin HEAD:agent/combat-arena-third-person
