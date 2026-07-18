@@ -1,0 +1,61 @@
+name: Apply researched third-person locomotion pass
+
+on:
+  push:
+    branches:
+      - agent/combat-arena-third-person
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/combat-arena-third-person
+          fetch-depth: 0
+
+      - name: Apply locomotion and camera pass
+        run: python .github/scripts/apply-third-person-locomotion-pass.py
+
+      - name: Validate module JavaScript and feature anchors
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('combat-arena.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script type="module">(.*?)</script>', source, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected one module script, found {len(scripts)}')
+          required = [
+              'THIRD_PERSON_LOCOMOTION',
+              "retreatHold:.42",
+              "l.mode='retreat'",
+              'locomotionSpeedScale()',
+              'landscapeLookLift',
+              "cameraRig.manualT",
+          ]
+          missing = [item for item in required if item not in source]
+          if missing:
+              raise SystemExit('Missing third-person features: ' + ', '.join(missing))
+          Path('/tmp/combat-arena.mjs').write_text(scripts[0], encoding='utf-8')
+          PY
+          node --check /tmp/combat-arena.mjs
+
+      - name: Remove one-time helpers
+        run: |
+          rm .github/scripts/apply-third-person-locomotion-pass.py
+          rm .github/workflows/apply-third-person-locomotion-pass.yml
+
+      - name: Commit completed pass
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add combat-arena.html .github/scripts/apply-third-person-locomotion-pass.py .github/workflows/apply-third-person-locomotion-pass.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Add third-person combat locomotion and framing"
+          git push origin HEAD:agent/combat-arena-third-person
