@@ -19,8 +19,19 @@ jobs:
           ref: agent/combat-arena-third-person
           fetch-depth: 0
 
-      - name: Apply locomotion and camera pass
-        run: python .github/scripts/apply-third-person-locomotion-pass.py
+      - name: Correct generator boundary and apply pass
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/apply-third-person-locomotion-pass.py')
+          source = path.read_text(encoding='utf-8')
+          bad = "}\nfunction attackCommitWeight(){''',\n'facing and locomotion logic')"
+          good = "}''',\n'facing and locomotion logic')"
+          if source.count(bad) != 1:
+              raise SystemExit(f'Expected one duplicated boundary generator, found {source.count(bad)}')
+          path.write_text(source.replace(bad, good, 1), encoding='utf-8')
+          PY
+          python .github/scripts/apply-third-person-locomotion-pass.py
 
       - name: Validate module JavaScript and feature anchors
         run: |
@@ -37,7 +48,7 @@ jobs:
               "l.mode='retreat'",
               'locomotionSpeedScale()',
               'landscapeLookLift',
-              "cameraRig.manualT",
+              'cameraRig.manualT',
           ]
           missing = [item for item in required if item not in source]
           if missing:
