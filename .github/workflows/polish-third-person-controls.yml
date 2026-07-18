@@ -1,0 +1,66 @@
+name: Polish third-person controls
+
+on:
+  push:
+    branches:
+      - agent/combat-arena-third-person
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/combat-arena-third-person
+          fetch-depth: 0
+
+      - name: Correct screen-right basis and clean generated comments
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('combat-arena.html')
+          source = path.read_text(encoding='utf-8')
+          replacements = {
+              "function cameraRightFlat(){ return { x:Math.cos(cameraRig.yaw), z:-Math.sin(cameraRig.yaw) }; }":
+                  "function cameraRightFlat(){ return { x:-Math.cos(cameraRig.yaw), z:Math.sin(cameraRig.yaw) }; }",
+              "switchLockTarget(Math.sign(padLook.x));": "switchLockTarget(-Math.sign(padLook.x));",
+              "/* touch buttons *//* touch buttons */": "/* touch buttons */",
+              "/* ---------- UI ---------- *//* ---------- UI ---------- */": "/* ---------- UI ---------- */",
+              "/* ---------- main update ---------- *//* ---------- main update ---------- */": "/* ---------- main update ---------- */",
+          }
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one occurrence of {old!r}, found {count}')
+              source = source.replace(old, new, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Validate module JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('combat-arena.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script type="module">(.*?)</script>', source, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected one module script, found {len(scripts)}')
+          Path('/tmp/combat-arena.mjs').write_text(scripts[0], encoding='utf-8')
+          PY
+          node --check /tmp/combat-arena.mjs
+
+      - name: Remove one-time workflow
+        run: rm .github/workflows/polish-third-person-controls.yml
+
+      - name: Commit polished controls
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add combat-arena.html .github/workflows/polish-third-person-controls.yml
+          git commit -m "Correct third-person control orientation"
+          git push origin HEAD:agent/combat-arena-third-person
