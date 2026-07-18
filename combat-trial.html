@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Combat Trial</title>
+<style>
+:root{color-scheme:dark;--bg:rgba(10,20,22,.9);--line:#2c4a47;--gold:#e8a04c;--text:#d8eee9;--purple:#d7b6ff}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071012;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text);touch-action:none}
+iframe{position:fixed;inset:0;width:100%;height:100%;border:0}
+.ui{position:fixed;inset:0;z-index:20;pointer-events:none}
+.top{position:absolute;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));display:flex;gap:7px;align-items:stretch}
+.tag,.btn,.layoutSelect{pointer-events:auto;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text)}
+.tag{padding:9px 11px;font-size:9px;letter-spacing:.1em;color:var(--gold)}
+.layoutWrap{pointer-events:auto;display:grid;gap:2px;padding:4px 7px;border:1px solid var(--line);border-radius:7px;background:var(--bg)}
+.layoutWrap label{font-size:7px;letter-spacing:.1em;color:#7fb8b0}
+.layoutSelect{min-width:116px;border:0;background:transparent;color:var(--gold);font:inherit;font-size:9px;padding:0}
+.layoutSelect option{background:#122426;color:var(--text)}
+#fs{width:42px;font-size:20px}
+.dock{position:absolute;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;opacity:0}
+.running .dock,.running .touch{opacity:1}
+.nav{width:44px;font-size:23px}
+.card{position:relative;width:min(270px,44vw);min-height:72px;padding:8px 11px;overflow:hidden;text-align:left;border-color:#60437b;color:var(--purple);display:grid;grid-template-columns:1fr auto;gap:3px 8px}
+.card.ready{border-color:var(--gold);color:#ffe6aa}
+.name{font-size:13px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.small{font-size:9px;color:#9abcb6}
+.state{font-size:10px;font-weight:900;text-align:right}
+.shade{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(3,5,10,.72);pointer-events:none}
+.touch{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(2,56px);gap:7px;opacity:0}
+.attack{width:56px;height:56px;border-radius:50%;font-size:9px;font-weight:900}
+.attack b{display:block;font-size:18px;color:var(--gold)}
+.ability{border-color:#60437b;color:var(--purple)}
+#status{position:absolute;left:50%;bottom:91px;transform:translateX(-50%);padding:6px 9px;max-width:68vw;border:1px solid var(--line);border-radius:7px;background:var(--bg);font-size:9px;text-align:center;opacity:0}
+.running #status{opacity:1}
+.error{color:#ff9070!important;border-color:#6e3a24!important}
+@media(pointer:fine){.touch{display:none}}
+@media(max-width:760px) and (orientation:landscape){
+  .tag{display:none}
+  .layoutWrap{min-width:108px}
+  .layoutSelect{min-width:96px}
+  .dock{left:max(142px,calc(env(safe-area-inset-left) + 142px));right:max(142px,calc(env(safe-area-inset-right) + 142px));transform:none;justify-content:center}
+  .card{min-height:62px;width:min(250px,46vw)}
+  .touch{grid-template-columns:repeat(2,50px)}
+  .attack{width:50px;height:50px}
+  #status{bottom:74px}
+}
+</style>
+</head>
+<body>
+<iframe id="arena" title="Combat Trial arena" allow="fullscreen; gamepad"></iframe>
+<div class="ui">
+  <div class="top">
+    <div class="tag">COMBAT TRIAL · DIRECT ATTACKS · NO STAMINA</div>
+    <div class="layoutWrap">
+      <label for="layout">ARENA LAYOUT</label>
+      <select class="layoutSelect" id="layout">
+        <option value="maze">MAZE RUN</option>
+        <option value="cell">COMBAT CELL</option>
+      </select>
+    </div>
+    <button class="btn" id="fs">⛶</button>
+  </div>
+  <div id="status">Loading combat systems…</div>
+  <div class="dock">
+    <button class="btn nav" id="prev">‹</button>
+    <button class="btn card" id="card">
+      <span class="name" id="name">Loading…</span><span class="small">RB</span>
+      <span class="small" id="meta"></span><span class="state" id="state">WAIT</span>
+      <span class="small" id="desc"></span><span class="shade" id="shade"></span>
+    </button>
+    <button class="btn nav" id="next">›</button>
+  </div>
+  <div class="touch">
+    <button class="btn attack" data-atk="horizontal"><b>□</b>HORIZONTAL</button>
+    <button class="btn attack" data-atk="vertical"><b>△</b>VERTICAL</button>
+    <button class="btn attack" data-atk="stab"><b>○</b>THRUST</button>
+    <button class="btn attack ability" id="act"><b>RB</b>ABILITY</button>
+  </div>
+</div>
+<script type="module">
+import { WARDEN_ABILITY_CARDS as CARDS } from './src/warden-ability-cards.js';
+
+const frame = document.getElementById('arena');
+const getPads = navigator.getGamepads?.bind(navigator);
+const cooldowns = new Map(CARDS.map(card => [card.id, 0]));
+const previousButtons = {};
+const LAYOUT_KEY = 'combatTrial.layout.v1';
+const CELL_LAYOUT = 'cell';
+const MAZE_LAYOUT = 'maze';
+let selected = 0;
+let lastFrame = performance.now();
+let ready = false;
+let runtime = null;
+let currentLayout = loadLayoutPreference();
+let arenaSourcePromise = null;
+let loadToken = 0;
+
+const $ = id => document.getElementById(id);
+const api = () => frame.contentWindow?.__arena || null;
+const selectedCard = () => CARDS[selected];
+
+function loadLayoutPreference() {
+  try { return localStorage.getItem(LAYOUT_KEY) === CELL_LAYOUT ? CELL_LAYOUT : MAZE_LAYOUT; }
+  catch (_) { return MAZE_LAYOUT; }
+}
+
+function saveLayoutPreference(layout) {
+  try { localStorage.setItem(LAYOUT_KEY, layout); } catch (_) {}
+}
+
+function say(text, error = false) {
+  $('status').textContent = text;
+  $('status').classList.toggle('error', error);
+}
+
+function render() {
+  const card = selectedCard();
+  const remaining = cooldowns.get(card.id) || 0;
+  const total = Math.max(.05, Number(card.cooldown) || 1);
+  const available = remaining <= 0;
+  $('name').textContent = card.name;
+  $('meta').textContent = `${selected + 1}/${CARDS.length} · ${total}s cooldown`;
+  $('desc').textContent = card.description || '';
+  $('state').textContent = available ? 'READY' : `${remaining.toFixed(1)}s`;
+  $('shade').style.height = available ? '0%' : `${Math.min(100, remaining / total * 100)}%`;
+  $('card').classList.toggle('ready', available);
+}
+
+function chooseAbility(direction) {
+  selected = (selected + direction + CARDS.length) % CARDS.length;
+  render();
+  say(`${selectedCard().name} selected · RB activates`);
+}
+
+function attack(group) {
+  const arena = api();
+  if (!arena?.PC?.triggerCombatAttack) return say('Direct attack system is not ready.', true);
+  arena.PC.triggerCombatAttack(group);
+  say(`${group === 'stab' ? 'Thrust' : group} attack`);
+}
+
+function ability() {
+  const card = selectedCard();
+  const remaining = cooldowns.get(card.id) || 0;
+  if (remaining > 0) return say(`${card.name} cooling down · ${remaining.toFixed(1)}s`);
+  if (!runtime) return say('Ability runtime is not ready.', true);
+  if (!runtime.playWardenAbility({ ...card, cost:0 })) return say(`${card.name} could not activate here.`, true);
+  cooldowns.set(card.id, Math.max(.05, Number(card.cooldown) || 1));
+  render();
+  say(`${card.name} activated`);
+}
+
+function dodge() { api()?.triggerDodge?.(); }
+function weapon(direction) { api()?.cycleWeapon?.(direction); }
+function menu() { frame.contentDocument?.getElementById('menuBtn')?.click(); }
+
+function resetCooldowns() {
+  for (const card of CARDS) cooldowns.set(card.id, 0);
+  render();
+}
+
+function combatCellDungeonPatch() {
+  return [
+    "function createCombatCellMaze(){",
+    "  const maze = createHexMaze({ seed:String(MAZE_SEED)+':combat-cell', radius:2, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });",
+    "  const kept = new Set(['0,0','1,0','1,-1','0,-1','-1,0','-1,1','0,1']);",
+    "  for(const key of [...maze.cells.keys()]) if(!kept.has(key)) maze.cells.delete(key);",
+    "  const edge = (a,b) => a < b ? a+'|'+b : b+'|'+a;",
+    "  const directions = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];",
+    "  maze.openEdges = new Set();",
+    "  for(const cell of maze.cells.values()){",
+    "    cell.roomId = 0;",
+    "    for(const [dq,dr] of directions){",
+    "      const next = (cell.q+dq)+','+(cell.r+dr);",
+    "      if(maze.cells.has(next)) maze.openEdges.add(edge(cell.key,next));",
+    "    }",
+    "  }",
+    "  const cellKeys = [...maze.cells.keys()].sort();",
+    "  maze.rooms = [{ id:0, type:'combat', cellKeys, size:cellKeys.length }];",
+    "  maze.doors = [];",
+    "  maze.braidedEdges = new Set(maze.openEdges);",
+    "  maze.originalDeadEnds = [];",
+    "  maze.startCellKey = '0,0';",
+    "  maze.startRoomId = 0;",
+    "  maze.options = { ...maze.options, radius:1, minRoomSize:cellKeys.length, maxRoomSize:cellKeys.length, minDoorsPerRoom:0 };",
+    "  maze.validation = { valid:true, errors:[], warnings:[], deadEnds:[], roomLocalDeadEnds:new Map(), roomDoorCounts:new Map([[0,0]]), reachableCells:cellKeys.length, reachableRooms:1 };",
+    "  return maze;",
+    "}",
+    "const IS_COMBAT_CELL = true;",
+    "const dungeon = createCombatCellMaze();",
+    "let activeRoomId = dungeon.startRoomId;",
+    "let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });",
+    "worldRoot.add(mazeWorld.group);",
+    "const startPoint = axialToWorld(0, 0, HEX_SIZE);",
+  ].join('\n');
+}
+
+function patchArenaForCombatCell(source) {
+  const originalDungeon = [
+    "const dungeon = createHexMaze({ seed:MAZE_SEED, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });",
+    "if(!dungeon.validation.valid) throw new Error(`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}`);",
+    "let activeRoomId = dungeon.startRoomId;",
+    "let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });",
+    "worldRoot.add(mazeWorld.group);",
+    "const startPoint = axialToWorld(0, 0, HEX_SIZE);",
+  ].join('\n');
+  if (!source.includes(originalDungeon)) throw new Error('Combat Cell patch failed: arena dungeon boot block was not found.');
+  let patched = source.replace(originalDungeon, combatCellDungeonPatch());
+
+  const clearMessage = "announce(progress?.cleared === progress?.total ? 'DUNGEON CLEAR' : `ROOM ${roomId + 1} CLEAR · STRIKE A DOOR`, 1.8);";
+  if (!patched.includes(clearMessage)) throw new Error('Combat Cell patch failed: encounter-clear message block was not found.');
+  patched = patched.replace(clearMessage, "announce('CELL CLEAR', 1.8);");
+
+  const sealMessage = "announce(`ROOM ${roomId + 1} · SEAL`, 1.1);";
+  if (!patched.includes(sealMessage)) throw new Error('Combat Cell patch failed: encounter-start message block was not found.');
+  patched = patched.replace(sealMessage, "announce('COMBAT CELL · SEAL', 1.1);");
+
+  const baseUrl = new URL('./', location.href).href;
+  return patched.replace('<head>', `<head><base href="${baseUrl}">`);
+}
+
+async function getArenaSource() {
+  if (!arenaSourcePromise) {
+    arenaSourcePromise = fetch('combat-arena.html', { cache:'no-store' }).then(response => {
+      if (!response.ok) throw new Error(`Arena source request failed: HTTP ${response.status}`);
+      return response.text();
+    });
+  }
+  return arenaSourcePromise;
+}
+
+async function loadArena(layout) {
+  const token = ++loadToken;
+  ready = false;
+  runtime = null;
+  document.body.classList.remove('running');
+  say(layout === CELL_LAYOUT ? 'Building Combat Cell…' : 'Loading Maze Run…');
+  resetCooldowns();
+  try {
+    if (layout === CELL_LAYOUT) {
+      const source = await getArenaSource();
+      if (token !== loadToken) return;
+      frame.removeAttribute('src');
+      frame.srcdoc = patchArenaForCombatCell(source);
+    } else {
+      frame.removeAttribute('srcdoc');
+      frame.src = `combat-arena.html?trial=1&layout=maze&_=${Date.now()}`;
+    }
+  } catch (error) {
+    console.error(error);
+    say(error?.message || 'Arena layout failed to load.', true);
+  }
+}
+
+function childSetup() {
+  const documentInArena = frame.contentDocument;
+  if (!documentInArena) return;
+  if (!documentInArena.getElementById('trialStyle')) {
+    const style = documentInArena.createElement('style');
+    style.id = 'trialStyle';
+    style.textContent = '#cardRow,#stWrap,#abilityStaminaWrap,#stanceBtn,#shuffleBtn,.btnrow,#hint,#fsBtn,#sgFsBtn,#wardenAbilitySettings{display:none!important}#weaponBtn{width:100%}';
+    documentInArena.head.appendChild(style);
+    const title = documentInArena.querySelector('#startCard .sgTitle');
+    const hint = documentInArena.querySelector('#startCard .sgHint');
+    if (title) title.textContent = currentLayout === CELL_LAYOUT ? 'COMBAT CELL' : 'COMBAT TRIAL';
+    if (hint) hint.textContent = currentLayout === CELL_LAYOUT
+      ? 'One open chamber · enemies begin here · Square horizontal · Triangle vertical · Circle thrust'
+      : 'Square horizontal · Triangle vertical · Circle thrust · D-pad left/right ability · RB activate';
+  }
+  if (!documentInArena.getElementById('trialRuntime')) {
+    const script = documentInArena.createElement('script');
+    script.id = 'trialRuntime';
+    script.type = 'module';
+    script.textContent = "import * as r from './src/warden-ability-runtime.js';window.__trialRuntime=r";
+    documentInArena.head.appendChild(script);
+  }
+  maskPad();
+}
+
+function maskPad() {
+  const childNavigator = frame.contentWindow?.navigator;
+  if (!childNavigator || !getPads) return;
+  const maskedGamepads = () => {
+    const gamepad = getPads()?.[0];
+    return gamepad ? [{
+      id:gamepad.id,
+      connected:true,
+      mapping:gamepad.mapping,
+      axes:Array.from(gamepad.axes || []),
+      buttons:Array.from({ length:20 }, () => ({ pressed:false, value:0 }))
+    }] : [];
+  };
+  try { Object.defineProperty(childNavigator, 'getGamepads', { configurable:true, value:maskedGamepads }); }
+  catch (_) {
+    try { Object.defineProperty(Object.getPrototypeOf(childNavigator), 'getGamepads', { configurable:true, value:maskedGamepads }); }
+    catch (error) { say(`Controller isolation failed: ${error.message}`, true); }
+  }
+}
+
+function pollGamepad() {
+  const gamepad = getPads?.()?.[0];
+  if (!gamepad) return;
+  const edge = (name, index, action) => {
+    const pressed = !!gamepad.buttons?.[index]?.pressed;
+    if (pressed && !previousButtons[name]) action();
+    previousButtons[name] = pressed;
+  };
+  edge('cross', 0, dodge);
+  edge('circle', 1, () => attack('stab'));
+  edge('square', 2, () => attack('horizontal'));
+  edge('triangle', 3, () => attack('vertical'));
+  edge('rb', 5, ability);
+  edge('select', 8, menu);
+  edge('start', 9, menu);
+  edge('up', 12, () => weapon(-1));
+  edge('down', 13, () => weapon(1));
+  edge('left', 14, () => chooseAbility(-1));
+  edge('right', 15, () => chooseAbility(1));
+}
+
+function loop(now) {
+  const dt = Math.min(.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+  const arena = api();
+  if (arena) {
+    if (!ready) {
+      ready = true;
+      childSetup();
+      say(currentLayout === CELL_LAYOUT
+        ? 'Combat Cell · all enemies share this chamber'
+        : 'Maze Run · clear rooms and move through the maze');
+    }
+    runtime = frame.contentWindow?.__trialRuntime || null;
+    const running = !!arena.arena?.started;
+    document.body.classList.toggle('running', running);
+    const stamina = arena.arena?.stamina;
+    if (stamina) { stamina.v = 100; stamina.pending = 0; stamina.recoverDelayT = 0; }
+    pollGamepad();
+    if (running && !arena.arena?.paused) {
+      for (const card of CARDS) cooldowns.set(card.id, Math.max(0, (cooldowns.get(card.id) || 0) - dt));
+    }
+    render();
+  }
+  requestAnimationFrame(loop);
+}
+
+frame.addEventListener('load', () => {
+  ready = false;
+  setTimeout(childSetup, 0);
+});
+$('prev').addEventListener('pointerdown', event => { event.preventDefault(); chooseAbility(-1); });
+$('next').addEventListener('pointerdown', event => { event.preventDefault(); chooseAbility(1); });
+$('card').addEventListener('pointerdown', event => { event.preventDefault(); ability(); });
+$('act').addEventListener('pointerdown', event => { event.preventDefault(); ability(); });
+document.querySelectorAll('[data-atk]').forEach(button => button.addEventListener('pointerdown', event => {
+  event.preventDefault();
+  attack(button.dataset.atk);
+}));
+$('fs').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.());
+$('layout').value = currentLayout;
+$('layout').addEventListener('change', event => {
+  currentLayout = event.target.value === CELL_LAYOUT ? CELL_LAYOUT : MAZE_LAYOUT;
+  saveLayoutPreference(currentLayout);
+  loadArena(currentLayout);
+});
+addEventListener('keydown', event => {
+  if (event.repeat) return;
+  const key = event.key.toLowerCase();
+  if (key === '1') attack('horizontal');
+  if (key === '2') attack('vertical');
+  if (key === '3') attack('stab');
+  if (key === '[') chooseAbility(-1);
+  if (key === ']') chooseAbility(1);
+  if (key === 'e') ability();
+  if (key === ' ') dodge();
+  if (key === 'm') menu();
+});
+
+render();
+loadArena(currentLayout);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
