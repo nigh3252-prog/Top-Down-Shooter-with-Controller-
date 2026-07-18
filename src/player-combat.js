@@ -28,7 +28,7 @@ export function installPlayerCombat(api){
     setPinnedSource:setPinnedArenaEnemySource,
   });
   const magicFluidRuntime=installMagicFluidRuntime({
-    THREE,scene:api.scene,
+    THREE,scene:api.scene,camera:api.camera,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
     getWorldKey:()=>window.__arena?.mazeWorld||null,
   });
@@ -72,7 +72,7 @@ export function installPlayerCombat(api){
     }else if(wasDashing){
       magicFluidRuntime.endDashJet({position:basicDashRuntime.state.position});
     }
-    magicFluidRuntime.update(dt);
+    magicFluidRuntime.update(dt,now);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
     return out;
