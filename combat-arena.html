@@ -400,7 +400,7 @@ const scratchCamera = {
 };
 
 function cameraForwardFlat(){ return { x:Math.sin(cameraRig.yaw), z:Math.cos(cameraRig.yaw) }; }
-function cameraRightFlat(){ return { x:Math.cos(cameraRig.yaw), z:-Math.sin(cameraRig.yaw) }; }
+function cameraRightFlat(){ return { x:-Math.cos(cameraRig.yaw), z:Math.sin(cameraRig.yaw) }; }
 function enemyTargetHeight(enemy){
   const scale = enemySystem?.heightScale || 1;
   return (enemy?.targetYOffset || 0) + Math.max(.75, (enemy?.height || (enemy?.radius || 1) * 2) * scale * .58);
@@ -1348,7 +1348,7 @@ function endPointer(e){
 }
 addEventListener('pointerup', endPointer);
 addEventListener('pointercancel', endPointer);
-/* touch buttons *//* touch buttons */
+/* touch buttons */
 const atkBtn=document.getElementById('atkBtn'), heavyBtn=document.getElementById('heavyBtn'), lockBtn=document.getElementById('lockBtn');
 lockBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); toggleLock(); });
 atkBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); atkBtn.classList.add('held'); lightDown(); });
@@ -1394,7 +1394,7 @@ function pollPad(){
   if(cameraRig.lockTarget){
     if(Math.abs(padLook.x)<.42) cameraRig.switchReady=true;
     else if(cameraRig.switchReady && Math.abs(padLook.x)>.78){
-      switchLockTarget(Math.sign(padLook.x));
+      switchLockTarget(-Math.sign(padLook.x));
       cameraRig.switchReady=false;
     }
   }
@@ -1414,7 +1414,7 @@ function gatherInput(){
   if(len>1){input.mx/=len;input.mz/=len;}
 }
 
-/* ---------- UI ---------- *//* ---------- UI ---------- */
+/* ---------- UI ---------- */
 const panel=document.getElementById('panel');
 const menuBtn=document.getElementById('menuBtn');
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
@@ -1767,7 +1767,7 @@ function updateCamera(rawDt){
   updateLockReticle();
 }
 
-/* ---------- main update ---------- *//* ---------- main update ---------- */
+/* ---------- main update ---------- */
 function updatePlayer(dt, rawDt = dt){
   const d = arena.dodge;
   if(arena.deadT >= 0){
