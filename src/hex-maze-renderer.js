@@ -13,6 +13,7 @@ export function createMazeWorld(options = {}){
     // every tree, shrub, and forest-region visual in the Enemy Lab chamber.
     world.forest.group.visible = false;
     world.forest.trees.length = 0;
+    world.forest.placements.length = 0;
   }
   return world;
 }
