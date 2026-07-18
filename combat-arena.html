@@ -318,10 +318,11 @@ const DODGE_SPEED = 18, DODGE_TIME = .26, DODGE_IFRAMES = .30, DODGE_COOL = .55;
 const SOFT_AIM_RANGE = 14;
 const LOCK_RANGE = 28;
 const THIRD_PERSON_CAMERA = {
-  fov:58, distance:7.2, shoulder:.58, pivotHeight:1.82,
-  minPitch:.06, maxPitch:.58, startPitch:.28,
+  fov:54, distance:12, lockDistance:13, shoulder:.32, pivotHeight:2.35,
+  minPitch:11*Math.PI/180, maxPitch:40*Math.PI/180, startPitch:25*Math.PI/180,
   yawSpeed:2.45, pitchSpeed:1.65, touchYaw:.0062, touchPitch:.0052,
-  collisionPadding:.055, softAimDegrees:38,
+  lookAhead:5, lookHeight:1.15, lockRise:.35,
+  collisionPadding:.045, wallHeight:3.2, softAimDegrees:38,
 };
 /* stamina economy: swings drain it, playing a stance card is the only refill */
 const STAMINA = { max:100, start:100, recoverTime:.85, recoverDelay:.08, chargeCostMult:1.75,
@@ -1696,11 +1697,17 @@ function validateCameraLock(rawDt){
 }
 function cameraCollisionT(start,end,right){
   let safeT=1;
-  for(const offset of [-.30,0,.30]){
+  for(const offset of [-.34,0,.34]){
     const a={x:start.x+right.x*offset,z:start.z+right.z*offset};
     const b={x:end.x+right.x*offset,z:end.z+right.z*offset};
     const hit=raycastWalls(a,b,mazeWorld.getCollisionSegments());
-    if(hit) safeT=Math.min(safeT,Math.max(.035,hit.t-THIRD_PERSON_CAMERA.collisionPadding));
+    if(!hit) continue;
+    const rayHeight=lerp(start.y,end.y,hit.t);
+    // The maze collision data is two-dimensional. Only pull the camera in
+    // when the three-dimensional camera ray is still below the wall top.
+    if(rayHeight<=THIRD_PERSON_CAMERA.wallHeight+.12){
+      safeT=Math.min(safeT,Math.max(.035,hit.t-THIRD_PERSON_CAMERA.collisionPadding));
+    }
   }
   return safeT;
 }
@@ -1728,36 +1735,41 @@ function updateCamera(rawDt){
 
   shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
   shake.addScaledVector(shakeVel,rawDt);
-  const j=HitFeel.jitter*.24,kick=HitFeel.camKick,zk=HitFeel.zoomKick;
+  const j=HitFeel.jitter*.14,kick=HitFeel.camKick,zk=HitFeel.zoomKick;
   const f=cameraForwardFlat(),r=cameraRightFlat();
   const pivot=scratchCamera.pivot.set(actorPos.x,THIRD_PERSON_CAMERA.pivotHeight,actorPos.y);
-  const horizontal=Math.cos(cameraRig.pitch)*(THIRD_PERSON_CAMERA.distance-zk*.45-transitionView.cameraPush*.45);
-  const shoulder=cameraRig.lockTarget ? THIRD_PERSON_CAMERA.shoulder*.52 : THIRD_PERSON_CAMERA.shoulder;
+  const cameraDistance=cameraRig.lockTarget ? THIRD_PERSON_CAMERA.lockDistance : THIRD_PERSON_CAMERA.distance;
+  const horizontal=Math.cos(cameraRig.pitch)*(cameraDistance-zk*.28-transitionView.cameraPush*.45);
+  const shoulder=cameraRig.lockTarget ? THIRD_PERSON_CAMERA.shoulder*.25 : THIRD_PERSON_CAMERA.shoulder;
   scratchCamera.desired.set(
     pivot.x-f.x*horizontal+r.x*shoulder,
-    pivot.y+Math.sin(cameraRig.pitch)*THIRD_PERSON_CAMERA.distance,
+    pivot.y+Math.sin(cameraRig.pitch)*cameraDistance+(cameraRig.lockTarget?THIRD_PERSON_CAMERA.lockRise:0),
     pivot.z-f.z*horizontal+r.z*shoulder,
   );
   const safeT=cameraCollisionT(pivot,scratchCamera.desired,r);
   scratchCamera.corrected.copy(pivot).lerp(scratchCamera.desired,safeT);
   const currentDistance=cameraRig.currentPosition.distanceTo(pivot);
   const desiredDistance=scratchCamera.corrected.distanceTo(pivot);
-  const followRate=desiredDistance<currentDistance ? 32 : 13;
+  const followRate=desiredDistance<currentDistance ? 38 : 8.5;
   cameraRig.currentPosition.lerp(scratchCamera.corrected,1-Math.exp(-rawDt*followRate));
 
   camera.position.copy(cameraRig.currentPosition);
-  camera.position.x+=shake.x*.22+(Math.random()*2-1)*j+kick.x*.22;
-  camera.position.y+=shake.y*.16+(Math.random()*2-1)*j*.35+kick.y*.18;
-  camera.position.z+=shake.z*.22+(Math.random()*2-1)*j+kick.z*.22;
+  camera.position.x+=shake.x*.13+(Math.random()*2-1)*j+kick.x*.12;
+  camera.position.y+=shake.y*.10+(Math.random()*2-1)*j*.30+kick.y*.10;
+  camera.position.z+=shake.z*.13+(Math.random()*2-1)*j+kick.z*.12;
   if(cameraRig.lockTarget){
     const target=cameraRig.lockTarget;
     scratchCamera.lookAt.set(
-      lerp(actorPos.x,target.x,.28),
-      lerp(THIRD_PERSON_CAMERA.pivotHeight,enemyTargetHeight(target),.22),
-      lerp(actorPos.y,target.z,.28),
+      lerp(actorPos.x,target.x,.38),
+      lerp(THIRD_PERSON_CAMERA.lookHeight,enemyTargetHeight(target),.18),
+      lerp(actorPos.y,target.z,.38),
     );
   } else {
-    scratchCamera.lookAt.set(pivot.x+f.x*2.5,pivot.y-.08,pivot.z+f.z*2.5);
+    scratchCamera.lookAt.set(
+      actorPos.x+f.x*THIRD_PERSON_CAMERA.lookAhead,
+      THIRD_PERSON_CAMERA.lookHeight,
+      actorPos.y+f.z*THIRD_PERSON_CAMERA.lookAhead,
+    );
   }
   camera.lookAt(scratchCamera.lookAt);
 
