@@ -10,6 +10,7 @@ export function createMazeWorld(options = {}){
   });
   if(options.maze?.options?.layout === 'arena' && world.forest?.group){
     world.forest.group.visible = false;
+    world.forest.trees.length = 0;
   }
   return world;
 }
