@@ -86,7 +86,7 @@ export function damageRegisteredArenaEnemy(enemy, {
   const beforeHp = enemy.hp;
   const length = Math.hypot(Number(motion.x) || 0, Number(motion.z) || 0) || 1;
   const nx = (Number(motion.x) || 0) / length;
-  const nz = (Number(motion.z) || 0) / length;
+  const nz = (Number(motion.z) || 0)) / length;
   const requestedKnock = Math.max(0, Number(knock) || 0);
 
   // Correct public signature: damageEnemy(enemy, amount, knock, options).
