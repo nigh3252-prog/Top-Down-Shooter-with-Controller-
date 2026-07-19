@@ -1,17 +1,20 @@
 // Branch-local lion behavior wrapper. The full current main implementation remains
 // pinned below so the Pilebunker rigid-body work and all existing enemy tuning stay
-// intact while this branch changes only how an idle lion chooses its pursuit point.
+// intact while this branch changes only how the lion chooses its pursuit target.
 
 import {
   ARENA_ENEMY_ARCHETYPES,
   createArenaEnemySystem as createPinnedArenaEnemySystem,
 } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@5cc93e68f6d48234127bc838a38a3a810025f786/src/arena-enemies-original.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
+import { FUSION_ATTACKS } from './fusion-enemies.js';
 import { createDelayedPositionTracker } from './player-position-history.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const LION_TRAIL_DELAY = 3;
+const LION_ATTACK = FUSION_ATTACKS.lionPounce;
+const ATTACK_START_PADDING = .22 * 4.3;
 const PLAYER_RADIUS = 1.075;
 const ARENA_MARGIN = 1;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -74,24 +77,28 @@ export function createArenaEnemySystem(options = {}) {
     return { x, z };
   }
 
+  function trailVector(lion, trailPoint) {
+    const rawTarget = { x:trailPoint.x, z:trailPoint.z };
+    const waypoint = navigation?.nextWaypoint?.(lion, rawTarget, system.activeEncounterRoomId) || rawTarget;
+    const x = finite(waypoint.x) - lion.x;
+    const z = finite(waypoint.z) - lion.z;
+    return { x, z, distance:Math.hypot(x, z) };
+  }
+
   function moveLionAlongTrail(lion, before, trailPoint, dt) {
     lion.x = before.x;
     lion.z = before.z;
 
-    const rawTarget = { x:trailPoint.x, z:trailPoint.z };
-    const waypoint = navigation?.nextWaypoint?.(lion, rawTarget, system.activeEncounterRoomId) || rawTarget;
-    const dx = finite(waypoint.x) - lion.x;
-    const dz = finite(waypoint.z) - lion.z;
-    const distance = Math.hypot(dx, dz);
+    const target = trailVector(lion, trailPoint);
     const stopDistance = Math.max(.2, finite(lion.radius, .94) * .2);
     const maxSpeed = Math.max(.1, finite(lion.speed, 4) * finite(system.speedScale, 1));
 
     let targetVx = 0;
     let targetVz = 0;
-    if (distance > stopDistance) {
-      const amount = clamp((distance - stopDistance) / Math.max(.5, stopDistance), 0, 1);
-      targetVx = dx / distance * maxSpeed * amount;
-      targetVz = dz / distance * maxSpeed * amount;
+    if (target.distance > stopDistance) {
+      const amount = clamp((target.distance - stopDistance) / Math.max(.5, stopDistance), 0, 1);
+      targetVx = target.x / target.distance * maxSpeed * amount;
+      targetVz = target.z / target.distance * maxSpeed * amount;
     }
 
     lion.vx = approach(finite(before.vx), targetVx, dt);
@@ -102,7 +109,52 @@ export function createArenaEnemySystem(options = {}) {
     lion.z = moved.z;
     lion.maxGroundSpeed = maxSpeed;
     lion.visualGroundSpeed = Math.min(maxSpeed, Math.hypot(lion.x - previous.x, lion.z - previous.z) / Math.max(dt, .001));
-    setLionFacing(lion, dx, dz);
+    setLionFacing(lion, target.x, target.z);
+  }
+
+  function lionAttackRange() {
+    return finite(LION_ATTACK?.range, 3.45) + ATTACK_START_PADDING;
+  }
+
+  function delayedTargetIsAttackable(lion, trailPoint) {
+    return trailVector(lion, trailPoint).distance <= lionAttackRange();
+  }
+
+  function canStartDelayedAttack(lion, trailPoint) {
+    if (!LION_ATTACK || finite(lion.cooldown) > 0 || finite(lion.stunned) > 0) return false;
+    if (!delayedTargetIsAttackable(lion, trailPoint)) return false;
+    const director = system.director;
+    if (!director?.hasApproachPermit?.(lion)) return false;
+    return director.canGrant?.(lion, LION_ATTACK, {
+      enemies:system.enemies,
+      pressureBudget:director.settings?.pressureBudget,
+      aggression:system.aggression,
+    }) !== false;
+  }
+
+  function startDelayedAttack(lion, trailPoint) {
+    const target = trailVector(lion, trailPoint);
+    setLionFacing(lion, target.x, target.z);
+    lion.attack = LION_ATTACK;
+    lion.state = 'windup';
+    lion.stateTime = 0;
+    lion.windup = LION_ATTACK.windup;
+    lion.active = LION_ATTACK.active;
+    lion.recovery = LION_ATTACK.recovery;
+    lion.hitDone = false;
+    system.director?.grant?.(lion, LION_ATTACK);
+  }
+
+  function cancelWrongTargetAttack(lion) {
+    system.director?.release?.(lion);
+    lion.state = 'idle';
+    lion.stateTime = 0;
+    lion.attack = null;
+    lion.windup = 0;
+    lion.active = 0;
+    lion.recovery = 0;
+    lion.hitDone = false;
+    lion.cooldown = Math.max(finite(lion.cooldown), .12);
   }
 
   function separateLion(lion, other) {
@@ -168,10 +220,41 @@ export function createArenaEnemySystem(options = {}) {
 
     const movedLions = [];
     for (const [lion, before] of snapshots) {
-      if (lion.hp <= 0 || before.state !== 'idle' || lion.state !== 'idle') continue;
+      if (lion.hp <= 0) continue;
+
+      if (before.state === 'idle' && lion.state === 'windup') {
+        if (!delayedTargetIsAttackable(lion, trailPoint)) {
+          cancelWrongTargetAttack(lion);
+          if (before.stunned <= 0 && before.knock <= .05) {
+            moveLionAlongTrail(lion, before, trailPoint, frameDt);
+            movedLions.push(lion);
+          }
+        } else {
+          const target = trailVector(lion, trailPoint);
+          setLionFacing(lion, target.x, target.z);
+          syncLionRoot(lion);
+        }
+        continue;
+      }
+
+      if ((before.state === 'windup' && lion.state === 'windup') ||
+          (before.state === 'windup' && lion.state === 'active')) {
+        const target = trailVector(lion, trailPoint);
+        setLionFacing(lion, target.x, target.z);
+        syncLionRoot(lion);
+        continue;
+      }
+
+      if (before.state !== 'idle' || lion.state !== 'idle') continue;
       if (before.stunned > 0 || finite(lion.stunned) > 0 || before.knock > .05) continue;
-      moveLionAlongTrail(lion, before, trailPoint, frameDt);
-      movedLions.push(lion);
+
+      if (canStartDelayedAttack(lion, trailPoint)) {
+        startDelayedAttack(lion, trailPoint);
+        syncLionRoot(lion);
+      } else {
+        moveLionAlongTrail(lion, before, trailPoint, frameDt);
+        movedLions.push(lion);
+      }
     }
 
     for (const lion of movedLions) {
