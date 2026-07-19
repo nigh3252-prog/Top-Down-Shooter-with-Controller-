@@ -25,24 +25,89 @@ export const DEFAULT_DIRECTOR_SETTINGS = {
   directEngageDelay:0
 };
 
-// Pressure is no longer a user-tuned system on this branch. Remove those rows
-// after combat-arena creates them while retaining population, speed, health,
-// and physical-size controls.
 const REMOVED_PRESSURE_SLIDERS = ['PRESSURE BUDGET', 'AGGRESSION', 'IDLE RANGE'];
-function removePressureSliders(){
+const ENEMY_COUNT_PRESETS = [
+  { id:'small', label:'SMALL', multiplier:.5, count:3 },
+  { id:'medium', label:'MEDIUM', multiplier:1, count:6 },
+  { id:'large', label:'LARGE', multiplier:2, count:12 },
+  { id:'tooMany', label:'TOO MANY', multiplier:10, count:60 },
+];
+const ENEMY_COUNT_STORAGE_KEY = 'arena.enemyCountPreset';
+
+function storedEnemyCountPreset(){
+  try { return localStorage.getItem(ENEMY_COUNT_STORAGE_KEY) || 'medium'; }
+  catch { return 'medium'; }
+}
+function storeEnemyCountPreset(value){
+  try { localStorage.setItem(ENEMY_COUNT_STORAGE_KEY, value); }
+  catch {}
+}
+
+function installArenaControls(){
   if(typeof document === 'undefined') return;
   const box = document.getElementById('dirSliders');
   if(!box) return;
+
   for(const row of [...box.querySelectorAll('.srow')]){
     const text = row.querySelector('.slabel')?.textContent?.trim() || '';
     if(REMOVED_PRESSURE_SLIDERS.some(label => text.startsWith(label))) row.remove();
   }
+
+  const waveRow=[...box.querySelectorAll('.srow')].find(row=>
+    (row.querySelector('.slabel')?.textContent?.trim() || '').startsWith('WAVE SIZE')
+  );
+  if(!waveRow || waveRow.dataset.enemyCountPresetInstalled === 'true') return;
+  const input=waveRow.querySelector('input[type="range"]');
+  if(!input) return;
+
+  waveRow.dataset.enemyCountPresetInstalled='true';
+  input.max='120';
+  input.hidden=true;
+
+  const label=document.createElement('div');
+  label.className='slabel';
+  label.textContent='ENEMY COUNT ';
+  const value=document.createElement('span');
+  value.className='sval';
+  label.appendChild(value);
+
+  const controls=document.createElement('div');
+  controls.style.display='grid';
+  controls.style.gridTemplateColumns='repeat(2,minmax(0,1fr))';
+  controls.style.gap='6px';
+  controls.style.width='100%';
+
+  function applyPreset(id,{reset=false}={}){
+    const preset=ENEMY_COUNT_PRESETS.find(entry=>entry.id===id)||ENEMY_COUNT_PRESETS[1];
+    input.value=String(preset.count);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    storeEnemyCountPreset(preset.id);
+    value.textContent=`${preset.label} · ${preset.multiplier}×`;
+    controls.querySelectorAll('button').forEach(button=>button.classList.toggle('on',button.dataset.preset===preset.id));
+    if(reset) document.getElementById('resetBtn')?.click();
+  }
+
+  for(const preset of ENEMY_COUNT_PRESETS){
+    const button=document.createElement('button');
+    button.type='button';
+    button.dataset.preset=preset.id;
+    button.textContent=preset.label;
+    button.title=`${preset.multiplier}× normal enemy count${preset.id==='tooMany'?' — 60 enemies from the normal six':''}`;
+    button.addEventListener('click',()=>applyPreset(preset.id,{reset:true}));
+    controls.appendChild(button);
+  }
+
+  waveRow.replaceChildren(label,controls,input);
+  const stored=storedEnemyCountPreset();
+  applyPreset(stored,{reset:false});
+  if(stored!=='medium') setTimeout(()=>document.getElementById('resetBtn')?.click(),0);
 }
+
 if(typeof document !== 'undefined'){
   // Imported modules execute before combat-arena's inline module body. Waiting a
-  // task lets the arena finish constructing its slider rows before we remove them.
-  setTimeout(removePressureSliders, 0);
-  setTimeout(removePressureSliders, 100);
+  // task lets the arena finish constructing its controls before they are replaced.
+  setTimeout(installArenaControls,0);
+  setTimeout(installArenaControls,100);
 }
 
 // Keep melee enemies pressing into their physical collision ring. Ranged rock
@@ -146,9 +211,7 @@ export function createCombatDirector(options = {}){
     for(const enemy of context.enemies || []) applyAttackAllProfile(enemy, step, context.player);
   }
 
-  function canGrant(enemy, attack){
-    return live(enemy) && !!attack;
-  }
+  function canGrant(enemy, attack){return live(enemy) && !!attack;}
 
   function grant(enemy, attack){
     if(!live(enemy) || !attack) return null;
@@ -177,52 +240,20 @@ export function createCombatDirector(options = {}){
 
   function getDebugState(){
     return {
-      mode:'attackAll',
-      activeTokens:0,
-      activeMelee:0,
-      activeRanged:0,
-      approachers:0,
-      directEngagedEnemy:null,
-      directEngageAttackId:null,
-      directEngageDistance:0,
-      activeRally:null,
-      activeCost:0,
-      cooldownPressure:0,
-      pressureBudget:'unlimited',
+      mode:'attackAll',activeTokens:0,activeMelee:0,activeRanged:0,approachers:0,
+      directEngagedEnemy:null,directEngageAttackId:null,directEngageDistance:0,
+      activeRally:null,activeCost:0,cooldownPressure:0,pressureBudget:'unlimited',
       attacksStarted10s:state.grantTimes.length,
       meleeStarted10s:state.grantTimes.filter(entry => entry.kind !== 'ranged').length,
       rangedStarted10s:state.grantTimes.filter(entry => entry.kind === 'ranged').length,
-      initiationsStarted10s:0,
-      targetApproachers:'all',
-      targetMeleeCap:'all',
-      targetRangedCap:'all',
-      rangedGap:0,
-      impactGap:0,
-      slots
+      initiationsStarted10s:0,targetApproachers:'all',targetMeleeCap:'all',targetRangedCap:'all',
+      rangedGap:0,impactGap:0,slots
     };
   }
 
   return {
-    settings,
-    reset,
-    setMode,
-    getMode,
-    nextMode,
-    update,
-    canGrant,
-    grant,
-    release,
-    releaseApproach,
-    releaseAllForEnemy,
-    removeDeadTokens,
-    activeCost,
-    countActiveKind,
-    hasApproachPermit,
-    requestRally,
-    endRally,
-    markNearEligible,
-    assignBattleCircleSlots,
-    onWaveClear,
-    getDebugState
+    settings,reset,setMode,getMode,nextMode,update,canGrant,grant,release,releaseApproach,
+    releaseAllForEnemy,removeDeadTokens,activeCost,countActiveKind,hasApproachPermit,
+    requestRally,endRally,markNearEligible,assignBattleCircleSlots,onWaveClear,getDebugState
   };
 }
