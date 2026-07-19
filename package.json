@@ -2,8 +2,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:combat && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick",
+    "test": "npm run test:combat && npm run test:fusion-movement && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick",
     "test:combat": "node tests/combat-pass.test.mjs",
+    "test:fusion-movement": "node tests/fusion-movement-behaviors.test.mjs",
     "test:flare": "node tests/flare-enemies.test.mjs",
     "test:hades": "node tests/hades-enemies.test.mjs",
     "test:encounters": "node tests/combined-encounter.test.mjs",
