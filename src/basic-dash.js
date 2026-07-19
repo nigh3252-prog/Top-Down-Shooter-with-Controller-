@@ -1,5 +1,5 @@
 import { resolveCircleMovement } from './hex-maze-navigation.js';
-import { installMidairLiftedDashSwirl } from './dash-midair-lifted-swirl.js';
+import { installMidairLiftedDashSwirl } from './dash-midair-lifted-swirl-controls.js';
 import {
   BASIC_DASH,
   dashDistance,
