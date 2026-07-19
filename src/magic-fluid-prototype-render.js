@@ -84,13 +84,17 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
 
   function renderGroundTexture(){
     const s=settings();
+    const edgeFadeCells=Math.max(0,Number(s.edgeFadeCells)||0);
     for(let i=0,p=0;i<N;i++,p+=4){
       if(solid[i]){pix[p]=0;pix[p+1]=0;pix[p+2]=0;pix[p+3]=0;continue;}
       const d=Math.max(0,dye[i]),h=Math.max(0,heat[i]);
       const body=Math.min(1,Math.pow(d*1.25,.75)),hot=Math.min(1,Math.pow(Math.min(d,h)*1.45,.78));
       if(body<.035){pix[p]=0;pix[p+1]=0;pix[p+2]=0;pix[p+3]=0;continue;}
+      const cellX=i%simW,cellY=Math.floor(i/simW);
+      const edgeDistance=Math.min(cellX,cellY,simW-1-cellX,simH-1-cellY);
+      const edgeFade=edgeFadeCells>0?Math.min(1,edgeDistance/edgeFadeCells):1;
       paletteColor(body,hot,0,color);
-      const a=Math.min(1,body*.78+hot*.35);
+      const a=Math.min(1,body*.78+hot*.35)*edgeFade;
       pix[p]=Math.floor(Math.min(255,color.r*255));pix[p+1]=Math.floor(Math.min(255,color.g*255));pix[p+2]=Math.floor(Math.min(255,color.b*255));pix[p+3]=Math.floor(Math.min(255,a*255));
     }
     dyeCtx.putImageData(imageData,0,0);dyeTexture.needsUpdate=true;
