@@ -2,12 +2,8 @@ import {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples} fro
 import {createPrototypeFluidSimulation} from './magic-fluid-sim.js';
 import {createPrototypeFluidRenderer} from './magic-fluid-prototype-render.js';
 
-function resolveRenderCamera(THREE,camera){
+export function resolveRenderCamera(THREE,camera){
   if(camera?.quaternion)return camera;
-  // combat-arena currently passes THREE + scene into installPlayerCombat, but not
-  // its lexical camera variable. Use the arena's real relative camera pose as a
-  // billboard-only proxy so the direct port remains visible instead of aborting
-  // the entire game at startup. This object does not render or control gameplay.
   const proxy=new THREE.Object3D();
   proxy.position.set(0,20,17.6);
   proxy.lookAt(0,1.8,-1.4);
@@ -15,9 +11,14 @@ function resolveRenderCamera(THREE,camera){
   return proxy;
 }
 
-// Integration shell around the direct prototype port. The dash supplies a virtual
-// drag brush; the solver and renderer remain the submitted prototype versions.
-export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=>[],getWorldKey=()=>null}={}){
+// Integration shell around the submitted prototype solver and renderer. The dash
+// supplies a virtual drag brush; the game owns world placement and the torso anchor.
+export function installMagicFluidRuntime({
+  THREE,scene,camera,
+  getMazeSegments=()=>[],
+  getWorldKey=()=>null,
+  getMagicCenterY=()=>1.4,
+}={}){
   if(!THREE||!scene)throw new Error('[magic-fluid-runtime] THREE and scene are required.');
   const renderCamera=resolveRenderCamera(THREE,camera);
   const settings=()=>PROTOTYPE_MAGIC_SETTINGS;
@@ -30,7 +31,7 @@ export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=
   function dashFits(position,direction){
     const start=localPoint(position);
     const end={x:start.x+(Number(direction?.x)||0)*8.4,z:start.z+(Number(direction?.z)||0)*8.4};
-    const margin=1.2;
+    const margin=2.5;
     return Math.abs(start.x)<sim.PATCH_W*.5-margin&&Math.abs(start.z)<sim.PATCH_D*.5-margin
       &&Math.abs(end.x)<sim.PATCH_W*.5-margin&&Math.abs(end.z)<sim.PATCH_D*.5-margin;
   }
@@ -38,7 +39,9 @@ export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=
   function positionPatch(position,direction){
     const centerX=(Number(position?.x)||0)+(Number(direction?.x)||0)*4.2;
     const centerZ=(Number(position?.z)||0)+(Number(direction?.z)||0)*4.2;
-    sim.setCenter(centerX,centerZ);renderer.setCenter(centerX,centerZ);
+    const centerY=Number(getMagicCenterY?.());
+    sim.setCenter(centerX,centerZ);
+    renderer.setCenter(centerX,centerZ,Number.isFinite(centerY)?centerY:1.4);
   }
 
   function beginDashJet(payload={}){
@@ -81,4 +84,4 @@ export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=
   };
 }
 
-export {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples,resolveRenderCamera};
+export {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples};
