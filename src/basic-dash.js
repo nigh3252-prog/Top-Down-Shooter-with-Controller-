@@ -1,6 +1,8 @@
 import { resolveCircleMovement } from './hex-maze-navigation.js';
+import { installMidairLiftedDashSwirl } from './dash-midair-lifted-swirl.js';
 import {
   BASIC_DASH,
+  dashDistance,
   dashDistanceAt,
   normalizeDirection,
   postDashDirection,
@@ -17,6 +19,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   const keyState = Object.create(null);
   const forwardVector = new THREE.Vector3(0, 0, 1);
   const yAxis = THREE.Vector3 ? new THREE.Vector3(0, 1, 0) : Y_AXIS_FALLBACK;
+  const dashSwirl = installMidairLiftedDashSwirl(api);
   const state = {
     active:false,
     postActive:false,
@@ -173,16 +176,29 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     syncPosition(handle, state.position);
     holdFacing(handle);
     applyPose();
+    dashSwirl.beginDash({
+      x:state.position.x,
+      z:state.position.z,
+      direction:state.direction,
+      distance:dashDistance(config),
+    });
   }
 
   function updateActiveDash(handle, dt){
     state.elapsed = Math.min(config.duration, state.elapsed + dt);
     const targetDistance = dashDistanceAt(state.elapsed, config);
     const stepDistance = Math.max(0, targetDistance - state.plannedDistance);
+    const previousPosition = state.position;
     state.position = moveFrom(handle, state.position, state.direction, stepDistance);
     state.plannedDistance = targetDistance;
     syncPosition(handle, state.position);
     holdFacing(handle);
+    dashSwirl.emitWorld(
+      state.position.x,
+      state.position.z,
+      state.position.x - previousPosition.x,
+      state.position.z - previousPosition.z,
+    );
 
     const u = clamp01(state.elapsed / Math.max(.001, config.duration));
     const anticipationWindow=Math.max(.01,config.movingAnticipationFraction||.18);
@@ -232,12 +248,16 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
 
   function update(dt){
     const handle = arenaHandle();
-    if(!handle) return;
+    if(!handle){
+      dashSwirl.update(dt);
+      return;
+    }
     const dodge = handle.arena.dodge;
     const interrupted = handle.arena.deadT >= 0 || handle.roomTransition?.active;
     if(interrupted){
       cancel(handle);
       state.sawArenaDash = dodge.t >= 0;
+      dashSwirl.update(dt);
       return;
     }
 
@@ -252,13 +272,15 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
 
     if(!state.active) state.lastForward = currentForward();
     state.sawArenaDash = dodge.t >= 0;
+    dashSwirl.update(dt);
   }
 
   function dispose(){
     resetPose();
+    dashSwirl.dispose();
     globalThis.removeEventListener?.('keydown', onKeyDown);
     globalThis.removeEventListener?.('keyup', onKeyUp);
   }
 
-  return { state, config, update, dispose };
+  return { state, config, update, dispose, dashSwirl };
 }
