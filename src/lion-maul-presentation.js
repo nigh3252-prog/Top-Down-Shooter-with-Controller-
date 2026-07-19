@@ -1,8 +1,4 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const smooth01 = value => {
-  const t = clamp(value, 0, 1);
-  return t * t * (3 - 2 * t);
-};
 
 let installed = false;
 let actorVisual = null;
@@ -20,67 +16,58 @@ function disableDamageVignette() {
   vignette.style.setProperty('opacity', '0', 'important');
 }
 
+function actorWorldZ(actorPos) {
+  if (Number.isFinite(Number(actorPos?.y))) return Number(actorPos.y);
+  if (Number.isFinite(Number(actorPos?.z))) return Number(actorPos.z);
+  return 0;
+}
+
 function findActorVisual(runtime) {
-  if (actorVisual?.parent) return actorVisual;
+  const actorPos = runtime?.actorPos;
+  if (actorVisual?.parent && actorPos) {
+    const root = actorVisual.parent;
+    const distance = Math.hypot(
+      Number(root.position?.x || 0) - Number(actorPos.x || 0),
+      Number(root.position?.z || 0) - actorWorldZ(actorPos),
+    );
+    if (distance < .35) return actorVisual;
+  }
+
   const enemyGroup = runtime?.enemySystem?.group;
   const worldRoot = enemyGroup?.parent;
   const mazeGroup = runtime?.mazeWorld?.group;
-  if (!worldRoot) return null;
+  if (!worldRoot || !actorPos) return null;
 
-  const actorRoot = worldRoot.children.find(child =>
-    child?.isGroup &&
-    child !== enemyGroup &&
-    child !== mazeGroup &&
-    child.children?.some(grandchild => grandchild?.isGroup)
-  );
+  const playerX = Number(actorPos.x) || 0;
+  const playerZ = actorWorldZ(actorPos);
+  const candidates = worldRoot.children
+    .filter(child => child?.isGroup && child !== enemyGroup && child !== mazeGroup)
+    .map(root => ({
+      root,
+      distance:Math.hypot(
+        Number(root.position?.x || 0) - playerX,
+        Number(root.position?.z || 0) - playerZ,
+      ),
+    }))
+    .filter(entry => entry.distance < .35 && entry.root.children?.some(child => child?.isGroup))
+    .sort((a, b) => a.distance - b.distance);
+
+  const actorRoot = candidates[0]?.root || null;
   actorVisual = actorRoot?.children?.find(child => child?.isGroup) || null;
   return actorVisual;
-}
-
-function biteShape(progress) {
-  const p = clamp(Number(progress) || 0, 0, 1);
-  const braceIn = smooth01(p / .24);
-  const braceOut = 1 - smooth01((p - .88) / .12);
-  const brace = braceIn * braceOut;
-  const snap = Math.exp(-Math.pow((p - .74) / .105, 2));
-  const shake = Math.sin(p * Math.PI * 2) * brace * (1 - snap * .35);
-  return { p, brace, snap, shake };
 }
 
 function applyPronePlayerPose(runtime, lion) {
   const visual = findActorVisual(runtime);
   if (!visual) return;
-  const { p, snap } = biteShape(lion?._lionMaulProgress);
+  const progress = clamp(Number(lion?._lionMaulProgress) || 0, 0, 1);
+  const impact = Math.exp(-Math.pow((progress - .75) / .11, 2));
 
-  // The regular player update restores the standing transform each frame. Applying
-  // this immediately before render makes the whole character lie flat only while pinned.
-  visual.rotateX(-Math.PI * .47);
-  visual.rotateZ(.10 + Math.sin(p * Math.PI * 2) * .035);
-  visual.position.y = .24 + snap * .055;
-}
-
-function applyLionMaulPose(lion) {
-  const body = lion?.fusionVisual?.model?.chassis?.body;
-  const socket = lion?.fusionVisual?.model?.chassis?.socket;
-  if (!body && !socket) return;
-  const { p, brace, snap, shake } = biteShape(lion._lionMaulProgress);
-
-  // The authored maul pose already opens the jaw. This pass makes the animal read as
-  // planted over its prey: shoulders low, forequarters braced, and the head sawing
-  // side-to-side before snapping down on each bite.
-  if (body) {
-    body.position.y -= .44 * brace;
-    body.rotation.x += .24 * brace + .20 * snap;
-    body.rotation.y += shake * .09;
-    body.rotation.z += Math.sin(p * Math.PI * 4) * .055 * brace;
-  }
-  if (socket) {
-    socket.rotation.x -= .28 * brace + .52 * snap;
-    socket.rotation.y += shake * .48;
-    socket.rotation.z += Math.sin(p * Math.PI * 4) * .14 * brace;
-    socket.position.y -= .08 * brace;
-    socket.position.z += .15 * brace;
-  }
+  // actorVisual is reset to its upright yaw every player update. A local -90° X turn
+  // therefore lays the entire model on its back while preserving its world facing.
+  visual.rotateX(-Math.PI * .5);
+  visual.rotateZ(.06 + Math.sin(progress * Math.PI * 2) * .025);
+  visual.position.y = .10 + impact * .035;
 }
 
 function installLionMaulPresentation() {
@@ -106,7 +93,6 @@ function installLionMaulPresentation() {
       const lion = currentRuntime?.enemySystem?.enemies?.find(enemy => enemy?._lionMaulActive && enemy.hp > 0);
       if (!lion || currentRuntime?.arena?.paused) return;
       applyPronePlayerPose(currentRuntime, lion);
-      applyLionMaulPose(lion);
     };
   };
 
@@ -115,4 +101,4 @@ function installLionMaulPresentation() {
 
 installLionMaulPresentation();
 
-export { applyLionMaulPose, applyPronePlayerPose, disableDamageVignette, installLionMaulPresentation };
+export { applyPronePlayerPose, disableDamageVignette, findActorVisual, installLionMaulPresentation };
