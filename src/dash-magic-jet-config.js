@@ -8,8 +8,8 @@ export const DASH_JET_SETTINGS = {
   // a near-black scene where dense white-hot dye looked right, but over the
   // arena's bright ground full density clips the whole trail to white. These
   // values keep the core in the cyan/teal part of the ramp.
-  ink: .7,
-  heat: .45,
+  ink: .6,
+  heat: .4,
   curl: 2.45,
   momentum: .984,
   // `fade` is the live value the solver reads; the runtime ramps it from
@@ -23,6 +23,13 @@ export const DASH_JET_SETTINGS = {
   height: .95,
   voxelSize: .82,
   breakup: .38,
+  // World-Y the voxel stack starts at. Lifts the plume so it emits from the
+  // middle of the puppet instead of its feet — the same band other magical
+  // effects should emit from.
+  baseLift: 1.0,
+  // Multiplies the per-layer vertical step so the layer separation stays
+  // readable now that the blocks are twice the size.
+  layerSpread: 2,
   glow: 2.25,
   accent: 1.8,
   // Multiplies the lifted air-slice plane opacities (1 = prototype look,
@@ -33,7 +40,7 @@ export const DASH_JET_SETTINGS = {
   // ramp against a near-black background; over the arena's bright ground the
   // full-gain colors clip to white, so this pulls intensity down until the
   // blue ramp reads.
-  voxelGain: .28,
+  voxelGain: .18,
   // Opacity of the dark understain plane drawn beneath the trail. It locally
   // recreates the prototype's dark background so the additive glow keeps its
   // color instead of washing out on bright ground. 0 disables it.
@@ -41,8 +48,11 @@ export const DASH_JET_SETTINGS = {
 };
 
 export const DASH_JET_LAYOUT = Object.freeze({
-  patchWidth: 15.5,
-  patchDepth: 13.5,
+  // Double the prototype patch: the 15.5x13.5 field showed its edges during a
+  // dash, and the doubled grid-cell size also doubles the voxel blocks, which
+  // keeps the trail chunky at the larger scale.
+  patchWidth: 31,
+  patchDepth: 27,
   simulationColumns: 48,
   simulationRows: 42,
   pressureIterations: 4,

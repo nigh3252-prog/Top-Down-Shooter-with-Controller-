@@ -55,9 +55,12 @@ function dyeNear(sim, wx, wz){
   const sim=makeSim();
   sim.injectWorld(0, 0, 0, .5, 1);
   const before=sim.maxDye();
-  const upstream0=dyeNear(sim, 0, 1.5);
+  // Probe just beyond the injection brush (radius ~3.8 grid cells), scaled to
+  // world units so the test holds for any patch size.
+  const probeZ=5.5*(sim.PATCH_D/sim.simH);
+  const upstream0=dyeNear(sim, 0, probeZ);
   for(let i=0;i<12;i++) sim.updateSim();
-  assert.ok(dyeNear(sim, 0, 1.5) > upstream0, 'dye advects downstream (+z) of the jet');
+  assert.ok(dyeNear(sim, 0, probeZ) > upstream0, 'dye advects downstream (+z) of the jet');
   assert.ok(sim.maxDye() < before, 'fade decays the dye peak');
 }
 

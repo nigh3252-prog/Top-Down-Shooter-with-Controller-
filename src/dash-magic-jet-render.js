@@ -226,6 +226,14 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
     airPlane.material.opacity=Math.min(1.45,.78+s.glow*.18)*sheet;
     airGlowPlane.material.opacity=Math.min(1.10,.26+s.glow*.16)*sheet;
     airHaloPlane.material.opacity=Math.min(.75,.10+s.glow*.08)*sheet;
+
+    // Ride the slices at the upper-middle of the lifted voxel stack (the
+    // prototype's fixed 0.92..1.10 band assumed the stack started at ground).
+    const layerStep=(.14+s.height*.17)*(s.layerSpread??1);
+    const sliceBase=(s.baseLift??.28)+layerStep*2;
+    airPlane.position.y=sliceBase;
+    airGlowPlane.position.y=sliceBase+.10;
+    airHaloPlane.position.y=sliceBase+.18;
   }
 
   function sampleRenderedGroundColor(gx,gy,out){
@@ -288,7 +296,7 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
           const dz=sim.sample(v,gx,gy)*drift+jitterZ[instance]*baseSize*(.18+distFromMid*.06);
           const swirlPush=Math.sin(time*1.7+seed*12.0)*swirl*.008*(.4+layer);
 
-          const y=.28+layer*(.14+s.height*.17)+groundAlpha*(.12+.16*layerFocus);
+          const y=(s.baseLift??.28)+layer*(.14+s.height*.17)*(s.layerSpread??1)+groundAlpha*(.12+.16*layerFocus);
           const size=baseSize*(.68+groundAlpha*.92+layerFocus*.24)*(1.0-distFromMid*.06);
           const pulse=1+.06*Math.sin(time*4.6+seed*100);
 
@@ -333,7 +341,7 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
       const dz=st.z1-st.z0;
       const len=Math.max(.01,Math.hypot(dx,dz));
       const ang=Math.atan2(dz,dx);
-      dummy.position.set(mx,.94+st.heat*.10,mz);
+      dummy.position.set(mx,(s.baseLift??.84)+.10+st.heat*.10,mz);
       dummy.rotation.set(-Math.PI*.5,0,-ang);
       dummy.scale.set(len*2.0,st.width*s.accent*(.65+st.life*.55),1);
       dummy.updateMatrix();
