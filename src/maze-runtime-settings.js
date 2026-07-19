@@ -13,8 +13,10 @@ export const MAZE_ROOM_SIZE_OPTIONS = Object.freeze([
 ]);
 
 const CELL_SIZE_KEY = 'arena.mazeCellSize';
+const LAB_CELL_SIZE_KEY = 'enemyLab.mazeCellSize';
 const ROOM_SIZE_KEY = 'arena.mazeRoomCells';
 const DEFAULT_CELL_SIZE_ID = 'compact';
+const DEFAULT_LAB_CELL_SIZE_ID = 'large';
 const DEFAULT_ROOM_SIZE_ID = 'medium';
 
 function storageGet(key){
@@ -37,9 +39,51 @@ function isCombatArenaRuntime(){
   return typeof document !== 'undefined' && /(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname || '');
 }
 
+function isEnemyLabRuntime(){
+  if(typeof document === 'undefined') return false;
+  try{
+    const params = new URLSearchParams(globalThis.location?.search || '');
+    if(String(params.get('layout') || '').trim().toLowerCase() === 'arena') return true;
+
+    const parent = globalThis.parent;
+    const isArenaFrame = parent && parent !== globalThis && globalThis.frameElement?.id === 'arenaFrame';
+    const parentPage = isArenaFrame ? parent.location.pathname.split('/').pop() : '';
+    return parentPage === 'enemy-lab.html';
+  }catch{
+    return false;
+  }
+}
+
+function requestedCellSizeId(){
+  try{
+    const value = new URLSearchParams(globalThis.location?.search || '').get('cellSize');
+    const normalized = String(value || '').trim().toLowerCase();
+    return MAZE_CELL_SIZE_OPTIONS.some(option => option.id === normalized) ? normalized : null;
+  }catch{
+    return null;
+  }
+}
+
+function cellSizeStorageKey(){
+  return isEnemyLabRuntime() ? LAB_CELL_SIZE_KEY : CELL_SIZE_KEY;
+}
+
+function defaultCellSizeId(){
+  return isEnemyLabRuntime() ? DEFAULT_LAB_CELL_SIZE_ID : DEFAULT_CELL_SIZE_ID;
+}
+
+function selectedCellSize(){
+  const explicit = requestedCellSizeId();
+  return optionById(
+    MAZE_CELL_SIZE_OPTIONS,
+    explicit || storageGet(cellSizeStorageKey()),
+    defaultCellSizeId(),
+  );
+}
+
 export function getMazeRuntimeSettings(){
   return {
-    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS, storageGet(CELL_SIZE_KEY), DEFAULT_CELL_SIZE_ID),
+    cellSize:selectedCellSize(),
     roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS, storageGet(ROOM_SIZE_KEY), DEFAULT_ROOM_SIZE_ID),
   };
 }
@@ -50,9 +94,9 @@ export function configuredHexSize(requestedHexSize){
   // The gameplay maze uses large world-unit cells. Lab/debug renderers use tiny
   // values such as 1 or 2.6 and must not inherit the gameplay override.
   if(requested < 10) return requested;
-  const stored = storageGet(CELL_SIZE_KEY);
-  if(stored === null && !isCombatArenaRuntime()) return requested;
-  return optionById(MAZE_CELL_SIZE_OPTIONS, stored, DEFAULT_CELL_SIZE_ID).value;
+  const stored = storageGet(cellSizeStorageKey());
+  if(stored === null && !requestedCellSizeId() && !isCombatArenaRuntime()) return requested;
+  return selectedCellSize().value;
 }
 
 export function configuredRoomSize(defaultMin, defaultMax, presetId = null){
@@ -130,7 +174,9 @@ export function installMazeRuntimeControls(){
   });
   const note = document.createElement('div');
   note.className = 'mazeReloadNote';
-  note.textContent = 'Changing either option rebuilds the entire maze. Compact 12 + Medium 7–10 is now the default.';
+  note.textContent = isEnemyLabRuntime()
+    ? 'Enemy Lab uses its own cell-size setting and defaults to Large 24.'
+    : 'Changing either option rebuilds the entire maze. Compact 12 + Medium 7–10 is now the default.';
   group.append(heading, cell.row, room.row, note);
   simBody.insertBefore(group, sliderRoot);
 
@@ -138,7 +184,7 @@ export function installMazeRuntimeControls(){
     storageSet(key, value);
     globalThis.location?.reload?.();
   };
-  cell.select.addEventListener('change', ()=>reloadWith(CELL_SIZE_KEY, cell.select.value));
+  cell.select.addEventListener('change', ()=>reloadWith(cellSizeStorageKey(), cell.select.value));
   room.select.addEventListener('change', ()=>reloadWith(ROOM_SIZE_KEY, room.select.value));
   return true;
 }
