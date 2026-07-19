@@ -1,8 +1,20 @@
+function isEnemyLabRuntime(){
+  if(typeof document==='undefined')return false;
+  try{
+    const params=new URLSearchParams(globalThis.location?.search||'');
+    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
+    const parent=globalThis.parent;
+    const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
+    return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
+  }catch{return false;}
+}
+
 export function createRoomEncounterState(maze, { onRoomEnter, onEncounterStart, onRoomCleared } = {}){
   const clearedRoomIds = new Set();
   const openedDoorEdges = new Set();
   let activeRoomId = null;
   let encounterRoomId = null;
+  const enemyLab = isEnemyLabRuntime();
 
   function enterRoom(roomId){
     if(roomId === null || roomId === undefined || roomId === activeRoomId) return false;
@@ -11,7 +23,7 @@ export function createRoomEncounterState(maze, { onRoomEnter, onEncounterStart, 
     onRoomEnter?.({ roomId, previousRoomId, cleared:clearedRoomIds.has(roomId) });
     if(!clearedRoomIds.has(roomId)){
       encounterRoomId = roomId;
-      onEncounterStart?.({ roomId });
+      if(!enemyLab) onEncounterStart?.({ roomId });
     }
     return true;
   }
