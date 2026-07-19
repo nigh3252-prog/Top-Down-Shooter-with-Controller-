@@ -156,11 +156,12 @@ export function createPrototypeFluidSimulation({settings,layout,getMazeSegments=
 
   function buildSolidMask(){
     solid.fill(0);const segments=getMazeSegments?.()||[];
+    const wallRadius=Math.max(.42,Number(layout.wallMaskRadius)||.42);
     for(let y=1;y<simH-1;y++)for(let x=1;x<simW-1;x++){
       const wx=centerX+(x/simW-.5)*PATCH_W,wz=centerZ+(y/simH-.5)*PATCH_D;
       for(const segment of segments){
         if(!segment?.a||!segment?.b)continue;
-        if(pointSegmentDistance(wx,wz,segment.a,segment.b)<=.42){solid[idx(x,y)]=1;break;}
+        if(pointSegmentDistance(wx,wz,segment.a,segment.b)<=wallRadius){solid[idx(x,y)]=1;break;}
       }
     }
   }
