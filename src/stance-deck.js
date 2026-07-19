@@ -5,6 +5,17 @@
 import { POW_BUNKER_CARD } from './powbunker-card.js';
 import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
 
+function isEnemyLabRuntime(){
+  if(typeof window==='undefined'||typeof document==='undefined')return false;
+  try{
+    const params=new URLSearchParams(globalThis.location?.search||'');
+    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
+    const parent=globalThis.parent;
+    const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
+    return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
+  }catch{return false;}
+}
+
 export function cardRestoresStamina(card){
   if(!card)return false;
   if(typeof card.__restoresStamina==='boolean')return card.__restoresStamina;
@@ -90,7 +101,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     update(dt){if(s.shuffleT<0)return;s.shuffleT-=dt;if(s.shuffleT<=0){s.shuffleT=-1;dealFresh(s.pool);}scheduleDecoration();},
   };
 
-  if(typeof document!=='undefined'&&document.getElementById('startGate')){
+  if(typeof document!=='undefined'&&document.getElementById('startGate')&&!isEnemyLabRuntime()){
     const install=()=>import('./run-draft.js').then(module=>module.installRunDraft(api)).catch(error=>{console.error('Run draft UI failed to install',error);const err=document.getElementById('err');if(err){err.style.display='block';err.textContent=`Run draft UI did not load\n${error?.message||error}`;}});
     if(typeof queueMicrotask==='function')queueMicrotask(install);else setTimeout(install,0);
   }
