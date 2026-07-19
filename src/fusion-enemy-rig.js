@@ -262,20 +262,56 @@ function lionMaulProxy(enemy){
   };
 }
 
+function ensureLionMaulState(handle){
+  if(handle._lionMaulState) return handle._lionMaulState;
+  const body = handle?.model?.chassis?.body || null;
+  const socket = handle?.model?.chassis?.socket || null;
+  const legs = body?.children
+    ?.filter(child => child?.isGroup
+      && child.position.y < -.45
+      && Math.abs(child.position.x) > .55
+      && Math.abs(child.position.z) > 1)
+    .map(root => ({
+      root,
+      joints:chainJoints(root, 3),
+      rear:root.position.z < 0,
+    }))
+    .filter(leg => leg.joints.length === 3) || [];
+  handle._lionMaulState = { body, socket, legs };
+  return handle._lionMaulState;
+}
+
 function applyLionMaulPose(handle, enemy){
+  const state = ensureLionMaulState(handle);
   const progress = clamp(Number(enemy._lionMaulProgress) || 0, 0, 1);
-  const body = handle?.model?.chassis?.body;
-  const socket = handle?.model?.chassis?.socket;
-  const brace = smooth01(clamp(progress / .34, 0, 1)) * (1 - smooth01(clamp((progress - .82) / .18, 0, 1)));
-  const snap = Math.exp(-Math.pow((progress - .76) / .09, 2));
-  if(body){
-    body.position.y -= .22 * brace;
-    body.rotation.x += .18 * brace + .20 * snap;
-    body.rotation.z += Math.sin((Number(enemy._lionMaulBiteIndex) || 0) * 2.7) * .035 * brace;
+  const brace = smooth01(clamp(progress / .26, 0, 1))
+    * (1 - smooth01(clamp((progress - .9) / .1, 0, 1)));
+  const snap = Math.exp(-Math.pow((progress - .75) / .095, 2));
+  const biteIndex = Number(enemy._lionMaulBiteIndex) || 0;
+  const shake = Math.sin(progress * Math.PI * 2.2 + biteIndex * 1.7)
+    * brace * (1 - snap * .5);
+
+  // Lower and fold the whole chassis instead of translating the head socket. Because
+  // the head remains a child of body, it cannot drift away from the shoulders.
+  if(state.body){
+    state.body.position.y -= .68 * brace;
+    state.body.rotation.x += .12 * brace + .10 * snap;
+    state.body.rotation.z += Math.sin(progress * Math.PI * 4 + biteIndex) * .035 * brace;
   }
-  if(socket){
-    socket.rotation.x += .20 * brace - .42 * snap;
-    socket.position.z += .12 * brace;
+
+  for(const leg of state.legs){
+    const hip = leg.rear ? .95 : .55;
+    const knee = leg.rear ? -1.62 : 1.24;
+    const ankle = leg.rear ? .42 : -.16;
+    leg.joints[0].rotation.x = lerp(leg.joints[0].rotation.x, hip, brace);
+    leg.joints[1].rotation.x = lerp(leg.joints[1].rotation.x, knee, brace);
+    leg.joints[2].rotation.x = lerp(leg.joints[2].rotation.x, ankle, brace);
+  }
+
+  if(state.socket){
+    state.socket.rotation.x += -.18 * brace + .34 * snap;
+    state.socket.rotation.y += shake * .42;
+    state.socket.rotation.z += Math.sin(progress * Math.PI * 4 + biteIndex * .8) * .10 * brace;
   }
 }
 
