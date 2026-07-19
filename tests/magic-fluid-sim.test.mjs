@@ -5,7 +5,7 @@ assert.deepEqual(PROTOTYPE_MAGIC_SETTINGS,{
   push:1.9,ink:1.45,heat:1.85,curl:2.45,momentum:.984,fade:.989,
   radius:14,layers:4,height:.95,voxelSize:.52,breakup:.38,
   ground:0,glow:2.25,accent:1.8,quality:0,
-  verticalScale:2,stackCenter:.95,anchorHeightScale:.25,torsoBias:-.08,
+  verticalScale:3.25,stackCenter:.95,anchorHeightScale:.25,torsoBias:-.08,
   edgeFadeCells:3,
 });
 assert.deepEqual(PROTOTYPE_MAGIC_LAYOUT,{
@@ -20,7 +20,7 @@ assert.equal(PROTOTYPE_MAGIC_SETTINGS.radius,42/3,'brush percentage should shrin
 assert.equal(PROTOTYPE_MAGIC_SETTINGS.anchorHeightScale,.25,'the whole stack should anchor at one quarter of the measured model-center height');
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.visualColumns,PROTOTYPE_MAGIC_LAYOUT.simulationColumns,'expanded field should render every coarse simulation column');
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.visualRows,PROTOTYPE_MAGIC_LAYOUT.simulationRows,'expanded field should render every coarse simulation row');
-assert.ok(PROTOTYPE_MAGIC_SETTINGS.verticalScale>1,'voxel layers should remain spread farther apart vertically');
+assert.ok(PROTOTYPE_MAGIC_SETTINGS.verticalScale>=3,'voxel layers should be substantially separated vertically for the comparison pass');
 assert.ok(PROTOTYPE_MAGIC_SETTINGS.edgeFadeCells>=3,'expanded field should soften its rectangular boundary');
 assert.ok(PROTOTYPE_MAGIC_LAYOUT.wallMaskRadius>.7,'coarse field should use a wall mask wider than half a cell');
 
@@ -44,4 +44,4 @@ assert.deepEqual(fallbackCamera.lookAtValue,{x:0,y:1.8,z:-1.4},'fallback billboa
 const realCamera={quaternion:{real:true}};
 assert.equal(resolveRenderCamera({},realCamera),realCamera,'a supplied game camera must be used unchanged');
 
-console.log('lowered separated cube-layer magic tests passed');
+console.log('extra-separated cube-layer magic tests passed');
