@@ -5,55 +5,96 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Enemy Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#071113;--panel:rgba(7,19,21,.97);--panel2:#102628;--line:#31504d;--text:#d9eee9;--muted:#7ea39d;--gold:#e8a04c;--red:#d96d4a}
+:root{
+  color-scheme:dark;
+  --bg:#071113;--panel:rgba(7,19,21,.985);--panel2:#102628;--line:#31504d;
+  --text:#d9eee9;--muted:#7ea39d;--gold:#e8a04c;--red:#d96d4a;
+}
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text);touch-action:none}
 button,select,input{font:inherit}
 #arenaFrame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0d191b}
-#labHud{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));z-index:80;display:flex;align-items:center;gap:7px;pointer-events:none}
+#labHud{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));z-index:80;display:flex;align-items:center;gap:7px;pointer-events:none;transition:opacity .15s}
+body.dockOpen #labHud{opacity:0}
 #testBadge{max-width:min(54vw,360px);padding:8px 10px;border:1px solid rgba(49,80,77,.85);border-radius:7px;background:rgba(8,20,22,.84);font-size:10px;line-height:1.2;letter-spacing:.06em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #testBadge strong{color:var(--gold)}
-.uiBtn,.categoryBtn,.choice,.actionBtn,.miniBtn{color:var(--text);background:rgba(16,38,40,.95);border:1px solid var(--line);border-radius:8px;touch-action:manipulation}
+.uiBtn,.choice,.miniBtn{color:var(--text);background:rgba(16,38,40,.95);border:1px solid var(--line);border-radius:8px;touch-action:manipulation}
 .uiBtn{min-height:38px;padding:0 13px;color:var(--gold);font-size:11px;letter-spacing:.12em;pointer-events:auto;box-shadow:0 3px 0 rgba(0,0,0,.35)}
 button:active{transform:translateY(1px);background:#264542}
 #veil{position:fixed;inset:0;z-index:87;background:rgba(0,0,0,.08);opacity:0;pointer-events:none;transition:opacity .16s}
 #veil.on{opacity:1;pointer-events:auto}
-#labDock{position:fixed;z-index:90;background:linear-gradient(180deg,rgba(8,22,24,.985),rgba(4,13,15,.985));border:1px solid #40645f;box-shadow:0 12px 55px rgba(0,0,0,.5);overflow:hidden;transition:transform .2s ease-out;display:grid}
+#labDock{position:fixed;z-index:90;background:linear-gradient(180deg,rgba(8,22,24,.99),rgba(4,13,15,.99));border:1px solid #40645f;box-shadow:0 12px 55px rgba(0,0,0,.5);overflow:hidden;transition:transform .2s ease-out;display:grid}
 #dockHead{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid rgba(49,80,77,.7)}
-#dockTitle{flex:1;min-width:0}#dockTitle b{display:block;color:var(--gold);font-size:13px;letter-spacing:.15em}#dockTitle span{display:block;color:var(--muted);font-size:8.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dockTitle{flex:1;min-width:0}
+#dockTitle b{display:block;color:var(--gold);font-size:13px;letter-spacing:.15em}
+#dockTitle span{display:block;color:var(--muted);font-size:8.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #closeBtn{width:38px;height:38px;padding:0;font-size:18px}
-#labCategories,#labValues{scrollbar-width:none;overscroll-behavior:contain}#labCategories::-webkit-scrollbar,#labValues::-webkit-scrollbar{display:none}
+#labCategories,#labValues{scrollbar-width:none;overscroll-behavior:contain}
+#labCategories::-webkit-scrollbar,#labValues::-webkit-scrollbar{display:none}
 #labCategories{display:flex;gap:6px;padding:8px;background:rgba(0,0,0,.14)}
-.categoryBtn{flex:0 0 auto;min-height:44px;padding:7px;font-size:9px;letter-spacing:.08em;color:var(--muted)}
-.categoryBtn.on{color:var(--gold);border-color:#8a5630;background:rgba(232,160,76,.12)}
-#labValues{padding:8px;min-width:0;min-height:0;touch-action:pan-y}
+#labValues{padding:8px;min-width:0;min-height:0}
 .valueList{display:flex;gap:7px}
 .choice{flex:0 0 auto;min-width:0;padding:10px;text-align:left;display:flex;flex-direction:column;gap:4px}
-.choice b{font-size:10.5px;line-height:1.2}.choice span{font-size:8px;line-height:1.35;color:var(--muted)}.choice em{font-style:normal;font-size:7.5px;color:#aa7860;margin-top:auto}
+.choice b{font-size:10.5px;line-height:1.2}
+.choice span{font-size:8px;line-height:1.35;color:var(--muted)}
+.choice em{font-style:normal;font-size:7.5px;color:#aa7860;margin-top:auto}
 .choice.on{border-color:var(--gold);background:rgba(232,160,76,.12);box-shadow:inset 0 0 0 1px rgba(232,160,76,.18)}
+.choice.primary{color:#102020;background:var(--gold);border-color:#f2bd78}
+.choice.primary span,.choice.primary em{color:#243332}
+.choice.danger{border-color:#75402e;color:#ffad91}
 .controlCard,.sliderCard,.statusCard{border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58);padding:10px;flex:0 0 auto}
-.statusCard b{display:block;color:var(--gold);font-size:11px;margin-bottom:5px}.statusCard span{font-size:8.5px;line-height:1.5;color:var(--muted)}
-.controlCard{display:grid;gap:8px}.row{display:flex;align-items:center;gap:7px}.row label{flex:1;color:var(--muted);font-size:8.5px;letter-spacing:.07em}.value{min-width:45px;text-align:center;color:var(--gold);font-weight:800;font-size:11px}
-.miniBtn{min-height:36px;padding:0 10px;font-size:9px;letter-spacing:.06em}.miniBtn.on{color:var(--gold);border-color:#8a5630}
-.stepper{display:flex;align-items:center;gap:6px}.stepper .miniBtn{width:38px;padding:0;font-size:17px}
-.sliderCard label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:8.5px;letter-spacing:.05em}.sliderCard output{color:var(--gold)}
-.sliderCard input{width:100%;height:30px;margin-top:6px;accent-color:var(--gold);touch-action:pan-x}
+.statusCard b{display:block;color:var(--gold);font-size:11px;margin-bottom:5px}
+.statusCard span{font-size:8.5px;line-height:1.5;color:var(--muted)}
+.controlCard{display:grid;gap:8px}
+.row{display:flex;align-items:center;gap:7px}
+.row label{flex:1;color:var(--muted);font-size:8.5px;letter-spacing:.07em}
+.value{min-width:45px;text-align:center;color:var(--gold);font-weight:800;font-size:11px}
+.miniBtn{min-height:36px;padding:0 10px;font-size:9px;letter-spacing:.06em}
+.miniBtn.on{color:var(--gold);border-color:#8a5630}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper .miniBtn{width:38px;padding:0;font-size:17px}
+.sliderCard label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:8.5px;letter-spacing:.05em}
+.sliderCard output{color:var(--gold)}
+.sliderCard input{width:100%;height:34px;margin-top:6px;accent-color:var(--gold);touch-action:pan-x}
 select{width:100%;min-height:39px;border:1px solid var(--line);border-radius:7px;background:#102628;color:var(--gold);padding:7px}
-#message{min-height:18px;padding:2px 8px;color:#ff987a;font-size:8.5px;text-align:center}
-#actions{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:7px;padding:8px;border-top:1px solid rgba(49,80,77,.7)}
-.actionBtn{min-height:43px;padding:7px;font-size:9.5px;letter-spacing:.1em}#spawnBtn{color:#102020;background:var(--gold);border-color:#f2bd78;font-weight:900}
+#message{min-height:22px;padding:4px 8px;color:#ff987a;font-size:8.5px;text-align:center;border-top:1px solid rgba(49,80,77,.4)}
+#valueScrollGutter{position:relative;overflow:hidden;background:rgba(0,0,0,.2);touch-action:none;user-select:none;-webkit-user-select:none}
+#valueScrollGutter::before{content:"DRAG";position:absolute;color:#6f918c;font-size:7px;letter-spacing:.12em;pointer-events:none}
+#valueScrollThumb{position:absolute;border-radius:10px;background:#8a5630;box-shadow:0 0 0 1px rgba(232,160,76,.25);pointer-events:none;transition:opacity .12s}
+#valueScrollGutter.disabled #valueScrollThumb{opacity:.22}
 #result{position:fixed;left:50%;top:20%;z-index:84;transform:translate(-50%,-12px);opacity:0;pointer-events:none;transition:.18s;padding:12px 15px;border:1px solid #8a5630;border-radius:9px;background:rgba(8,20,22,.94);text-align:center;box-shadow:0 8px 35px #0008}
-#result.on{opacity:1;transform:translate(-50%,0)}#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
+#result.on{opacity:1;transform:translate(-50%,0)}
+#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}
+#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
 @media (orientation:landscape){
-  #labDock{top:max(96px,calc(env(safe-area-inset-top) + 64px));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));width:min(47vw,530px);border-radius:14px;grid-template-columns:minmax(230px,1fr) 92px;grid-template-rows:auto 1fr auto auto;transform:translateX(calc(100% + 24px))}
-  #labDock.on{transform:translateX(0)}#dockHead{grid-column:1/3;grid-row:1}#labValues{grid-column:1;grid-row:2;overflow-y:auto;touch-action:pan-y}#labCategories{grid-column:2;grid-row:2;flex-direction:column;overflow-y:auto;touch-action:pan-y;border-left:1px solid rgba(49,80,77,.6)}#message{grid-column:1/3;grid-row:3}#actions{grid-column:1/3;grid-row:4}
-  .valueList{flex-direction:column}.choice{width:100%;min-height:66px}.controlCard,.sliderCard,.statusCard{width:100%}
+  #labDock{top:0;right:0;bottom:0;width:min(48vw,560px);border-radius:14px 0 0 14px;border-right:0;grid-template-columns:minmax(230px,1fr) 30px 92px;grid-template-rows:auto 1fr auto;transform:translateX(calc(100% + 24px));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock.on{transform:translateX(0)}
+  #dockHead{grid-column:1/4;grid-row:1}
+  #labValues{grid-column:1;grid-row:2;overflow-y:auto;touch-action:pan-y}
+  #valueScrollGutter{grid-column:2;grid-row:2;border-left:1px solid rgba(49,80,77,.55);border-right:1px solid rgba(49,80,77,.55)}
+  #valueScrollGutter::before{left:50%;bottom:10px;transform:translateX(-50%) rotate(-90deg);transform-origin:center}
+  #valueScrollThumb{left:9px;right:9px;top:0;min-height:38px}
+  #labCategories{grid-column:3;grid-row:2;flex-direction:column;overflow-y:auto;touch-action:pan-y}
+  #message{grid-column:1/4;grid-row:3}
+  .valueList{flex-direction:column}
+  .choice{width:100%;min-height:66px}
+  .controlCard,.sliderCard,.statusCard{width:100%}
 }
 @media (orientation:portrait){
-  #labDock{left:0;right:0;bottom:0;height:min(49dvh,490px);border-radius:16px 16px 0 0;grid-template-columns:1fr;grid-template-rows:auto 1fr 58px auto auto;transform:translateY(105%);padding-bottom:env(safe-area-inset-bottom)}
-  #labDock.on{transform:translateY(0)}#dockHead{grid-row:1}#labValues{grid-row:2;overflow-x:auto;touch-action:pan-x}#labCategories{grid-row:3;overflow-x:auto;touch-action:pan-x;border-top:1px solid rgba(49,80,77,.6)}#message{grid-row:4}#actions{grid-row:5}
-  .valueList{flex-direction:row;height:100%}.choice{width:160px;min-height:92px}.controlCard,.sliderCard,.statusCard{width:220px;max-height:100%;overflow-y:auto}
-  #labHud{top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right))}#testBadge{max-width:58vw}
+  #labDock{left:0;right:0;bottom:0;height:min(56dvh,560px);border-radius:16px 16px 0 0;grid-template-columns:1fr;grid-template-rows:auto 1fr 28px 58px auto;transform:translateY(105%);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock.on{transform:translateY(0)}
+  #dockHead{grid-row:1}
+  #labValues{grid-row:2;overflow-x:auto;touch-action:pan-x}
+  #valueScrollGutter{grid-row:3;border-top:1px solid rgba(49,80,77,.55);border-bottom:1px solid rgba(49,80,77,.55)}
+  #valueScrollGutter::before{right:9px;top:50%;transform:translateY(-50%)}
+  #valueScrollThumb{top:9px;bottom:9px;left:0;min-width:42px}
+  #labCategories{grid-row:4;overflow-x:auto;touch-action:pan-x}
+  #message{grid-row:5}
+  .valueList{flex-direction:row;height:100%}
+  .choice{width:160px;min-height:92px}
+  .controlCard,.sliderCard,.statusCard{width:220px;max-height:100%;overflow-y:auto}
+  #labHud{top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right))}
+  #testBadge{max-width:58vw}
 }
 </style>
 </head>
@@ -65,9 +106,9 @@ select{width:100%;min-height:39px;border:1px solid var(--line);border-radius:7px
 <aside id="labDock" aria-label="Enemy Lab controls">
   <div id="dockHead"><div id="dockTitle"><b>ENEMY LAB</b><span id="categoryHint">Pick what to edit on the outside, then choose a value inside.</span></div><button class="uiBtn" id="closeBtn" aria-label="Close Enemy Lab">×</button></div>
   <section id="labValues"></section>
+  <div id="valueScrollGutter" role="scrollbar" aria-label="Drag to scroll options" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="valueScrollThumb"></div></div>
   <nav id="labCategories"></nav>
   <div id="message"></div>
-  <div id="actions"><button class="actionBtn" id="spawnBtn">SPAWN TEST</button><button class="actionBtn" id="clearBtn">CLEAR</button><button class="actionBtn" id="repeatBtn">REPEAT</button></div>
 </aside>
 <script type="module">
 import { ARENA_ENEMY_ARCHETYPES } from './src/arena-enemies.js';
@@ -78,6 +119,7 @@ import { COMBINED_ENCOUNTER_GROUPS } from './src/combined-encounter-director.js'
 
 const $=id=>document.getElementById(id);
 const frame=$('arenaFrame'),dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories');
+const scrollGutter=$('valueScrollGutter'),scrollThumb=$('valueScrollThumb');
 const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
 const storeKey='enemyLab.settings.v2';
 const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||localStorage.getItem('enemyLab.settings.v1')||'{}')}catch{return{}}})();
@@ -103,7 +145,17 @@ const catalog=[
 ];
 const familyOrder=['GOBLINS','FUSION','FLARE','HADES'];
 const categoryDefs=[
-  ['type','TYPE','Choose the enemy family.'],['enemy','ENEMY','Choose the exact focal enemy.'],['spawn','SPAWN','Configure solo, pack, or paired-wave spawning.'],['room','ROOM','Configure the test chamber.'],['player','PLAYER','Change weapon and stance.'],['combat','COMBAT','Choose combo and input behavior.'],['director','DIRECTOR','Choose the arena director behavior.'],['tuning','TUNING','Adjust enemy and encounter values.'],['feel','FEEL','Edit hit-feel keyframes.'],['tools','TOOLS','Reset, fullscreen, and utility actions.'],
+  ['type','TYPE','Choose the enemy family.'],
+  ['enemy','ENEMY','Choose the exact focal enemy.'],
+  ['spawn','SPAWN','Configure solo, pack, or paired-wave spawning.'],
+  ['test','TEST','Start, clear, or repeat the configured test.'],
+  ['room','ROOM','Configure the test chamber.'],
+  ['player','PLAYER','Change weapon and stance.'],
+  ['combat','COMBAT','Choose combo and input behavior.'],
+  ['director','DIRECTOR','Choose the arena director behavior.'],
+  ['tuning','TUNING','Adjust enemy and encounter values.'],
+  ['feel','FEEL','Edit hit-feel keyframes.'],
+  ['tools','TOOLS','Reset, fullscreen, and utility actions.'],
 ];
 let state={
   category:categoryDefs.some(([id])=>id===saved.category)?saved.category:'enemy',
@@ -141,7 +193,7 @@ function partnerScore(a,b){
 function partnerCandidates(){const focal=currentEnemy();return catalog.filter(candidate=>compatible(focal,candidate)).sort((a,b)=>partnerScore(focal,b)-partnerScore(focal,a)||a.label.localeCompare(b.label));}
 function ensurePartner(){const candidates=partnerCandidates();if(!candidates.length){state.partnerId='';return null;}if(!candidates.some(enemy=>enemy.id===state.partnerId))state.partnerId=candidates[partnerCycle%candidates.length].id;return catalog.find(enemy=>enemy.id===state.partnerId)||candidates[0];}
 function countsForWave(){const focal=currentEnemy(),partner=ensurePartner();const table={low:[1,2],standard:[2,3],high:[3,5]};let [focalCount,partnerCount]=table[state.threat]||table.standard;focalCount=Math.min(focalCount,focal.maxCount||8,focal.family==='GOBLINS'?4:20);partnerCount=Math.min(partnerCount,partner?.maxCount||8,partner?.family==='GOBLINS'?4:20);return {focalCount,partnerCount,partner};}
-function choice({label,sub='',meta='',active=false,onClick}){const button=document.createElement('button');button.className='choice'+(active?' on':'');button.innerHTML=`<b>${label}</b>${sub?`<span>${sub}</span>`:''}${meta?`<em>${meta}</em>`:''}`;button.addEventListener('click',onClick);return button;}
+function choice({label,sub='',meta='',active=false,className='',onClick}){const button=document.createElement('button');button.className=`choice${active?' on':''}${className?` ${className}`:''}`;button.innerHTML=`<b>${label}</b>${sub?`<span>${sub}</span>`:''}${meta?`<em>${meta}</em>`:''}`;button.addEventListener('click',onClick);return button;}
 function list(...nodes){const root=document.createElement('div');root.className='valueList';root.append(...nodes.flat().filter(Boolean));return root;}
 function status(title,body){const card=document.createElement('div');card.className='statusCard';card.innerHTML=`<b>${title}</b><span>${body}</span>`;return card;}
 function snapshot(){return controlBridge()?.snapshot?.()||{ready:false,directorModes:[],combatModes:[],tuning:[],feelKeys:[],feel:[],roomOptions:[]};}
@@ -149,18 +201,30 @@ function renderCategories(){categoriesEl.replaceChildren(...categoryDefs.map(([i
 function renderType(){return list(...familyOrder.map(family=>choice({label:family,sub:`${catalog.filter(enemy=>enemy.family===family).length} enemies`,active:state.family===family,onClick:()=>{state.family=family;const first=catalog.find(enemy=>enemy.family===family);if(first)state.enemyId=first.id;partnerCycle=0;ensurePartner();save();renderAll();}})));}
 function renderEnemy(){return list(...catalog.filter(enemy=>enemy.family===state.family).map(enemy=>choice({label:enemy.label,sub:enemy.role,meta:enemy.tags.slice(0,4).join(' · ')||enemy.system,active:enemy.id===state.enemyId,onClick:()=>{state.enemyId=enemy.id;partnerCycle=0;ensurePartner();save();renderAll();}})));}
 function renderSpawn(){
-  const focal=currentEnemy();const nodes=['solo','pack','wave'].map(mode=>choice({label:mode.toUpperCase(),sub:mode==='solo'?'One focal enemy':mode==='pack'?'Matching copies':'Focal + partner',active:state.mode===mode,onClick:()=>{state.mode=mode;ensurePartner();save();renderValues();}}));
+  const focal=currentEnemy();
+  const nodes=['solo','pack','wave'].map(mode=>choice({label:mode.toUpperCase(),sub:mode==='solo'?'One focal enemy':mode==='pack'?'Matching copies':'Focal + partner',active:state.mode===mode,onClick:()=>{state.mode=mode;ensurePartner();save();renderValues();}}));
   if(state.mode==='solo')nodes.push(status(`${focal.label} SOLO`,'One enemy. Best for studying movement, telegraphs, reach, and hit reactions.'));
   if(state.mode==='pack'){
     const max=Math.min(12,focal.maxCount||12,focal.family==='GOBLINS'?4:12);state.packCount=Math.max(2,Math.min(max,state.packCount));
-    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<div class="row"><label>SAME-ENEMY COUNT</label><div class="stepper"><button class="miniBtn" id="countDown">−</button><span class="value">${state.packCount}</span><button class="miniBtn" id="countUp">+</button></div></div><div class="statusCard"><b>${state.packCount} × ${focal.label}</b><span>Tests crowd spacing and repeated pressure.</span></div>`;nodes.push(card);queueMicrotask(()=>{$('countDown')?.addEventListener('click',()=>{state.packCount=Math.max(2,state.packCount-1);save();renderValues();});$('countUp')?.addEventListener('click',()=>{state.packCount=Math.min(max,state.packCount+1);save();renderValues();});});
+    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<div class="row"><label>SAME-ENEMY COUNT</label><div class="stepper"><button class="miniBtn" id="countDown">−</button><span class="value">${state.packCount}</span><button class="miniBtn" id="countUp">+</button></div></div><div class="statusCard"><b>${state.packCount} × ${focal.label}</b><span>Tests crowd spacing and repeated pressure.</span></div>`;nodes.push(card);
+    queueMicrotask(()=>{$('countDown')?.addEventListener('click',()=>{state.packCount=Math.max(2,state.packCount-1);save();renderValues();});$('countUp')?.addEventListener('click',()=>{state.packCount=Math.min(max,state.packCount+1);save();renderValues();});});
   }
   if(state.mode==='wave'){
     const candidates=partnerCandidates();const {focalCount,partnerCount,partner}=countsForWave();
     nodes.push(...['low','standard','high'].map(level=>choice({label:level.toUpperCase(),sub:'Threat level',active:state.threat===level,onClick:()=>{state.threat=level;save();renderValues();}})));
-    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<label style="font-size:8.5px;color:var(--muted)">MATCHING PARTNER</label><select id="partnerSelect">${candidates.map(enemy=>`<option value="${enemy.id}"${enemy.id===partner?.id?' selected':''}>${enemy.family} · ${enemy.label}</option>`).join('')}</select><div class="row"><label>AUTO MATCH</label><button class="miniBtn" id="rerollBtn">REROLL</button></div><div class="statusCard"><b>${focalCount} × ${focal.label}${partner?` + ${partnerCount} × ${partner.label}`:''}</b><span>${partner?'A compatible cross-system pairing.':'No compatible partner found.'}</span></div>`;nodes.push(card);queueMicrotask(()=>{$('partnerSelect')?.addEventListener('change',event=>{state.partnerId=event.target.value;save();renderValues();});$('rerollBtn')?.addEventListener('click',()=>{if(candidates.length){partnerCycle=(partnerCycle+1)%candidates.length;state.partnerId=candidates[partnerCycle].id;save();renderValues();}});});
+    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<label style="font-size:8.5px;color:var(--muted)">MATCHING PARTNER</label><select id="partnerSelect">${candidates.map(enemy=>`<option value="${enemy.id}"${enemy.id===partner?.id?' selected':''}>${enemy.family} · ${enemy.label}</option>`).join('')}</select><div class="row"><label>AUTO MATCH</label><button class="miniBtn" id="rerollBtn">REROLL</button></div><div class="statusCard"><b>${focalCount} × ${focal.label}${partner?` + ${partnerCount} × ${partner.label}`:''}</b><span>${partner?'A compatible cross-system pairing.':'No compatible partner found.'}</span></div>`;nodes.push(card);
+    queueMicrotask(()=>{$('partnerSelect')?.addEventListener('change',event=>{state.partnerId=event.target.value;save();renderValues();});$('rerollBtn')?.addEventListener('click',()=>{if(candidates.length){partnerCycle=(partnerCycle+1)%candidates.length;state.partnerId=candidates[partnerCycle].id;save();renderValues();}});});
   }
   return list(...nodes);
+}
+function renderTestActions(){
+  const configured=buildPlan();
+  return list(
+    status('CONFIGURED TEST',configured?.label||'No valid test configuration.'),
+    choice({label:'SPAWN TEST',sub:'Close the lab and start this configuration',className:'primary',onClick:()=>startTest()}),
+    choice({label:'CLEAR',sub:'Remove all active enemies and queued spawns',className:'danger',onClick:()=>{clearTest();renderValues();}}),
+    choice({label:'REPEAT',sub:lastPlan?`Run ${lastPlan.label} again`:'Run a test first',onClick:()=>{if(lastPlan)startTest(lastPlan);else setMessage('Run a test first.');}})
+  );
 }
 function renderRoom(data){const options=data.roomOptions?.length?data.roomOptions:[{id:'large',label:'Large · 24',active:true}];return list(status('OPEN ARENA','One clean hexagonal test chamber. No maze corridors, doors, room transitions, or visible trees.'),...options.map(option=>choice({label:option.label,sub:'Cell size · reloads chamber',active:option.active,onClick:()=>controlBridge()?.setCellSize?.(option.id)})));}
 function renderPlayer(data){return list(status(`WEAPON · ${titleCase(data.weaponId||'loading')}`,`STANCE · ${data.stanceName||'loading'}`),choice({label:'PREVIOUS WEAPON',sub:'Cycle backward',onClick:()=>{controlBridge()?.cycleWeapon?.(-1);setTimeout(renderValues,60);}}),choice({label:'NEXT WEAPON',sub:'Cycle forward',onClick:()=>{controlBridge()?.cycleWeapon?.(1);setTimeout(renderValues,60);}}),choice({label:'NEXT STANCE',sub:'Developer cycle',onClick:()=>{controlBridge()?.cycleStance?.();setTimeout(renderValues,40);}}));}
@@ -171,12 +235,63 @@ function renderTools(){return list(choice({label:'RESET FIGHT',sub:'Respawn play
 function renderValues(){
   const data=snapshot();const def=categoryDefs.find(([id])=>id===state.category);categoryHint.textContent=def?.[2]||'';
   let content;
-  if(state.category==='type')content=renderType();else if(state.category==='enemy')content=renderEnemy();else if(state.category==='spawn')content=renderSpawn();else if(state.category==='room')content=renderRoom(data);else if(state.category==='player')content=renderPlayer(data);else if(state.category==='combat')content=renderButtonGroup(data.combatModes,id=>controlBridge()?.setCombatMode?.(id));else if(state.category==='director')content=renderButtonGroup(data.directorModes,id=>controlBridge()?.setDirectorMode?.(id));else if(state.category==='tuning')content=renderSliders(data.tuning,(index,value)=>controlBridge()?.setTuning?.(index,value));else if(state.category==='feel')content=renderFeel(data);else content=renderTools();
+  if(state.category==='type')content=renderType();
+  else if(state.category==='enemy')content=renderEnemy();
+  else if(state.category==='spawn')content=renderSpawn();
+  else if(state.category==='test')content=renderTestActions();
+  else if(state.category==='room')content=renderRoom(data);
+  else if(state.category==='player')content=renderPlayer(data);
+  else if(state.category==='combat')content=renderButtonGroup(data.combatModes,id=>controlBridge()?.setCombatMode?.(id));
+  else if(state.category==='director')content=renderButtonGroup(data.directorModes,id=>controlBridge()?.setDirectorMode?.(id));
+  else if(state.category==='tuning')content=renderSliders(data.tuning,(index,value)=>controlBridge()?.setTuning?.(index,value));
+  else if(state.category==='feel')content=renderFeel(data);
+  else content=renderTools();
   if(!data.ready&&['room','player','combat','director','tuning','feel'].includes(state.category))content=list(status('ARENA CONTROLS LOADING','The embedded Combat Arena bridge has not finished loading yet.'));
-  values.replaceChildren(content);requestAnimationFrame(()=>values.querySelector('.on')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}));
+  values.replaceChildren(content);
+  values.scrollTop=0;values.scrollLeft=0;
+  requestAnimationFrame(()=>{values.querySelector('.on')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});setTimeout(updateScrollGutter,180);});
 }
 function renderAll(){renderCategories();renderValues();}
-function setDockOpen(open,{syncArena=true}={}){dockOpen=!!open;dock.classList.toggle('on',dockOpen);veil.classList.toggle('on',dockOpen);if(dockOpen)renderAll();if(syncArena){const bridge=controlBridge();if(bridge)bridge.setMenuOpen(dockOpen);else{const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');if(panel&&menu&&(!panel.classList.contains('hidden'))!==dockOpen)menu.click();}}}
+function isLandscape(){return matchMedia('(orientation:landscape)').matches;}
+function scrollMetrics(){
+  const vertical=isLandscape();
+  const viewport=vertical?values.clientHeight:values.clientWidth;
+  const content=vertical?values.scrollHeight:values.scrollWidth;
+  const track=vertical?scrollGutter.clientHeight:scrollGutter.clientWidth;
+  const scroll=vertical?values.scrollTop:values.scrollLeft;
+  return {vertical,viewport,content,track,scroll,maxScroll:Math.max(0,content-viewport)};
+}
+function updateScrollGutter(){
+  const {vertical,viewport,content,track,scroll,maxScroll}=scrollMetrics();
+  const minThumb=vertical?38:42;
+  const size=Math.max(minThumb,Math.min(track,content>0?track*(viewport/content):track));
+  const position=maxScroll>0?(track-size)*(scroll/maxScroll):0;
+  scrollGutter.classList.toggle('disabled',maxScroll<=0);
+  scrollGutter.setAttribute('aria-valuenow',String(Math.round(maxScroll>0?scroll/maxScroll*100:0)));
+  if(vertical){
+    scrollThumb.style.height=`${size}px`;scrollThumb.style.width='';scrollThumb.style.transform=`translateY(${position}px)`;
+  }else{
+    scrollThumb.style.width=`${size}px`;scrollThumb.style.height='';scrollThumb.style.transform=`translateX(${position}px)`;
+  }
+}
+function scrollFromGutterPointer(event){
+  const {vertical,track,maxScroll}=scrollMetrics();
+  if(maxScroll<=0)return;
+  const rect=scrollGutter.getBoundingClientRect();
+  const thumbRect=scrollThumb.getBoundingClientRect();
+  const thumbSize=vertical?thumbRect.height:thumbRect.width;
+  const pointer=vertical?event.clientY-rect.top:event.clientX-rect.left;
+  const ratio=Math.max(0,Math.min(1,(pointer-thumbSize/2)/Math.max(1,track-thumbSize)));
+  if(vertical)values.scrollTop=ratio*maxScroll;else values.scrollLeft=ratio*maxScroll;
+}
+scrollGutter.addEventListener('pointerdown',event=>{event.preventDefault();scrollGutter.setPointerCapture(event.pointerId);scrollFromGutterPointer(event);});
+scrollGutter.addEventListener('pointermove',event=>{if(scrollGutter.hasPointerCapture(event.pointerId))scrollFromGutterPointer(event);});
+scrollGutter.addEventListener('pointerup',event=>{if(scrollGutter.hasPointerCapture(event.pointerId))scrollGutter.releasePointerCapture(event.pointerId);});
+scrollGutter.addEventListener('pointercancel',event=>{if(scrollGutter.hasPointerCapture(event.pointerId))scrollGutter.releasePointerCapture(event.pointerId);});
+values.addEventListener('scroll',updateScrollGutter,{passive:true});
+addEventListener('resize',()=>requestAnimationFrame(updateScrollGutter));
+new ResizeObserver(()=>requestAnimationFrame(updateScrollGutter)).observe(values);
+function setDockOpen(open,{syncArena=true}={}){dockOpen=!!open;dock.classList.toggle('on',dockOpen);veil.classList.toggle('on',dockOpen);document.body.classList.toggle('dockOpen',dockOpen);if(dockOpen){renderAll();requestAnimationFrame(updateScrollGutter);}if(syncArena){const bridge=controlBridge();if(bridge)bridge.setMenuOpen(dockOpen);else{const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');if(panel&&menu&&(!panel.classList.contains('hidden'))!==dockOpen)menu.click();}}}
 window.__enemyLabSetOpenFromArena=open=>setDockOpen(open,{syncArena:false});
 window.__enemyLabArenaControlsReady=()=>{if(dockOpen)renderValues();};
 function ensureArenaStarted(){const doc=frameDoc(),gate=doc?.getElementById('startGate');if(gate&&!gate.classList.contains('hidden'))doc.getElementById('startBtn')?.click();}
@@ -189,13 +304,36 @@ function startTest(plan=buildPlan()){
 }
 function clearTest(){const system=enemyBridge();system?.clearRoomRuntime?.();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
 function poll(){
-  const system=enemyBridge();if(system){const alive=system.enemies?.filter(enemy=>enemy.hp>0).length||0;const pending=(system.queuedSpawnCount||0)+(system.telegraphCount||0);if(running){if(alive>0||pending>0)sawEnemy=true;const elapsed=(performance.now()-testStart)/1000;testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;if(sawEnemy&&alive===0&&pending===0){running=false;const damage=Math.max(0,Math.round(startHp-system.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;}else if(system.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}}}
+  const system=enemyBridge();
+  if(system){
+    const alive=system.enemies?.filter(enemy=>enemy.hp>0).length||0;
+    const pending=(system.queuedSpawnCount||0)+(system.telegraphCount||0);
+    if(running){
+      if(alive>0||pending>0)sawEnemy=true;
+      const elapsed=(performance.now()-testStart)/1000;
+      testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;
+      if(sawEnemy&&alive===0&&pending===0){
+        running=false;const damage=Math.max(0,Math.round(startHp-system.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;
+      }else if(system.playerHp<=0){
+        running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;
+      }
+    }
+  }
   requestAnimationFrame(poll);
 }
-function prepareFrame(){const doc=frameDoc();if(!doc)return;const title=doc.querySelector('#startCard .sgTitle'),hint=doc.querySelector('#startCard .sgHint');if(title)title.textContent='ENEMY LAB';if(hint)hint.textContent='Enter the chamber, then press LAB or Backbone Start to configure the test.';const wait=()=>{const system=enemyBridge();if(!system){setTimeout(wait,60);return;}system.clearRoomRuntime?.();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';};wait();}
-frame.addEventListener('load',prepareFrame);if(frame.contentDocument?.readyState==='complete')prepareFrame();
-$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));
-$('spawnBtn').addEventListener('click',()=>startTest());$('clearBtn').addEventListener('click',clearTest);$('repeatBtn').addEventListener('click',()=>{if(lastPlan)startTest(lastPlan);else setMessage('Run a test first.');});
+function prepareFrame(){
+  const doc=frameDoc();if(!doc)return;
+  const title=doc.querySelector('#startCard .sgTitle'),hint=doc.querySelector('#startCard .sgHint');
+  if(title)title.textContent='ENEMY LAB';
+  if(hint)hint.textContent='Enter the chamber, then press LAB or Backbone Start to configure the test.';
+  const wait=()=>{const system=enemyBridge();if(!system){setTimeout(wait,60);return;}system.clearRoomRuntime?.();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';};
+  wait();
+}
+frame.addEventListener('load',prepareFrame);
+if(frame.contentDocument?.readyState==='complete')prepareFrame();
+$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));
+$('closeBtn').addEventListener('click',()=>setDockOpen(false));
+veil.addEventListener('click',()=>setDockOpen(false));
 ensurePartner();renderAll();poll();
 </script>
 </body>
