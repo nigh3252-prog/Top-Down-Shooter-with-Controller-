@@ -23,12 +23,26 @@ export function installPlayerCombat(api){
   const playerWorld=new THREE.Vector3();
   const playerForward=new THREE.Vector3(0,0,1);
   const identityQ=new THREE.Quaternion();
+  const magicBounds=THREE.Box3?new THREE.Box3():null;
+  const magicCenter=new THREE.Vector3();
   const enemyRegistryBridge=createArenaEnemyRegistryBridge({
     getLocalSystem:getArenaEnemySystem,
     setPinnedSource:setPinnedArenaEnemySource,
   });
+
+  function getMagicCenterY(){
+    const model=api.activeModel;
+    if(!model||!magicBounds?.setFromObject)return 1.4;
+    model.updateWorldMatrix?.(true,true);
+    magicBounds.setFromObject(model);
+    if(magicBounds.isEmpty?.())return 1.4;
+    magicBounds.getCenter(magicCenter);
+    return Number.isFinite(magicCenter.y)?magicCenter.y:1.4;
+  }
+
   const magicFluidRuntime=installMagicFluidRuntime({
     THREE,scene:api.scene,camera:api.camera,
+    getMagicCenterY,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
     getWorldKey:()=>window.__arena?.mazeWorld||null,
   });
