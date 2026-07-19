@@ -80,7 +80,7 @@ const $=id=>document.getElementById(id);
 const frame=$('arenaFrame'),dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories');
 const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
 const storeKey='enemyLab.settings.v2';
-const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||'{}')}catch{return{}}})();
+const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||localStorage.getItem('enemyLab.settings.v1')||'{}')}catch{return{}}})();
 const combinedByKind=new Map(COMBINED_ENCOUNTER_GROUPS.map(group=>[group.spawnKind,group]));
 const labelsFrom=options=>new Map(options.map(option=>[option.id,option.label.replace(/^FLARE · |^HADES · /,'')]));
 const fusionLabels=labelsFrom(FUSION_ENEMY_OPTIONS),flareLabels=labelsFrom(FLARE_ENEMY_OPTIONS),hadesLabels=labelsFrom(HADES_ENEMY_OPTIONS);
@@ -193,7 +193,7 @@ function poll(){
   requestAnimationFrame(poll);
 }
 function prepareFrame(){const doc=frameDoc();if(!doc)return;const title=doc.querySelector('#startCard .sgTitle'),hint=doc.querySelector('#startCard .sgHint');if(title)title.textContent='ENEMY LAB';if(hint)hint.textContent='Enter the chamber, then press LAB or Backbone Start to configure the test.';const wait=()=>{const system=enemyBridge();if(!system){setTimeout(wait,60);return;}system.clearRoomRuntime?.();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';};wait();}
-frame.addEventListener('load',prepareFrame);
+frame.addEventListener('load',prepareFrame);if(frame.contentDocument?.readyState==='complete')prepareFrame();
 $('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));
 $('spawnBtn').addEventListener('click',()=>startTest());$('clearBtn').addEventListener('click',clearTest);$('repeatBtn').addEventListener('click',()=>{if(lastPlan)startTest(lastPlan);else setMessage('Run a test first.');});
 ensurePartner();renderAll();poll();
