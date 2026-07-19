@@ -104,7 +104,7 @@ function installLionMaulPresentation() {
       disableDamageVignette();
       const currentRuntime = runtimeHandle();
       const lion = currentRuntime?.enemySystem?.enemies?.find(enemy => enemy?._lionMaulActive && enemy.hp > 0);
-      if (!lion) return;
+      if (!lion || currentRuntime?.arena?.paused) return;
       applyPronePlayerPose(currentRuntime, lion);
       applyLionMaulPose(lion);
     };
