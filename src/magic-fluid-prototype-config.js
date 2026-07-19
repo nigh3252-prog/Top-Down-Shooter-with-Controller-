@@ -9,6 +9,8 @@ export const PROTOTYPE_MAGIC_SETTINGS=Object.freeze({
   ground:0,glow:2.25,accent:1.8,quality:0,
   // Remap the prototype's absolute heights around the Warden's measured model center.
   verticalScale:2,stackCenter:.95,torsoBias:-.08,
+  // Only affects the outer three coarse cells, preventing a rectangular cutoff.
+  edgeFadeCells:3,
 });
 
 export const PROTOTYPE_MAGIC_LAYOUT=Object.freeze({
@@ -17,6 +19,9 @@ export const PROTOTYPE_MAGIC_LAYOUT=Object.freeze({
   // display grid, but prevents the smaller source from disappearing between samples.
   visualColumns:48,visualRows:42,maxStrokes:40,
   simulationColumns:48,simulationRows:42,pressureIterations:4,
+  // The enlarged cells are roughly one world unit wide; this keeps maze walls from
+  // falling between coarse cell centers and leaking fluid.
+  wallMaskRadius:.78,
 });
 
 // Integration adapter: reproduce the prototype's dragMove subdivision, but point
