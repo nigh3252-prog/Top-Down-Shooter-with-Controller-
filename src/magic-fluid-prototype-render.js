@@ -1,7 +1,6 @@
-// Renderer copied from threejs_midair_lifted_ground_slice_v1.html: hidden ground
-// texture, three lifted texture planes, middle-weighted voxel layers, and the
-// prototype accent-stroke mesh. The game integration remaps the vertical stack
-// around the Warden model center and spreads the layers farther apart.
+// Renderer copied from threejs_midair_lifted_ground_slice_v1.html. This diagnostic
+// pass keeps the submitted fluid/color math but renders the lifted volume as cubes,
+// disables the broad texture sheets, and exaggerates per-layer X/Z separation.
 export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout,sim}={}){
   const PATCH_W=layout.patchWidth,PATCH_D=layout.patchDepth;
   const MAX_LAYERS=layout.maxLayers,VIS_COLS=layout.visualColumns,VIS_ROWS=layout.visualRows;
@@ -9,7 +8,7 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const simW=sim.simW,simH=sim.simH,N=sim.N;
   const {u,v,dye,heat,curlField,solid,strokes}=sim;
   const idx=sim.idx,sample=sim.sample;
-  let renderMode='quads',palette='ember';
+  let renderMode='cubes',palette='ember',activeCamera=camera;
 
   const mapHeight=originalY=>{
     const s=settings();
@@ -30,17 +29,16 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const color=new THREE.Color(),color2=new THREE.Color(),dummy=new THREE.Object3D();
   const seeds=new Float32Array(MAX_INSTANCES),jitterX=new Float32Array(MAX_INSTANCES),jitterZ=new Float32Array(MAX_INSTANCES);
   for(let i=0;i<MAX_INSTANCES;i++){seeds[i]=Math.random();jitterX[i]=Math.random()-.5;jitterZ[i]=Math.random()-.5;}
-  const strokeSeeds=new Float32Array(MAX_STROKES);
-  for(let i=0;i<MAX_STROKES;i++)strokeSeeds[i]=Math.random();
 
-  const group=new THREE.Group();group.name='Prototype magic fluid direct port';group.visible=false;scene.add(group);
+  const group=new THREE.Group();group.name='Prototype magic fluid cube-layer diagnostic';group.visible=false;scene.add(group);
 
   function texturePlane(width,depth,originalY,opacity){
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshBasicMaterial({
       map:dyeTexture,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,
     }));
-    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);group.add(mesh);return mesh;
+    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);mesh.visible=false;group.add(mesh);return mesh;
   }
+  // Retained for later comparison, but disabled so they cannot fill the gaps between layers.
   const fluidPlane=texturePlane(PATCH_W,PATCH_D,.025,1);
   const fluidGlowPlane=texturePlane(PATCH_W*1.02,PATCH_D*1.02,.035,.45);
   const airPlane=texturePlane(PATCH_W,PATCH_D,.92,1);
@@ -48,13 +46,24 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const airHaloPlane=texturePlane(PATCH_W*1.08,PATCH_D*1.08,1.10,.24);
 
   const quadMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
-  const cubeMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.75,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true});
+  // Normal blending + depth writing makes the cube faces occlude one another instead
+  // of collapsing into one additive screen-facing sheet.
+  const cubeMaterial=new THREE.MeshLambertMaterial({
+    color:0xffffff,vertexColors:true,transparent:true,opacity:.82,
+    blending:THREE.NormalBlending,depthWrite:true,depthTest:true,
+    emissive:0x3b1200,emissiveIntensity:.55,
+  });
   const strokeMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
   const quadMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),quadMaterial,MAX_INSTANCES);
   const cubeMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),cubeMaterial,MAX_INSTANCES);
   const strokeMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),strokeMaterial,MAX_STROKES);
   quadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);cubeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);strokeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   quadMesh.frustumCulled=false;cubeMesh.frustumCulled=false;strokeMesh.frustumCulled=false;
+  // Three.js supplies the actual render camera here, even though combat-arena does not
+  // pass its lexical camera into installPlayerCombat. This replaces the proxy after the
+  // first rendered frame and keeps the seam fixed if quads are re-enabled later.
+  const captureRenderCamera=(_renderer,_scene,renderCamera)=>{if(renderCamera?.quaternion)activeCamera=renderCamera;};
+  quadMesh.onBeforeRender=captureRenderCamera;cubeMesh.onBeforeRender=captureRenderCamera;strokeMesh.onBeforeRender=captureRenderCamera;
   group.add(quadMesh,cubeMesh,strokeMesh);
 
   function mix3(a,b,t,out){out.copy(a).lerp(b,t);}
@@ -98,11 +107,8 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
       pix[p]=Math.floor(Math.min(255,color.r*255));pix[p+1]=Math.floor(Math.min(255,color.g*255));pix[p+2]=Math.floor(Math.min(255,color.b*255));pix[p+3]=Math.floor(Math.min(255,a*255));
     }
     dyeCtx.putImageData(imageData,0,0);dyeTexture.needsUpdate=true;
-    fluidPlane.material.opacity=s.ground<=.001?0:Math.min(1.6,.92*s.ground);
-    fluidGlowPlane.material.opacity=s.ground<=.001?0:Math.min(1.2,.42*s.ground);
-    airPlane.material.opacity=Math.min(1.45,.78+s.glow*.18);
-    airGlowPlane.material.opacity=Math.min(1.10,.26+s.glow*.16);
-    airHaloPlane.material.opacity=Math.min(.75,.10+s.glow*.08);
+    fluidPlane.material.opacity=0;fluidGlowPlane.material.opacity=0;
+    airPlane.material.opacity=0;airGlowPlane.material.opacity=0;airHaloPlane.material.opacity=0;
   }
 
   function sampleRenderedGroundColor(gx,gy,out){
@@ -131,16 +137,22 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
         const threshold=.05+s.breakup*.08+distFromMid*.14+breakupNoise;
         const visible=!isSolid&&layer<activeLayers&&groundAlpha>threshold;
         if(!visible){dummy.position.set(0,-999,0);dummy.scale.set(.001,.001,.001);dummy.rotation.set(0,0,0);dummy.updateMatrix();mesh.setMatrixAt(instance,dummy.matrix);mesh.setColorAt(instance,color.setRGB(0,0,0));instance++;continue;}
-        const drift=layer*(.06+s.height*.10);
-        const dx=sample(u,gx,gy)*drift+jitterX[instance]*baseSize*(.18+distFromMid*.06);
-        const dz=sample(v,gx,gy)*drift+jitterZ[instance]*baseSize*(.18+distFromMid*.06);
-        const swirlPush=Math.sin(time*1.7+seed*12)*swirl*.008*(.4+layer);
+        const drift=layer*(.18+s.height*.22);
+        const layerSpread=1+layer*.55;
+        const dx=sample(u,gx,gy)*drift+jitterX[instance]*baseSize*(.34+distFromMid*.12)*layerSpread;
+        const dz=sample(v,gx,gy)*drift+jitterZ[instance]*baseSize*(.34+distFromMid*.12)*layerSpread;
+        const swirlPush=Math.sin(time*1.7+seed*12)*swirl*.02*(.8+layer*1.1);
         const originalY=.28+layer*(.14+s.height*.17)+groundAlpha*(.12+.16*layerFocus);
         const y=mapHeight(originalY);
         const size=baseSize*(.68+groundAlpha*.92+layerFocus*.24)*(1-distFromMid*.06);
         const pulse=1+.06*Math.sin(time*4.6+seed*100);
         dummy.position.set(worldX+dx+swirlPush,y,worldZ+dz-swirlPush);
-        if(renderMode==='quads'){dummy.quaternion.copy(camera.quaternion);dummy.scale.set(size*pulse,size*pulse,1);}else{dummy.rotation.set(0,seed*Math.PI*2,0);dummy.scale.set(size*pulse,size*(.45+groundAlpha*.95+layerFocus*.22),size*pulse);}
+        if(renderMode==='quads'){
+          dummy.quaternion.copy(activeCamera.quaternion);dummy.scale.set(size*pulse,size*pulse,1);
+        }else{
+          dummy.rotation.set(seed*.34,seed*Math.PI*2,seed*.22);
+          dummy.scale.set(size*pulse,size*(.45+groundAlpha*.95+layerFocus*.22),size*pulse);
+        }
         dummy.updateMatrix();mesh.setMatrixAt(instance,dummy.matrix);
         sampleRenderedGroundColor(gx,gy,color);color.multiplyScalar((.72+groundAlpha*.82+speed*.03)*(.66+layerFocus*.58));mesh.setColorAt(instance,color);instance++;
       }
@@ -171,5 +183,5 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
     for(const object of[fluidPlane,fluidGlowPlane,airPlane,airGlowPlane,airHaloPlane,quadMesh,cubeMesh,strokeMesh]){object.geometry?.dispose?.();object.material?.dispose?.();}
     dyeTexture.dispose?.();
   }
-  return{group,setCenter,setVisible,update,dispose,mapHeight};
+  return{group,setCenter,setVisible,update,dispose,mapHeight,get activeCamera(){return activeCamera;},renderMode};
 }
