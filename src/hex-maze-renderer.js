@@ -18,8 +18,19 @@ export function createMazeWorld(options = {}){
     ...options,
     hexSize:configuredHexSize(options.hexSize ?? 2.6),
   };
-  replaceHalfInternalWallsWithGaps(configuredOptions.maze);
+  const arenaLayout = configuredOptions.maze?.options?.layout === 'arena';
+  if(!arenaLayout) replaceHalfInternalWallsWithGaps(configuredOptions.maze);
   const world = createBaseMazeWorld(configuredOptions);
+  if(arenaLayout){
+    if(world.forest?.group){
+      // Keep the forest collision segments as the arena perimeter, but suppress
+      // every tree, shrub, and forest-region visual in the Enemy Lab chamber.
+      world.forest.group.visible = false;
+      world.forest.trees.length = 0;
+      world.forest.placements.length = 0;
+    }
+    return world;
+  }
   applyBoundaryRoomWallGaps({ ...configuredOptions, world });
   applyAkaiMazeStyle({ ...configuredOptions, world });
   applyBoundaryDistrictExtensions({ ...configuredOptions, world });
