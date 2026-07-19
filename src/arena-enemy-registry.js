@@ -1,3 +1,5 @@
+import { installFusionMovementBehaviors } from './fusion-movement-behaviors.js';
+
 // Explicit branch-local bridge for card abilities that need the arena enemy list.
 // The arena-enemies wrapper registers the real system immediately after creation;
 // no prototype patching, hidden discovery, or silent fallback is used.
@@ -14,7 +16,13 @@ function sourceEnemies() {
 }
 
 export function setArenaEnemySource(source) {
-  const enemies = Array.isArray(source) ? source : source?.enemies;
+  // The original child system also registers itself. Install the movement layer
+  // only on the final router, identified by the Enemy Lab scenario API, so fusion
+  // enemies are adjusted exactly once in normal, combined, and lab encounters.
+  const registeredSource = source && typeof source.startLabScenario === 'function'
+    ? installFusionMovementBehaviors(source)
+    : source;
+  const enemies = Array.isArray(registeredSource) ? registeredSource : registeredSource?.enemies;
   if (!Array.isArray(enemies)) {
     registry.enemies = null;
     registry.source = null;
@@ -22,7 +30,7 @@ export function setArenaEnemySource(source) {
     throw new Error('[pilebunker-effect] Arena enemy system did not expose an enemies array.');
   }
   registry.enemies = enemies;
-  registry.source = source;
+  registry.source = registeredSource;
   registry.registeredAt = performance.now?.() ?? Date.now();
   return enemies;
 }
