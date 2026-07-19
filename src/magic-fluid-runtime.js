@@ -7,7 +7,7 @@ export function resolveRenderCamera(THREE,camera){
   const proxy=new THREE.Object3D();
   proxy.position.set(0,20,17.6);
   proxy.lookAt(0,1.8,-1.4);
-  console.warn('[magic-fluid-runtime] Camera was not provided; using the combat-arena camera-angle proxy.');
+  console.warn('[magic-fluid-runtime] Camera was not provided; using the combat-arena camera-angle proxy until the renderer captures the real camera.');
   return proxy;
 }
 
@@ -39,9 +39,12 @@ export function installMagicFluidRuntime({
   function positionPatch(position,direction){
     const centerX=(Number(position?.x)||0)+(Number(direction?.x)||0)*4.2;
     const centerZ=(Number(position?.z)||0)+(Number(direction?.z)||0)*4.2;
-    const centerY=Number(getMagicCenterY?.());
+    const measuredCenterY=Number(getMagicCenterY?.());
+    const safeCenterY=Number.isFinite(measuredCenterY)?measuredCenterY:1.4;
+    const anchorScale=Number.isFinite(Number(PROTOTYPE_MAGIC_SETTINGS.anchorHeightScale))
+      ?Number(PROTOTYPE_MAGIC_SETTINGS.anchorHeightScale):1;
     sim.setCenter(centerX,centerZ);
-    renderer.setCenter(centerX,centerZ,Number.isFinite(centerY)?centerY:1.4);
+    renderer.setCenter(centerX,centerZ,safeCenterY*anchorScale);
   }
 
   function beginDashJet(payload={}){
