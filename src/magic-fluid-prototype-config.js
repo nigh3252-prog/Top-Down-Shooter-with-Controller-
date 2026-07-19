@@ -1,13 +1,21 @@
-// Values copied from threejs_midair_lifted_ground_slice_v1.html's default Duel/Ember setup.
+// Base values come from threejs_midair_lifted_ground_slice_v1.html's Duel/Ember setup.
+// The game integration deliberately expands the world-space canvas while preserving
+// the submitted 48 x 42 solver so large magic can span several maze cells.
 export const PROTOTYPE_MAGIC_SETTINGS=Object.freeze({
   push:1.9,ink:1.45,heat:1.85,curl:2.45,momentum:.984,fade:.989,
-  radius:42,layers:4,height:.95,voxelSize:.82,breakup:.38,
+  // The physical field is 3x larger, so one-third of the prototype percentage keeps
+  // the dash brush approximately the same world-space diameter.
+  radius:14,layers:4,height:.95,voxelSize:.52,breakup:.38,
   ground:0,glow:2.25,accent:1.8,quality:0,
+  // Remap the prototype's absolute heights around the Warden's measured model center.
+  verticalScale:2,stackCenter:.95,torsoBias:-.08,
 });
 
 export const PROTOTYPE_MAGIC_LAYOUT=Object.freeze({
-  patchWidth:15.5,patchDepth:13.5,maxLayers:6,
-  visualColumns:26,visualRows:24,maxStrokes:40,
+  patchWidth:46.5,patchDepth:40.5,maxLayers:6,
+  // Sample every simulation cell. This is heavier than the prototype's 26 x 24
+  // display grid, but prevents the smaller source from disappearing between samples.
+  visualColumns:48,visualRows:42,maxStrokes:40,
   simulationColumns:48,simulationRows:42,pressureIterations:4,
 });
 
