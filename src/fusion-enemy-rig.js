@@ -231,11 +231,69 @@ function phaseProxy(enemy, phaseCuts){
   };
 }
 
+function lionMaulProxy(enemy){
+  const progress = clamp(Number(enemy._lionMaulProgress) || 0, 0, 1);
+  const windup = .44;
+  const active = .18;
+  const recovery = .38;
+  let state;
+  let stateTime;
+  if(progress < windup){
+    state = 'windup';
+    stateTime = progress;
+  }else if(progress < windup + active){
+    state = 'active';
+    stateTime = progress - windup;
+  }else{
+    state = 'recovery';
+    stateTime = progress - windup - active;
+  }
+  return {
+    ...enemy,
+    state,
+    stateTime,
+    windup,
+    active,
+    recovery,
+    attack:{ ...(enemy.attack || {}), name:'Maul Bite' },
+    visualGroundSpeed:0,
+    vx:0,
+    vz:0,
+  };
+}
+
+function applyLionMaulPose(handle, enemy){
+  const progress = clamp(Number(enemy._lionMaulProgress) || 0, 0, 1);
+  const body = handle?.model?.chassis?.body;
+  const socket = handle?.model?.chassis?.socket;
+  const brace = smooth01(clamp(progress / .34, 0, 1)) * (1 - smooth01(clamp((progress - .82) / .18, 0, 1)));
+  const snap = Math.exp(-Math.pow((progress - .76) / .09, 2));
+  if(body){
+    body.position.y -= .22 * brace;
+    body.rotation.x += .18 * brace + .20 * snap;
+    body.rotation.z += Math.sin((Number(enemy._lionMaulBiteIndex) || 0) * 2.7) * .035 * brace;
+  }
+  if(socket){
+    socket.rotation.x += .20 * brace - .42 * snap;
+    socket.position.z += .12 * brace;
+  }
+}
+
 export function installFusionEnemyRig(THREE){
   const rig = installBaseFusionEnemyRig(THREE);
   const baseUpdate = rig.update.bind(rig);
 
-  rig.update = function updateWithAntelopeAnimations(handle, enemy, dt, time, heightScale=1){
+  rig.update = function updateWithBranchAnimations(handle, enemy, dt, time, heightScale=1){
+    if(enemy?.kind === 'lion' && enemy._lionMaulActive){
+      const animations = handle?.model?.bodyDef?.anims;
+      const previousAnimation = animations?.[0];
+      if(animations) animations[0] = 'LION_ROAR';
+      baseUpdate(handle, lionMaulProxy(enemy), dt, time, heightScale);
+      applyLionMaulPose(handle, enemy);
+      if(animations) animations[0] = previousAnimation;
+      return;
+    }
+
     if(enemy?.kind !== 'ant') return baseUpdate(handle, enemy, dt, time, heightScale);
 
     const boundState = ensureAntelopeBoundState(handle);
