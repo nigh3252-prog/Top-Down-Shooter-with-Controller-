@@ -5,90 +5,70 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Enemy Lab</title>
 <style>
-:root{
-  color-scheme:dark;
-  --bg:#071113;--panel:rgba(8,20,22,.97);--panel2:#102628;--line:#31504d;
-  --text:#d9eee9;--muted:#7ea39d;--gold:#e8a04c;--red:#d96d4a;--green:#7fd0a8;
-}
+:root{color-scheme:dark;--bg:#071113;--panel:rgba(7,19,21,.97);--panel2:#102628;--line:#31504d;--text:#d9eee9;--muted:#7ea39d;--gold:#e8a04c;--red:#d96d4a}
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text);touch-action:none}
+button,select,input{font:inherit}
 #arenaFrame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0d191b}
 #labHud{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));z-index:80;display:flex;align-items:center;gap:7px;pointer-events:none}
-#testBadge{max-width:min(54vw,340px);padding:8px 10px;border:1px solid rgba(49,80,77,.85);border-radius:7px;background:rgba(8,20,22,.82);font-size:10px;line-height:1.2;letter-spacing:.06em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
-#testBadge strong{color:var(--gold);font-weight:800}
-.hudBtn,.wideBtn,.segBtn,.familyBtn,.enemyCard,.miniBtn{font-family:inherit;color:var(--text);background:rgba(16,38,40,.94);border:1px solid var(--line);border-radius:7px;touch-action:manipulation}
-.hudBtn{min-height:38px;padding:0 13px;color:var(--gold);font-size:11px;letter-spacing:.12em;pointer-events:auto;box-shadow:0 3px 0 rgba(0,0,0,.35)}
-.hudBtn:active,.wideBtn:active,.segBtn:active,.familyBtn:active,.enemyCard:active,.miniBtn:active{transform:translateY(1px);background:#264542}
-#veil{position:fixed;inset:0;z-index:88;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .16s}
+#testBadge{max-width:min(54vw,360px);padding:8px 10px;border:1px solid rgba(49,80,77,.85);border-radius:7px;background:rgba(8,20,22,.84);font-size:10px;line-height:1.2;letter-spacing:.06em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#testBadge strong{color:var(--gold)}
+.uiBtn,.categoryBtn,.choice,.actionBtn,.miniBtn{color:var(--text);background:rgba(16,38,40,.95);border:1px solid var(--line);border-radius:8px;touch-action:manipulation}
+.uiBtn{min-height:38px;padding:0 13px;color:var(--gold);font-size:11px;letter-spacing:.12em;pointer-events:auto;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+button:active{transform:translateY(1px);background:#264542}
+#veil{position:fixed;inset:0;z-index:87;background:rgba(0,0,0,.08);opacity:0;pointer-events:none;transition:opacity .16s}
 #veil.on{opacity:1;pointer-events:auto}
-#sheet{position:fixed;left:0;right:0;bottom:0;z-index:90;height:min(73dvh,650px);transform:translateY(105%);transition:transform .2s ease-out;background:linear-gradient(180deg,rgba(11,27,29,.99),rgba(5,14,16,.99));border-top:1px solid #40645f;border-radius:16px 16px 0 0;padding:10px max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:9px;box-shadow:0 -16px 60px rgba(0,0,0,.48);touch-action:pan-y}
-#sheet.on{transform:translateY(0)}
-#grab{width:52px;height:4px;border-radius:3px;background:#40645f;margin:0 auto 2px}
-.sheetHead{display:flex;align-items:center;gap:8px}
-.sheetTitle{flex:1}.sheetTitle b{display:block;color:var(--gold);font-size:14px;letter-spacing:.16em}.sheetTitle span{display:block;color:var(--muted);font-size:9px;margin-top:3px}
-#closeBtn{width:38px;height:38px;font-size:18px;padding:0}
-#families{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;touch-action:pan-x}
-#families::-webkit-scrollbar,#enemyStrip::-webkit-scrollbar{display:none}
-.familyBtn{flex:0 0 auto;padding:8px 11px;font-size:9px;letter-spacing:.1em;color:var(--muted)}
-.familyBtn.on{color:var(--gold);border-color:#8a5630;background:rgba(138,86,48,.18)}
-#enemyStrip{display:flex;gap:7px;overflow-x:auto;min-height:82px;padding:1px 1px 5px;scrollbar-width:none;touch-action:pan-x}
-.enemyCard{flex:0 0 132px;min-height:76px;text-align:left;padding:8px;display:flex;flex-direction:column;gap:4px}
-.enemyCard.on{border-color:var(--gold);background:rgba(232,160,76,.12);box-shadow:inset 0 0 0 1px rgba(232,160,76,.2)}
-.enemyName{color:var(--text);font-size:10.5px;line-height:1.2;font-weight:800}
-.enemyRole{color:var(--muted);font-size:8.5px;line-height:1.2}
-.enemyTags{margin-top:auto;color:#aa7860;font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#modeRow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.segBtn{min-height:42px;font-size:10px;letter-spacing:.1em;color:var(--muted)}
-.segBtn.on{color:var(--gold);border-color:#8a5630;background:rgba(232,160,76,.1)}
-#controls{flex:1;min-height:0;overflow-y:auto;padding-right:3px;overscroll-behavior:contain;touch-action:pan-y}
-.controlCard{border:1px solid rgba(49,80,77,.72);border-radius:9px;background:rgba(16,38,40,.58);padding:10px;display:grid;gap:9px}
-.row{display:flex;align-items:center;gap:8px}.row label{flex:1;color:var(--muted);font-size:9px;letter-spacing:.08em}.value{min-width:42px;text-align:center;color:var(--gold);font-size:12px;font-weight:800}
-.stepper{display:flex;align-items:center;gap:6px}.miniBtn{width:38px;height:34px;font-size:17px;padding:0}.miniBtn.text{width:auto;padding:0 10px;font-size:9px;letter-spacing:.08em}.miniBtn.on{color:var(--gold);border-color:#8a5630}
-select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:7px;background:#102628;color:var(--gold);font-family:inherit;font-size:10px;padding:8px 9px}
-#composition{font-size:9px;line-height:1.5;color:var(--muted);padding:8px;border-left:2px solid #8a5630;background:rgba(0,0,0,.16)}
-#composition b{color:var(--text)}
-#actions{display:grid;grid-template-columns:1.35fr .8fr .8fr;gap:7px}
-.wideBtn{min-height:45px;font-size:10px;letter-spacing:.1em;padding:8px}
-#spawnBtn{color:#102020;background:var(--gold);border-color:#f2bd78;font-weight:900}
-#spawnBtn:active{background:#c9863a}
-#utilityRow{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-#message{min-height:16px;color:#ff987a;font-size:9px;line-height:1.3;text-align:center}
+#labDock{position:fixed;z-index:90;background:linear-gradient(180deg,rgba(8,22,24,.985),rgba(4,13,15,.985));border:1px solid #40645f;box-shadow:0 12px 55px rgba(0,0,0,.5);overflow:hidden;transition:transform .2s ease-out;display:grid}
+#dockHead{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid rgba(49,80,77,.7)}
+#dockTitle{flex:1;min-width:0}#dockTitle b{display:block;color:var(--gold);font-size:13px;letter-spacing:.15em}#dockTitle span{display:block;color:var(--muted);font-size:8.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#closeBtn{width:38px;height:38px;padding:0;font-size:18px}
+#labCategories,#labValues{scrollbar-width:none;overscroll-behavior:contain}#labCategories::-webkit-scrollbar,#labValues::-webkit-scrollbar{display:none}
+#labCategories{display:flex;gap:6px;padding:8px;background:rgba(0,0,0,.14)}
+.categoryBtn{flex:0 0 auto;min-height:44px;padding:7px;font-size:9px;letter-spacing:.08em;color:var(--muted)}
+.categoryBtn.on{color:var(--gold);border-color:#8a5630;background:rgba(232,160,76,.12)}
+#labValues{padding:8px;min-width:0;min-height:0;touch-action:pan-y}
+.valueList{display:flex;gap:7px}
+.choice{flex:0 0 auto;min-width:0;padding:10px;text-align:left;display:flex;flex-direction:column;gap:4px}
+.choice b{font-size:10.5px;line-height:1.2}.choice span{font-size:8px;line-height:1.35;color:var(--muted)}.choice em{font-style:normal;font-size:7.5px;color:#aa7860;margin-top:auto}
+.choice.on{border-color:var(--gold);background:rgba(232,160,76,.12);box-shadow:inset 0 0 0 1px rgba(232,160,76,.18)}
+.controlCard,.sliderCard,.statusCard{border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58);padding:10px;flex:0 0 auto}
+.statusCard b{display:block;color:var(--gold);font-size:11px;margin-bottom:5px}.statusCard span{font-size:8.5px;line-height:1.5;color:var(--muted)}
+.controlCard{display:grid;gap:8px}.row{display:flex;align-items:center;gap:7px}.row label{flex:1;color:var(--muted);font-size:8.5px;letter-spacing:.07em}.value{min-width:45px;text-align:center;color:var(--gold);font-weight:800;font-size:11px}
+.miniBtn{min-height:36px;padding:0 10px;font-size:9px;letter-spacing:.06em}.miniBtn.on{color:var(--gold);border-color:#8a5630}
+.stepper{display:flex;align-items:center;gap:6px}.stepper .miniBtn{width:38px;padding:0;font-size:17px}
+.sliderCard label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:8.5px;letter-spacing:.05em}.sliderCard output{color:var(--gold)}
+.sliderCard input{width:100%;height:30px;margin-top:6px;accent-color:var(--gold);touch-action:pan-x}
+select{width:100%;min-height:39px;border:1px solid var(--line);border-radius:7px;background:#102628;color:var(--gold);padding:7px}
+#message{min-height:18px;padding:2px 8px;color:#ff987a;font-size:8.5px;text-align:center}
+#actions{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:7px;padding:8px;border-top:1px solid rgba(49,80,77,.7)}
+.actionBtn{min-height:43px;padding:7px;font-size:9.5px;letter-spacing:.1em}#spawnBtn{color:#102020;background:var(--gold);border-color:#f2bd78;font-weight:900}
 #result{position:fixed;left:50%;top:20%;z-index:84;transform:translate(-50%,-12px);opacity:0;pointer-events:none;transition:.18s;padding:12px 15px;border:1px solid #8a5630;border-radius:9px;background:rgba(8,20,22,.94);text-align:center;box-shadow:0 8px 35px #0008}
-#result.on{opacity:1;transform:translate(-50%,0)}
-#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
-@media(min-width:760px){#sheet{left:auto;width:430px;right:12px;bottom:12px;border:1px solid #40645f;border-radius:16px;height:min(78dvh,680px)}#veil{background:rgba(0,0,0,.18)}}
+#result.on{opacity:1;transform:translate(-50%,0)}#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
+@media (orientation:landscape){
+  #labDock{top:max(96px,calc(env(safe-area-inset-top) + 64px));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));width:min(47vw,530px);border-radius:14px;grid-template-columns:minmax(230px,1fr) 92px;grid-template-rows:auto 1fr auto auto;transform:translateX(calc(100% + 24px))}
+  #labDock.on{transform:translateX(0)}#dockHead{grid-column:1/3;grid-row:1}#labValues{grid-column:1;grid-row:2;overflow-y:auto;touch-action:pan-y}#labCategories{grid-column:2;grid-row:2;flex-direction:column;overflow-y:auto;touch-action:pan-y;border-left:1px solid rgba(49,80,77,.6)}#message{grid-column:1/3;grid-row:3}#actions{grid-column:1/3;grid-row:4}
+  .valueList{flex-direction:column}.choice{width:100%;min-height:66px}.controlCard,.sliderCard,.statusCard{width:100%}
+}
+@media (orientation:portrait){
+  #labDock{left:0;right:0;bottom:0;height:min(49dvh,490px);border-radius:16px 16px 0 0;grid-template-columns:1fr;grid-template-rows:auto 1fr 58px auto auto;transform:translateY(105%);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock.on{transform:translateY(0)}#dockHead{grid-row:1}#labValues{grid-row:2;overflow-x:auto;touch-action:pan-x}#labCategories{grid-row:3;overflow-x:auto;touch-action:pan-x;border-top:1px solid rgba(49,80,77,.6)}#message{grid-row:4}#actions{grid-row:5}
+  .valueList{flex-direction:row;height:100%}.choice{width:160px;min-height:92px}.controlCard,.sliderCard,.statusCard{width:220px;max-height:100%;overflow-y:auto}
+  #labHud{top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right))}#testBadge{max-width:58vw}
+}
 </style>
 </head>
 <body>
-<iframe id="arenaFrame" src="combat-arena.html?seed=enemy-lab-001" title="Enemy Lab combat chamber"></iframe>
-<div id="labHud"><div id="testBadge"><strong>ENEMY LAB</strong> · chamber ready</div><button class="hudBtn" id="labBtn">LAB</button></div>
+<iframe id="arenaFrame" src="combat-arena.html?seed=enemy-lab-001&amp;layout=arena" title="Enemy Lab combat chamber"></iframe>
+<div id="labHud"><div id="testBadge"><strong>ENEMY LAB</strong> · chamber ready</div><button class="uiBtn" id="labBtn">LAB</button></div>
 <div id="result"><b>TEST CLEAR</b><span></span></div>
 <div id="veil"></div>
-<section id="sheet" aria-label="Enemy Lab controls">
-  <div id="grab"></div>
-  <div class="sheetHead">
-    <div class="sheetTitle"><b>ENEMY LAB</b><span>Pick a focal enemy, then spawn a solo, pack, or paired wave test.</span></div>
-    <button class="hudBtn" id="closeBtn" aria-label="Close Enemy Lab">×</button>
-  </div>
-  <div id="families"></div>
-  <div id="enemyStrip"></div>
-  <div id="modeRow">
-    <button class="segBtn on" data-mode="solo">SOLO</button>
-    <button class="segBtn" data-mode="pack">PACK</button>
-    <button class="segBtn" data-mode="wave">WAVE</button>
-  </div>
-  <div id="controls"></div>
+<aside id="labDock" aria-label="Enemy Lab controls">
+  <div id="dockHead"><div id="dockTitle"><b>ENEMY LAB</b><span id="categoryHint">Pick what to edit on the outside, then choose a value inside.</span></div><button class="uiBtn" id="closeBtn" aria-label="Close Enemy Lab">×</button></div>
+  <section id="labValues"></section>
+  <nav id="labCategories"></nav>
   <div id="message"></div>
-  <div id="actions">
-    <button class="wideBtn" id="spawnBtn">SPAWN TEST</button>
-    <button class="wideBtn" id="clearBtn">CLEAR</button>
-    <button class="wideBtn" id="repeatBtn">REPEAT</button>
-  </div>
-  <div id="utilityRow">
-    <button class="wideBtn" id="tuningBtn">ARENA TUNING</button>
-    <button class="wideBtn" id="fullscreenBtn">FULLSCREEN</button>
-  </div>
-</section>
+  <div id="actions"><button class="actionBtn" id="spawnBtn">SPAWN TEST</button><button class="actionBtn" id="clearBtn">CLEAR</button><button class="actionBtn" id="repeatBtn">REPEAT</button></div>
+</aside>
 <script type="module">
 import { ARENA_ENEMY_ARCHETYPES } from './src/arena-enemies.js';
 import { FUSION_ARCHETYPES, FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
@@ -97,9 +77,9 @@ import { HADES_ENEMY_ARCHETYPES, HADES_ENEMY_OPTIONS } from './src/hades-enemies
 import { COMBINED_ENCOUNTER_GROUPS } from './src/combined-encounter-director.js';
 
 const $=id=>document.getElementById(id);
-const frame=$('arenaFrame'),sheet=$('sheet'),veil=$('veil'),families=$('families'),enemyStrip=$('enemyStrip'),controls=$('controls');
-const testBadge=$('testBadge'),message=$('message'),result=$('result');
-const storeKey='enemyLab.settings.v1';
+const frame=$('arenaFrame'),dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories');
+const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
+const storeKey='enemyLab.settings.v2';
 const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||'{}')}catch{return{}}})();
 const combinedByKind=new Map(COMBINED_ENCOUNTER_GROUPS.map(group=>[group.spawnKind,group]));
 const labelsFrom=options=>new Map(options.map(option=>[option.id,option.label.replace(/^FLARE · |^HADES · /,'')]));
@@ -113,15 +93,7 @@ const originalMeta={
 };
 function entry(id,label,family,system,data={}){
   const combined=combinedByKind.get(id)||{};
-  return {
-    id,label,family,system,
-    role:data.role||combined.label||'enemy',
-    tags:[...(data.pairingTags||data.categories||combined.tags||[])],
-    avoidTags:[...(data.avoidPairTags||combined.avoidTags||[])],
-    encounterCost:data.encounterCost||combined.encounterCost||8,
-    maxCount:data.maxActive||combined.maxCount||8,
-    needsPartner:!!(data.needsPartner||combined.needsPartner),
-  };
+  return {id,label,family,system,role:data.role||combined.label||'enemy',tags:[...(data.pairingTags||data.categories||combined.tags||[])],avoidTags:[...(data.avoidPairTags||combined.avoidTags||[])],encounterCost:data.encounterCost||combined.encounterCost||8,maxCount:data.maxActive||combined.maxCount||8,needsPartner:!!(data.needsPartner||combined.needsPartner)};
 }
 const catalog=[
   ...Object.keys(ARENA_ENEMY_ARCHETYPES).map(id=>entry(id,originalMeta[id]?.label||id,'GOBLINS','original',{...ARENA_ENEMY_ARCHETYPES[id],...originalMeta[id]})),
@@ -130,7 +102,11 @@ const catalog=[
   ...Object.entries(HADES_ENEMY_ARCHETYPES).map(([id,data])=>entry(id,hadesLabels.get(id)||data.label||id,'HADES','hades',data)),
 ];
 const familyOrder=['GOBLINS','FUSION','FLARE','HADES'];
+const categoryDefs=[
+  ['type','TYPE','Choose the enemy family.'],['enemy','ENEMY','Choose the exact focal enemy.'],['spawn','SPAWN','Configure solo, pack, or paired-wave spawning.'],['room','ROOM','Configure the test chamber.'],['player','PLAYER','Change weapon and stance.'],['combat','COMBAT','Choose combo and input behavior.'],['director','DIRECTOR','Choose the arena director behavior.'],['tuning','TUNING','Adjust enemy and encounter values.'],['feel','FEEL','Edit hit-feel keyframes.'],['tools','TOOLS','Reset, fullscreen, and utility actions.'],
+];
 let state={
+  category:categoryDefs.some(([id])=>id===saved.category)?saved.category:'enemy',
   family:familyOrder.includes(saved.family)?saved.family:'GOBLINS',
   enemyId:catalog.some(enemy=>enemy.id===saved.enemyId)?saved.enemyId:'grunt',
   mode:['solo','pack','wave'].includes(saved.mode)?saved.mode:'solo',
@@ -138,172 +114,88 @@ let state={
   threat:['low','standard','high'].includes(saved.threat)?saved.threat:'standard',
   partnerId:saved.partnerId||'',
 };
-let pausedByLab=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0;
+let dockOpen=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0;
 const currentEnemy=()=>catalog.find(enemy=>enemy.id===state.enemyId)||catalog[0];
-const bridge=()=>frame.contentWindow?.__enemyLabEnemySystem||null;
+const enemyBridge=()=>frame.contentWindow?.__enemyLabEnemySystem||null;
+const controlBridge=()=>frame.contentWindow?.__enemyLabControlBridge||null;
 const frameDoc=()=>frame.contentDocument||null;
 function save(){localStorage.setItem(storeKey,JSON.stringify(state));}
 function setMessage(text=''){message.textContent=text;}
+function titleCase(text=''){return String(text).replace(/[-_]/g,' ').replace(/\b\w/g,char=>char.toUpperCase());}
 function compatible(a,b){
   if(!a||!b||a.id===b.id||a.system===b.system)return false;
-  const areaControl=(a.tags.includes('area-denial')&&b.tags.includes('hard-control'))||(b.tags.includes('area-denial')&&a.tags.includes('hard-control'));
-  if(areaControl)return false;
-  if(a.avoidTags.some(tag=>b.tags.includes(tag)))return false;
-  if(b.avoidTags.some(tag=>a.tags.includes(tag)))return false;
+  if((a.tags.includes('area-denial')&&b.tags.includes('hard-control'))||(b.tags.includes('area-denial')&&a.tags.includes('hard-control')))return false;
+  if(a.avoidTags.some(tag=>b.tags.includes(tag))||b.avoidTags.some(tag=>a.tags.includes(tag)))return false;
   return true;
 }
 function partnerScore(a,b){
-  let score=0;
-  const has=(enemy,tag)=>enemy.tags.includes(tag);
+  let score=0;const has=(enemy,tag)=>enemy.tags.includes(tag);
   if(has(a,'ranged')&&(has(b,'frontline')||has(b,'anchor')))score+=8;
   if(has(a,'anchor')&&(has(b,'mobile')||has(b,'swarm')||has(b,'ranged')))score+=7;
   if(has(a,'swarm')&&(has(b,'anchor')||has(b,'frontline')))score+=8;
   if((has(a,'mobile')||has(a,'committed'))&&(has(b,'anchor')||has(b,'ranged')))score+=6;
   if(has(a,'area-denial')&&(has(b,'mobile')||has(b,'frontline')))score+=5;
   if(has(a,'hard-control')&&(has(b,'frontline')||has(b,'ranged')))score+=4;
-  score+=Math.max(0,4-Math.abs(a.encounterCost-b.encounterCost)/4);
-  return score;
+  return score+Math.max(0,4-Math.abs(a.encounterCost-b.encounterCost)/4);
 }
-function partnerCandidates(){
-  const focal=currentEnemy();
-  return catalog.filter(candidate=>compatible(focal,candidate)).sort((a,b)=>partnerScore(focal,b)-partnerScore(focal,a)||a.label.localeCompare(b.label));
-}
-function ensurePartner(){
-  const candidates=partnerCandidates();
-  if(!candidates.length){state.partnerId='';return null;}
-  if(!candidates.some(enemy=>enemy.id===state.partnerId))state.partnerId=candidates[partnerCycle%candidates.length].id;
-  return catalog.find(enemy=>enemy.id===state.partnerId)||candidates[0];
-}
-function renderFamilies(){
-  families.replaceChildren(...familyOrder.map(family=>{
-    const button=document.createElement('button');button.className='familyBtn'+(family===state.family?' on':'');button.textContent=family;
-    button.addEventListener('click',()=>{state.family=family;const first=catalog.find(enemy=>enemy.family===family);if(first)state.enemyId=first.id;partnerCycle=0;ensurePartner();save();renderAll();});
-    return button;
-  }));
-}
-function renderEnemies(){
-  const list=catalog.filter(enemy=>enemy.family===state.family);
-  enemyStrip.replaceChildren(...list.map(enemy=>{
-    const button=document.createElement('button');button.className='enemyCard'+(enemy.id===state.enemyId?' on':'');
-    button.innerHTML=`<span class="enemyName">${enemy.label}</span><span class="enemyRole">${enemy.role}</span><span class="enemyTags">${enemy.tags.slice(0,4).join(' · ')||enemy.system}</span>`;
-    button.addEventListener('click',()=>{state.enemyId=enemy.id;partnerCycle=0;ensurePartner();save();renderAll();});
-    return button;
-  }));
-  requestAnimationFrame(()=>enemyStrip.querySelector('.on')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}));
-}
-function countsForWave(){
-  const focal=currentEnemy(),partner=ensurePartner();
-  const table={low:[1,2],standard:[2,3],high:[3,5]};
-  let [focalCount,partnerCount]=table[state.threat]||table.standard;
-  focalCount=Math.min(focalCount,focal.maxCount||8,focal.family==='GOBLINS'?4:20);
-  partnerCount=Math.min(partnerCount,partner?.maxCount||8,partner?.family==='GOBLINS'?4:20);
-  return {focalCount,partnerCount,partner};
-}
-function renderControls(){
-  const focal=currentEnemy();
-  if(state.mode==='solo'){
-    controls.innerHTML=`<div class="controlCard"><div class="row"><label>FOCAL ENEMY</label><span class="value">1</span></div><div id="composition"><b>${focal.label}</b> alone. Best for reading its movement, telegraph, attack reach, and hit reactions.</div></div>`;
-    return;
-  }
+function partnerCandidates(){const focal=currentEnemy();return catalog.filter(candidate=>compatible(focal,candidate)).sort((a,b)=>partnerScore(focal,b)-partnerScore(focal,a)||a.label.localeCompare(b.label));}
+function ensurePartner(){const candidates=partnerCandidates();if(!candidates.length){state.partnerId='';return null;}if(!candidates.some(enemy=>enemy.id===state.partnerId))state.partnerId=candidates[partnerCycle%candidates.length].id;return catalog.find(enemy=>enemy.id===state.partnerId)||candidates[0];}
+function countsForWave(){const focal=currentEnemy(),partner=ensurePartner();const table={low:[1,2],standard:[2,3],high:[3,5]};let [focalCount,partnerCount]=table[state.threat]||table.standard;focalCount=Math.min(focalCount,focal.maxCount||8,focal.family==='GOBLINS'?4:20);partnerCount=Math.min(partnerCount,partner?.maxCount||8,partner?.family==='GOBLINS'?4:20);return {focalCount,partnerCount,partner};}
+function choice({label,sub='',meta='',active=false,onClick}){const button=document.createElement('button');button.className='choice'+(active?' on':'');button.innerHTML=`<b>${label}</b>${sub?`<span>${sub}</span>`:''}${meta?`<em>${meta}</em>`:''}`;button.addEventListener('click',onClick);return button;}
+function list(...nodes){const root=document.createElement('div');root.className='valueList';root.append(...nodes.flat().filter(Boolean));return root;}
+function status(title,body){const card=document.createElement('div');card.className='statusCard';card.innerHTML=`<b>${title}</b><span>${body}</span>`;return card;}
+function snapshot(){return controlBridge()?.snapshot?.()||{ready:false,directorModes:[],combatModes:[],tuning:[],feelKeys:[],feel:[],roomOptions:[]};}
+function renderCategories(){categoriesEl.replaceChildren(...categoryDefs.map(([id,label])=>choice({label,active:state.category===id,onClick:()=>{state.category=id;save();renderAll();}})));}
+function renderType(){return list(...familyOrder.map(family=>choice({label:family,sub:`${catalog.filter(enemy=>enemy.family===family).length} enemies`,active:state.family===family,onClick:()=>{state.family=family;const first=catalog.find(enemy=>enemy.family===family);if(first)state.enemyId=first.id;partnerCycle=0;ensurePartner();save();renderAll();}})));}
+function renderEnemy(){return list(...catalog.filter(enemy=>enemy.family===state.family).map(enemy=>choice({label:enemy.label,sub:enemy.role,meta:enemy.tags.slice(0,4).join(' · ')||enemy.system,active:enemy.id===state.enemyId,onClick:()=>{state.enemyId=enemy.id;partnerCycle=0;ensurePartner();save();renderAll();}})));}
+function renderSpawn(){
+  const focal=currentEnemy();const nodes=['solo','pack','wave'].map(mode=>choice({label:mode.toUpperCase(),sub:mode==='solo'?'One focal enemy':mode==='pack'?'Matching copies':'Focal + partner',active:state.mode===mode,onClick:()=>{state.mode=mode;ensurePartner();save();renderValues();}}));
+  if(state.mode==='solo')nodes.push(status(`${focal.label} SOLO`,'One enemy. Best for studying movement, telegraphs, reach, and hit reactions.'));
   if(state.mode==='pack'){
     const max=Math.min(12,focal.maxCount||12,focal.family==='GOBLINS'?4:12);state.packCount=Math.max(2,Math.min(max,state.packCount));
-    controls.innerHTML=`<div class="controlCard"><div class="row"><label>SAME-ENEMY COUNT</label><div class="stepper"><button class="miniBtn" id="countDown">−</button><span class="value" id="countValue">${state.packCount}</span><button class="miniBtn" id="countUp">+</button></div></div><div id="composition"><b>${state.packCount} × ${focal.label}</b>. Tests crowd spacing, repeated pressure, and how the enemy behaves when several copies compete to engage.</div></div>`;
-    $('countDown').addEventListener('click',()=>{state.packCount=Math.max(2,state.packCount-1);save();renderControls();});
-    $('countUp').addEventListener('click',()=>{state.packCount=Math.min(max,state.packCount+1);save();renderControls();});
-    return;
+    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<div class="row"><label>SAME-ENEMY COUNT</label><div class="stepper"><button class="miniBtn" id="countDown">−</button><span class="value">${state.packCount}</span><button class="miniBtn" id="countUp">+</button></div></div><div class="statusCard"><b>${state.packCount} × ${focal.label}</b><span>Tests crowd spacing and repeated pressure.</span></div>`;nodes.push(card);queueMicrotask(()=>{$('countDown')?.addEventListener('click',()=>{state.packCount=Math.max(2,state.packCount-1);save();renderValues();});$('countUp')?.addEventListener('click',()=>{state.packCount=Math.min(max,state.packCount+1);save();renderValues();});});
   }
-  const candidates=partnerCandidates();const {focalCount,partnerCount,partner}=countsForWave();
-  controls.innerHTML=`<div class="controlCard">
-    <div class="row"><label>THREAT LEVEL</label><div class="stepper">${['low','standard','high'].map(level=>`<button class="miniBtn text${state.threat===level?' on':''}" data-threat="${level}">${level.toUpperCase()}</button>`).join('')}</div></div>
-    <div><label style="display:block;color:var(--muted);font-size:9px;letter-spacing:.08em;margin-bottom:6px">MATCHING PARTNER</label><select id="partnerSelect">${candidates.map(enemy=>`<option value="${enemy.id}"${enemy.id===partner?.id?' selected':''}>${enemy.family} · ${enemy.label}</option>`).join('')}</select></div>
-    <div class="row"><label>AUTO MATCH</label><button class="miniBtn text" id="rerollBtn">REROLL</button></div>
-    <div id="composition"><b>${focalCount} × ${focal.label}</b>${partner?` + <b>${partnerCount} × ${partner.label}</b>`:' — no compatible cross-system partner found.'}</div>
-  </div>`;
-  controls.querySelectorAll('[data-threat]').forEach(button=>button.addEventListener('click',()=>{state.threat=button.dataset.threat;save();renderControls();}));
-  $('partnerSelect')?.addEventListener('change',event=>{state.partnerId=event.target.value;save();renderControls();});
-  $('rerollBtn')?.addEventListener('click',()=>{if(candidates.length){partnerCycle=(partnerCycle+1)%candidates.length;state.partnerId=candidates[partnerCycle].id;save();renderControls();}});
-}
-function renderModes(){document.querySelectorAll('.segBtn').forEach(button=>button.classList.toggle('on',button.dataset.mode===state.mode));}
-function renderAll(){renderFamilies();renderEnemies();renderModes();renderControls();}
-function pauseForLab(){
-  const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');
-  if(panel&&menu){
-    if(panel.classList.contains('hidden')){menu.click();pausedByLab=true;}else pausedByLab=false;
-    panel.style.visibility='hidden';
+  if(state.mode==='wave'){
+    const candidates=partnerCandidates();const {focalCount,partnerCount,partner}=countsForWave();
+    nodes.push(...['low','standard','high'].map(level=>choice({label:level.toUpperCase(),sub:'Threat level',active:state.threat===level,onClick:()=>{state.threat=level;save();renderValues();}})));
+    const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<label style="font-size:8.5px;color:var(--muted)">MATCHING PARTNER</label><select id="partnerSelect">${candidates.map(enemy=>`<option value="${enemy.id}"${enemy.id===partner?.id?' selected':''}>${enemy.family} · ${enemy.label}</option>`).join('')}</select><div class="row"><label>AUTO MATCH</label><button class="miniBtn" id="rerollBtn">REROLL</button></div><div class="statusCard"><b>${focalCount} × ${focal.label}${partner?` + ${partnerCount} × ${partner.label}`:''}</b><span>${partner?'A compatible cross-system pairing.':'No compatible partner found.'}</span></div>`;nodes.push(card);queueMicrotask(()=>{$('partnerSelect')?.addEventListener('change',event=>{state.partnerId=event.target.value;save();renderValues();});$('rerollBtn')?.addEventListener('click',()=>{if(candidates.length){partnerCycle=(partnerCycle+1)%candidates.length;state.partnerId=candidates[partnerCycle].id;save();renderValues();}});});
   }
+  return list(...nodes);
 }
-function resumeFromLab(){
-  const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');
-  if(panel)panel.style.visibility='';
-  if(pausedByLab&&panel&&!panel.classList.contains('hidden'))menu?.click();
-  pausedByLab=false;
+function renderRoom(data){const options=data.roomOptions?.length?data.roomOptions:[{id:'large',label:'Large · 24',active:true}];return list(status('OPEN ARENA','One clean hexagonal test chamber. No maze corridors, doors, room transitions, or visible trees.'),...options.map(option=>choice({label:option.label,sub:'Cell size · reloads chamber',active:option.active,onClick:()=>controlBridge()?.setCellSize?.(option.id)})));}
+function renderPlayer(data){return list(status(`WEAPON · ${titleCase(data.weaponId||'loading')}`,`STANCE · ${data.stanceName||'loading'}`),choice({label:'PREVIOUS WEAPON',sub:'Cycle backward',onClick:()=>{controlBridge()?.cycleWeapon?.(-1);setTimeout(renderValues,60);}}),choice({label:'NEXT WEAPON',sub:'Cycle forward',onClick:()=>{controlBridge()?.cycleWeapon?.(1);setTimeout(renderValues,60);}}),choice({label:'NEXT STANCE',sub:'Developer cycle',onClick:()=>{controlBridge()?.cycleStance?.();setTimeout(renderValues,40);}}));}
+function renderButtonGroup(options,setter){return list(...options.map(option=>choice({label:option.label,sub:option.note,active:option.active,onClick:()=>{setter(option.id);setTimeout(renderValues,80);}})));}
+function renderSliders(items,setter){return list(...items.map(item=>{const card=document.createElement('div');card.className='sliderCard';card.innerHTML=`<label>${item.label}<output>${item.value}</output></label><input type="range" min="${item.min}" max="${item.max}" step="${item.step}" value="${item.value}">`;const input=card.querySelector('input'),output=card.querySelector('output');input.addEventListener('input',()=>{output.value=input.value;setter(item.index,Number(input.value));});return card;}));}
+function renderFeel(data){const root=document.createElement('div');root.className='valueList';root.append(...data.feelKeys.map(key=>choice({label:key.label,sub:'Keyframe',active:key.active,onClick:()=>{controlBridge()?.setFeelKey?.(key.id);setTimeout(renderValues,30);}})),...renderSliders(data.feel,(index,value)=>controlBridge()?.setFeel?.(index,value)).children,choice({label:'TEST THIS TIER',sub:'Close the dock and swing',onClick:()=>{setDockOpen(false);setTimeout(()=>controlBridge()?.testFeel?.(),30);}}));return root;}
+function renderTools(){return list(choice({label:'RESET FIGHT',sub:'Respawn player and encounter',onClick:()=>controlBridge()?.resetFight?.()}),choice({label:'FULLSCREEN',sub:'Toggle the complete Enemy Lab',onClick:()=>controlBridge()?.toggleFullscreen?.()}),choice({label:'CLOSE LAB',sub:'Resume the test chamber',onClick:()=>setDockOpen(false)}));}
+function renderValues(){
+  const data=snapshot();const def=categoryDefs.find(([id])=>id===state.category);categoryHint.textContent=def?.[2]||'';
+  let content;
+  if(state.category==='type')content=renderType();else if(state.category==='enemy')content=renderEnemy();else if(state.category==='spawn')content=renderSpawn();else if(state.category==='room')content=renderRoom(data);else if(state.category==='player')content=renderPlayer(data);else if(state.category==='combat')content=renderButtonGroup(data.combatModes,id=>controlBridge()?.setCombatMode?.(id));else if(state.category==='director')content=renderButtonGroup(data.directorModes,id=>controlBridge()?.setDirectorMode?.(id));else if(state.category==='tuning')content=renderSliders(data.tuning,(index,value)=>controlBridge()?.setTuning?.(index,value));else if(state.category==='feel')content=renderFeel(data);else content=renderTools();
+  if(!data.ready&&['room','player','combat','director','tuning','feel'].includes(state.category))content=list(status('ARENA CONTROLS LOADING','The embedded Combat Arena bridge has not finished loading yet.'));
+  values.replaceChildren(content);requestAnimationFrame(()=>values.querySelector('.on')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}));
 }
-function openLab(){sheet.classList.add('on');veil.classList.add('on');pauseForLab();renderAll();}
-function closeLab({resume=true}={}){sheet.classList.remove('on');veil.classList.remove('on');if(resume)resumeFromLab();}
-function ensureArenaStarted(){const doc=frameDoc();const gate=doc?.getElementById('startGate');if(gate&&!gate.classList.contains('hidden'))doc.getElementById('startBtn')?.click();}
-function buildPlan(){
-  const focal=currentEnemy();
-  if(state.mode==='solo')return {label:`${focal.label} Solo`,groups:[{spawnKind:focal.id,count:1}]};
-  if(state.mode==='pack')return {label:`${focal.label} Pack ×${state.packCount}`,groups:[{spawnKind:focal.id,count:state.packCount}]};
-  const {focalCount,partnerCount,partner}=countsForWave();
-  if(!partner)return null;
-  return {label:`${focal.label} + ${partner.label}`,groups:[{spawnKind:focal.id,count:focalCount},{spawnKind:partner.id,count:partnerCount}]};
-}
-function showResult(title,detail){
-  result.querySelector('b').textContent=title;result.querySelector('span').textContent=detail;result.classList.add('on');
-  clearTimeout(resultTimer);resultTimer=setTimeout(()=>result.classList.remove('on'),2600);
-}
+function renderAll(){renderCategories();renderValues();}
+function setDockOpen(open,{syncArena=true}={}){dockOpen=!!open;dock.classList.toggle('on',dockOpen);veil.classList.toggle('on',dockOpen);if(dockOpen)renderAll();if(syncArena){const bridge=controlBridge();if(bridge)bridge.setMenuOpen(dockOpen);else{const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');if(panel&&menu&&(!panel.classList.contains('hidden'))!==dockOpen)menu.click();}}}
+window.__enemyLabSetOpenFromArena=open=>setDockOpen(open,{syncArena:false});
+window.__enemyLabArenaControlsReady=()=>{if(dockOpen)renderValues();};
+function ensureArenaStarted(){const doc=frameDoc(),gate=doc?.getElementById('startGate');if(gate&&!gate.classList.contains('hidden'))doc.getElementById('startBtn')?.click();}
+function buildPlan(){const focal=currentEnemy();if(state.mode==='solo')return {label:`${focal.label} Solo`,groups:[{spawnKind:focal.id,count:1}]};if(state.mode==='pack')return {label:`${focal.label} Pack ×${state.packCount}`,groups:[{spawnKind:focal.id,count:state.packCount}]};const {focalCount,partnerCount,partner}=countsForWave();if(!partner)return null;return {label:`${focal.label} + ${partner.label}`,groups:[{spawnKind:focal.id,count:focalCount},{spawnKind:partner.id,count:partnerCount}]};}
+function showResult(title,detail){result.querySelector('b').textContent=title;result.querySelector('span').textContent=detail;result.classList.add('on');clearTimeout(resultTimer);resultTimer=setTimeout(()=>result.classList.remove('on'),2600);}
 function startTest(plan=buildPlan()){
-  setMessage('');
-  const system=bridge();
-  if(!system?.startLabScenario){setMessage('Enemy Lab bridge did not load. Reload the page and try again.');return;}
-  if(!plan){setMessage('No compatible partner is available for this wave.');return;}
-  ensureArenaStarted();
-  closeLab();
-  const response=system.startLabScenario(-777,plan);
-  if(!response?.ok){setMessage(response?.error||'Enemy Lab could not spawn this composition.');openLab();return;}
-  lastPlan=JSON.parse(JSON.stringify(plan));running=true;sawEnemy=false;testStart=performance.now();startHp=system.playerHp;
-  testBadge.innerHTML=`<strong>${plan.label.toUpperCase()}</strong> · spawning`;
-  save();
+  setMessage('');const system=enemyBridge();if(!system?.startLabScenario){setMessage('Enemy Lab bridge did not load. Reload and try again.');return;}if(!plan){setMessage('No compatible partner is available for this wave.');return;}
+  ensureArenaStarted();setDockOpen(false);const response=system.startLabScenario(-777,plan);if(!response?.ok){setMessage(response?.error||'Enemy Lab could not spawn this composition.');setDockOpen(true);return;}
+  lastPlan=JSON.parse(JSON.stringify(plan));running=true;sawEnemy=false;testStart=performance.now();startHp=system.playerHp;testBadge.innerHTML=`<strong>${plan.label.toUpperCase()}</strong> · spawning`;save();
 }
-function clearTest(){const system=bridge();system?.clearRoomRuntime?.();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
-function openArenaTuning(){
-  sheet.classList.remove('on');veil.classList.remove('on');
-  const doc=frameDoc(),panel=doc?.getElementById('panel'),menu=doc?.getElementById('menuBtn');
-  if(panel){panel.style.visibility='';if(panel.classList.contains('hidden'))menu?.click();}
-  pausedByLab=false;
-}
+function clearTest(){const system=enemyBridge();system?.clearRoomRuntime?.();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
 function poll(){
-  const system=bridge();
-  if(system){
-    const alive=system.enemies?.filter(enemy=>enemy.hp>0).length||0;
-    const pending=(system.queuedSpawnCount||0)+(system.telegraphCount||0);
-    if(running){
-      if(alive>0||pending>0)sawEnemy=true;
-      const elapsed=(performance.now()-testStart)/1000;
-      testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;
-      if(sawEnemy&&alive===0&&pending===0){
-        running=false;const damage=Math.max(0,Math.round(startHp-system.playerHp));
-        showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);
-        testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;
-      }else if(system.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}
-    }
-  }
+  const system=enemyBridge();if(system){const alive=system.enemies?.filter(enemy=>enemy.hp>0).length||0;const pending=(system.queuedSpawnCount||0)+(system.telegraphCount||0);if(running){if(alive>0||pending>0)sawEnemy=true;const elapsed=(performance.now()-testStart)/1000;testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;if(sawEnemy&&alive===0&&pending===0){running=false;const damage=Math.max(0,Math.round(startHp-system.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;}else if(system.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}}}
   requestAnimationFrame(poll);
 }
-function prepareFrame(){
-  const doc=frameDoc();if(!doc)return;
-  const title=doc.querySelector('#startCard .sgTitle'),hint=doc.querySelector('#startCard .sgHint');
-  if(title)title.textContent='ENEMY LAB';
-  if(hint)hint.textContent='Enter the chamber, then use LAB to spawn a solo enemy, a same-enemy pack, or a paired wave.';
-  const wait=()=>{const system=bridge();if(!system){setTimeout(wait,60);return;}system.clearRoomRuntime?.();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';};
-  wait();
-}
+function prepareFrame(){const doc=frameDoc();if(!doc)return;const title=doc.querySelector('#startCard .sgTitle'),hint=doc.querySelector('#startCard .sgHint');if(title)title.textContent='ENEMY LAB';if(hint)hint.textContent='Enter the chamber, then press LAB or Backbone Start to configure the test.';const wait=()=>{const system=enemyBridge();if(!system){setTimeout(wait,60);return;}system.clearRoomRuntime?.();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';};wait();}
 frame.addEventListener('load',prepareFrame);
-$('labBtn').addEventListener('click',openLab);$('closeBtn').addEventListener('click',()=>closeLab());veil.addEventListener('click',()=>closeLab());
-document.querySelectorAll('.segBtn').forEach(button=>button.addEventListener('click',()=>{state.mode=button.dataset.mode;ensurePartner();save();renderAll();}));
+$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));
 $('spawnBtn').addEventListener('click',()=>startTest());$('clearBtn').addEventListener('click',clearTest);$('repeatBtn').addEventListener('click',()=>{if(lastPlan)startTest(lastPlan);else setMessage('Run a test first.');});
-$('tuningBtn').addEventListener('click',openArenaTuning);$('fullscreenBtn').addEventListener('click',()=>{const root=document.documentElement;(root.requestFullscreen||root.webkitRequestFullscreen)?.call(root);});
 ensurePartner();renderAll();poll();
 </script>
 </body>
