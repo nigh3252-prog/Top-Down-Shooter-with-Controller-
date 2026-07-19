@@ -1,6 +1,6 @@
-// Renderer copied from threejs_midair_lifted_ground_slice_v1.html. This diagnostic
-// pass keeps the submitted fluid/color math but renders the lifted volume as cubes,
-// disables the broad texture sheets, and exaggerates per-layer X/Z separation.
+// Renderer copied from threejs_midair_lifted_ground_slice_v1.html. This pass keeps
+// the enlarged cube volume and stronger layer separation, but restores the submitted
+// prototype's translucent additive color treatment and lifted color-copy planes.
 export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout,sim}={}){
   const PATCH_W=layout.patchWidth,PATCH_D=layout.patchDepth;
   const MAX_LAYERS=layout.maxLayers,VIS_COLS=layout.visualColumns,VIS_ROWS=layout.visualRows;
@@ -30,71 +30,52 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const seeds=new Float32Array(MAX_INSTANCES),jitterX=new Float32Array(MAX_INSTANCES),jitterZ=new Float32Array(MAX_INSTANCES);
   for(let i=0;i<MAX_INSTANCES;i++){seeds[i]=Math.random();jitterX[i]=Math.random()-.5;jitterZ[i]=Math.random()-.5;}
 
-  const group=new THREE.Group();group.name='Prototype magic fluid cube-layer diagnostic';group.visible=false;scene.add(group);
+  const group=new THREE.Group();group.name='Prototype magic fluid additive cube port';group.visible=false;scene.add(group);
 
   function texturePlane(width,depth,originalY,opacity){
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshBasicMaterial({
-      map:dyeTexture,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,
+      map:dyeTexture,transparent:true,opacity,blending:THREE.AdditiveBlending,
+      depthWrite:false,depthTest:true,side:THREE.DoubleSide,toneMapped:false,
     }));
-    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);mesh.visible=false;group.add(mesh);return mesh;
+    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);group.add(mesh);return mesh;
   }
-  // Retained for later comparison, but disabled so they cannot fill the gaps between layers.
   const fluidPlane=texturePlane(PATCH_W,PATCH_D,.025,1);
   const fluidGlowPlane=texturePlane(PATCH_W*1.02,PATCH_D*1.02,.035,.45);
   const airPlane=texturePlane(PATCH_W,PATCH_D,.92,1);
   const airGlowPlane=texturePlane(PATCH_W*1.03,PATCH_D*1.03,1.02,.55);
   const airHaloPlane=texturePlane(PATCH_W*1.08,PATCH_D*1.08,1.10,.24);
 
-  const quadMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
-  // Read InstancedMesh.instanceColor directly. This avoids both the fixed orange
-  // Lambert emissive and the stock material path that rendered the instances black.
-  // A small directional face term preserves cube volume without replacing the palette.
-  const cubeMaterial=new THREE.ShaderMaterial({
-    transparent:true,
-    depthWrite:true,
-    depthTest:true,
-    blending:THREE.NormalBlending,
-    toneMapped:false,
-    uniforms:{uOpacity:{value:.94}},
-    vertexShader:`
-      varying vec3 vInstanceColor;
-      varying vec3 vViewNormal;
-      void main(){
-        #ifdef USE_INSTANCING_COLOR
-          vInstanceColor=instanceColor;
-        #else
-          vInstanceColor=vec3(1.0,0.0,1.0);
-        #endif
-        mat4 localInstance=mat4(1.0);
-        #ifdef USE_INSTANCING
-          localInstance=instanceMatrix;
-        #endif
-        mat4 instanceModelView=modelViewMatrix*localInstance;
-        vViewNormal=normalize(mat3(instanceModelView)*normal);
-        gl_Position=projectionMatrix*instanceModelView*vec4(position,1.0);
-      }
-    `,
-    fragmentShader:`
-      uniform float uOpacity;
-      varying vec3 vInstanceColor;
-      varying vec3 vViewNormal;
-      void main(){
-        vec3 palette=pow(clamp(vInstanceColor,0.0,1.0),vec3(0.72));
-        vec3 lightDir=normalize(vec3(0.35,0.72,0.58));
-        float faceLight=0.76+0.24*max(dot(normalize(vViewNormal),lightDir),0.0);
-        gl_FragColor=vec4(palette*faceLight,uOpacity);
-      }
-    `,
+  const quadMaterial=new THREE.MeshBasicMaterial({
+    color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,
+    depthWrite:false,depthTest:true,vertexColors:true,side:THREE.DoubleSide,toneMapped:false,
   });
-  const strokeMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
+  // Match the submitted prototype's cube material: translucent additive color,
+  // no depth writing, and no scene lighting replacing the Ember palette.
+  const cubeMaterial=new THREE.MeshBasicMaterial({
+    color:0xffffff,transparent:true,opacity:.75,blending:THREE.AdditiveBlending,
+    depthWrite:false,depthTest:true,vertexColors:true,toneMapped:false,
+  });
+  const strokeMaterial=new THREE.MeshBasicMaterial({
+    color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,
+    depthWrite:false,depthTest:true,vertexColors:true,side:THREE.DoubleSide,toneMapped:false,
+  });
   const quadMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),quadMaterial,MAX_INSTANCES);
   const cubeMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),cubeMaterial,MAX_INSTANCES);
   const strokeMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),strokeMaterial,MAX_STROKES);
   quadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);cubeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);strokeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  // Allocate instance-color attributes before the first render. Without this, the
+  // arena could compile a stock material before setColorAt created the attribute.
+  function allocateInstanceColors(mesh,count){
+    const values=new Float32Array(count*3);values.fill(1);
+    mesh.instanceColor=new THREE.InstancedBufferAttribute(values,3);
+    mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  }
+  allocateInstanceColors(quadMesh,MAX_INSTANCES);
+  allocateInstanceColors(cubeMesh,MAX_INSTANCES);
+  allocateInstanceColors(strokeMesh,MAX_STROKES);
+
   quadMesh.frustumCulled=false;cubeMesh.frustumCulled=false;strokeMesh.frustumCulled=false;
-  // Three.js supplies the actual render camera here, even though combat-arena does not
-  // pass its lexical camera into installPlayerCombat. This replaces the proxy after the
-  // first rendered frame and keeps the seam fixed if quads are re-enabled later.
   const captureRenderCamera=(_renderer,_scene,renderCamera)=>{if(renderCamera?.quaternion)activeCamera=renderCamera;};
   quadMesh.onBeforeRender=captureRenderCamera;cubeMesh.onBeforeRender=captureRenderCamera;strokeMesh.onBeforeRender=captureRenderCamera;
   group.add(quadMesh,cubeMesh,strokeMesh);
@@ -140,8 +121,12 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
       pix[p]=Math.floor(Math.min(255,color.r*255));pix[p+1]=Math.floor(Math.min(255,color.g*255));pix[p+2]=Math.floor(Math.min(255,color.b*255));pix[p+3]=Math.floor(Math.min(255,a*255));
     }
     dyeCtx.putImageData(imageData,0,0);dyeTexture.needsUpdate=true;
-    fluidPlane.material.opacity=0;fluidGlowPlane.material.opacity=0;
-    airPlane.material.opacity=0;airGlowPlane.material.opacity=0;airHaloPlane.material.opacity=0;
+    fluidPlane.material.opacity=s.ground<=.001?0:Math.min(1.6,.92*s.ground);
+    fluidGlowPlane.material.opacity=s.ground<=.001?0:Math.min(1.2,.42*s.ground);
+    // These lifted copies are a major part of the submitted prototype's luminous look.
+    airPlane.material.opacity=Math.min(1.45,.78+s.glow*.18);
+    airGlowPlane.material.opacity=Math.min(1.10,.26+s.glow*.16);
+    airHaloPlane.material.opacity=Math.min(.75,.10+s.glow*.08);
   }
 
   function sampleRenderedGroundColor(gx,gy,out){
