@@ -46,12 +46,13 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const airHaloPlane=texturePlane(PATCH_W*1.08,PATCH_D*1.08,1.10,.24);
 
   const quadMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
-  // Normal blending + depth writing makes the cube faces occlude one another instead
-  // of collapsing into one additive screen-facing sheet.
-  const cubeMaterial=new THREE.MeshLambertMaterial({
-    color:0xffffff,vertexColors:true,transparent:true,opacity:.82,
+  // Preserve the prototype's Ember instance colors exactly. The previous Lambert
+  // material's fixed orange emissive contribution overwhelmed the per-cube palette.
+  // Normal blending and depth writing keep the separated cube volume readable.
+  const cubeMaterial=new THREE.MeshBasicMaterial({
+    color:0xffffff,vertexColors:true,transparent:true,opacity:.92,
     blending:THREE.NormalBlending,depthWrite:true,depthTest:true,
-    emissive:0x3b1200,emissiveIntensity:.55,
+    toneMapped:false,
   });
   const strokeMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
   const quadMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),quadMaterial,MAX_INSTANCES);
