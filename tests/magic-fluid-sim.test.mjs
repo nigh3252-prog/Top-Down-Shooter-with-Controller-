@@ -6,11 +6,13 @@ assert.deepEqual(PROTOTYPE_MAGIC_SETTINGS,{
   radius:14,layers:4,height:.95,voxelSize:.52,breakup:.38,
   ground:0,glow:2.25,accent:1.8,quality:0,
   verticalScale:2,stackCenter:.95,torsoBias:-.08,
+  edgeFadeCells:3,
 });
 assert.deepEqual(PROTOTYPE_MAGIC_LAYOUT,{
   patchWidth:46.5,patchDepth:40.5,maxLayers:6,
   visualColumns:48,visualRows:42,maxStrokes:40,
   simulationColumns:48,simulationRows:42,pressureIterations:4,
+  wallMaskRadius:.78,
 });
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.patchWidth/15.5,3,'field width should be exactly three times the submitted prototype');
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.patchDepth/13.5,3,'field depth should be exactly three times the submitted prototype');
@@ -18,6 +20,8 @@ assert.equal(PROTOTYPE_MAGIC_SETTINGS.radius,42/3,'brush percentage should shrin
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.visualColumns,PROTOTYPE_MAGIC_LAYOUT.simulationColumns,'expanded field should render every coarse simulation column');
 assert.equal(PROTOTYPE_MAGIC_LAYOUT.visualRows,PROTOTYPE_MAGIC_LAYOUT.simulationRows,'expanded field should render every coarse simulation row');
 assert.ok(PROTOTYPE_MAGIC_SETTINGS.verticalScale>1,'voxel layers should be spread farther apart vertically');
+assert.ok(PROTOTYPE_MAGIC_SETTINGS.edgeFadeCells>=3,'expanded field should soften its rectangular boundary');
+assert.ok(PROTOTYPE_MAGIC_LAYOUT.wallMaskRadius>.7,'coarse field should use a wall mask wider than half a cell');
 
 const backward=buildDashJetSamples({x:0,z:0},{x:0,z:-1});
 assert.equal(backward.length,4,'one world unit should use the prototype drag spacing of 0.25');
