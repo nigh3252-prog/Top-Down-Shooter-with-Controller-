@@ -1,0 +1,230 @@
+name: Apply lion trail branch patch
+
+on:
+  push:
+    branches:
+      - agent/lion-three-second-trail
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply lion trail changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import json
+          import subprocess
+          import textwrap
+
+          root = Path('.')
+
+          helper = textwrap.dedent('''\
+          const finite = value => Number.isFinite(Number(value));
+
+          export function createDelayedPositionTracker({ delaySeconds = 3, retentionSeconds = 4.25 } = {}) {
+            const delay = Math.max(0, Number(delaySeconds) || 0);
+            const retention = Math.max(delay + .5, Number(retentionSeconds) || delay + 1);
+            const samples = [];
+
+            function clear() {
+              samples.length = 0;
+            }
+
+            function record(time, position) {
+              const at = Number(time);
+              const x = Number(position?.x);
+              const z = Number(position?.z);
+              if (!finite(at) || !finite(x) || !finite(z)) return false;
+
+              const next = { time:at, x, z };
+              const last = samples[samples.length - 1];
+              if (last && at < last.time) clear();
+              const currentLast = samples[samples.length - 1];
+              if (currentLast && at === currentLast.time) samples[samples.length - 1] = next;
+              else samples.push(next);
+
+              const cutoff = at - retention;
+              while (samples.length > 2 && samples[1].time < cutoff) samples.shift();
+              return true;
+            }
+
+            function sample(time) {
+              if (!samples.length) return null;
+              const targetTime = Number(time) - delay;
+              if (!finite(targetTime) || targetTime <= samples[0].time) {
+                const first = samples[0];
+                return { x:first.x, z:first.z, time:first.time };
+              }
+
+              const last = samples[samples.length - 1];
+              if (targetTime >= last.time) return { x:last.x, z:last.z, time:last.time };
+
+              let low = 0;
+              let high = samples.length - 1;
+              while (high - low > 1) {
+                const mid = (low + high) >> 1;
+                if (samples[mid].time <= targetTime) low = mid;
+                else high = mid;
+              }
+
+              const a = samples[low];
+              const b = samples[high];
+              const span = Math.max(1e-6, b.time - a.time);
+              const mix = Math.max(0, Math.min(1, (targetTime - a.time) / span));
+              return {
+                x:a.x + (b.x - a.x) * mix,
+                z:a.z + (b.z - a.z) * mix,
+                time:targetTime,
+              };
+            }
+
+            return {
+              clear,
+              record,
+              sample,
+              get delaySeconds() { return delay; },
+              get sampleCount() { return samples.length; },
+            };
+          }
+          ''')
+          (root / 'src/player-position-history.js').write_text(helper, encoding='utf-8')
+
+          pinned = subprocess.check_output([
+              'git', 'show',
+              'a256b089bf912aff434f5b1263a29ec060507b5d:src/arena-enemies.js'
+          ], text=True)
+          (root / 'src/arena-enemies-pinned.js').write_text(pinned, encoding='utf-8')
+
+          original_path = root / 'src/arena-enemies-original.js'
+          original = original_path.read_text(encoding='utf-8')
+          pinned_url = 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@a256b089bf912aff434f5b1263a29ec060507b5d/src/arena-enemies.js'
+          if pinned_url not in original:
+              raise SystemExit('Pinned arena-enemies import was not found.')
+          original = original.replace(pinned_url, './arena-enemies-pinned.js', 1)
+          original_path.write_text(original, encoding='utf-8')
+
+          base_path = root / 'src/arena-enemies-base.js'
+          base = base_path.read_text(encoding='utf-8')
+
+          import_anchor = "import { installFusionEnemyRig } from './fusion-enemy-rig.js';\n"
+          import_line = "import { createDelayedPositionTracker } from './player-position-history.js';\n"
+          if import_line not in base:
+              if import_anchor not in base:
+                  raise SystemExit('Fusion rig import anchor was not found.')
+              base = base.replace(import_anchor, import_anchor + import_line, 1)
+
+          history_anchor = "  let lastPlayer = { x:0, z:0, invulnerable:false };\n"
+          history_line = "  const lionTargetHistory = createDelayedPositionTracker({ delaySeconds:3, retentionSeconds:4.25 });\n"
+          if history_line not in base:
+              if history_anchor not in base:
+                  raise SystemExit('lastPlayer anchor was not found.')
+              base = base.replace(history_anchor, history_anchor + history_line, 1)
+
+          old_signature = "  function updateEnemy(e, dt, p){\n"
+          new_signature = "  function updateEnemy(e, dt, p, actualPlayer = p){\n"
+          if old_signature in base:
+              base = base.replace(old_signature, new_signature, 1)
+          elif new_signature not in base:
+              raise SystemExit('updateEnemy signature was not found.')
+
+          old_melee = "        if(!e.hitDone) resolveEnemyMelee(e, p);\n"
+          new_melee = "        if(!e.hitDone) resolveEnemyMelee(e, actualPlayer);\n"
+          if old_melee in base:
+              base = base.replace(old_melee, new_melee, 1)
+          elif new_melee not in base:
+              raise SystemExit('Melee resolution anchor was not found.')
+
+          clear_anchor = "  function clearEnemies(){\n    director.reset();\n"
+          clear_replacement = "  function clearEnemies(){\n    director.reset();\n    lionTargetHistory.clear();\n"
+          if clear_replacement not in base:
+              if clear_anchor not in base:
+                  raise SystemExit('clearEnemies anchor was not found.')
+              base = base.replace(clear_anchor, clear_replacement, 1)
+
+          old_update = textwrap.dedent('''\
+            function update(dt, player){
+              lastPlayer = player || lastPlayer;
+              time += dt;
+              director.update(dt, { enemies, player:lastPlayer, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
+              director.markNearEligible(enemies, lastPlayer);
+              director.assignBattleCircleSlots(enemies);
+              for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
+              for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
+              resolveBodyCollisions(lastPlayer);
+          ''')
+          new_update = textwrap.dedent('''\
+            function update(dt, player){
+              lastPlayer = player || lastPlayer;
+              time += dt;
+              lionTargetHistory.record(time, lastPlayer);
+              const lionTrailPoint = lionTargetHistory.sample(time) || lastPlayer;
+              director.update(dt, { enemies, player:lastPlayer, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression });
+              director.markNearEligible(enemies, lastPlayer);
+              director.assignBattleCircleSlots(enemies);
+              for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
+              for(const e of [...enemies]){
+                const behaviorPlayer = e.kind === 'lion'
+                  ? { ...lastPlayer, x:lionTrailPoint.x, z:lionTrailPoint.z }
+                  : lastPlayer;
+                updateEnemy(e, dt, behaviorPlayer, lastPlayer);
+              }
+              resolveBodyCollisions(lastPlayer);
+          ''')
+          if new_update not in base:
+              if old_update not in base:
+                  raise SystemExit('Enemy-system update block was not found.')
+              base = base.replace(old_update, new_update, 1)
+
+          base_path.write_text(base, encoding='utf-8')
+
+          test = textwrap.dedent('''\
+          import assert from 'node:assert/strict';
+          import { createDelayedPositionTracker } from '../src/player-position-history.js';
+
+          const tracker = createDelayedPositionTracker({ delaySeconds:3, retentionSeconds:5 });
+          tracker.record(0, { x:0, z:0 });
+          tracker.record(1, { x:10, z:4 });
+          tracker.record(2, { x:20, z:8 });
+          tracker.record(3, { x:30, z:12 });
+
+          assert.deepEqual(tracker.sample(3), { x:0, z:0, time:0 }, 'the first three seconds point at the encounter-start position');
+          assert.deepEqual(tracker.sample(3.5), { x:5, z:2, time:.5 }, 'the delayed target interpolates smoothly between recorded frames');
+          assert.deepEqual(tracker.sample(5), { x:20, z:8, time:2 }, 'the target is exactly three seconds behind');
+
+          tracker.record(6, { x:60, z:24 });
+          assert.deepEqual(tracker.sample(6), { x:30, z:12, time:3 });
+          tracker.clear();
+          assert.equal(tracker.sample(7), null, 'clearing an encounter also clears the old trail');
+
+          console.log('lion trail tests passed');
+          ''')
+          (root / 'tests/lion-trail.test.mjs').write_text(test, encoding='utf-8')
+
+          package_path = root / 'package.json'
+          package = json.loads(package_path.read_text(encoding='utf-8'))
+          package['scripts']['test:combat'] = 'node tests/lion-trail.test.mjs && node tests/combat-pass.test.mjs'
+          package_path.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate branch
+        run: npm test
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          rm .github/workflows/apply-lion-trail.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/arena-enemies-base.js src/arena-enemies-original.js src/arena-enemies-pinned.js src/player-position-history.js tests/lion-trail.test.mjs package.json .github/workflows/apply-lion-trail.yml
+          git commit -m "Make lion follow player trail"
+          git push
