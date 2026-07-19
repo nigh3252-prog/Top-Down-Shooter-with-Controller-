@@ -1,6 +1,6 @@
-// Renderer copied from threejs_midair_lifted_ground_slice_v1.html. This pass keeps
-// the enlarged cube volume and stronger layer separation, but restores the submitted
-// prototype's translucent additive color treatment and lifted color-copy planes.
+// Renderer copied from threejs_midair_lifted_ground_slice_v1.html. This pass preserves
+// the separated colored voxel look from cdcbacc, then adds a cube-shaped glow shell
+// for bright cells and per-voxel opacity that fades as the simulated magic cools.
 export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout,sim}={}){
   const PATCH_W=layout.patchWidth,PATCH_D=layout.patchDepth;
   const MAX_LAYERS=layout.maxLayers,VIS_COLS=layout.visualColumns,VIS_ROWS=layout.visualRows;
@@ -10,6 +10,8 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const idx=sim.idx,sample=sim.sample;
   let renderMode='cubes',palette='ember',activeCamera=camera;
 
+  const clamp01=value=>Math.max(0,Math.min(1,value));
+  const smoothstep01=value=>{const t=clamp01(value);return t*t*(3-2*t);};
   const mapHeight=originalY=>{
     const s=settings();
     const center=Number.isFinite(Number(s.stackCenter))?Number(s.stackCenter):.95;
@@ -30,15 +32,17 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const seeds=new Float32Array(MAX_INSTANCES),jitterX=new Float32Array(MAX_INSTANCES),jitterZ=new Float32Array(MAX_INSTANCES);
   for(let i=0;i<MAX_INSTANCES;i++){seeds[i]=Math.random();jitterX[i]=Math.random()-.5;jitterZ[i]=Math.random()-.5;}
 
-  const group=new THREE.Group();group.name='Prototype magic fluid additive cube port';group.visible=false;scene.add(group);
+  const group=new THREE.Group();group.name='Prototype magic fluid fading glow voxels';group.visible=false;scene.add(group);
 
   function texturePlane(width,depth,originalY,opacity){
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshBasicMaterial({
       map:dyeTexture,transparent:true,opacity,blending:THREE.AdditiveBlending,
       depthWrite:false,depthTest:true,side:THREE.DoubleSide,toneMapped:false,
     }));
-    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);group.add(mesh);return mesh;
+    mesh.rotation.x=-Math.PI/2;mesh.position.y=mapHeight(originalY);mesh.visible=false;group.add(mesh);return mesh;
   }
+  // Keep the prototype planes allocated for comparison, but never draw them: broad
+  // additive sheets are what made the later version lose its readable voxel volume.
   const fluidPlane=texturePlane(PATCH_W,PATCH_D,.025,1);
   const fluidGlowPlane=texturePlane(PATCH_W*1.02,PATCH_D*1.02,.035,.45);
   const airPlane=texturePlane(PATCH_W,PATCH_D,.92,1);
@@ -49,23 +53,89 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
     color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,
     depthWrite:false,depthTest:true,vertexColors:true,side:THREE.DoubleSide,toneMapped:false,
   });
-  // Match the submitted prototype's cube material: translucent additive color,
-  // no depth writing, and no scene lighting replacing the Ember palette.
-  const cubeMaterial=new THREE.MeshBasicMaterial({
-    color:0xffffff,transparent:true,opacity:.75,blending:THREE.AdditiveBlending,
-    depthWrite:false,depthTest:true,vertexColors:true,toneMapped:false,
+  // This is the cdcbacc solid voxel shader, extended only with instance opacity.
+  // Normal blending and depth writing preserve distinct cube faces instead of turning
+  // the whole volume into one additive screen-facing mass.
+  const cubeMaterial=new THREE.ShaderMaterial({
+    transparent:true,depthWrite:true,depthTest:true,blending:THREE.NormalBlending,toneMapped:false,
+    vertexShader:`
+      attribute float instanceOpacity;
+      varying vec3 vInstanceColor;
+      varying vec3 vViewNormal;
+      varying float vOpacity;
+      void main(){
+        #ifdef USE_INSTANCING_COLOR
+          vInstanceColor=instanceColor;
+        #else
+          vInstanceColor=vec3(1.0,0.0,1.0);
+        #endif
+        vOpacity=instanceOpacity;
+        mat4 localInstance=mat4(1.0);
+        #ifdef USE_INSTANCING
+          localInstance=instanceMatrix;
+        #endif
+        mat4 instanceModelView=modelViewMatrix*localInstance;
+        vViewNormal=normalize(mat3(instanceModelView)*normal);
+        gl_Position=projectionMatrix*instanceModelView*vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      varying vec3 vInstanceColor;
+      varying vec3 vViewNormal;
+      varying float vOpacity;
+      void main(){
+        if(vOpacity<0.025)discard;
+        vec3 palette=pow(clamp(vInstanceColor,0.0,1.0),vec3(0.72));
+        vec3 lightDir=normalize(vec3(0.35,0.72,0.58));
+        float faceLight=0.76+0.24*max(dot(normalize(vViewNormal),lightDir),0.0);
+        gl_FragColor=vec4(palette*faceLight,vOpacity);
+      }
+    `,
+  });
+  // A slightly expanded copy of each cube supplies glow only where that cube is bright.
+  // It follows the cube silhouette, so the glow does not reintroduce flat texture sheets.
+  const glowMaterial=new THREE.ShaderMaterial({
+    transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,toneMapped:false,
+    vertexShader:`
+      attribute float instanceGlow;
+      varying vec3 vInstanceColor;
+      varying float vGlow;
+      void main(){
+        #ifdef USE_INSTANCING_COLOR
+          vInstanceColor=instanceColor;
+        #else
+          vInstanceColor=vec3(1.0,0.0,1.0);
+        #endif
+        vGlow=instanceGlow;
+        mat4 localInstance=mat4(1.0);
+        #ifdef USE_INSTANCING
+          localInstance=instanceMatrix;
+        #endif
+        vec3 expandedPosition=position*1.16;
+        gl_Position=projectionMatrix*modelViewMatrix*localInstance*vec4(expandedPosition,1.0);
+      }
+    `,
+    fragmentShader:`
+      varying vec3 vInstanceColor;
+      varying float vGlow;
+      void main(){
+        if(vGlow<0.015)discard;
+        vec3 palette=pow(clamp(vInstanceColor,0.0,1.0),vec3(0.60));
+        gl_FragColor=vec4(palette,vGlow*0.42);
+      }
+    `,
   });
   const strokeMaterial=new THREE.MeshBasicMaterial({
     color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,
     depthWrite:false,depthTest:true,vertexColors:true,side:THREE.DoubleSide,toneMapped:false,
   });
   const quadMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),quadMaterial,MAX_INSTANCES);
-  const cubeMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),cubeMaterial,MAX_INSTANCES);
+  const cubeGeometry=new THREE.BoxGeometry(1,1,1),glowGeometry=cubeGeometry.clone();
+  const cubeMesh=new THREE.InstancedMesh(cubeGeometry,cubeMaterial,MAX_INSTANCES);
+  const glowMesh=new THREE.InstancedMesh(glowGeometry,glowMaterial,MAX_INSTANCES);
   const strokeMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),strokeMaterial,MAX_STROKES);
-  quadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);cubeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);strokeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  quadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);cubeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);glowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);strokeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-  // Allocate instance-color attributes before the first render. Without this, the
-  // arena could compile a stock material before setColorAt created the attribute.
   function allocateInstanceColors(mesh,count){
     const values=new Float32Array(count*3);values.fill(1);
     mesh.instanceColor=new THREE.InstancedBufferAttribute(values,3);
@@ -73,12 +143,18 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   }
   allocateInstanceColors(quadMesh,MAX_INSTANCES);
   allocateInstanceColors(cubeMesh,MAX_INSTANCES);
+  allocateInstanceColors(glowMesh,MAX_INSTANCES);
   allocateInstanceColors(strokeMesh,MAX_STROKES);
+  const instanceOpacity=new THREE.InstancedBufferAttribute(new Float32Array(MAX_INSTANCES),1);
+  const instanceGlow=new THREE.InstancedBufferAttribute(new Float32Array(MAX_INSTANCES),1);
+  instanceOpacity.setUsage(THREE.DynamicDrawUsage);instanceGlow.setUsage(THREE.DynamicDrawUsage);
+  cubeGeometry.setAttribute('instanceOpacity',instanceOpacity);
+  glowGeometry.setAttribute('instanceGlow',instanceGlow);
 
-  quadMesh.frustumCulled=false;cubeMesh.frustumCulled=false;strokeMesh.frustumCulled=false;
+  quadMesh.frustumCulled=false;cubeMesh.frustumCulled=false;glowMesh.frustumCulled=false;strokeMesh.frustumCulled=false;
   const captureRenderCamera=(_renderer,_scene,renderCamera)=>{if(renderCamera?.quaternion)activeCamera=renderCamera;};
-  quadMesh.onBeforeRender=captureRenderCamera;cubeMesh.onBeforeRender=captureRenderCamera;strokeMesh.onBeforeRender=captureRenderCamera;
-  group.add(quadMesh,cubeMesh,strokeMesh);
+  quadMesh.onBeforeRender=captureRenderCamera;cubeMesh.onBeforeRender=captureRenderCamera;glowMesh.onBeforeRender=captureRenderCamera;strokeMesh.onBeforeRender=captureRenderCamera;
+  group.add(quadMesh,cubeMesh,glowMesh,strokeMesh);
 
   function mix3(a,b,t,out){out.copy(a).lerp(b,t);}
 
@@ -121,12 +197,8 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
       pix[p]=Math.floor(Math.min(255,color.r*255));pix[p+1]=Math.floor(Math.min(255,color.g*255));pix[p+2]=Math.floor(Math.min(255,color.b*255));pix[p+3]=Math.floor(Math.min(255,a*255));
     }
     dyeCtx.putImageData(imageData,0,0);dyeTexture.needsUpdate=true;
-    fluidPlane.material.opacity=s.ground<=.001?0:Math.min(1.6,.92*s.ground);
-    fluidGlowPlane.material.opacity=s.ground<=.001?0:Math.min(1.2,.42*s.ground);
-    // These lifted copies are a major part of the submitted prototype's luminous look.
-    airPlane.material.opacity=Math.min(1.45,.78+s.glow*.18);
-    airGlowPlane.material.opacity=Math.min(1.10,.26+s.glow*.16);
-    airHaloPlane.material.opacity=Math.min(.75,.10+s.glow*.08);
+    fluidPlane.material.opacity=0;fluidGlowPlane.material.opacity=0;
+    airPlane.material.opacity=0;airGlowPlane.material.opacity=0;airHaloPlane.material.opacity=0;
   }
 
   function sampleRenderedGroundColor(gx,gy,out){
@@ -136,7 +208,7 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
 
   function updateVoxelInstances(time){
     const s=settings(),mesh=renderMode==='cubes'?cubeMesh:quadMesh,other=renderMode==='cubes'?quadMesh:cubeMesh;
-    mesh.visible=true;other.visible=false;
+    mesh.visible=true;other.visible=false;glowMesh.visible=renderMode==='cubes';
     const activeLayers=s.layers,voxelBaseW=PATCH_W/VIS_COLS,voxelBaseD=PATCH_D/VIS_ROWS;
     const baseSize=Math.min(voxelBaseW,voxelBaseD)*s.voxelSize;
     const midLayer=Math.max(0,Math.min(activeLayers-1,Math.round((activeLayers-1)*.55)));
@@ -144,8 +216,10 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
     for(let row=0;row<VIS_ROWS;row++)for(let col=0;col<VIS_COLS;col++){
       const gx=(col+.5)/VIS_COLS*(simW-2)+1,gy=(row+.5)/VIS_ROWS*(simH-2)+1;
       const iApprox=idx(Math.max(1,Math.min(simW-2,Math.floor(gx))),Math.max(1,Math.min(simH-2,Math.floor(gy))));
-      const isSolid=solid[iApprox],d=sample(dye,gx,gy),speed=Math.hypot(sample(u,gx,gy),sample(v,gx,gy));
+      const isSolid=solid[iApprox],d=sample(dye,gx,gy),h=sample(heat,gx,gy),speed=Math.hypot(sample(u,gx,gy),sample(v,gx,gy));
       const swirl=sample(curlField,gx,gy),body=Math.min(1,Math.pow(d*1.30,.75));
+      const hot=Math.min(1,Math.pow(Math.max(0,Math.min(d,h))*1.45,.78));
+      const freshness=clamp01(hot/Math.max(.12,body));
       const groundAlpha=sampleRenderedGroundColor(gx,gy,color);
       const worldX=(col/(VIS_COLS-1)-.5)*PATCH_W,worldZ=(row/(VIS_ROWS-1)-.5)*PATCH_D;
       for(let layer=0;layer<MAX_LAYERS;layer++){
@@ -154,7 +228,12 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
         const breakupNoise=seed*.06+.05*Math.sin(time*1.1+seed*18+layer*1.6);
         const threshold=.05+s.breakup*.08+distFromMid*.14+breakupNoise;
         const visible=!isSolid&&layer<activeLayers&&groundAlpha>threshold;
-        if(!visible){dummy.position.set(0,-999,0);dummy.scale.set(.001,.001,.001);dummy.rotation.set(0,0,0);dummy.updateMatrix();mesh.setMatrixAt(instance,dummy.matrix);mesh.setColorAt(instance,color.setRGB(0,0,0));instance++;continue;}
+        if(!visible){
+          dummy.position.set(0,-999,0);dummy.scale.set(.001,.001,.001);dummy.rotation.set(0,0,0);dummy.updateMatrix();
+          mesh.setMatrixAt(instance,dummy.matrix);glowMesh.setMatrixAt(instance,dummy.matrix);
+          mesh.setColorAt(instance,color.setRGB(0,0,0));glowMesh.setColorAt(instance,color);
+          instanceOpacity.setX(instance,0);instanceGlow.setX(instance,0);instance++;continue;
+        }
         const drift=layer*(.18+s.height*.22);
         const layerSpread=1+layer*.55;
         const dx=sample(u,gx,gy)*drift+jitterX[instance]*baseSize*(.34+distFromMid*.12)*layerSpread;
@@ -171,11 +250,26 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
           dummy.rotation.set(seed*.34,seed*Math.PI*2,seed*.22);
           dummy.scale.set(size*pulse,size*(.45+groundAlpha*.95+layerFocus*.22),size*pulse);
         }
-        dummy.updateMatrix();mesh.setMatrixAt(instance,dummy.matrix);
-        sampleRenderedGroundColor(gx,gy,color);color.multiplyScalar((.72+groundAlpha*.82+speed*.03)*(.66+layerFocus*.58));mesh.setColorAt(instance,color);instance++;
+        dummy.updateMatrix();mesh.setMatrixAt(instance,dummy.matrix);glowMesh.setMatrixAt(instance,dummy.matrix);
+        sampleRenderedGroundColor(gx,gy,color);
+        color.multiplyScalar((.72+groundAlpha*.82+speed*.03)*(.66+layerFocus*.58));
+        const brightness=Math.max(color.r,color.g,color.b);
+        // Heat falls faster than dye, so heat/body acts as a stable proxy for age:
+        // newly injected voxels stay solid, while cooled remnants become translucent.
+        const ageOpacity=.12+.84*smoothstep01(freshness);
+        const densityOpacity=smoothstep01((body-.025)/.38);
+        const layerOpacity=.62+.38*layerFocus;
+        const opacity=clamp01(ageOpacity*densityOpacity*layerOpacity);
+        const brightGlow=smoothstep01((brightness-.58)/.72);
+        const glowSetting=Math.max(0,Number(s.glow)||0)/2.25;
+        const glowStrength=clamp01(brightGlow*(.30+.70*freshness)*glowSetting);
+        mesh.setColorAt(instance,color);glowMesh.setColorAt(instance,color);
+        instanceOpacity.setX(instance,opacity);instanceGlow.setX(instance,glowStrength);instance++;
       }
     }
     mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    glowMesh.instanceMatrix.needsUpdate=true;if(glowMesh.instanceColor)glowMesh.instanceColor.needsUpdate=true;
+    instanceOpacity.needsUpdate=true;instanceGlow.needsUpdate=true;
   }
 
   function updateStrokeInstances(){
@@ -183,7 +277,7 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
     for(let i=0;i<MAX_STROKES;i++){
       const st=strokes[i];
       if(!st||st.life<=0||s.accent<=.03){dummy.position.set(0,-999,0);dummy.scale.set(.001,.001,.001);dummy.rotation.set(0,0,0);dummy.updateMatrix();strokeMesh.setMatrixAt(i,dummy.matrix);strokeMesh.setColorAt(i,color.setRGB(0,0,0));continue;}
-      const mx=(st.x0+st.x1)*.5,mz=(st.z0+st.z1)*.5,dx=st.x1-st.x0,dz=st.z1-st.z0,len=Math.max(.01,Math.hypot(dx,dz)),ang=Math.atan2(dz,dx);
+      const mx=(st.x0+st.x1)*.5,mz=(st.z0+st.z1)*.5,dx=st.x1-st.x0,dz=st.x1-st.x0,len=Math.max(.01,Math.hypot(dx,dz)),ang=Math.atan2(dz,dx);
       dummy.position.set(mx,mapHeight(.94+st.heat*.10),mz);dummy.rotation.set(-Math.PI*.5,0,-ang);dummy.scale.set(len*2,st.width*s.accent*(.65+st.life*.55),1);dummy.updateMatrix();strokeMesh.setMatrixAt(i,dummy.matrix);
       hotAccentColor(st.heat,color);color.multiplyScalar(.75+st.life*.45);strokeMesh.setColorAt(i,color);
     }
@@ -198,7 +292,7 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   function update(time){renderGroundTexture();updateVoxelInstances(time);updateStrokeInstances();}
   function dispose(){
     scene.remove(group);
-    for(const object of[fluidPlane,fluidGlowPlane,airPlane,airGlowPlane,airHaloPlane,quadMesh,cubeMesh,strokeMesh]){object.geometry?.dispose?.();object.material?.dispose?.();}
+    for(const object of[fluidPlane,fluidGlowPlane,airPlane,airGlowPlane,airHaloPlane,quadMesh,cubeMesh,glowMesh,strokeMesh]){object.geometry?.dispose?.();object.material?.dispose?.();}
     dyeTexture.dispose?.();
   }
   return{group,setCenter,setVisible,update,dispose,mapHeight,get activeCamera(){return activeCamera;},renderMode};
