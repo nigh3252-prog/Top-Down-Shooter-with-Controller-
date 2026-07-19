@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples,resolveRenderCamera} from '../src/magic-fluid-runtime.js';
 
 assert.deepEqual(PROTOTYPE_MAGIC_SETTINGS,{
@@ -24,6 +25,14 @@ assert.ok(PROTOTYPE_MAGIC_SETTINGS.verticalScale>=3,'voxel layers should be subs
 assert.ok(PROTOTYPE_MAGIC_SETTINGS.edgeFadeCells>=3,'expanded field should soften its rectangular boundary');
 assert.ok(PROTOTYPE_MAGIC_LAYOUT.wallMaskRadius>.7,'coarse field should use a wall mask wider than half a cell');
 
+const rendererSource=readFileSync(new URL('../src/magic-fluid-prototype-render.js',import.meta.url),'utf8');
+assert.match(rendererSource,/blending:THREE\.NormalBlending/,'primary cubes should retain normal blending and readable solid faces');
+assert.match(rendererSource,/attribute float instanceOpacity/,'cube opacity should be controlled per voxel');
+assert.match(rendererSource,/attribute float instanceGlow/,'bright voxels should have per-voxel glow strength');
+assert.match(rendererSource,/const glowMesh=new THREE\.InstancedMesh/,'glow should use a cube-shaped instanced shell');
+assert.match(rendererSource,/fluidPlane\.material\.opacity=0;fluidGlowPlane\.material\.opacity=0;/,'broad ground sheets should remain disabled');
+assert.match(rendererSource,/airPlane\.material\.opacity=0;airGlowPlane\.material\.opacity=0;airHaloPlane\.material\.opacity=0;/,'broad lifted sheets should remain disabled');
+
 const backward=buildDashJetSamples({x:0,z:0},{x:0,z:-1});
 assert.equal(backward.length,4,'one world unit should use the prototype drag spacing of 0.25');
 assert.ok(backward.every(sample=>sample.dz>0),'backward player movement should inject forward jet velocity');
@@ -44,4 +53,4 @@ assert.deepEqual(fallbackCamera.lookAtValue,{x:0,y:1.8,z:-1.4},'fallback billboa
 const realCamera={quaternion:{real:true}};
 assert.equal(resolveRenderCamera({},realCamera),realCamera,'a supplied game camera must be used unchanged');
 
-console.log('extra-separated cube-layer magic tests passed');
+console.log('glowing age-faded cube-layer magic tests passed');
