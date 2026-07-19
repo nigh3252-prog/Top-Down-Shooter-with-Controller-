@@ -15,6 +15,21 @@ function enemyLabParentDocument(){
   }
 }
 
+function installEnemyLabParentStyles(parentDocument){
+  if(parentDocument.getElementById('enemyLabBridgeStyles'))return;
+  const style=parentDocument.createElement('style');
+  style.id='enemyLabBridgeStyles';
+  style.textContent=`
+    #labCategories .choice{width:100%;min-height:44px;padding:7px;font-size:9px;justify-content:center}
+    #labCategories .choice b{font-size:9px;letter-spacing:.08em}
+    #labCategories .choice span,#labCategories .choice em{display:none}
+    @media (orientation:portrait){
+      #labCategories .choice{width:auto;min-width:82px;min-height:42px;padding:6px 9px}
+    }
+  `;
+  parentDocument.head.appendChild(style);
+}
+
 function installEnemyLabFullscreenBridge(parentDocument){
   const isFullscreen=()=>!!(parentDocument.fullscreenElement||parentDocument.webkitFullscreenElement);
   const syncButtons=()=>{
@@ -177,8 +192,16 @@ function installEnemyLabMenuBridge(parentDocument,fullscreenBridge){
     };
 
     notifyParent();
-    try{ window.parent.__enemyLabArenaControlsReady?.(); }
-    catch(error){ console.error('Enemy Lab controls-ready sync failed',error); }
+    let readyAttempts=0;
+    const notifyControlsReady=()=>{
+      if(window.__arena){
+        try{ window.parent.__enemyLabArenaControlsReady?.(); }
+        catch(error){ console.error('Enemy Lab controls-ready sync failed',error); }
+        return;
+      }
+      if(readyAttempts++<240)setTimeout(notifyControlsReady,50);
+    };
+    notifyControlsReady();
     return true;
   };
 
@@ -194,6 +217,7 @@ function installEnemyLabBridges(){
   const parentDocument=enemyLabParentDocument();
   if(!parentDocument)return;
   const attach=()=>{
+    installEnemyLabParentStyles(parentDocument);
     const fullscreenBridge=installEnemyLabFullscreenBridge(parentDocument);
     installEnemyLabMenuBridge(parentDocument,fullscreenBridge);
   };
