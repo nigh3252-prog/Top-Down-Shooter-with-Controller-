@@ -36,6 +36,7 @@ export function createArenaEnemySystem(options={}){
   const systemsById=new Map();
   const pools={original:[],flare:[],hades:[]};
   const systems=[];
+  let routerApi=null;
 
   const sharedTuning={
     directorMode:'attackAll',pressureBudget:99,aggression:1,cycleOnWaveClear:false,
@@ -82,6 +83,10 @@ export function createArenaEnemySystem(options={}){
     pools[key].push(system);
     systems.push(system);
     systemsById.set(id,system);
+    // The original Pilebunker wrapper registers itself when constructed. Lazy
+    // shards must hand the registry back to the router so abilities can find
+    // enemies across every active shard.
+    if(routerApi)setArenaEnemySource(routerApi);
     return system;
   }
 
@@ -334,6 +339,7 @@ export function createArenaEnemySystem(options={}){
     get activeSet(){return combinedMode?'combined':activeKey;},
     originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
+  routerApi=api;
   setArenaEnemySource(api);
   return api;
 }
