@@ -125,6 +125,12 @@ function installEnemyLabMenuBridge(parentDocument,fullscreenBridge){
       ];
     };
 
+    function runtimeCall(name,...args){
+      const fn=window.__arena?.[name];
+      if(typeof fn==='function')return fn(...args);
+      return undefined;
+    }
+
     window.__enemyLabControlBridge={
       isReady:()=>!!window.__arena,
       isMenuOpen:panelOpen,
@@ -153,7 +159,12 @@ function installEnemyLabMenuBridge(parentDocument,fullscreenBridge){
       setTuning(index,value){ return setSlider('dirSliders',index,value); },
       setFeelKey(id){ return clickButton('keyRow',id); },
       setFeel(index,value){ return setSlider('feelSliders',index,value); },
-      testFeel(){ document.getElementById('testBtn')?.click(); },
+      testFeel(){
+        const keys=[...(document.getElementById('keyRow')?.querySelectorAll('button')||[])];
+        const selected=Math.max(0,keys.findIndex(button=>button.classList.contains('on')));
+        if(panelOpen())menuButton.click();
+        runtimeCall('beginTestSwing',selected/Math.max(1,keys.length-1));
+      },
       resetFight(){ document.getElementById('resetBtn')?.click(); },
       setCellSize(id){
         const select=document.getElementById('mazeCellSizeSelect');
@@ -164,12 +175,6 @@ function installEnemyLabMenuBridge(parentDocument,fullscreenBridge){
       },
       toggleFullscreen(){ fullscreenBridge?.toggleOuterFullscreen?.(); },
     };
-
-    function runtimeCall(name,...args){
-      const fn=window.__arena?.[name];
-      if(typeof fn==='function')return fn(...args);
-      return undefined;
-    }
 
     notifyParent();
     try{ window.parent.__enemyLabArenaControlsReady?.(); }
