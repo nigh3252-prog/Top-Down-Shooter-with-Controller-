@@ -2,13 +2,27 @@ import {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples} fro
 import {createPrototypeFluidSimulation} from './magic-fluid-sim.js';
 import {createPrototypeFluidRenderer} from './magic-fluid-prototype-render.js';
 
+function resolveRenderCamera(THREE,camera){
+  if(camera?.quaternion)return camera;
+  // combat-arena currently passes THREE + scene into installPlayerCombat, but not
+  // its lexical camera variable. Use the arena's real relative camera pose as a
+  // billboard-only proxy so the direct port remains visible instead of aborting
+  // the entire game at startup. This object does not render or control gameplay.
+  const proxy=new THREE.Object3D();
+  proxy.position.set(0,20,17.6);
+  proxy.lookAt(0,1.8,-1.4);
+  console.warn('[magic-fluid-runtime] Camera was not provided; using the combat-arena camera-angle proxy.');
+  return proxy;
+}
+
 // Integration shell around the direct prototype port. The dash supplies a virtual
 // drag brush; the solver and renderer remain the submitted prototype versions.
 export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=>[],getWorldKey=()=>null}={}){
-  if(!THREE||!scene||!camera)throw new Error('[magic-fluid-runtime] THREE, scene, and camera are required.');
+  if(!THREE||!scene)throw new Error('[magic-fluid-runtime] THREE and scene are required.');
+  const renderCamera=resolveRenderCamera(THREE,camera);
   const settings=()=>PROTOTYPE_MAGIC_SETTINGS;
   const sim=createPrototypeFluidSimulation({settings,layout:PROTOTYPE_MAGIC_LAYOUT,getMazeSegments});
-  const renderer=createPrototypeFluidRenderer({THREE,scene,camera,settings,layout:PROTOTYPE_MAGIC_LAYOUT,sim});
+  const renderer=createPrototypeFluidRenderer({THREE,scene,camera:renderCamera,settings,layout:PROTOTYPE_MAGIC_LAYOUT,sim});
   let active=false,dashJet=null,lastWorldKey=getWorldKey?.()||null;
 
   const localPoint=point=>({x:(Number(point?.x)||0)-sim.centerX,z:(Number(point?.z)||0)-sim.centerZ});
@@ -63,8 +77,8 @@ export function installMagicFluidRuntime({THREE,scene,camera,getMazeSegments=()=
   return{
     beginDashJet,updateDashJet,endDashJet,update,clear,dispose,
     settings:PROTOTYPE_MAGIC_SETTINGS,layout:PROTOTYPE_MAGIC_LAYOUT,
-    debug:{sim,renderer,get active(){return active;}},
+    debug:{sim,renderer,renderCamera,get active(){return active;}},
   };
 }
 
-export {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples};
+export {PROTOTYPE_MAGIC_LAYOUT,PROTOTYPE_MAGIC_SETTINGS,buildDashJetSamples,resolveRenderCamera};
