@@ -7,9 +7,9 @@ export const PROTOTYPE_MAGIC_SETTINGS=Object.freeze({
   // the dash brush approximately the same world-space diameter.
   radius:14,layers:4,height:.95,voxelSize:.52,breakup:.38,
   ground:0,glow:2.25,accent:1.8,quality:0,
-  // Keep the expanded layer separation, but place the stack at one quarter of the
-  // Warden model-center height. This lowers the whole effect without flattening it.
-  verticalScale:2,stackCenter:.95,anchorHeightScale:.25,torsoBias:-.08,
+  // Keep the stack anchored low on the Warden, but exaggerate the distance between
+  // its four active rendered layers so their separate heights are easier to read.
+  verticalScale:3.25,stackCenter:.95,anchorHeightScale:.25,torsoBias:-.08,
   // Only affects the outer three coarse cells, preventing a rectangular cutoff.
   edgeFadeCells:3,
 });
