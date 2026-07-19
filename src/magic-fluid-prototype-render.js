@@ -277,7 +277,7 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
     for(let i=0;i<MAX_STROKES;i++){
       const st=strokes[i];
       if(!st||st.life<=0||s.accent<=.03){dummy.position.set(0,-999,0);dummy.scale.set(.001,.001,.001);dummy.rotation.set(0,0,0);dummy.updateMatrix();strokeMesh.setMatrixAt(i,dummy.matrix);strokeMesh.setColorAt(i,color.setRGB(0,0,0));continue;}
-      const mx=(st.x0+st.x1)*.5,mz=(st.z0+st.z1)*.5,dx=st.x1-st.x0,dz=st.x1-st.x0,len=Math.max(.01,Math.hypot(dx,dz)),ang=Math.atan2(dz,dx);
+      const mx=(st.x0+st.x1)*.5,mz=(st.z0+st.z1)*.5,dx=st.x1-st.x0,dz=st.z1-st.z0,len=Math.max(.01,Math.hypot(dx,dz)),ang=Math.atan2(dz,dx);
       dummy.position.set(mx,mapHeight(.94+st.heat*.10),mz);dummy.rotation.set(-Math.PI*.5,0,-ang);dummy.scale.set(len*2,st.width*s.accent*(.65+st.life*.55),1);dummy.updateMatrix();strokeMesh.setMatrixAt(i,dummy.matrix);
       hotAccentColor(st.heat,color);color.multiplyScalar(.75+st.life*.45);strokeMesh.setColorAt(i,color);
     }
