@@ -46,13 +46,45 @@ export function createPrototypeFluidRenderer({THREE,scene,camera,settings,layout
   const airHaloPlane=texturePlane(PATCH_W*1.08,PATCH_D*1.08,1.10,.24);
 
   const quadMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.78,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
-  // Preserve the prototype's Ember instance colors exactly. The previous Lambert
-  // material's fixed orange emissive contribution overwhelmed the per-cube palette.
-  // Normal blending and depth writing keep the separated cube volume readable.
-  const cubeMaterial=new THREE.MeshBasicMaterial({
-    color:0xffffff,vertexColors:true,transparent:true,opacity:.92,
-    blending:THREE.NormalBlending,depthWrite:true,depthTest:true,
+  // Read InstancedMesh.instanceColor directly. This avoids both the fixed orange
+  // Lambert emissive and the stock material path that rendered the instances black.
+  // A small directional face term preserves cube volume without replacing the palette.
+  const cubeMaterial=new THREE.ShaderMaterial({
+    transparent:true,
+    depthWrite:true,
+    depthTest:true,
+    blending:THREE.NormalBlending,
     toneMapped:false,
+    uniforms:{uOpacity:{value:.94}},
+    vertexShader:`
+      varying vec3 vInstanceColor;
+      varying vec3 vViewNormal;
+      void main(){
+        #ifdef USE_INSTANCING_COLOR
+          vInstanceColor=instanceColor;
+        #else
+          vInstanceColor=vec3(1.0,0.0,1.0);
+        #endif
+        mat4 localInstance=mat4(1.0);
+        #ifdef USE_INSTANCING
+          localInstance=instanceMatrix;
+        #endif
+        mat4 instanceModelView=modelViewMatrix*localInstance;
+        vViewNormal=normalize(mat3(instanceModelView)*normal);
+        gl_Position=projectionMatrix*instanceModelView*vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform float uOpacity;
+      varying vec3 vInstanceColor;
+      varying vec3 vViewNormal;
+      void main(){
+        vec3 palette=pow(clamp(vInstanceColor,0.0,1.0),vec3(0.72));
+        vec3 lightDir=normalize(vec3(0.35,0.72,0.58));
+        float faceLight=0.76+0.24*max(dot(normalize(vViewNormal),lightDir),0.0);
+        gl_FragColor=vec4(palette*faceLight,uOpacity);
+      }
+    `,
   });
   const strokeMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true,side:THREE.DoubleSide});
   const quadMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),quadMaterial,MAX_INSTANCES);
