@@ -1,3 +1,5 @@
+import './lion-maul-presentation.js';
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export const DEFAULT_LION_MAUL_PRESET = 'triple';
@@ -8,9 +10,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Quick Snap',
     biteCount:2,
     biteDamage:4,
-    biteInterval:.22,
-    firstBiteDelay:.16,
-    stunDuration:.72,
+    biteInterval:.36,
+    firstBiteDelay:.20,
+    stunDuration:.95,
     recovery:.55,
     interruptOnStagger:true,
   }),
@@ -19,9 +21,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Triple Maul',
     biteCount:3,
     biteDamage:4,
-    biteInterval:.28,
-    firstBiteDelay:.20,
-    stunDuration:1.05,
+    biteInterval:.46,
+    firstBiteDelay:.24,
+    stunDuration:1.48,
     recovery:.75,
     interruptOnStagger:true,
   }),
@@ -30,9 +32,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Apex Frenzy',
     biteCount:4,
     biteDamage:5,
-    biteInterval:.24,
-    firstBiteDelay:.16,
-    stunDuration:1.22,
+    biteInterval:.40,
+    firstBiteDelay:.22,
+    stunDuration:1.72,
     recovery:.95,
     interruptOnStagger:true,
   }),
@@ -91,12 +93,13 @@ export function createLionMaulSequence(settings = {}) {
   }
 
   function biteVisualProgress() {
-    const nearest = Math.round((elapsed - config.firstBiteDelay) / config.biteInterval);
-    const index = clamp(nearest, 0, config.biteCount - 1);
-    const biteAt = config.firstBiteDelay + index * config.biteInterval;
-    const start = biteAt - config.biteInterval * .72;
-    const span = Math.max(.08, config.biteInterval * .92);
-    return clamp((elapsed - start) / span, 0, 1);
+    const interval = Math.max(.12, config.biteInterval);
+    const relative = elapsed - config.firstBiteDelay;
+    const nextIndex = clamp(Math.ceil(relative / interval), 0, config.biteCount - 1);
+    const biteAt = config.firstBiteDelay + nextIndex * interval;
+    const start = biteAt - Math.min(.30, interval * .68);
+    const end = biteAt + Math.min(.16, interval * .30);
+    return clamp((elapsed - start) / Math.max(.08, end - start), 0, 1);
   }
 
   function snapshot() {
