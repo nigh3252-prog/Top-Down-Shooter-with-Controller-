@@ -193,12 +193,20 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     state.plannedDistance = targetDistance;
     syncPosition(handle, state.position);
     holdFacing(handle);
-    dashSwirl.emitWorld(
-      state.position.x,
-      state.position.z,
-      state.position.x - previousPosition.x,
-      state.position.z - previousPosition.z,
-    );
+
+    const segmentX = state.position.x - previousPosition.x;
+    const segmentZ = state.position.z - previousPosition.z;
+    const segmentDistance = Math.hypot(segmentX, segmentZ);
+    const steps = Math.max(1, Math.ceil(segmentDistance / 0.25));
+    for(let step = 1; step <= steps; step++){
+      const t = step / steps;
+      dashSwirl.emitWorld(
+        previousPosition.x + segmentX * t,
+        previousPosition.z + segmentZ * t,
+        segmentX / steps,
+        segmentZ / steps,
+      );
+    }
 
     const u = clamp01(state.elapsed / Math.max(.001, config.duration));
     const anticipationWindow=Math.max(.01,config.movingAnticipationFraction||.18);
