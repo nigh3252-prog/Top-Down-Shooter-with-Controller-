@@ -1,4 +1,8 @@
 import './lion-maul-presentation.js';
+import {
+  lionMaulAnimationDuration,
+  lionMaulAnimationState,
+} from './lion-maul-animation.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -10,9 +14,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Quick Snap',
     biteCount:2,
     biteDamage:4,
-    biteInterval:.36,
-    firstBiteDelay:.20,
-    stunDuration:.95,
+    biteInterval:.48,
+    firstBiteDelay:.58,
+    stunDuration:1.88,
     recovery:.55,
     interruptOnStagger:true,
   }),
@@ -21,9 +25,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Triple Maul',
     biteCount:3,
     biteDamage:4,
-    biteInterval:.46,
-    firstBiteDelay:.24,
-    stunDuration:1.48,
+    biteInterval:.58,
+    firstBiteDelay:.78,
+    stunDuration:2.76,
     recovery:.75,
     interruptOnStagger:true,
   }),
@@ -32,9 +36,9 @@ export const LION_MAUL_PRESETS = Object.freeze({
     label:'Apex Frenzy',
     biteCount:4,
     biteDamage:5,
-    biteInterval:.40,
-    firstBiteDelay:.22,
-    stunDuration:1.72,
+    biteInterval:.48,
+    firstBiteDelay:.68,
+    stunDuration:2.94,
     recovery:.95,
     interruptOnStagger:true,
   }),
@@ -43,15 +47,15 @@ export const LION_MAUL_PRESETS = Object.freeze({
 export function normalizeLionMaulSettings(settings = {}) {
   const fallback = LION_MAUL_PRESETS[DEFAULT_LION_MAUL_PRESET];
   const biteCount = clamp(Math.round(Number(settings.biteCount) || fallback.biteCount), 1, 6);
-  const biteInterval = clamp(Number(settings.biteInterval) || fallback.biteInterval, .12, .7);
-  const firstBiteDelay = clamp(Number(settings.firstBiteDelay) || fallback.firstBiteDelay, .08, .65);
-  const minimumDuration = firstBiteDelay + Math.max(0, biteCount - 1) * biteInterval + .16;
+  const biteInterval = clamp(Number(settings.biteInterval) || fallback.biteInterval, .12, 1.2);
+  const firstBiteDelay = clamp(Number(settings.firstBiteDelay) || fallback.firstBiteDelay, .08, 1.8);
+  const minimumDuration = lionMaulAnimationDuration({ biteCount, biteInterval, firstBiteDelay });
   return {
     biteCount,
     biteDamage:clamp(Math.round(Number(settings.biteDamage) || fallback.biteDamage), 1, 20),
     biteInterval,
     firstBiteDelay,
-    stunDuration:clamp(Math.max(Number(settings.stunDuration) || fallback.stunDuration, minimumDuration), .35, 3),
+    stunDuration:clamp(Math.max(Number(settings.stunDuration) || fallback.stunDuration, minimumDuration), .35, 5),
     recovery:clamp(Number(settings.recovery) || fallback.recovery, .2, 2.5),
     interruptOnStagger:settings.interruptOnStagger === undefined
       ? fallback.interruptOnStagger
@@ -92,16 +96,6 @@ export function createLionMaulSequence(settings = {}) {
     return index;
   }
 
-  function biteVisualProgress() {
-    const interval = Math.max(.12, config.biteInterval);
-    const relative = elapsed - config.firstBiteDelay;
-    const nextIndex = clamp(Math.ceil(relative / interval), 0, config.biteCount - 1);
-    const biteAt = config.firstBiteDelay + nextIndex * interval;
-    const start = biteAt - Math.min(.30, interval * .68);
-    const end = biteAt + Math.min(.16, interval * .30);
-    return clamp((elapsed - start) / Math.max(.08, end - start), 0, 1);
-  }
-
   function snapshot() {
     return {
       elapsed,
@@ -109,7 +103,9 @@ export function createLionMaulSequence(settings = {}) {
       pendingBites,
       complete,
       remaining:Math.max(0, config.stunDuration - elapsed),
-      visualProgress:biteVisualProgress(),
+      // Keep the existing bridge field, but carry the complete standalone-lab pose
+      // state through it so both rendered characters use one synchronized timeline.
+      visualProgress:lionMaulAnimationState(elapsed, config),
       config:{ ...config },
     };
   }
