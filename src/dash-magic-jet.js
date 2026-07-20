@@ -5,9 +5,13 @@
 // and the whole effect goes fully idle until the next dash.
 import {
   DASH_JET_SETTINGS,
+  DASH_JET_SETTING_DEFAULTS,
   DASH_JET_LIFECYCLE,
   buildDashJetLayout,
   buildDashJetSamples,
+  clampZoneScale,
+  loadDashJetOverrides,
+  saveDashJetOverrides,
 } from './dash-magic-jet-config.js';
 import { createDashJetSimulation } from './dash-magic-jet-sim.js';
 import { createDashJetRenderer } from './dash-magic-jet-render.js';
@@ -25,12 +29,25 @@ export function installDashMagicJet({
   if(typeof getDashState !== 'function') throw new Error('[dash-magic-jet] getDashState is required.');
 
   const settings = () => DASH_JET_SETTINGS;
-  // The zone spans a 2-hex-cell radius around the dash, derived from the same
-  // configured cell size the arena maze uses (20 is the arena's requested
-  // HEX_SIZE; the runtime setting overrides it in combat-arena).
-  const layout = buildDashJetLayout(configuredHexSize(20));
-  const sim = createDashJetSimulation({ settings, layout, getMazeSegments });
-  const renderer = createDashJetRenderer({ THREE, scene, settings, layout, sim });
+
+  // Saved Lab-slider overrides apply on top of the tuned defaults.
+  const overrides = loadDashJetOverrides();
+  for(const [key, value] of Object.entries(overrides))
+    if(key in DASH_JET_SETTING_DEFAULTS) DASH_JET_SETTINGS[key] = value;
+  DASH_JET_SETTINGS.fade = DASH_JET_SETTINGS.fadeDash;
+  let zoneScale = clampZoneScale(overrides.zoneScale ?? 1);
+
+  // The zone spans a 2-hex-cell radius around the dash (scaled by the Lab's
+  // zone-size slider), derived from the same configured cell size the arena
+  // maze uses (20 is the arena's requested HEX_SIZE; the runtime setting
+  // overrides it in combat-arena).
+  let layout, sim, renderer;
+  function buildStack(){
+    layout = buildDashJetLayout(configuredHexSize(20), 2 * zoneScale);
+    sim = createDashJetSimulation({ settings, layout, getMazeSegments });
+    renderer = createDashJetRenderer({ THREE, scene, settings, layout, sim });
+  }
+  buildStack();
 
   let phase = 'idle'; // idle | dashing | post | fading
   let lastRoomKey = getRoomKey?.() ?? null;
@@ -162,16 +179,61 @@ export function installDashMagicJet({
     renderer.dispose();
   }
 
+  // --- Lab tuning API (dash-magic-jet-panel.js drives these) ---
+  function saveOverride(key, value){
+    overrides[key] = value;
+    saveDashJetOverrides(overrides);
+  }
+
+  function setZoneScale(scale){
+    const next = clampZoneScale(scale);
+    if(Math.abs(next - zoneScale) < 1e-6) return zoneScale;
+    zoneScale = next;
+    clear();
+    renderer.dispose();
+    buildStack();
+    return zoneScale;
+  }
+
+  function applySetting(key, value){
+    if(key === 'zoneScale'){
+      const applied = setZoneScale(value);
+      saveOverride('zoneScale', applied);
+      return applied;
+    }
+    if(!(key in DASH_JET_SETTING_DEFAULTS)) return undefined;
+    const numeric = Number(value);
+    if(!Number.isFinite(numeric)) return DASH_JET_SETTINGS[key];
+    DASH_JET_SETTINGS[key] = numeric;
+    // fade is the live solver value the runtime ramps; keep it in sync when
+    // the base fade slider moves outside a fade-out.
+    if(key === 'fadeDash' && phase !== 'fading') DASH_JET_SETTINGS.fade = numeric;
+    saveOverride(key, numeric);
+    return numeric;
+  }
+
+  function resetSettings(){
+    Object.assign(DASH_JET_SETTINGS, DASH_JET_SETTING_DEFAULTS);
+    DASH_JET_SETTINGS.fade = DASH_JET_SETTINGS.fadeDash;
+    for(const key of Object.keys(overrides)) delete overrides[key];
+    saveDashJetOverrides(overrides);
+    setZoneScale(1);
+  }
+
   const runtime = {
     update,
     clear,
     dispose,
+    applySetting,
+    resetSettings,
+    setZoneScale,
+    get zoneScale(){ return zoneScale; },
     settings: DASH_JET_SETTINGS,
-    layout,
+    get layout(){ return layout; },
     lifecycle: DASH_JET_LIFECYCLE,
     debug: {
-      sim,
-      renderer,
+      get sim(){ return sim; },
+      get renderer(){ return renderer; },
       get phase(){ return phase; },
       get active(){ return phase !== 'idle'; },
     },

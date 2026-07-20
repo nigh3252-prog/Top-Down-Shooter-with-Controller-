@@ -12,6 +12,7 @@ import { getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
+import { installDashJetPanel } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
 
 export function installPlayerCombat(api){
@@ -38,6 +39,7 @@ export function installPlayerCombat(api){
       return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
     },
   });
+  installDashJetPanel({runtime:dashMagicJet});
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;

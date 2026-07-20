@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import {
   DASH_JET_SETTINGS,
+  DASH_JET_SETTING_DEFAULTS,
   DASH_JET_LAYOUT,
   DASH_JET_LIFECYCLE,
+  DASH_JET_STORAGE_KEY,
   buildDashJetSamples,
+  clampZoneScale,
+  loadDashJetOverrides,
+  saveDashJetOverrides,
 } from '../src/dash-magic-jet-config.js';
 import { createDashJetSimulation } from '../src/dash-magic-jet-sim.js';
 
@@ -107,6 +112,37 @@ function dyeNear(sim, wx, wz){
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
     nearWallSolid+=sim.solid[sim.idx(gx+dx, gz+dy)];
   assert.ok(nearWallSolid > 0, 'solid cells sit on the wall segment');
+}
+
+// --- zone scale clamps to 10%..100% ---
+{
+  assert.equal(clampZoneScale(1), 1);
+  assert.equal(clampZoneScale(.05), .1);
+  assert.equal(clampZoneScale(4), 1);
+  assert.equal(clampZoneScale('nonsense'), 1);
+}
+
+// --- Lab-slider overrides persist through a fake localStorage ---
+{
+  const store=new Map();
+  const storage={
+    getItem:key => store.has(key) ? store.get(key) : null,
+    setItem(key, value){ store.set(key, String(value)); },
+    removeItem(key){ store.delete(key); },
+  };
+
+  assert.deepEqual(loadDashJetOverrides(storage), {}, 'empty storage loads no overrides');
+
+  saveDashJetOverrides({ zoneScale:.4, push:2.2, bogusKey:9, glow:'not-a-number' }, storage);
+  const loaded=loadDashJetOverrides(storage);
+  assert.deepEqual(loaded, { zoneScale:.4, push:2.2 }, 'unknown keys and non-numeric values are dropped on load');
+  assert.ok('push' in DASH_JET_SETTING_DEFAULTS);
+
+  storage.setItem(DASH_JET_STORAGE_KEY, '{corrupt json');
+  assert.deepEqual(loadDashJetOverrides(storage), {}, 'malformed JSON loads as no overrides');
+
+  saveDashJetOverrides({}, storage);
+  assert.equal(storage.getItem(DASH_JET_STORAGE_KEY), null, 'saving empty overrides clears the stored entry');
 }
 
 console.log('dash-magic-jet tests passed');

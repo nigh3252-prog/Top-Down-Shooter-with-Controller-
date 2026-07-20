@@ -91,6 +91,43 @@ export const DASH_JET_LIFECYCLE = Object.freeze({
   patchMargin: 2.5,
 });
 
+// Frozen copy of the tuned defaults, taken before any saved overrides are
+// applied, so the Lab panel's reset can restore them.
+export const DASH_JET_SETTING_DEFAULTS = Object.freeze({ ...DASH_JET_SETTINGS });
+
+// The Lab zone slider scales the 2-hex patch radius between 10% and 100%.
+export function clampZoneScale(value){
+  const numeric = Number(value);
+  if(!Number.isFinite(numeric)) return 1;
+  return Math.max(.1, Math.min(1, numeric));
+}
+
+// --- Saved tuning overrides (Enemy Lab sliders) ---
+export const DASH_JET_STORAGE_KEY = 'dashJet.settings.v1';
+
+export function loadDashJetOverrides(storage = globalThis.localStorage){
+  try {
+    const raw = storage?.getItem?.(DASH_JET_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const overrides = {};
+    for(const [key, value] of Object.entries(parsed)){
+      const numeric = Number(value);
+      if(!Number.isFinite(numeric)) continue;
+      if(key === 'zoneScale' || key in DASH_JET_SETTING_DEFAULTS) overrides[key] = numeric;
+    }
+    return overrides;
+  } catch { return {}; }
+}
+
+export function saveDashJetOverrides(overrides, storage = globalThis.localStorage){
+  try {
+    if(!overrides || Object.keys(overrides).length === 0) storage?.removeItem?.(DASH_JET_STORAGE_KEY);
+    else storage?.setItem?.(DASH_JET_STORAGE_KEY, JSON.stringify(overrides));
+    return true;
+  } catch { return false; }
+}
+
 // Reproduce the prototype's dragMove subdivision, but point each virtual brush
 // motion opposite the player's displacement so the plume reads as thrust wake.
 export function buildDashJetSamples(from, to){
