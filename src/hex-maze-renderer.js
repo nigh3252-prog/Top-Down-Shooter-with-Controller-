@@ -10,6 +10,8 @@ import { applyBoundaryRoomWallGaps } from './boundary-room-wall-gaps.js';
 import { applyBoundaryRoomFloor } from './boundary-room-floor.js';
 import { applyBoundaryRoomProps } from './boundary-room-props.js';
 
+const BOUNDARY_VISUAL_BUILD = 'boundary-districts-post-main-sync-20260720';
+
 installAkaiInterfaceStyle();
 installAkaiCompactInterface();
 
@@ -21,6 +23,8 @@ export function createMazeWorld(options = {}){
   const arenaLayout = configuredOptions.maze?.options?.layout === 'arena';
   if(!arenaLayout) replaceHalfInternalWallsWithGaps(configuredOptions.maze);
   const world = createBaseMazeWorld(configuredOptions);
+  world.group.userData.boundaryVisualBuild = BOUNDARY_VISUAL_BUILD;
+  world.group.userData.boundaryVisualEnabled = !arenaLayout;
   if(arenaLayout){
     if(world.forest?.group){
       // Keep the forest collision segments as the arena perimeter, but suppress
