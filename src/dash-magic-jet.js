@@ -5,12 +5,13 @@
 // and the whole effect goes fully idle until the next dash.
 import {
   DASH_JET_SETTINGS,
-  DASH_JET_LAYOUT,
   DASH_JET_LIFECYCLE,
+  buildDashJetLayout,
   buildDashJetSamples,
 } from './dash-magic-jet-config.js';
 import { createDashJetSimulation } from './dash-magic-jet-sim.js';
 import { createDashJetRenderer } from './dash-magic-jet-render.js';
+import { configuredHexSize } from './maze-runtime-settings.js';
 
 export function installDashMagicJet({
   THREE,
@@ -24,8 +25,12 @@ export function installDashMagicJet({
   if(typeof getDashState !== 'function') throw new Error('[dash-magic-jet] getDashState is required.');
 
   const settings = () => DASH_JET_SETTINGS;
-  const sim = createDashJetSimulation({ settings, layout: DASH_JET_LAYOUT, getMazeSegments });
-  const renderer = createDashJetRenderer({ THREE, scene, settings, layout: DASH_JET_LAYOUT, sim });
+  // The zone spans a 2-hex-cell radius around the dash, derived from the same
+  // configured cell size the arena maze uses (20 is the arena's requested
+  // HEX_SIZE; the runtime setting overrides it in combat-arena).
+  const layout = buildDashJetLayout(configuredHexSize(20));
+  const sim = createDashJetSimulation({ settings, layout, getMazeSegments });
+  const renderer = createDashJetRenderer({ THREE, scene, settings, layout, sim });
 
   let phase = 'idle'; // idle | dashing | post | fading
   let lastRoomKey = getRoomKey?.() ?? null;
@@ -162,7 +167,7 @@ export function installDashMagicJet({
     clear,
     dispose,
     settings: DASH_JET_SETTINGS,
-    layout: DASH_JET_LAYOUT,
+    layout,
     lifecycle: DASH_JET_LIFECYCLE,
     debug: {
       sim,

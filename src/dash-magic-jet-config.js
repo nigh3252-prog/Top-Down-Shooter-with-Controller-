@@ -18,11 +18,14 @@ export const DASH_JET_SETTINGS = {
   fade: .989,
   fadeDash: .989,
   fadeOut: .965,
-  radius: 42,
+  // Brush radius as a percent of the sim grid (prototype semantics). 16 keeps
+  // the injected trail ~2.5 world units wide on the 2-hex-radius patch; the
+  // old 42 was tuned for the much smaller prototype patch.
+  radius: 16,
   layers: 4,
   height: .95,
   voxelSize: .82,
-  breakup: .38,
+  breakup: .5,
   // World-Y the voxel stack starts at. Lifts the plume so it emits from the
   // middle of the puppet instead of its feet — the same band other magical
   // effects should emit from.
@@ -40,28 +43,41 @@ export const DASH_JET_SETTINGS = {
   // ramp against a near-black background; over the arena's bright ground the
   // full-gain colors clip to white, so this pulls intensity down until the
   // blue ramp reads.
-  voxelGain: .18,
+  voxelGain: .12,
   // Opacity of the dark understain plane drawn beneath the trail. It locally
   // recreates the prototype's dark background so the additive glow keeps its
   // color instead of washing out on bright ground. 0 disables it.
   groundStain: 1,
 };
 
-export const DASH_JET_LAYOUT = Object.freeze({
-  // Double the prototype patch: the 15.5x13.5 field showed its edges during a
-  // dash, and the doubled grid-cell size also doubles the voxel blocks, which
-  // keeps the trail chunky at the larger scale.
-  patchWidth: 31,
-  patchDepth: 27,
-  simulationColumns: 48,
-  simulationRows: 42,
-  pressureIterations: 4,
-  visualColumns: 26,
-  visualRows: 24,
-  maxLayers: 6,
-  maxStrokes: 40,
-  wallMaskRadius: .45,
-});
+// The effect zone is defined in maze terms: a square patch spanning a radius
+// of `hexRadius` hex cells (center-to-center spacings) around the dash. Sim
+// and visual resolution scale with the span (within caps) so grid cells and
+// voxel blocks stay near their tuned world size whatever the maze cell size.
+export function buildDashJetLayout(hexSize = 12, hexRadius = 2){
+  const spacing = Math.sqrt(3) * hexSize;
+  const span = spacing * hexRadius * 2;
+  const even = value => Math.round(value / 2) * 2;
+  const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
+  const simCells = clamp(even(span / 1.3), 48, 72);
+  const visCells = clamp(even(span / 2.1), 26, 40);
+  return Object.freeze({
+    patchWidth: span,
+    patchDepth: span,
+    simulationColumns: simCells,
+    simulationRows: simCells,
+    pressureIterations: 4,
+    visualColumns: visCells,
+    visualRows: visCells,
+    maxLayers: 6,
+    maxStrokes: 40,
+    // Coarser sim cells need a wider mask so maze walls can't slip between
+    // cell centers.
+    wallMaskRadius: Math.max(.45, .55 * span / simCells),
+  });
+}
+
+export const DASH_JET_LAYOUT = buildDashJetLayout();
 
 export const DASH_JET_LIFECYCLE = Object.freeze({
   jetTrailOffset: 1.8,

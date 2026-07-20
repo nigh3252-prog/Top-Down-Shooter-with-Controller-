@@ -82,8 +82,10 @@ function dyeNear(sim, wx, wz){
 
 // --- setCenter clears fields and rebuilds the solid mask from segments ---
 {
-  const nearWall={ a:{ x:18, z:-2 }, b:{ x:22, z:2 } };
-  const farWall={ a:{ x:200, z:200 }, b:{ x:204, z:204 } };
+  // Outside the patch when centered at origin (half-span ~41.5 + mask radius),
+  // inside once the patch re-centers at x=20.
+  const nearWall={ a:{ x:50, z:-2 }, b:{ x:54, z:2 } };
+  const farWall={ a:{ x:400, z:400 }, b:{ x:404, z:404 } };
   const sim=makeSim({ segments:[nearWall, farWall] });
   let solidCount=0;
   for(let i=0;i<sim.N;i++) solidCount+=sim.solid[i];
@@ -98,9 +100,13 @@ function dyeNear(sim, wx, wz){
   for(let i=0;i<sim.N;i++) solidCount+=sim.solid[i];
   assert.ok(solidCount > 0, 'wall inside the re-centered patch masks solid cells');
 
-  const gx=(0/sim.PATCH_W+.5)*sim.simW; // wall midpoint (20,0) is the new patch center
-  const gz=(0/sim.PATCH_D+.5)*sim.simH;
-  assert.equal(sim.solid[sim.idx(Math.floor(gx), Math.floor(gz))], 1, 'cell on the wall is solid');
+  // A solid cell exists near the wall midpoint (52,0) in the re-centered grid.
+  const gx=Math.floor(((52-20)/sim.PATCH_W+.5)*sim.simW);
+  const gz=Math.floor((0/sim.PATCH_D+.5)*sim.simH);
+  let nearWallSolid=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
+    nearWallSolid+=sim.solid[sim.idx(gx+dx, gz+dy)];
+  assert.ok(nearWallSolid > 0, 'solid cells sit on the wall segment');
 }
 
 console.log('dash-magic-jet tests passed');
