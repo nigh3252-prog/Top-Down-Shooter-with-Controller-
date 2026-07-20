@@ -7,15 +7,16 @@ import {
   DASH_JET_SETTINGS,
   DASH_JET_SETTING_DEFAULTS,
   DASH_JET_LIFECYCLE,
+  DASH_JET_PALETTES,
   buildDashJetLayout,
   buildDashJetSamples,
+  clampGrainScale,
   clampZoneScale,
   loadDashJetOverrides,
   saveDashJetOverrides,
 } from './dash-magic-jet-config.js';
 import { createDashJetSimulation } from './dash-magic-jet-sim.js';
 import { createDashJetRenderer } from './dash-magic-jet-render.js';
-import { configuredHexSize } from './maze-runtime-settings.js';
 
 export function installDashMagicJet({
   THREE,
@@ -36,14 +37,15 @@ export function installDashMagicJet({
     if(key in DASH_JET_SETTING_DEFAULTS) DASH_JET_SETTINGS[key] = value;
   DASH_JET_SETTINGS.fade = DASH_JET_SETTINGS.fadeDash;
   let zoneScale = clampZoneScale(overrides.zoneScale ?? 1);
+  let grainScale = clampGrainScale(overrides.grainScale ?? 1);
 
-  // The zone spans a 2-hex-cell radius around the dash (scaled by the Lab's
-  // zone-size slider), derived from the same configured cell size the arena
-  // maze uses (20 is the arena's requested HEX_SIZE; the runtime setting
-  // overrides it in combat-arena).
+  // The zone is a fixed world-size square and the grain a fixed world cell
+  // size, so the effect looks identical in every scene regardless of the
+  // maze's cell-size setting; the Lab's Zone Size and Grain Size sliders
+  // scale the two independently.
   let layout, sim, renderer;
   function buildStack(){
-    layout = buildDashJetLayout(configuredHexSize(20), 2 * zoneScale);
+    layout = buildDashJetLayout(zoneScale, grainScale);
     sim = createDashJetSimulation({ settings, layout, getMazeSegments });
     renderer = createDashJetRenderer({ THREE, scene, settings, layout, sim });
   }
@@ -78,12 +80,16 @@ export function installDashMagicJet({
   function beginJet(state){
     const position = { x: Number(state.position?.x) || 0, z: Number(state.position?.z) || 0 };
     const direction = { x: Number(state.direction?.x) || 0, z: Number(state.direction?.z) || -1 };
-    if(phase === 'idle' || !dashFits(position, direction)){
-      const centerX = position.x + direction.x * DASH_JET_LIFECYCLE.dashDistance * .5;
-      const centerZ = position.z + direction.z * DASH_JET_LIFECYCLE.dashDistance * .5;
-      sim.setCenter(centerX, centerZ);
-      renderer.setCenter(centerX, centerZ);
+    const desiredX = position.x + direction.x * DASH_JET_LIFECYCLE.dashDistance * .5;
+    const desiredZ = position.z + direction.z * DASH_JET_LIFECYCLE.dashDistance * .5;
+    if(phase === 'idle'){
+      sim.setCenter(desiredX, desiredZ);
+    }else if(!dashFits(position, direction)){
+      // Shift the live field instead of clearing it so a chained dash never
+      // visibly wipes the previous trail.
+      sim.moveCenter(desiredX, desiredZ);
     }
+    renderer.setCenter(sim.centerX, sim.centerZ);
     DASH_JET_SETTINGS.fade = DASH_JET_SETTINGS.fadeDash;
     fadeElapsed = 0;
     sinceDashEnd = 0;
@@ -195,11 +201,32 @@ export function installDashMagicJet({
     return zoneScale;
   }
 
+  function setGrainScale(scale){
+    const next = clampGrainScale(scale);
+    if(Math.abs(next - grainScale) < 1e-6) return grainScale;
+    grainScale = next;
+    clear();
+    renderer.dispose();
+    buildStack();
+    return grainScale;
+  }
+
   function applySetting(key, value){
     if(key === 'zoneScale'){
       const applied = setZoneScale(value);
       saveOverride('zoneScale', applied);
       return applied;
+    }
+    if(key === 'grainScale'){
+      const applied = setGrainScale(value);
+      saveOverride('grainScale', applied);
+      return applied;
+    }
+    if(key === 'palette'){
+      if(!DASH_JET_PALETTES.includes(value)) return DASH_JET_SETTINGS.palette;
+      DASH_JET_SETTINGS.palette = value;
+      saveOverride('palette', value);
+      return value;
     }
     if(!(key in DASH_JET_SETTING_DEFAULTS)) return undefined;
     const numeric = Number(value);
@@ -218,6 +245,7 @@ export function installDashMagicJet({
     for(const key of Object.keys(overrides)) delete overrides[key];
     saveDashJetOverrides(overrides);
     setZoneScale(1);
+    setGrainScale(1);
   }
 
   const runtime = {
@@ -227,7 +255,9 @@ export function installDashMagicJet({
     applySetting,
     resetSettings,
     setZoneScale,
+    setGrainScale,
     get zoneScale(){ return zoneScale; },
+    get grainScale(){ return grainScale; },
     settings: DASH_JET_SETTINGS,
     get layout(){ return layout; },
     lifecycle: DASH_JET_LIFECYCLE,

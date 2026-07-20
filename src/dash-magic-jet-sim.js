@@ -9,7 +9,7 @@ export function createDashJetSimulation({settings,layout,getMazeSegments=()=>[]}
   const simH=layout.simulationRows;
   const pressureIters=layout.pressureIterations;
   const N=simW*simH;
-  let u,v,u0,v0,dye,dye0,heat,heat0,pressure,divergence,curlField,solid;
+  let u,v,u0,v0,dye,dye0,heat,heat0,pressure,divergence,curlField,solid,shiftScratch;
   let centerX=0,centerZ=0;
   const strokes=[];
 
@@ -180,9 +180,43 @@ export function createDashJetSimulation({settings,layout,getMazeSegments=()=>[]}
     u=new Float32Array(N);v=new Float32Array(N);u0=new Float32Array(N);v0=new Float32Array(N);
     dye=new Float32Array(N);dye0=new Float32Array(N);heat=new Float32Array(N);heat0=new Float32Array(N);
     pressure=new Float32Array(N);divergence=new Float32Array(N);curlField=new Float32Array(N);solid=new Uint8Array(N);
+    shiftScratch=new Float32Array(N);
     buildSolidMask();clearSim();
   }
   function setCenter(x,z){centerX=Number(x)||0;centerZ=Number(z)||0;buildSolidMask();clearSim();}
+
+  function shiftField(field,sx,sy){
+    shiftScratch.set(field);field.fill(0);
+    for(let y=0;y<simH;y++){
+      const srcY=y+sy;
+      if(srcY<0||srcY>=simH)continue;
+      for(let x=0;x<simW;x++){
+        const srcX=x+sx;
+        if(srcX<0||srcX>=simW)continue;
+        field[idx(x,y)]=shiftScratch[idx(srcX,srcY)];
+      }
+    }
+  }
+
+  // Re-center the patch while keeping the live trail: content is shifted by a
+  // whole-cell offset (the center snaps to the cell grid) so a chained dash
+  // never wipes the previous plume the way a clearing setCenter would.
+  function moveCenter(x,z){
+    if(!u){setCenter(x,z);return;}
+    const cellW=PATCH_W/simW,cellD=PATCH_D/simH;
+    const shiftX=Math.round(((Number(x)||0)-centerX)/cellW);
+    const shiftY=Math.round(((Number(z)||0)-centerZ)/cellD);
+    if(Math.abs(shiftX)>=simW||Math.abs(shiftY)>=simH){setCenter(x,z);return;}
+    if(shiftX!==0||shiftY!==0){
+      const dxWorld=shiftX*cellW,dzWorld=shiftY*cellD;
+      shiftField(u,shiftX,shiftY);shiftField(v,shiftX,shiftY);
+      shiftField(dye,shiftX,shiftY);shiftField(heat,shiftX,shiftY);
+      pressure.fill(0);divergence.fill(0);curlField.fill(0);
+      for(const stroke of strokes){stroke.x0-=dxWorld;stroke.z0-=dzWorld;stroke.x1-=dxWorld;stroke.z1-=dzWorld;}
+      centerX+=dxWorld;centerZ+=dzWorld;
+    }
+    buildSolidMask();
+  }
   function maxDye(){let max=0;for(let i=0;i<N;i++)if(dye[i]>max)max=dye[i];return max;}
   initialize();
 
@@ -191,6 +225,6 @@ export function createDashJetSimulation({settings,layout,getMazeSegments=()=>[]}
     get centerX(){return centerX;},get centerZ(){return centerZ;},
     get u(){return u;},get v(){return v;},get dye(){return dye;},get heat(){return heat;},
     get curlField(){return curlField;},get solid(){return solid;},strokes,
-    idx,sample,clearSim,injectWorld,updateSim,setCenter,buildSolidMask,maxDye,
+    idx,sample,clearSim,injectWorld,updateSim,setCenter,moveCenter,buildSolidMask,maxDye,
   };
 }

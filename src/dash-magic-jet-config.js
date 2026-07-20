@@ -48,19 +48,27 @@ export const DASH_JET_SETTINGS = {
   // recreates the prototype's dark background so the additive glow keeps its
   // color instead of washing out on bright ground. 0 disables it.
   groundStain: 1,
+  // Color ramp: 'blue' | 'ember' | 'arcane' (the prototype's three palettes).
+  palette: 'blue',
 };
 
-// The effect zone is defined in maze terms: a square patch spanning a radius
-// of `hexRadius` hex cells (center-to-center spacings) around the dash. Sim
-// and visual resolution scale with the span (within caps) so grid cells and
-// voxel blocks stay near their tuned world size whatever the maze cell size.
-export function buildDashJetLayout(hexSize = 12, hexRadius = 2){
-  const spacing = Math.sqrt(3) * hexSize;
-  const span = spacing * hexRadius * 2;
+export const DASH_JET_PALETTES = Object.freeze(['blue', 'ember', 'arcane']);
+
+// The effect zone is a fixed-world-size square: 42 units ≈ two compact hex
+// cells wide — big enough that a dash plus its wake never touches the edges,
+// no bigger than needed. Grain (sim cell / voxel block world size) is also
+// fixed, so the effect looks identical in every scene regardless of the
+// maze's cell-size setting; the Lab's Zone Size and Grain Size sliders scale
+// the two independently. Cell-count clamps cap the solver/instance budget.
+export const DASH_JET_ZONE_SPAN = 42;
+
+export function buildDashJetLayout(zoneScale = 1, grainScale = 1){
+  const span = DASH_JET_ZONE_SPAN * clampZoneScale(zoneScale);
+  const grain = clampGrainScale(grainScale);
   const even = value => Math.round(value / 2) * 2;
   const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
-  const simCells = clamp(even(span / 1.3), 48, 72);
-  const visCells = clamp(even(span / 2.1), 26, 40);
+  const simCells = clamp(even(span / (1.3 * grain)), 16, 72);
+  const visCells = clamp(even(span / (2.1 * grain)), 10, 40);
   return Object.freeze({
     patchWidth: span,
     patchDepth: span,
@@ -95,11 +103,18 @@ export const DASH_JET_LIFECYCLE = Object.freeze({
 // applied, so the Lab panel's reset can restore them.
 export const DASH_JET_SETTING_DEFAULTS = Object.freeze({ ...DASH_JET_SETTINGS });
 
-// The Lab zone slider scales the 2-hex patch radius between 10% and 100%.
+// The Lab zone slider scales the fixed-world zone span between 10% and 100%.
 export function clampZoneScale(value){
   const numeric = Number(value);
   if(!Number.isFinite(numeric)) return 1;
   return Math.max(.1, Math.min(1, numeric));
+}
+
+// The Lab grain slider scales the world size of sim cells and voxel blocks.
+export function clampGrainScale(value){
+  const numeric = Number(value);
+  if(!Number.isFinite(numeric)) return 1;
+  return Math.max(.5, Math.min(2, numeric));
 }
 
 // --- Saved tuning overrides (Enemy Lab sliders) ---
@@ -112,9 +127,13 @@ export function loadDashJetOverrides(storage = globalThis.localStorage){
     if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const overrides = {};
     for(const [key, value] of Object.entries(parsed)){
+      if(key === 'palette'){
+        if(DASH_JET_PALETTES.includes(value)) overrides.palette = value;
+        continue;
+      }
       const numeric = Number(value);
       if(!Number.isFinite(numeric)) continue;
-      if(key === 'zoneScale' || key in DASH_JET_SETTING_DEFAULTS) overrides[key] = numeric;
+      if(key === 'zoneScale' || key === 'grainScale' || key in DASH_JET_SETTING_DEFAULTS) overrides[key] = numeric;
     }
     return overrides;
   } catch { return {}; }

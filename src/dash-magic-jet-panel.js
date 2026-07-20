@@ -11,7 +11,8 @@ export function installDashJetPanel({ runtime, document: doc = globalThis.docume
   // Prototype sliders keep the ranges from threejs_midair_lifted_ground_slice_v1.html;
   // the rest are the integration knobs this port added.
   const SLIDERS = [
-    { key:'zoneScale', label:'Zone Size', min:.1, max:1, step:.05, note:'Scales the effect zone from 10% up to its full 2-hex-cell radius (rebuilds the field)' },
+    { key:'zoneScale', label:'Zone Size', min:.1, max:1, step:.05, note:'Scales the fixed-world effect zone from 10% up to its full span (rebuilds the field)' },
+    { key:'grainScale', label:'Grain Size', min:.5, max:2, step:.05, note:'World size of the sim cells and voxel blocks, same in every scene (rebuilds the field)' },
     { key:'push', label:'Push', min:.3, max:4, step:.05 },
     { key:'ink', label:'Material', min:.1, max:3.5, step:.05 },
     { key:'heat', label:'Heat', min:.1, max:4, step:.05 },
@@ -38,7 +39,32 @@ export function installDashJetPanel({ runtime, document: doc = globalThis.docume
   panel.style.display = 'none';
 
   const inputs = new Map();
-  const currentValue = key => key === 'zoneScale' ? runtime.zoneScale : runtime.settings[key];
+  const currentValue = key => {
+    if(key === 'zoneScale') return runtime.zoneScale;
+    if(key === 'grainScale') return runtime.grainScale;
+    return runtime.settings[key];
+  };
+
+  {
+    const row = doc.createElement('div');
+    const label = doc.createElement('label');
+    label.setAttribute('for', 'dashJet-palette');
+    label.textContent = 'Palette';
+    const select = doc.createElement('select');
+    select.id = 'dashJet-palette';
+    for(const palette of ['blue', 'ember', 'arcane']){
+      const option = doc.createElement('option');
+      option.value = palette;
+      option.textContent = palette[0].toUpperCase() + palette.slice(1);
+      select.appendChild(option);
+    }
+    select.value = String(currentValue('palette'));
+    select.title = 'Color ramp for the dye, voxels, and accent streaks';
+    select.addEventListener('change', () => runtime.applySetting('palette', select.value));
+    inputs.set('palette', select);
+    row.append(label, select);
+    panel.appendChild(row);
+  }
 
   for(const def of SLIDERS){
     const row = doc.createElement('div');

@@ -5,7 +5,9 @@ import {
   DASH_JET_LAYOUT,
   DASH_JET_LIFECYCLE,
   DASH_JET_STORAGE_KEY,
+  buildDashJetLayout,
   buildDashJetSamples,
+  clampGrainScale,
   clampZoneScale,
   loadDashJetOverrides,
   saveDashJetOverrides,
@@ -87,9 +89,9 @@ function dyeNear(sim, wx, wz){
 
 // --- setCenter clears fields and rebuilds the solid mask from segments ---
 {
-  // Outside the patch when centered at origin (half-span ~41.5 + mask radius),
+  // Outside the patch when centered at origin (half-span 21 + mask radius),
   // inside once the patch re-centers at x=20.
-  const nearWall={ a:{ x:50, z:-2 }, b:{ x:54, z:2 } };
+  const nearWall={ a:{ x:30, z:-2 }, b:{ x:34, z:2 } };
   const farWall={ a:{ x:400, z:400 }, b:{ x:404, z:404 } };
   const sim=makeSim({ segments:[nearWall, farWall] });
   let solidCount=0;
@@ -105,8 +107,8 @@ function dyeNear(sim, wx, wz){
   for(let i=0;i<sim.N;i++) solidCount+=sim.solid[i];
   assert.ok(solidCount > 0, 'wall inside the re-centered patch masks solid cells');
 
-  // A solid cell exists near the wall midpoint (52,0) in the re-centered grid.
-  const gx=Math.floor(((52-20)/sim.PATCH_W+.5)*sim.simW);
+  // A solid cell exists near the wall midpoint (32,0) in the re-centered grid.
+  const gx=Math.floor(((32-20)/sim.PATCH_W+.5)*sim.simW);
   const gz=Math.floor((0/sim.PATCH_D+.5)*sim.simH);
   let nearWallSolid=0;
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
@@ -114,12 +116,54 @@ function dyeNear(sim, wx, wz){
   assert.ok(nearWallSolid > 0, 'solid cells sit on the wall segment');
 }
 
-// --- zone scale clamps to 10%..100% ---
+// --- zone scale clamps to 10%..100%, grain scale to 50%..200% ---
 {
   assert.equal(clampZoneScale(1), 1);
   assert.equal(clampZoneScale(.05), .1);
   assert.equal(clampZoneScale(4), 1);
   assert.equal(clampZoneScale('nonsense'), 1);
+  assert.equal(clampGrainScale(.2), .5);
+  assert.equal(clampGrainScale(3), 2);
+  assert.equal(clampGrainScale('nonsense'), 1);
+}
+
+// --- grain stays constant at any zone size; the grain slider refines it ---
+{
+  const full=buildDashJetLayout(1);
+  const half=buildDashJetLayout(.5);
+  assert.equal(full.patchWidth, 42, 'full zone spans the fixed world size');
+  assert.equal(half.patchWidth, 21, 'zone scale halves the span');
+  const simCellFull=full.patchWidth/full.simulationColumns;
+  const simCellHalf=half.patchWidth/half.simulationColumns;
+  assert.ok(Math.abs(simCellFull-simCellHalf) < .05, 'sim grain is identical at any zone size');
+  const visCellFull=full.patchWidth/full.visualColumns;
+  const visCellHalf=half.patchWidth/half.visualColumns;
+  assert.ok(Math.abs(visCellFull-visCellHalf) < .1, 'voxel grain is identical at any zone size');
+  const fine=buildDashJetLayout(1, .5);
+  assert.ok(fine.patchWidth/fine.simulationColumns < simCellFull*.7, 'grain slider refines the grid');
+  assert.equal(fine.patchWidth, 42, 'grain slider leaves the zone span alone');
+}
+
+// --- moveCenter shifts the live trail instead of clearing it ---
+{
+  const sim=makeSim();
+  sim.injectWorld(0, 0, 0, -.25, 1);
+  const before=sim.maxDye();
+  assert.ok(before > 0);
+  assert.equal(sim.strokes.length, 1);
+
+  sim.moveCenter(5, 3);
+  const cell=sim.PATCH_W/sim.simW;
+  assert.ok(Math.abs(sim.centerX-5) <= cell/2+1e-9, 'center snaps to the cell grid near the request');
+  assert.ok(Math.abs(sim.maxDye()-before) < 1e-4, 'no dye is lost on an in-bounds shift');
+  const gx=((0-sim.centerX)/sim.PATCH_W+.5)*sim.simW;
+  const gz=((0-sim.centerZ)/sim.PATCH_D+.5)*sim.simH;
+  assert.ok(sim.sample(sim.dye, gx, gz) > before*.5, 'the trail stays at the same world position');
+  const stroke=sim.strokes[0];
+  assert.ok(Math.abs(stroke.x1+sim.centerX) < cell, 'strokes stay at the same world position');
+
+  sim.moveCenter(500, 500);
+  assert.equal(sim.maxDye(), 0, 'a shift with no overlap falls back to a cleared field');
 }
 
 // --- Lab-slider overrides persist through a fake localStorage ---
@@ -133,10 +177,14 @@ function dyeNear(sim, wx, wz){
 
   assert.deepEqual(loadDashJetOverrides(storage), {}, 'empty storage loads no overrides');
 
-  saveDashJetOverrides({ zoneScale:.4, push:2.2, bogusKey:9, glow:'not-a-number' }, storage);
+  saveDashJetOverrides({ zoneScale:.4, grainScale:1.5, push:2.2, palette:'ember', bogusKey:9, glow:'not-a-number' }, storage);
   const loaded=loadDashJetOverrides(storage);
-  assert.deepEqual(loaded, { zoneScale:.4, push:2.2 }, 'unknown keys and non-numeric values are dropped on load');
+  assert.deepEqual(loaded, { zoneScale:.4, grainScale:1.5, push:2.2, palette:'ember' },
+    'unknown keys and non-numeric values are dropped on load; palette string survives');
   assert.ok('push' in DASH_JET_SETTING_DEFAULTS);
+
+  saveDashJetOverrides({ palette:'neon' }, storage);
+  assert.deepEqual(loadDashJetOverrides(storage), {}, 'non-whitelisted palettes are dropped');
 
   storage.setItem(DASH_JET_STORAGE_KEY, '{corrupt json');
   assert.deepEqual(loadDashJetOverrides(storage), {}, 'malformed JSON loads as no overrides');

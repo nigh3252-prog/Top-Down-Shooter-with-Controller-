@@ -159,19 +159,58 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
     if(camera?.quaternion)activeCamera=camera;
   };
 
-  // --- Palette (prototype paletteColor/hotAccentColor, blue branch) ---
+  // --- Palettes (prototype paletteColor/hotAccentColor, all three branches) ---
   const blue0=new THREE.Color(1.00,.99,1.00);
   const blue1=new THREE.Color(.48,.98,1.00);
   const blue2=new THREE.Color(.12,.66,1.00);
   const blue3=new THREE.Color(.38,.20,.78);
+  const ember0=new THREE.Color(1.00,.98,.92);
+  const ember1=new THREE.Color(1.00,.86,.22);
+  const ember2=new THREE.Color(1.00,.48,.08);
+  const ember3=new THREE.Color(.96,.20,.66);
+  const ember4=new THREE.Color(.26,.06,.26);
+  const arcane0=new THREE.Color(1.00,.99,.98);
+  const arcane1=new THREE.Color(.40,1.00,.96);
+  const arcane2=new THREE.Color(.16,.70,1.00);
+  const arcane3=new THREE.Color(.98,.24,.80);
+  const arcane4=new THREE.Color(1.00,.68,.18);
+  const arcane5=new THREE.Color(.26,.08,.33);
+  const warmWhite=new THREE.Color(1.00,.95,.90);
+  const gold=new THREE.Color(1.00,.80,.24);
   const white=new THREE.Color(1,1,1);
+  // Understain tints per palette: a dark version of each ramp's haze color.
+  const STAIN_RGB={blue:[10,6,24],ember:[26,8,16],arcane:[24,8,30]};
 
   function mix3(a,b,t,out){out.copy(a).lerp(b,t);}
 
-  function paletteColor(body,hot,layerT,out){
+  function paletteColor(palette,body,hot,layerT,out){
     const cool=Math.max(0,body-hot*.55);
     const core=Math.min(1,hot*1.25);
     const haze=Math.min(1,cool*(.65+layerT*.35));
+
+    if(palette==='ember'){
+      if(core>.70)mix3(ember1,ember0,(core-.70)/.30,out);
+      else if(core>.44)mix3(ember2,ember1,(core-.44)/.26,out);
+      else if(core>.22)mix3(ember3,ember2,(core-.22)/.22,out);
+      else mix3(ember4,ember3,Math.min(1,core/.22),out);
+      color2.setRGB(.19,.05,.14);
+      out.lerp(color2,Math.min(.44,haze*.42+layerT*.12));
+      out.multiplyScalar(.26+body*1.02+core*.62);
+      return;
+    }
+
+    if(palette==='arcane'){
+      if(core>.78)mix3(arcane1,arcane0,(core-.78)/.22,out);
+      else if(core>.50)mix3(arcane2,arcane1,(core-.50)/.28,out);
+      else if(core>.24)mix3(arcane3,arcane2,(core-.24)/.26,out);
+      else mix3(arcane5,arcane3,Math.min(1,core/.24),out);
+      const emberT=Math.min(1,cool*.95*(1-layerT*.25));
+      out.lerp(arcane4,emberT*.22);
+      out.lerp(arcane5,Math.min(.40,haze*.38+layerT*.10));
+      out.multiplyScalar(.25+body*1.00+core*.68);
+      return;
+    }
+
     if(core>.68)mix3(blue1,blue0,(core-.68)/.32,out);
     else if(core>.30)mix3(blue2,blue1,(core-.30)/.38,out);
     else mix3(blue3,blue2,Math.min(1,core/.30),out);
@@ -180,7 +219,18 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
     out.multiplyScalar(.26+body*.95+core*.65);
   }
 
-  function hotAccentColor(hot,out){
+  function hotAccentColor(palette,hot,out){
+    if(palette==='ember'){
+      out.setRGB(1.00,.74,.14);
+      out.lerp(warmWhite,Math.min(1,hot*.68));
+      return;
+    }
+    if(palette==='arcane'){
+      out.setRGB(.62,1.00,.96);
+      out.lerp(gold,.20);
+      out.lerp(white,Math.min(1,hot*.65));
+      return;
+    }
     out.setRGB(.62,1.00,1.00);
     out.lerp(white,Math.min(1,hot*.55));
   }
@@ -188,7 +238,9 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
   // --- Ground texture (prototype renderGroundTexture, ground planes omitted) ---
   function renderGroundTexture(){
     const s=settings();
+    const palette=s.palette||'blue';
     const stain=Math.max(0,Number(s.groundStain??0));
+    const stainRGB=STAIN_RGB[palette]||STAIN_RGB.blue;
     const solid=sim.solid,dye=sim.dye,heat=sim.heat;
     for(let i=0,p=0;i<N;i++,p+=4){
       if(solid[i]){
@@ -203,13 +255,13 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
       // The stain footprint is wider than the glow (lower threshold, softer
       // curve) so the additive layers always sit on darkened ground.
       const stainBody=Math.min(1,Math.pow(d*1.6,.55));
-      stainPix[p+0]=10;stainPix[p+1]=6;stainPix[p+2]=24;
+      stainPix[p+0]=stainRGB[0];stainPix[p+1]=stainRGB[1];stainPix[p+2]=stainRGB[2];
       stainPix[p+3]=Math.floor(Math.min(255,stainBody*stain*255));
       if(body<.035){
         pix[p+0]=0;pix[p+1]=0;pix[p+2]=0;pix[p+3]=0;
         continue;
       }
-      paletteColor(body,hot,0,color);
+      paletteColor(palette,body,hot,0,color);
       const a=Math.min(1,body*.78+hot*.35);
       pix[p+0]=Math.floor(Math.min(255,color.r*255));
       pix[p+1]=Math.floor(Math.min(255,color.g*255));
@@ -323,6 +375,7 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
   // --- Accent streaks (prototype updateStrokeInstances) ---
   function updateStrokeInstances(){
     const s=settings();
+    const palette=s.palette||'blue';
     const strokes=sim.strokes;
     for(let i=0;i<MAX_STROKES;i++){
       const st=strokes[i];
@@ -346,7 +399,7 @@ export function createDashJetRenderer({THREE,scene,settings,layout,sim}={}){
       dummy.scale.set(len*2.0,st.width*s.accent*(.65+st.life*.55),1);
       dummy.updateMatrix();
       strokeMesh.setMatrixAt(i,dummy.matrix);
-      hotAccentColor(st.heat,color);
+      hotAccentColor(palette,st.heat,color);
       color.multiplyScalar((.75+st.life*.45)*(s.voxelGain??1));
       strokeMesh.setColorAt(i,color);
     }
