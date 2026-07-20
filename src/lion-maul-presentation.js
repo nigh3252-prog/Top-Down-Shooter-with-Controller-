@@ -30,6 +30,8 @@ function actorWorldZ(actorPos) {
 
 function findActorVisual(runtime) {
   if (playerPose?.visual?.parent === playerPose?.pivot && playerPose?.pivot?.parent) return playerPose.visual;
+  const direct = runtime?.PC?.arenaActorVisual;
+  if (direct) return direct;
   const actorPos = runtime?.actorPos;
   const enemyGroup = runtime?.enemySystem?.group;
   const worldRoot = enemyGroup?.parent;
@@ -57,7 +59,7 @@ function findActorVisual(runtime) {
 function ensurePlayerPivot(runtime) {
   if (playerPose?.pivot?.parent && playerPose.visual?.parent === playerPose.pivot) return playerPose;
   const visual = findActorVisual(runtime);
-  const root = visual?.parent;
+  const root = runtime?.PC?.arenaActorRoot || visual?.parent;
   if (!visual || !root) return null;
   const pivot = new visual.constructor();
   pivot.name = 'Lion maul player pivot (standalone lab pose)';
