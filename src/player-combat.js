@@ -11,6 +11,8 @@ import { setArenaEnemySource as setPinnedArenaEnemySource } from 'https://cdn.js
 import { getArenaEnemySystem } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
+import { installDashMagicJet } from './dash-magic-jet.js';
+import { installDashJetPanel } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
 
 export function installPlayerCombat(api){
@@ -27,6 +29,17 @@ export function installPlayerCombat(api){
     setPinnedSource:setPinnedArenaEnemySource,
   });
   const basicDashRuntime=installBasicDashRuntime(api);
+  const dashMagicJet=installDashMagicJet({
+    THREE,scene:api.scene,
+    getDashState:()=>basicDashRuntime.state,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getRoomKey:()=>window.__arena?.activeRoomId??null,
+    getInterrupted:()=>{
+      const handle=window.__arena;
+      return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
+    },
+  });
+  installDashJetPanel({runtime:dashMagicJet});
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -55,12 +68,14 @@ export function installPlayerCombat(api){
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
     basicDashRuntime.update(dt);
+    dashMagicJet.update(dt,now,rawDt);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
     return out;
   };
 
   Object.defineProperty(PC,'basicDashRuntime',{value:basicDashRuntime,enumerable:true});
+  Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
