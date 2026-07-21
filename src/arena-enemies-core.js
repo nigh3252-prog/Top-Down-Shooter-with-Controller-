@@ -6,7 +6,7 @@
 import {
   ARENA_ENEMY_ARCHETYPES,
   createArenaEnemySystem as createOriginalArenaEnemySystem,
-} from './arena-enemies-original.js';
+} from './arena-enemies-guard.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 import { createFlareArenaEnemySystem } from './flare-arena-enemies.js';
 import { isFlareSpawnKind } from './flare-enemies.js';
