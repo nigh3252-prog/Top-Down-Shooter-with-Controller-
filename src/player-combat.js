@@ -21,8 +21,6 @@ export function installPlayerCombat(api){
   if(!arenaPage)return PC;
 
   const {THREE}=api;
-  const arenaActorVisual=api.actorVisual||null;
-  const arenaActorRoot=arenaActorVisual?.parent||null;
   const playerWorld=new THREE.Vector3();
   const playerForward=new THREE.Vector3(0,0,1);
   const identityQ=new THREE.Quaternion();
@@ -44,7 +42,7 @@ export function installPlayerCombat(api){
   installDashJetPanel({runtime:dashMagicJet});
 
   function getPlayerTransform(){
-    const root=arenaActorRoot||api.actorVisual?.parent;
+    const root=api.actorVisual?.parent;
     if(root?.getWorldPosition)root.getWorldPosition(playerWorld);else playerWorld.set(0,0,0);
     playerForward.set(0,0,1).applyQuaternion(api.yawQ||identityQ);
     playerForward.y=0;
@@ -80,14 +78,20 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
-  // Stable direct references for presentation-only effects. These remain valid even
-  // when a temporary pivot is inserted between the arena actor root and actor visual.
-  Object.defineProperty(PC,'arenaActorVisual',{value:arenaActorVisual,enumerable:true});
-  Object.defineProperty(PC,'arenaActorRoot',{value:arenaActorRoot,enumerable:true});
-  Object.defineProperty(PC,'arenaActiveModel',{get:()=>api.activeModel||null,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});
   Object.defineProperty(PC,'bloodSlashStatus',{value:{state:combatEffectRuntime.state,entries:combatEffectRuntime.state.bleeds,update(){},reset(){}},enumerable:true});
+  return exposeLionActorReferences(PC,api);
+}
+
+function exposeLionActorReferences(PC,api){
+  const arenaActorVisual=api.actorVisual||null;
+  const arenaActorRoot=arenaActorVisual?.parent||null;
+  // Stable direct references for the maul presentation. They remain valid while
+  // the visual is temporarily reparented under the prone-player pivot.
+  Object.defineProperty(PC,'arenaActorVisual',{value:arenaActorVisual,enumerable:true});
+  Object.defineProperty(PC,'arenaActorRoot',{value:arenaActorRoot,enumerable:true});
+  Object.defineProperty(PC,'arenaActiveModel',{get:()=>api.activeModel||null,enumerable:true});
   return PC;
 }
