@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:dash && npm run test:combat && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick",
+    "test": "npm run test:dash && npm run test:combat && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick && npm run test:boundary-rooms",
     "test:dash": "node tests/basic-dash.test.mjs && node tests/basic-dash-runtime.test.mjs && node tests/dash-magic-jet.test.mjs",
     "test:combat": "node tests/combat-pass.test.mjs",
     "test:flare": "node tests/flare-enemies.test.mjs",
@@ -10,6 +10,7 @@
     "test:encounters": "node tests/combined-encounter.test.mjs",
     "test:maze:quick": "node tests/hex-maze.test.mjs --iterations=20",
     "test:maze": "node tests/hex-maze.test.mjs --iterations=100",
-    "test:maze:stress": "node tests/hex-maze.test.mjs --iterations=500"
+    "test:maze:stress": "node tests/hex-maze.test.mjs --iterations=500",
+    "test:boundary-rooms": "node tests/boundary-room-topology.test.mjs"
   }
 }
