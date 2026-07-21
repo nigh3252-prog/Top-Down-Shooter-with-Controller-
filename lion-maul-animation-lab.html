@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Lion Maul Animation Lab</title>
+<style>
+  :root{color-scheme:dark;--bg:#0d1718;--panel:rgba(12,25,27,.95);--line:#315653;--text:#d9e7df;--muted:#82aaa3;--gold:#f0ad55;--danger:#ff8670}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);touch-action:none}
+  canvas{display:block;width:100%;height:100%}
+  button,select,input{font:inherit}
+  #top{position:fixed;z-index:20;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:max(8px,env(safe-area-inset-top));display:flex;gap:6px;align-items:center;pointer-events:none}
+  #top>*{pointer-events:auto}
+  .btn{min-height:38px;border:1px solid var(--line);border-radius:7px;background:rgba(16,35,37,.9);color:var(--text);padding:7px 10px;box-shadow:0 2px 0 #071011}
+  .btn:active{transform:translateY(2px);box-shadow:none}
+  .btn.primary{border-color:#8c5d2c;color:var(--gold)}
+  #status{margin-left:auto;max-width:48vw;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:rgba(8,18,20,.82);font-size:10px;line-height:1.35;text-align:right;pointer-events:none}
+  #panel{position:fixed;z-index:18;top:54px;left:8px;width:min(84vw,330px);max-height:calc(100vh - 66px);overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:10px 12px 18px;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+  #panel.hidden{display:none}
+  h1{font-size:13px;letter-spacing:.13em;color:var(--gold);margin:2px 0 4px}
+  .sub{font-size:9px;line-height:1.45;color:var(--muted);margin:0 0 10px}
+  .group{border-top:1px solid rgba(49,86,83,.55);padding-top:9px;margin-top:10px}
+  .groupTitle{font-size:9px;letter-spacing:.16em;color:var(--gold);margin-bottom:8px}
+  .row{margin:0 0 13px}
+  .row label{display:flex;justify-content:space-between;gap:8px;font-size:9px;color:var(--muted);margin-bottom:4px}
+  .value{color:var(--gold)}
+  input[type=range]{width:100%;height:26px;margin:0;accent-color:var(--gold)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .grid .btn{min-height:36px;padding:6px 3px;font-size:9px}
+  .inline{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .inline select{flex:1;min-height:36px;border:1px solid var(--line);border-radius:6px;background:#102426;color:var(--gold);padding:6px}
+  .check{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted)}
+  #timelineWrap{position:fixed;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));z-index:17;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(8,18,20,.86)}
+  #timeline{width:100%;height:28px;accent-color:var(--gold)}
+  #timelineLabels{display:flex;justify-content:space-between;color:var(--muted);font-size:9px;margin-top:-2px}
+  #error{position:fixed;z-index:100;inset:0;display:none;align-items:center;justify-content:center;padding:24px;background:#090f10;color:#ffd2c9;text-align:center;white-space:pre-wrap;line-height:1.5}
+  #toast{position:fixed;z-index:50;left:50%;bottom:74px;transform:translateX(-50%);padding:8px 12px;border-radius:7px;background:#142d2f;border:1px solid var(--line);color:var(--gold);font-size:10px;opacity:0;transition:opacity .15s;pointer-events:none}
+  @media (orientation:portrait){#status{display:none}#panel{width:min(90vw,340px)}}
+</style>
+</head>
+<body>
+<div id="top">
+  <button id="menuBtn" class="btn primary">☰ LAB</button>
+  <button id="playBtn" class="btn primary">PAUSE</button>
+  <button id="restartBtn" class="btn">↺ RESTART</button>
+  <div id="status">LOADING REAL RIGS…</div>
+</div>
+
+<section id="panel">
+  <h1>LION MAUL ANIMATION LAB</h1>
+  <p class="sub">Real Stone Wanderer and lion models, isolated from combat. Drag the scene to orbit. Use the timeline to freeze any frame.</p>
+
+  <div class="group">
+    <div class="groupTitle">PLAYBACK</div>
+    <div class="inline">
+      <select id="speedSelect" aria-label="Playback speed">
+        <option value="0.25">0.25× SLOW</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+      </select>
+      <label class="check"><input id="loopCheck" type="checkbox" checked> LOOP</label>
+      <label class="check"><input id="debugCheck" type="checkbox"> JOINTS</label>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="groupTitle">CAMERA</div>
+    <div class="grid">
+      <button class="btn cameraBtn" data-camera="game">GAME</button>
+      <button class="btn cameraBtn" data-camera="side">SIDE</button>
+      <button class="btn cameraBtn" data-camera="three">3/4</button>
+      <button class="btn cameraBtn" data-camera="top">TOP</button>
+      <button class="btn" id="zoomIn">ZOOM +</button>
+      <button class="btn" id="zoomOut">ZOOM −</button>
+    </div>
+  </div>
+
+  <div id="controls"></div>
+
+  <div class="group">
+    <div class="groupTitle">TRANSFER</div>
+    <div class="grid">
+      <button id="copyBtn" class="btn primary">COPY SETTINGS</button>
+      <button id="resetBtn" class="btn">RESET VALUES</button>
+      <button id="freezeBiteBtn" class="btn">FREEZE BITE 1</button>
+    </div>
+  </div>
+</section>
+
+<div id="timelineWrap">
+  <input id="timeline" type="range" min="0" max="3" value="0" step="0.001" aria-label="Animation timeline">
+  <div id="timelineLabels"><span id="timeLabel">0.00s</span><span id="phaseLabel">PIN START</span><span id="durationLabel">3.00s</span></div>
+</div>
+<div id="toast"></div>
+<div id="error"></div>
+
+<script type="module">
+const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+const SOURCE_COMMIT = '9660216b8a90b8262c6d381452c277de40f48694';
+const REPO_CDN = `https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@${SOURCE_COMMIT}`;
+const STONE_URL = `${REPO_CDN}/src/stone-wanderer.js`;
+const LION_URL = `${REPO_CDN}/src/fusion-enemy-rig-base.js`;
+
+const errorBox = document.getElementById('error');
+const statusEl = document.getElementById('status');
+const toastEl = document.getElementById('toast');
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const smooth = v=>{const t=clamp(v,0,1);return t*t*(3-2*t)};
+const deg = v=>v*Math.PI/180;
+const gauss = (x,width)=>Math.exp(-Math.pow(x/Math.max(.001,width),2));
+
+const defaults = Object.freeze({
+  playerFallAngle:92,
+  playerFallDuration:.42,
+  playerGroundY:.08,
+  playerBackSlide:.18,
+  lionDistance:2.05,
+  lionSettleDuration:.48,
+  lionBodyDrop:.92,
+  frontCrouch:.92,
+  rearCrouch:.88,
+  lionBodyPitch:10,
+  headBasePitch:-12,
+  headShake:28,
+  biteSnap:35,
+  jawOpen:62,
+  biteCount:3,
+  firstBiteDelay:.78,
+  biteInterval:.58,
+  biteWindup:.30,
+  biteSnapWidth:.09,
+  holdAfterLast:.30,
+  releaseDuration:.52,
+});
+
+const definitions = [
+  ['PLAYER KNOCKDOWN',[
+    ['playerFallAngle','FALL ANGLE',0,110,1,'°'],
+    ['playerFallDuration','FALL DURATION',.08,1,.01,'s'],
+    ['playerGroundY','GROUND HEIGHT',-.35,.6,.01,''],
+    ['playerBackSlide','BACKWARD SLIDE',-.5,1,.01,''],
+  ]],
+  ['LION PIN POSE',[
+    ['lionDistance','DISTANCE FROM PLAYER',1,4,.01,''],
+    ['lionSettleDuration','SETTLE DURATION',.08,1.2,.01,'s'],
+    ['lionBodyDrop','WHOLE BODY DROP',0,1.8,.01,''],
+    ['frontCrouch','FRONT-LEG CROUCH',0,1,.01,''],
+    ['rearCrouch','REAR-LEG CROUCH',0,1,.01,''],
+    ['lionBodyPitch','BODY PITCH',-25,35,1,'°'],
+  ]],
+  ['BITE MOTION',[
+    ['headBasePitch','HEAD DOWN HOLD',-45,25,1,'°'],
+    ['headShake','HEAD SHAKE',0,65,1,'°'],
+    ['biteSnap','DOWNWARD SNAP',0,75,1,'°'],
+    ['jawOpen','JAW OPEN',0,100,1,'°'],
+    ['biteCount','BITE COUNT',1,6,1,''],
+    ['firstBiteDelay','FIRST BITE',.2,1.8,.01,'s'],
+    ['biteInterval','BITE INTERVAL',.2,1.2,.01,'s'],
+    ['biteWindup','BITE WINDUP',.08,.6,.01,'s'],
+    ['biteSnapWidth','SNAP SHARPNESS',.035,.22,.005,'s'],
+    ['holdAfterLast','HOLD AFTER LAST',0,1,.01,'s'],
+    ['releaseDuration','RELEASE DURATION',.1,1.4,.01,'s'],
+  ]],
+];
+
+let settings = loadSettings();
+let THREE, renderer, scene, camera, clock;
+let playerPivot, playerModel, lionRoot, lionHandle, lionRig;
+let lionParts = null;
+let playing = true;
+let currentTime = 0;
+let playbackSpeed = 1;
+let orbit = { yaw:-.55, pitch:.67, distance:13.5, targetY:1.8 };
+let pointer = null;
+let debugObjects = [];
+let initialized = false;
+
+function loadSettings(){
+  try{return {...defaults,...JSON.parse(localStorage.getItem('lionMaulAnimationLab.v1')||'{}')}}catch{return {...defaults}}
+}
+function persist(){
+  try{localStorage.setItem('lionMaulAnimationLab.v1',JSON.stringify(settings))}catch{}
+}
+function totalDuration(){
+  const lastBite = settings.firstBiteDelay + (settings.biteCount-1)*settings.biteInterval;
+  return Math.max(settings.playerFallDuration,settings.lionSettleDuration,lastBite+settings.holdAfterLast+settings.releaseDuration);
+}
+function lastBiteTime(){return settings.firstBiteDelay+(settings.biteCount-1)*settings.biteInterval}
+function releaseStart(){return lastBiteTime()+settings.holdAfterLast}
+function maulHoldAt(t){
+  const settle = smooth(t/settings.lionSettleDuration);
+  const release = smooth((t-releaseStart())/settings.releaseDuration);
+  return settle*(1-release);
+}
+function playerFallAt(t){
+  const fall = smooth(t/settings.playerFallDuration);
+  const release = smooth((t-releaseStart())/settings.releaseDuration);
+  return fall*(1-release);
+}
+function biteMotionAt(t){
+  let snap=0,shake=0,open=0,nearest=-1;
+  for(let i=0;i<settings.biteCount;i++){
+    const biteAt=settings.firstBiteDelay+i*settings.biteInterval;
+    const start=biteAt-settings.biteWindup;
+    const wind=smooth((t-start)/settings.biteWindup)*(1-smooth((t-biteAt)/.12));
+    const thisSnap=gauss(t-biteAt,settings.biteSnapWidth);
+    const local=clamp((t-start)/Math.max(.01,settings.biteWindup+.12),0,1);
+    const thisShake=Math.sin(local*Math.PI*3.2+i*.8)*wind*(1-thisSnap*.55);
+    if(thisSnap>snap){snap=thisSnap;nearest=i}
+    shake+=thisShake;
+    open=Math.max(open,wind,thisSnap*.30);
+  }
+  return {snap:clamp(snap,0,1),shake:clamp(shake,-1,1),open:clamp(open,0,1),nearest};
+}
+function phaseName(t){
+  if(t<Math.min(settings.playerFallDuration,settings.lionSettleDuration)*.7)return 'KNOCKDOWN';
+  for(let i=0;i<settings.biteCount;i++){
+    const at=settings.firstBiteDelay+i*settings.biteInterval;
+    if(Math.abs(t-at)<.11)return `BITE ${i+1} SNAP`;
+    if(t>at-settings.biteWindup&&t<at)return `BITE ${i+1} WINDUP`;
+  }
+  if(t<releaseStart())return 'PIN HOLD';
+  return 'RELEASE';
+}
+function flashToast(text){
+  toastEl.textContent=text;toastEl.style.opacity='1';
+  clearTimeout(flashToast.timer);flashToast.timer=setTimeout(()=>toastEl.style.opacity='0',1100);
+}
+function showError(error){
+  errorBox.style.display='flex';
+  errorBox.textContent=`LAB DIDN'T LOAD\n\n${error?.stack||error}\n\nThis file needs an internet connection the first time so it can load Three.js and the real game rigs.`;
+  statusEl.textContent='LOAD FAILED';
+}
+
+function buildControls(){
+  const host=document.getElementById('controls');host.replaceChildren();
+  for(const [title,rows] of definitions){
+    const group=document.createElement('div');group.className='group';
+    const heading=document.createElement('div');heading.className='groupTitle';heading.textContent=title;group.appendChild(heading);
+    for(const [key,label,min,max,step,suffix] of rows){
+      const row=document.createElement('div');row.className='row';
+      const lab=document.createElement('label');
+      const name=document.createElement('span');name.textContent=label;
+      const value=document.createElement('span');value.className='value';value.id=`value-${key}`;
+      lab.append(name,value);
+      const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=settings[key];input.id=`control-${key}`;
+      input.addEventListener('input',()=>{settings[key]=key==='biteCount'?Math.round(Number(input.value)):Number(input.value);persist();syncUI();applyPose()});
+      row.append(lab,input);group.appendChild(row);
+    }
+    host.appendChild(group);
+  }
+  syncUI();
+}
+function syncUI(){
+  for(const [,rows] of definitions)for(const [key,, , , ,suffix] of rows){
+    const input=document.getElementById(`control-${key}`);if(input)input.value=settings[key];
+    const value=document.getElementById(`value-${key}`);if(value){
+      const raw=settings[key];
+      value.textContent=(key==='biteCount'?Math.round(raw):Number(raw).toFixed(Math.abs(raw)>=10?0:2))+suffix;
+    }
+  }
+  const duration=totalDuration();
+  const timeline=document.getElementById('timeline');timeline.max=duration;timeline.value=clamp(currentTime,0,duration);
+  document.getElementById('durationLabel').textContent=`${duration.toFixed(2)}s`;
+}
+
+function firstGroupChild(object){return object?.children?.find(child=>child?.isGroup)||null}
+function chainJoints(root,count=3){const joints=[];let current=root;for(let i=0;i<count&&current;i++){joints.push(current);current=firstGroupChild(current)}return joints}
+function discoverLionParts(){
+  const body=lionHandle.model.chassis.body;
+  const socket=lionHandle.model.chassis.socket;
+  const legs=body.children.filter(child=>child?.isGroup&&child.position.y<-.45&&Math.abs(child.position.x)>.55&&Math.abs(child.position.z)>1)
+    .map(root=>({root,joints:chainJoints(root,3),rear:root.position.z<0}))
+    .filter(leg=>leg.joints.length===3);
+  const headGroup=lionHandle.model.head.group;
+  const jaw=headGroup.children.find(child=>child?.isGroup&&child.position.y<-.2&&child.position.z>.25)||null;
+  return {body,socket,legs,jaw,headGroup};
+}
+function addDebug(){
+  clearDebug();
+  const items=[playerPivot,lionParts.body,lionParts.socket,...lionParts.legs.flatMap(leg=>leg.joints)];
+  for(const object of items){const axes=new THREE.AxesHelper(object===playerPivot?1.4:.45);object.add(axes);debugObjects.push(axes)}
+}
+function clearDebug(){for(const object of debugObjects)object.parent?.remove(object);debugObjects=[]}
+
+function resetBasePose(){
+  const fakeEnemy={kind:'lion',state:'idle',stateTime:0,attack:null,visualGroundSpeed:0,vx:0,vz:0,speed:4,maxGroundSpeed:4,windup:0,active:0,recovery:0};
+  lionRig.update(lionHandle,fakeEnemy,1/60,performance.now()/1000,1);
+}
+function applyPose(){
+  if(!initialized)return;
+  resetBasePose();
+  const t=clamp(currentTime,0,totalDuration());
+  const hold=maulHoldAt(t);
+  const fall=playerFallAt(t);
+  const bite=biteMotionAt(t);
+
+  playerPivot.position.set(0,settings.playerGroundY,-settings.playerBackSlide*fall);
+  playerPivot.rotation.set(-deg(settings.playerFallAngle)*fall,0,Math.sin(t*10)*bite.snap*.025);
+
+  lionRoot.position.set(0,0,settings.lionDistance);
+  lionRoot.rotation.y=Math.PI;
+  const {body,socket,legs,jaw}=lionParts;
+  body.position.y-=settings.lionBodyDrop*hold;
+  body.rotation.x+=deg(settings.lionBodyPitch)*hold+deg(3)*bite.snap;
+  body.rotation.z+=bite.shake*.025;
+
+  for(const leg of legs){
+    const amount=hold*(leg.rear?settings.rearCrouch:settings.frontCrouch);
+    const hip=leg.rear ? .98 : .58;
+    const knee=leg.rear?-1.66:1.28;
+    const ankle=leg.rear ? .44 : -.18;
+    leg.joints[0].rotation.x+=(hip-leg.joints[0].rotation.x)*amount;
+    leg.joints[1].rotation.x+=(knee-leg.joints[1].rotation.x)*amount;
+    leg.joints[2].rotation.x+=(ankle-leg.joints[2].rotation.x)*amount;
+  }
+
+  socket.rotation.x+=deg(settings.headBasePitch)*hold+deg(settings.biteSnap)*bite.snap;
+  socket.rotation.y+=deg(settings.headShake)*bite.shake*hold;
+  socket.rotation.z+=bite.shake*.08*hold;
+  if(jaw)jaw.rotation.x+=deg(settings.jawOpen)*bite.open*hold;
+
+  const duration=totalDuration();
+  document.getElementById('timeline').value=t;
+  document.getElementById('timeLabel').textContent=`${t.toFixed(2)}s`;
+  document.getElementById('phaseLabel').textContent=phaseName(t);
+  statusEl.textContent=`${phaseName(t)} · ${t.toFixed(2)} / ${duration.toFixed(2)}s · BITE ${bite.nearest>=0?bite.nearest+1:'–'}`;
+}
+
+function setCameraPreset(name){
+  if(name==='side')orbit={yaw:-Math.PI/2,pitch:.35,distance:12,targetY:1.7};
+  else if(name==='top')orbit={yaw:-.3,pitch:1.35,distance:14,targetY:1.2};
+  else if(name==='three')orbit={yaw:-.72,pitch:.56,distance:11.5,targetY:1.6};
+  else orbit={yaw:-.38,pitch:.72,distance:14.5,targetY:1.7};
+  updateCamera();
+}
+function updateCamera(){
+  if(!camera)return;
+  const cp=Math.cos(orbit.pitch),sp=Math.sin(orbit.pitch);
+  camera.position.set(Math.sin(orbit.yaw)*cp*orbit.distance,orbit.targetY+sp*orbit.distance,Math.cos(orbit.yaw)*cp*orbit.distance);
+  camera.lookAt(0,orbit.targetY,1);
+}
+function installOrbit(){
+  renderer.domElement.addEventListener('pointerdown',event=>{pointer={id:event.pointerId,x:event.clientX,y:event.clientY};renderer.domElement.setPointerCapture(event.pointerId)});
+  renderer.domElement.addEventListener('pointermove',event=>{if(!pointer||pointer.id!==event.pointerId)return;const dx=event.clientX-pointer.x,dy=event.clientY-pointer.y;pointer.x=event.clientX;pointer.y=event.clientY;orbit.yaw-=dx*.008;orbit.pitch=clamp(orbit.pitch+dy*.006,.12,1.46);updateCamera()});
+  renderer.domElement.addEventListener('pointerup',()=>pointer=null);
+  renderer.domElement.addEventListener('wheel',event=>{orbit.distance=clamp(orbit.distance+event.deltaY*.01,6,24);updateCamera()},{passive:true});
+}
+
+async function init(){
+  try{
+    const threeModule=await import(THREE_URL);THREE=threeModule;
+    const [{installStoneWanderer},{installFusionEnemyRig}]=await Promise.all([import(STONE_URL),import(LION_URL)]);
+
+    renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;document.body.prepend(renderer.domElement);
+    scene=new THREE.Scene();scene.background=new THREE.Color(0x0d1718);scene.fog=new THREE.Fog(0x0d1718,22,38);
+    camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.1,100);
+    clock=new THREE.Clock();
+
+    scene.add(new THREE.HemisphereLight(0xcce8df,0x172323,2.1));
+    const key=new THREE.DirectionalLight(0xffddb0,3);key.position.set(-7,13,8);key.castShadow=true;key.shadow.mapSize.set(1024,1024);scene.add(key);
+    const rim=new THREE.DirectionalLight(0x70b9d2,1.2);rim.position.set(8,7,-7);scene.add(rim);
+
+    const floor=new THREE.Mesh(new THREE.CircleGeometry(10,48),new THREE.MeshStandardMaterial({color:0x213534,roughness:.95,metalness:0}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+    const grid=new THREE.GridHelper(18,18,0x476a66,0x294542);grid.position.y=.008;scene.add(grid);
+
+    const stone=installStoneWanderer({THREE});
+    playerPivot=new THREE.Group();playerModel=stone.makeStoneWanderer();playerPivot.add(playerModel);scene.add(playerPivot);
+
+    lionRig=installFusionEnemyRig(THREE);lionHandle=lionRig.create('lion');lionRoot=new THREE.Group();lionRoot.add(lionHandle.model.group);scene.add(lionRoot);lionParts=discoverLionParts();
+
+    initialized=true;setCameraPreset('game');installOrbit();applyPose();
+    statusEl.textContent='READY · REAL RIGS LOADED';
+    requestAnimationFrame(frame);
+  }catch(error){showError(error)}
+}
+
+function frame(){
+  const dt=Math.min(.05,clock.getDelta());
+  if(playing){
+    currentTime+=dt*playbackSpeed;
+    const duration=totalDuration();
+    if(currentTime>duration){
+      if(document.getElementById('loopCheck').checked)currentTime=currentTime%duration;
+      else{currentTime=duration;playing=false;document.getElementById('playBtn').textContent='PLAY'}
+    }
+  }
+  applyPose();updateCamera();renderer.render(scene,camera);requestAnimationFrame(frame);
+}
+
+buildControls();
+document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('panel').classList.toggle('hidden'));
+document.getElementById('playBtn').addEventListener('click',event=>{playing=!playing;event.currentTarget.textContent=playing?'PAUSE':'PLAY'});
+document.getElementById('restartBtn').addEventListener('click',()=>{currentTime=0;playing=true;document.getElementById('playBtn').textContent='PAUSE';applyPose()});
+document.getElementById('speedSelect').addEventListener('change',event=>playbackSpeed=Number(event.target.value));
+document.getElementById('timeline').addEventListener('input',event=>{playing=false;document.getElementById('playBtn').textContent='PLAY';currentTime=Number(event.target.value);applyPose()});
+document.getElementById('debugCheck').addEventListener('change',event=>event.target.checked?addDebug():clearDebug());
+document.querySelectorAll('.cameraBtn').forEach(button=>button.addEventListener('click',()=>setCameraPreset(button.dataset.camera)));
+document.getElementById('zoomIn').addEventListener('click',()=>{orbit.distance=clamp(orbit.distance-1,6,24);updateCamera()});
+document.getElementById('zoomOut').addEventListener('click',()=>{orbit.distance=clamp(orbit.distance+1,6,24);updateCamera()});
+document.getElementById('resetBtn').addEventListener('click',()=>{settings={...defaults};persist();currentTime=0;syncUI();applyPose();flashToast('DEFAULTS RESTORED')});
+document.getElementById('freezeBiteBtn').addEventListener('click',()=>{currentTime=settings.firstBiteDelay;playing=false;document.getElementById('playBtn').textContent='PLAY';applyPose()});
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+  const text=JSON.stringify({sourceCommit:SOURCE_COMMIT,...settings},null,2);
+  try{await navigator.clipboard.writeText(text);flashToast('SETTINGS COPIED')}
+  catch{const area=document.createElement('textarea');area.value=text;document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();flashToast('SETTINGS COPIED')}
+});
+addEventListener('resize',()=>{if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+init();
+</script>
+</body>
+</html>

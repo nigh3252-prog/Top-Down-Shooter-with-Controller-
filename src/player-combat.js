@@ -82,5 +82,16 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});
   Object.defineProperty(PC,'bloodSlashStatus',{value:{state:combatEffectRuntime.state,entries:combatEffectRuntime.state.bleeds,update(){},reset(){}},enumerable:true});
+  return exposeLionActorReferences(PC,api);
+}
+
+function exposeLionActorReferences(PC,api){
+  const arenaActorVisual=api.actorVisual||null;
+  const arenaActorRoot=arenaActorVisual?.parent||null;
+  // Stable direct references for the maul presentation. They remain valid while
+  // the visual is temporarily reparented under the prone-player pivot.
+  Object.defineProperty(PC,'arenaActorVisual',{value:arenaActorVisual,enumerable:true});
+  Object.defineProperty(PC,'arenaActorRoot',{value:arenaActorRoot,enumerable:true});
+  Object.defineProperty(PC,'arenaActiveModel',{get:()=>api.activeModel||null,enumerable:true});
   return PC;
 }

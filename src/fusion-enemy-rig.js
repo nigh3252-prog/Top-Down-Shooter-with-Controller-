@@ -231,11 +231,105 @@ function phaseProxy(enemy, phaseCuts){
   };
 }
 
+function lionMaulProxy(enemy){
+  const progress = clamp(Number(enemy._lionMaulProgress) || 0, 0, 1);
+  const windup = .44;
+  const active = .18;
+  const recovery = .38;
+  let state;
+  let stateTime;
+  if(progress < windup){
+    state = 'windup';
+    stateTime = progress;
+  }else if(progress < windup + active){
+    state = 'active';
+    stateTime = progress - windup;
+  }else{
+    state = 'recovery';
+    stateTime = progress - windup - active;
+  }
+  return {
+    ...enemy,
+    state,
+    stateTime,
+    windup,
+    active,
+    recovery,
+    attack:{ ...(enemy.attack || {}), name:'Maul Bite' },
+    visualGroundSpeed:0,
+    vx:0,
+    vz:0,
+  };
+}
+
+function ensureLionMaulState(handle){
+  if(handle._lionMaulState) return handle._lionMaulState;
+  const body = handle?.model?.chassis?.body || null;
+  const socket = handle?.model?.chassis?.socket || null;
+  const legs = body?.children
+    ?.filter(child => child?.isGroup
+      && child.position.y < -.45
+      && Math.abs(child.position.x) > .55
+      && Math.abs(child.position.z) > 1)
+    .map(root => ({
+      root,
+      joints:chainJoints(root, 3),
+      rear:root.position.z < 0,
+    }))
+    .filter(leg => leg.joints.length === 3) || [];
+  handle._lionMaulState = { body, socket, legs };
+  return handle._lionMaulState;
+}
+
+function applyLionMaulPose(handle, enemy){
+  const state = ensureLionMaulState(handle);
+  const progress = clamp(Number(enemy._lionMaulProgress) || 0, 0, 1);
+  const brace = smooth01(clamp(progress / .26, 0, 1))
+    * (1 - smooth01(clamp((progress - .9) / .1, 0, 1)));
+  const snap = Math.exp(-Math.pow((progress - .75) / .095, 2));
+  const biteIndex = Number(enemy._lionMaulBiteIndex) || 0;
+  const shake = Math.sin(progress * Math.PI * 2.2 + biteIndex * 1.7)
+    * brace * (1 - snap * .5);
+
+  // Lower and fold the whole chassis instead of translating the head socket. Because
+  // the head remains a child of body, it cannot drift away from the shoulders.
+  if(state.body){
+    state.body.position.y -= .68 * brace;
+    state.body.rotation.x += .12 * brace + .10 * snap;
+    state.body.rotation.z += Math.sin(progress * Math.PI * 4 + biteIndex) * .035 * brace;
+  }
+
+  for(const leg of state.legs){
+    const hip = leg.rear ? .95 : .55;
+    const knee = leg.rear ? -1.62 : 1.24;
+    const ankle = leg.rear ? .42 : -.16;
+    leg.joints[0].rotation.x = lerp(leg.joints[0].rotation.x, hip, brace);
+    leg.joints[1].rotation.x = lerp(leg.joints[1].rotation.x, knee, brace);
+    leg.joints[2].rotation.x = lerp(leg.joints[2].rotation.x, ankle, brace);
+  }
+
+  if(state.socket){
+    state.socket.rotation.x += -.18 * brace + .34 * snap;
+    state.socket.rotation.y += shake * .42;
+    state.socket.rotation.z += Math.sin(progress * Math.PI * 4 + biteIndex * .8) * .10 * brace;
+  }
+}
+
 export function installFusionEnemyRig(THREE){
   const rig = installBaseFusionEnemyRig(THREE);
   const baseUpdate = rig.update.bind(rig);
 
-  rig.update = function updateWithAntelopeAnimations(handle, enemy, dt, time, heightScale=1){
+  rig.update = function updateWithBranchAnimations(handle, enemy, dt, time, heightScale=1){
+    if(enemy?.kind === 'lion' && enemy._lionMaulActive){
+      const animations = handle?.model?.bodyDef?.anims;
+      const previousAnimation = animations?.[0];
+      if(animations) animations[0] = 'LION_ROAR';
+      baseUpdate(handle, lionMaulProxy(enemy), dt, time, heightScale);
+      applyLionMaulPose(handle, enemy);
+      if(animations) animations[0] = previousAnimation;
+      return;
+    }
+
     if(enemy?.kind !== 'ant') return baseUpdate(handle, enemy, dt, time, heightScale);
 
     const boundState = ensureAntelopeBoundState(handle);
