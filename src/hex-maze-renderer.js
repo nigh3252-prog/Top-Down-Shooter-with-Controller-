@@ -9,13 +9,16 @@ import { replaceHalfInternalWallsWithGaps } from './boundary-room-topology.js';
 import { applyBoundaryRoomWallGaps } from './boundary-room-wall-gaps.js';
 import { applyBoundaryRoomFloor } from './boundary-room-floor.js';
 import { applyBoundaryRoomProps } from './boundary-room-props.js';
+import { installWorldPerformancePhase1 } from './performance-phase1.js';
 
-const BOUNDARY_VISUAL_BUILD = 'boundary-districts-post-main-sync-20260720';
+const BOUNDARY_VISUAL_BUILD = 'boundary-districts-performance-phase1-20260721';
+const nowMs = () => globalThis.performance?.now?.() ?? Date.now();
 
 installAkaiInterfaceStyle();
 installAkaiCompactInterface();
 
 export function createMazeWorld(options = {}){
+  const buildStarted = nowMs();
   const configuredOptions = {
     ...options,
     hexSize:configuredHexSize(options.hexSize ?? 2.6),
@@ -33,11 +36,12 @@ export function createMazeWorld(options = {}){
       world.forest.trees.length = 0;
       world.forest.placements.length = 0;
     }
-    return world;
+    return installWorldPerformancePhase1(world, { buildMs:nowMs() - buildStarted });
   }
   applyBoundaryRoomWallGaps({ ...configuredOptions, world });
   applyAkaiMazeStyle({ ...configuredOptions, world });
   applyBoundaryDistrictExtensions({ ...configuredOptions, world });
   applyBoundaryRoomFloor({ ...configuredOptions, world });
-  return applyBoundaryRoomProps({ ...configuredOptions, world });
+  applyBoundaryRoomProps({ ...configuredOptions, world });
+  return installWorldPerformancePhase1(world, { buildMs:nowMs() - buildStarted });
 }
