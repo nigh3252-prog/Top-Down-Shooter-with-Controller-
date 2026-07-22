@@ -4,7 +4,7 @@
   "scripts": {
     "test": "npm run test:dash && npm run test:combat && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick && npm run test:boundary-rooms",
     "test:dash": "node tests/basic-dash.test.mjs && node tests/basic-dash-runtime.test.mjs && node tests/dash-magic-jet.test.mjs",
-    "test:combat": "node tests/goblin-guard.test.mjs && node tests/combat-pass.test.mjs",
+    "test:combat": "node tests/goblin-guard.test.mjs && node tests/goblin-attack-range-closing.test.mjs && node tests/combat-pass.test.mjs",
     "test:flare": "node tests/flare-enemies.test.mjs",
     "test:hades": "node tests/hades-enemies.test.mjs",
     "test:encounters": "node tests/combined-encounter.test.mjs",
