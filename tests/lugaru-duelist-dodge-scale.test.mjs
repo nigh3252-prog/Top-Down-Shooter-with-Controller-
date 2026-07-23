@@ -24,6 +24,18 @@ assert.equal(enemy.root.position.x,6);
 assert.equal(enemy.root.position.z,-3);
 assert.equal(enemy.duelistDodgeScale,1.5);
 
+const finalFrame={
+  hp:50,_lugaruDuelist:true,duelistIntent:'evade',x:0,z:0,radius:1,collisionScale:1,
+  root:{position:{x:0,z:0}},
+};
+const finalFrameSystem={
+  enemies:[finalFrame],heightScale:1,
+  update(){finalFrame.x=2;finalFrame.duelistIntent='assess';},
+};
+installLugaruDuelistDodgeScale(finalFrameSystem,{arenaRadius:50});
+finalFrameSystem.update(.016,{});
+assert.equal(finalFrame.x,3,'the frame that finishes the evade should still receive the final 50% extension');
+
 const idle={hp:50,_lugaruDuelist:true,duelistIntent:'assess',x:0,z:0,root:{position:{x:0,z:0}}};
 const idleSystem={enemies:[idle],update(){idle.x=2;idle.duelistIntent='assess';}};
 installLugaruDuelistDodgeScale(idleSystem,{arenaRadius:50});
