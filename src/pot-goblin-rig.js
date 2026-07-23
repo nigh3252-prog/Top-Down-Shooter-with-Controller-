@@ -230,7 +230,7 @@ export function installPotGoblinRig(THREE){
       const p = deathPieces[i]; p.age += dt; p.vel.y -= 5.2 * dt; p.mesh.position.addScaledVector(p.vel, dt);
       p.mesh.rotation.x += p.ang.x * dt; p.mesh.rotation.y += p.ang.y * dt; p.mesh.rotation.z += p.ang.z * dt;
       if(p.mesh.position.y < .08){ p.mesh.position.y = .08; p.vel.y *= -.28; p.vel.x *= .75; p.vel.z *= .75; p.ang.multiplyScalar(.75); }
-      if(p.age > 5){ p.mesh.parent && p.mesh.parent.remove(p.mesh); deathPieces.splice(i, 1); }
+      if(p.age > 5){ p.mesh.parent && p.mesh.parent.remove(p.mesh); p.mesh.geometry?.dispose?.(); deathPieces.splice(i, 1); }
     }
   }
 

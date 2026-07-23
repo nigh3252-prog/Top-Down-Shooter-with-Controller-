@@ -62,6 +62,30 @@ export function createArenaEnemySystem({
   for(const [kind, a] of Object.entries(ARCHETYPES)) bodyMats[kind] = new THREE.MeshStandardMaterial({ color:a.color, roughness:.78, flatShading:true });
   const barMat = new THREE.MeshStandardMaterial({ color:0x8dd2ff, roughness:.5, flatShading:true });
 
+  // Every goblin builds its own geometries + several per-instance materials
+  // (pot-goblin-rig.js) that were never freed on death/clear — an unbounded GPU
+  // leak across waves. These shared materials are built once and reused by all
+  // enemies, so they must be excluded from per-enemy disposal.
+  const sharedMats = new Set([barMat, ...Object.values(bodyMats), ...Object.values(mats)]);
+  for(const m of Object.values(materials || {})) if(m && m.isMaterial) sharedMats.add(m);
+  // Geometries are always unique per enemy (verified: markers, rig, and weapon all
+  // build fresh geometry), so disposing every geometry under a root is safe. On a
+  // kill the shatter pieces clone their geometry, so the root's geometry is still
+  // safe to free immediately.
+  function disposeEnemyGeometry(root){
+    root.traverse(obj => { if(obj.geometry) obj.geometry.dispose(); });
+  }
+  // Per-instance materials are only safe to dispose when no shatter piece can still
+  // reference them (i.e. clearing live, un-shattered enemies), never mid-kill.
+  function disposeEnemyMaterials(root){
+    root.traverse(obj => {
+      const mat = obj.material; if(!mat) return;
+      for(const m of (Array.isArray(mat) ? mat : [mat])){
+        if(m && m.isMaterial && !sharedMats.has(m)){ m.map?.dispose?.(); m.dispose(); }
+      }
+    });
+  }
+
   const group = new THREE.Group(); group.name = 'Arena Enemies'; worldRoot.add(group);
   const director = createCombatDirector({ ...DEFAULT_DIRECTOR_SETTINGS, pressureBudget:2.25, battleCircleRadius:1.6*S });
   const enemies = [];
@@ -663,6 +687,10 @@ export function createArenaEnemySystem({
   function removeEnemy(e){
     const idx = enemies.indexOf(e); if(idx >= 0) enemies.splice(idx, 1);
     if(e.root.parent) e.root.parent.remove(e.root);
+    // Free this enemy's geometry now. Shatter pieces (if any) clone their own
+    // geometry, so the root's buffers are no longer referenced. Materials are left
+    // for the shatter pieces and reclaimed at clearEnemies.
+    if(!e.fusion) disposeEnemyGeometry(e.root);
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
     if(e.hp <= 0) return false;
@@ -699,11 +727,12 @@ export function createArenaEnemySystem({
   }
 
   /* ---------- lifecycle ---------- */
-  function clearDeathPieces(){ deathPieces.forEach(p => p.mesh?.parent && p.mesh.parent.remove(p.mesh)); deathPieces.length = 0; }
+  function clearDeathPieces(){ deathPieces.forEach(p => { if(p.mesh){ p.mesh.parent?.remove(p.mesh); p.mesh.geometry?.dispose?.(); } }); deathPieces.length = 0; }
   function clearEnemies(){
     director.reset();
     enemies.splice(0).forEach(e => {
       if(e.fusion) fusionRig.dispose(e.fusionVisual);
+      else { disposeEnemyGeometry(e.root); disposeEnemyMaterials(e.root); }
       if(e.root.parent) e.root.parent.remove(e.root);
     });
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
