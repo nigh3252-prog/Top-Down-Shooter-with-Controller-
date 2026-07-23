@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   GOBLIN_ATTACK_TRIGGER_PADDING,
   GOBLIN_PERMITTED_MOVE_DEADBAND,
@@ -63,5 +64,31 @@ const lugaruSystem={
 installGoblinAttackRangeClosing(lugaruSystem,{includeDuelists:true});
 lugaruSystem.update(.016,{x:0,z:0});
 assert.equal(lugaruObserved,readyHold,'the explicit Lugaru enemy should close using the same next-attack handshake as PR #90 goblins');
+
+// Reproduce the real wrapper-order hazard. The Lugaru controller establishes its
+// preferred spacing before calling the inner base update. The range-closing wrapper
+// must sit inside it so base movement sees the narrowed distance rather than the
+// preferred spacing written by configureEnemy().
+const orderedLugaru={...lugaru,id:5,holdDist:4.5,stop:4.5};
+let orderedObserved=null;
+const orderedSystem={
+  enemies:[orderedLugaru],director:{hasApproachPermit:()=>true},
+  update(){orderedObserved=orderedLugaru.holdDist;},
+};
+installGoblinAttackRangeClosing(orderedSystem,{includeDuelists:true});
+const rangeClosingUpdate=orderedSystem.update.bind(orderedSystem);
+orderedSystem.update=function simulatedLugaruOuterUpdate(dt,player){
+  orderedLugaru.holdDist=5.35;
+  orderedLugaru.stop=5.35;
+  return rangeClosingUpdate(dt,player);
+};
+orderedSystem.update(.016,{x:0,z:0});
+assert.equal(orderedObserved,readyHold,'range closing must run after the Lugaru controller writes its preferred spacing');
+
+const wrapper=fs.readFileSync(new URL('../src/arena-enemies-guard.js',import.meta.url),'utf8');
+const closingIndex=wrapper.indexOf('const closing=installGoblinAttackRangeClosing');
+const duelistIndex=wrapper.indexOf('const duelist=installLugaruDuelist(closing');
+assert.ok(closingIndex>=0&&duelistIndex>closingIndex,
+  'the range-closing wrapper must be installed inside the Lugaru controller');
 
 console.log('Goblin and Lugaru attack-range closing tests passed.');
