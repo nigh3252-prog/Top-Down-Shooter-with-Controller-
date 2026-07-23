@@ -312,7 +312,7 @@ export function createMazeForest({
   const collisionSegments = wallEdges.flatMap(edge => expandWallCollisionSegments(edge, halfWidth, 5));
 
   const updateCutaways = (dt, player, camera = null) => {
-    if(!player) return;
+    if(!player || trees.length === 0) return;  // arena layout suppresses all trees; skip the per-frame viewCamera alloc + loop
     const viewCamera = camera || { x:player.x, z:player.z + Math.max(14, hexSize * 1.45) };
     for(const tree of trees){
       const occluding = treeShouldCutaway(tree, viewCamera, player);
