@@ -5,6 +5,7 @@
 
 import {
   ARENA_ENEMY_ARCHETYPES,
+  LUGARU_DUELIST_ID,
   createArenaEnemySystem as createOriginalArenaEnemySystem,
 } from './arena-enemies-guard.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
@@ -18,7 +19,7 @@ import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES));
+const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES).filter(id=>id!==LUGARU_DUELIST_ID));
 
 export function createArenaEnemySystem(options={}){
   const externalEncounterCleared=options.onEncounterCleared;
@@ -209,14 +210,20 @@ export function createArenaEnemySystem(options={}){
       system.group.visible=true;
       system.setEncounterPlanningEnabled?.(false);
 
+      const lugaruDuelist=groupPlan.system==='original'&&groupPlan.spawnKind===LUGARU_DUELIST_ID;
       const originalGoblin=groupPlan.system==='original'&&ORIGINAL_GOBLIN_IDS.has(groupPlan.spawnKind);
-      system.setSpawnKind(originalGoblin?'goblins':groupPlan.spawnKind);
-      const spawnCount=originalGoblin
+      const isolatedOriginal=originalGoblin||lugaruDuelist;
+      system.setSpawnKind(isolatedOriginal?'goblins':groupPlan.spawnKind);
+      const spawnCount=isolatedOriginal
         ? clamp(groupPlan.count*ORIGINAL_GOBLIN_IDS.size,1,20)
         : groupPlan.count;
       system.setWaveSize(spawnCount);
       system.startRoomEncounter(roomId);
       if(originalGoblin)retainOriginalGoblinKind(system,groupPlan.spawnKind,groupPlan.count);
+      if(lugaruDuelist){
+        retainOriginalGoblinKind(system,'grunt',groupPlan.count);
+        system.configureLugaruDuelists?.(system.enemies);
+      }
       hpSnapshots.set(system,system.playerHp);
     }
 

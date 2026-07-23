@@ -1,7 +1,7 @@
-// Keeps a director-approved goblin moving until the *next* authored attack is
+// Keeps a director-approved melee enemy moving until the *next* authored attack is
 // actually legal. The base enemy code parks real-combat goblins at a hold distance
 // derived from the longest move in their set, while chooseAttack() checks only the
-// current move. A shorter next move can therefore leave the goblin orbiting forever
+// current move. A shorter next move can therefore leave the enemy orbiting forever
 // just outside its own attack threshold.
 
 export const GOBLIN_ARENA_SCALE = 4.3;
@@ -34,11 +34,16 @@ export function attackReadyHoldDistance(
   return Math.max(.05, range + triggerPadding - movementDeadband - Math.max(0, epsilon));
 }
 
-function isEligibleGoblin(system, enemy){
-  if(!enemy || enemy.hp <= 0 || enemy.role !== 'goblin' || enemy.fusion || enemy.thrower) return false;
+function isEligibleMelee(system, enemy, options={}){
+  if(!enemy || enemy.hp <= 0 || enemy.fusion || enemy.thrower) return false;
+  const originalGoblin = enemy.role === 'goblin';
+  const includedDuelist = !!options.includeDuelists && !!enemy._lugaruDuelist;
+  if(!originalGoblin && !includedDuelist) return false;
   if(enemy.state !== 'idle' || (enemy.stunned || 0) > 0 || system.isRigidBodyActive?.(enemy)) return false;
   const permit = system.director?.hasApproachPermit?.(enemy);
-  return permit === undefined ? !!(enemy.approachPermit || enemy.directEngaged) : !!permit;
+  return permit === undefined
+    ? !!(enemy.approachPermit || enemy.directEngaged || includedDuelist)
+    : !!permit;
 }
 
 export function installGoblinAttackRangeClosing(system, options = {}){
@@ -48,7 +53,7 @@ export function installGoblinAttackRangeClosing(system, options = {}){
   system.update = function updateWithAttackRangeHandshake(dt, player){
     const restore = [];
     for(const enemy of system.enemies || []){
-      if(!isEligibleGoblin(system, enemy)) continue;
+      if(!isEligibleMelee(system, enemy, options)) continue;
       const attack = nextAuthoredMeleeAttack(enemy);
       if(!attack) continue;
 

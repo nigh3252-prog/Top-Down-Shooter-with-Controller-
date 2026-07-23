@@ -44,14 +44,24 @@ installGoblinAttackRangeClosing(deniedSystem);
 deniedSystem.update(.016,{x:0,z:0});
 assert.equal(deniedObserved,4.5,'goblins without director permission should retain their waiting distance');
 
-const duelist={...enemy,id:3,role:'duelist',holdDist:4.5,stop:4.5};
-let duelistObserved=null;
-const duelistSystem={
-  enemies:[duelist],director:{hasApproachPermit:()=>true},
-  update(){duelistObserved=duelist.holdDist;},
+const unmarkedDuelist={...enemy,id:3,role:'duelist',approachPermit:false,holdDist:4.5,stop:4.5};
+let unmarkedObserved=null;
+const unmarkedSystem={
+  enemies:[unmarkedDuelist],director:{hasApproachPermit:()=>true},
+  update(){unmarkedObserved=unmarkedDuelist.holdDist;},
 };
-installGoblinAttackRangeClosing(duelistSystem);
-duelistSystem.update(.016,{x:0,z:0});
-assert.equal(duelistObserved,4.5,'special duelist spacing should remain owned by its controller');
+installGoblinAttackRangeClosing(unmarkedSystem,{includeDuelists:true});
+unmarkedSystem.update(.016,{x:0,z:0});
+assert.equal(unmarkedObserved,4.5,'unmarked special enemies should not inherit the Lugaru spacing rule');
 
-console.log('Goblin attack-range closing tests passed.');
+const lugaru={...enemy,id:4,role:'duelist',_lugaruDuelist:true,approachPermit:false,holdDist:4.5,stop:4.5};
+let lugaruObserved=null;
+const lugaruSystem={
+  enemies:[lugaru],director:{hasApproachPermit:()=>true},
+  update(){lugaruObserved=lugaru.holdDist;},
+};
+installGoblinAttackRangeClosing(lugaruSystem,{includeDuelists:true});
+lugaruSystem.update(.016,{x:0,z:0});
+assert.equal(lugaruObserved,readyHold,'the explicit Lugaru enemy should close using the same next-attack handshake as PR #90 goblins');
+
+console.log('Goblin and Lugaru attack-range closing tests passed.');
