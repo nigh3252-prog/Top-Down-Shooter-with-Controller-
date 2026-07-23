@@ -312,7 +312,10 @@ const CAM_HEIGHT = 20, CAM_BACK = 17.6;
 
 /* ---------- scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+// Cap device pixel ratio at 1.5: on high-DPI phones (DPR 2-3) this is the single
+// biggest GPU win (render resolution scales with the square of this) and is barely
+// perceptible with antialiasing on.
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.setSize(innerWidth,innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -331,9 +334,14 @@ const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi)
 const key = new THREE.DirectionalLight(0xffe0b8, 2.6);
 key.position.set(-14, 26, 12);
 key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -30; key.shadow.camera.right = 30;
-key.shadow.camera.top = 30; key.shadow.camera.bottom = -30;
+// The player-tracking shadow map is re-rendered every frame, so its size is a
+// major GPU cost. Halve it to 1024 and tighten the ortho frustum from 60 to 44
+// units (it follows the player, so the smaller box still covers the visible play
+// area) — the tighter frustum keeps texel density high so soft shadows stay close
+// to the original look at a quarter of the shadow-map memory/fill.
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.left = -22; key.shadow.camera.right = 22;
+key.shadow.camera.top = 22; key.shadow.camera.bottom = -22;
 key.shadow.bias = -0.00025;
 const keyTarget = new THREE.Object3D(); scene.add(keyTarget);
 key.target = keyTarget; scene.add(key);
