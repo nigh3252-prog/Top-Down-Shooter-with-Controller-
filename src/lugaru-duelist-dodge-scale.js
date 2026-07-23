@@ -16,13 +16,16 @@ export function installLugaruDuelistDodgeScale(system,{navigation=null,arenaRadi
   system.update=function updateWithLongerLugaruDodge(dt,player){
     const before=new Map();
     for(const enemy of system.enemies||[]){
-      if(enemy?._lugaruDuelist&&enemy.hp>0)before.set(enemy,{x:enemy.x,z:enemy.z});
+      if(enemy?._lugaruDuelist&&enemy.hp>0){
+        before.set(enemy,{x:enemy.x,z:enemy.z,wasEvading:enemy.duelistIntent==='evade'});
+      }
     }
 
     const result=baseUpdate(dt,player);
 
     for(const [enemy,start] of before){
-      if(!system.enemies.includes(enemy)||enemy.hp<=0||enemy.duelistIntent!=='evade')continue;
+      const dodgeFrame=start.wasEvading||enemy.duelistIntent==='evade';
+      if(!system.enemies.includes(enemy)||enemy.hp<=0||!dodgeFrame)continue;
       const extension=scaledDodgeExtension(start,{x:enemy.x,z:enemy.z},scale);
       if(Math.hypot(extension.x,extension.z)<=1e-5)continue;
       let moved={x:enemy.x+extension.x,z:enemy.z+extension.z};
