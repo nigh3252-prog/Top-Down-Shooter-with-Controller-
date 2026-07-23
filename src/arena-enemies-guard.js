@@ -20,8 +20,11 @@ export const ARENA_ENEMY_ARCHETYPES = Object.freeze({
 
 export function createArenaEnemySystem(options={}){
   const guarded=installGoblinDuelGuard(createBaseArenaEnemySystem(options),options);
-  const duelist=installLugaruDuelist(guarded,options);
+  // Install the range handshake *inside* the Lugaru controller. The Lugaru update
+  // first establishes its preferred spacing, then this inner wrapper narrows that
+  // distance for the next authored attack immediately before base movement runs.
+  const closing=installGoblinAttackRangeClosing(guarded,{includeDuelists:true});
+  const duelist=installLugaruDuelist(closing,options);
   const released=installLugaruDuelistCounterRelease(duelist);
-  const closing=installGoblinAttackRangeClosing(released,{includeDuelists:true});
-  return installLugaruDuelistDodgeScale(closing,options);
+  return installLugaruDuelistDodgeScale(released,options);
 }
