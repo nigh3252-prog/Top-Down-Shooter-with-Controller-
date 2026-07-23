@@ -989,6 +989,11 @@ function detectDoorHits(zones){
     announce('PASSAGE OPEN', 1.0);
   }
 }
+// Scratch reused by detectEnemyHits so a live swing doesn't allocate an enemies
+// copy, sample Vector3s, and zone clones every frame while it is active.
+const _hitEnemies = [], SAMPLE_KS = [.24, .52, .80];
+const _hitSamples = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const _zoneA = new THREE.Vector3(), _zoneB = new THREE.Vector3();
 function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
   if(!combatState.attack || !PC.weaponRoot || !enemySystem) return;
   if(!combatState.hitIds) combatState.hitIds = new Set();
@@ -1000,32 +1005,34 @@ function detectEnemyHits(dt, tipScene, baseScene, tipSpeed){
     attackSlot: arena.chain.activeSlot,
     maxCharge: arena.swing.maxChargeCleave,
   });
-  const enemies = [...enemySystem.enemies];
+  _hitEnemies.length = 0;
+  for(let i=0;i<enemySystem.enemies.length;i++) _hitEnemies.push(enemySystem.enemies[i]);
   if(!canCleave){
-    enemies.sort((a,b)=>Math.hypot(a.x-actorPos.x,a.z-actorPos.y)-Math.hypot(b.x-actorPos.x,b.z-actorPos.y));
+    _hitEnemies.sort((a,b)=>Math.hypot(a.x-actorPos.x,a.z-actorPos.y)-Math.hypot(b.x-actorPos.x,b.z-actorPos.y));
   }
-  for(const e of enemies){
+  for(const e of _hitEnemies){
     if(!canCleave && combatState.singleTargetEnemy && combatState.singleTargetEnemy !== e) continue;
     if(combatState.hitIds.has(e)) continue;
     const enemyScale = enemySystem.heightScale || 1;
     const scaledRadius = e.radius * enemyScale * (e.collisionScale || 1);
     const h = (e.height || e.radius * 2) * enemyScale * (e.currentTargetScale || e.targetScale || 1);
     const targetOffsetY = e.targetYOffset || 0;
-    const targetOrigins = [{ x:e.x, z:e.z }];
+    // Fill reusable sample points: 3 heights at the body origin, and (if the enemy
+    // has a forward attack origin) 3 more at that origin. No per-frame allocation.
+    let sampleCount = 0;
+    for(const k of SAMPLE_KS) _hitSamples[sampleCount++].set(e.x, targetOffsetY + h * k, e.z);
     if(e.attackOriginForward > 0){
-      targetOrigins.push({
-        x:e.x + e.facing.x * e.attackOriginForward * enemyScale,
-        z:e.z + e.facing.z * e.attackOriginForward * enemyScale
-      });
+      const ox = e.x + e.facing.x * e.attackOriginForward * enemyScale;
+      const oz = e.z + e.facing.z * e.attackOriginForward * enemyScale;
+      for(const k of SAMPLE_KS) _hitSamples[sampleCount++].set(ox, targetOffsetY + h * k, oz);
     }
-    const hitSamples = targetOrigins.flatMap(origin => [.24, .52, .80].map(k => new THREE.Vector3(origin.x, targetOffsetY + h * k, origin.z)));
     let best = null;
     for(const zone of zones){
-      const a = PC.weaponRoot.localToWorld(zone.from.clone());
-      const b = PC.weaponRoot.localToWorld(zone.to.clone());
+      const a = PC.weaponRoot.localToWorld(_zoneA.copy(zone.from));
+      const b = PC.weaponRoot.localToWorld(_zoneB.copy(zone.to));
       const threshold = scaledRadius + zone.radius + .38;
-      let bestDist = Infinity, bestCenter = hitSamples[1];
-      for(const center of hitSamples){ const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
+      let bestDist = Infinity, bestCenter = _hitSamples[1];
+      for(let s=0;s<sampleCount;s++){ const center = _hitSamples[s]; const d = PC.pointSegmentDistance(center, a, b); if(d < bestDist){ bestDist = d; bestCenter = center; } }
       if(bestDist <= threshold){
         if(mazeNavigation.raycastWalls({ x:actorPos.x, z:actorPos.y }, { x:bestCenter.x, z:bestCenter.z })) continue;
         const quality = 1 - clamp(bestDist / threshold, 0, 1);
@@ -1068,34 +1075,55 @@ function onHitFeel(point, tier){
   shakeVel.y -= .7 * tier;
 }
 const HIT_TYPE_COLOR = { slice:0x9bd7f0, pierce:0xf4e0a2, blunt:0xffb066, hybrid:0xd7b6ff, weak:0x9aabc4 };
+// Combat impacts used to allocate a fresh ring geometry + material AND a fresh
+// 256x128 canvas + CanvasTexture + SpriteMaterial + Sprite on EVERY hit. Now the
+// ring geometry is shared, ring/label meshes are pooled and reused, and the
+// damage-number textures are cached by (text,color) so the canvas draw + GPU
+// upload happen once per distinct number/color instead of once per hit.
+const RING_GEO = new THREE.TorusGeometry(.45,.035,6,24);
+const ringPool = [], labelPool = [], damageTexCache = new Map();
+function damageTexture(text, color){
+  const key = text + '|' + color;
+  let tex = damageTexCache.get(key);
+  if(tex) return tex;
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=128; const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,256,128); ctx.font='900 44px system-ui,Segoe UI,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.fillStyle='#'+color.toString(16).padStart(6,'0');
+  ctx.strokeText(text,128,64); ctx.fillText(text,128,64);
+  tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
+  damageTexCache.set(key, tex);
+  return tex;
+}
 function spawnHitEffect(point, type, damage){
   const color = HIT_TYPE_COLOR[type] || 0xffffff;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.45,.035,6,24),
-    new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false }));
-  ring.position.copy(point); ring.lookAt(camera.position); scene.add(ring);
+  let ring = ringPool.pop();
+  if(!ring) ring = new THREE.Mesh(RING_GEO, new THREE.MeshBasicMaterial({ transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+  ring.material.color.setHex(color); ring.material.opacity = 1; ring.scale.setScalar(1);
+  ring.position.copy(point); ring.lookAt(camera.position); ring.visible = true; scene.add(ring);
   effects.push({ mesh:ring, age:0, life:.28, kind:'ring' });
-  const sp = makeDamageSprite(String(damage), color);
-  sp.scale.multiplyScalar(.75 + clamp(damage/28, .4, 2) * .45);   // big hits read bigger
-  sp.position.copy(point).add(new THREE.Vector3(0,.7,0)); scene.add(sp);
+  let sp = labelPool.pop();
+  if(!sp) sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthWrite:false }));
+  sp.material.map = damageTexture(String(damage), color); sp.material.opacity = 1; sp.material.needsUpdate = true;
+  sp.scale.set(3.4,1.7,1).multiplyScalar(.75 + clamp(damage/28, .4, 2) * .45);   // big hits read bigger
+  sp.position.copy(point); sp.position.y += .7; sp.visible = true; scene.add(sp);
   effects.push({ mesh:sp, age:0, life:.85, vel:new THREE.Vector3((Math.random()-.5)*.6,1.6,(Math.random()-.5)*.6), kind:'label' });
 }
-function makeDamageSprite(text,color){
-  const cv=document.createElement('canvas'); cv.width=256; cv.height=128; const ctx=cv.getContext('2d'); ctx.clearRect(0,0,256,128); ctx.font='900 44px system-ui,Segoe UI,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.fillStyle='#'+color.toString(16).padStart(6,'0'); ctx.strokeText(text,128,64); ctx.fillText(text,128,64); const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace; const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}); const sp=new THREE.Sprite(mat); sp.scale.set(3.4,1.7,1); return sp;
+function recycleEffect(fx){
+  scene.remove(fx.mesh); fx.mesh.visible = false;
+  if(fx.kind === 'ring') ringPool.push(fx.mesh);
+  else { fx.mesh.material.map = null; labelPool.push(fx.mesh); }   // cached texture stays alive for reuse
 }
 function updateEffects(rawDt){
   for(let i=effects.length-1;i>=0;i--){
     const fx = effects[i]; fx.age += rawDt;
-    if(fx.age >= fx.life){ scene.remove(fx.mesh); fx.mesh.material?.map?.dispose?.(); fx.mesh.material?.dispose?.(); fx.mesh.geometry?.dispose?.(); effects.splice(i,1); continue; }
+    if(fx.age >= fx.life){ recycleEffect(fx); effects.splice(i,1); continue; }
     const k = fx.age / fx.life;
     if(fx.kind === 'ring'){ fx.mesh.scale.setScalar(1 + k*2.2); fx.mesh.material.opacity = 1 - k; }
     else { fx.mesh.position.addScaledVector(fx.vel, rawDt); fx.mesh.material.opacity = 1 - k*k; }
   }
 }
 function clearRoomEffects(){
-  for(const fx of effects){
-    scene.remove(fx.mesh);
-    fx.mesh.material?.map?.dispose?.(); fx.mesh.material?.dispose?.(); fx.mesh.geometry?.dispose?.();
-  }
+  for(const fx of effects) recycleEffect(fx);
   effects.length = 0;
 }
 
