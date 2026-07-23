@@ -1482,7 +1482,7 @@ function renderCards(){
     drawQueue.classList.add('shift-down');
     cardAnim.queueShift = false;
   }
-  shuffleBtn.textContent = deck.shuffling ? '…' : '↻';
+  setTxt(shuffleBtn, deck.shuffling ? '…' : '↻');
   cardAnim.played = -1;
 }
 cardEls.forEach((el,i)=>el.addEventListener('pointerdown', e=>{ e.preventDefault(); playCard(i); }));
@@ -1490,10 +1490,14 @@ document.getElementById('shuffleBtn').addEventListener('pointerdown', e=>{ e.pre
 const msgEl=document.getElementById('msg');
 let msgT=0;
 function announce(text, sec=1.2){ msgEl.textContent=text; msgEl.style.opacity=1; msgT=sec; }
+// dirty-checked DOM writers: skip redundant style/text/class updates each frame
+function setStyleProp(el,k,v){ if(el['__'+k]!==v){ el['__'+k]=v; el.style[k]=v; } }
+function setTxt(el,v){ if(el.__txt!==v){ el.__txt=v; el.textContent=v; } }
+function setTgl(el,cls,on){ if(el['__c_'+cls]!==on){ el['__c_'+cls]=on; el.classList.toggle(cls,on); } }
 function updateAttackPreviews(){
   const lightMoves = [chainMove(0), chainMove(1)], heavyMove = chainMove(2);
-  atkArrow.textContent = lightMoves.map(move=>moveArrow(move?.att || {})).join(' ');
-  heavyArrow.textContent = moveArrow(heavyMove?.att || {});
+  setTxt(atkArrow, lightMoves.map(move=>moveArrow(move?.att || {})).join(' '));
+  setTxt(heavyArrow, moveArrow(heavyMove?.att || {}));
   const mode = combatInputMode();
   const followup = combatState.attack
     ? (mode.id === 'legacy'
@@ -1509,17 +1513,17 @@ function updateAttackPreviews(){
     && (arena.chain.activeSlot === 0 || arena.chain.activeSlot === 1);
   const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0
     || (!!combatState.attack && !canBufferHeavy);
-  atkBtn.classList.toggle('disabled', lightDisabled);
-  heavyBtn.classList.toggle('disabled', heavyDisabled);
+  setTgl(atkBtn, 'disabled', lightDisabled);
+  setTgl(heavyBtn, 'disabled', heavyDisabled);
 }
 function updateHud(rawDt){
-  hpFill.style.width = clamp(enemySystem.playerHp,0,100)+'%';
+  setStyleProp(hpFill, 'width', clamp(enemySystem.playerHp,0,100)+'%');
   const availPct = clamp(arena.stamina.v / STAMINA.max, 0, 1) * 100;
   const totalPct = clamp((arena.stamina.v + arena.stamina.pending) / STAMINA.max, 0, 1) * 100;
-  stFill.style.width = availPct + '%';
-  stPending.style.left = availPct + '%';
-  stPending.style.width = Math.max(0, totalPct - availPct) + '%';
-  shuffleBtn.textContent = deck.shuffling ? Math.max(0, deck.shuffleT).toFixed(1) : '↻';
+  setStyleProp(stFill, 'width', availPct + '%');
+  setStyleProp(stPending, 'left', availPct + '%');
+  setStyleProp(stPending, 'width', Math.max(0, totalPct - availPct) + '%');
+  setTxt(shuffleBtn, deck.shuffling ? Math.max(0, deck.shuffleT).toFixed(1) : '↻');
   updateAttackPreviews();
   if(msgT>0){ msgT-=rawDt; if(msgT<=0) msgEl.style.opacity=0; }
 }

@@ -1626,13 +1626,20 @@ function resize() {
 window.addEventListener('resize', resize);
 
 const clock = new THREE.Clock();
+// Reusable scratch/constant vectors so the per-frame animate loop allocates
+// nothing (avoids GC churn / frame hitches).
+const _kbMove = new THREE.Vector2();
+const _move = new THREE.Vector2();
+const _desiredMove = new THREE.Vector2();
+const X_AXIS = new THREE.Vector3(1,0,0), Y_AXIS = new THREE.Vector3(0,1,0);
 function animate() {
   const dt = Math.min(clock.getDelta(), .033);
   pollGamepads();
-  const keyboardMove = new THREE.Vector2((keyState.right?1:0) - (keyState.left?1:0), (keyState.down?1:0) - (keyState.up?1:0));
-  const move = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove.clone() : (touchMove.lengthSq()>.01 ? touchMove.clone() : keyboardMove);
+  _kbMove.set((keyState.right?1:0) - (keyState.left?1:0), (keyState.down?1:0) - (keyState.up?1:0));
+  const moveSrc = aimState.gpMove.lengthSq()>.01 ? aimState.gpMove : (touchMove.lengthSq()>.01 ? touchMove : _kbMove);
+  const move = _move.copy(moveSrc);
   const isMoving = move.lengthSq() > 0;
-  const desiredMove = new THREE.Vector2(0,0);
+  const desiredMove = _desiredMove.set(0,0);
   if (isMoving) {
     move.normalize();
     // Up on the screen should move toward the top of the dungeon (negative Z in world)
@@ -1660,8 +1667,8 @@ function animate() {
 
   // Key correction: lean is camera/presentation-relative, then facing yaw is applied inside it.
   // This keeps the character visually tipped toward the viewer no matter which way it walks.
-  leanQ.setFromAxisAngle(new THREE.Vector3(1,0,0), THREE.MathUtils.degToRad(-leanDeg));
-  yawQ.setFromAxisAngle(new THREE.Vector3(0,1,0), actorYawCurrent);
+  leanQ.setFromAxisAngle(X_AXIS, THREE.MathUtils.degToRad(-leanDeg));
+  yawQ.setFromAxisAngle(Y_AXIS, actorYawCurrent);
   actorVisual.quaternion.copy(leanQ).multiply(yawQ);
 
   const bob = isMoving ? Math.sin(walkPhase) * bobStyle[activeCharacter] : 0;
