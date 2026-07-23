@@ -91,6 +91,9 @@ export function createArenaEnemySystem({
   const enemies = [];
   const projectiles = [];
   const deathPieces = [];
+  // Reused each frame to iterate enemies safely even if one is removed mid-update,
+  // without allocating a fresh [...enemies] copy every frame.
+  const _updateOrder = [];
   const tuning = { playerHp:100, lastPlayerHit:'', lastPlayerHitDir:null, heightScale:1.5, speedScale:.5, hpScale:2.5, waveSize:6, idleRangeScale:3, aggression:1, spawnKind:'mixed' };
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let activeEncounterRoomId = null;
@@ -247,11 +250,15 @@ export function createArenaEnemySystem({
   }
   function applySeparationSteering(e, dt){
     let sx = 0, sz = 0;
+    const rE = separationRadius(e);
     for(const other of enemies){
       if(other === e || other.hp <= 0) continue;
-      let dx = e.x - other.x, dz = e.z - other.z, d = Math.hypot(dx,dz);
-      const comfort = separationRadius(e) + separationRadius(other) + .7;
-      if(d >= comfort) continue;
+      let dx = e.x - other.x, dz = e.z - other.z;
+      const comfort = rE + separationRadius(other) + .7;
+      // squared-distance reject first; only take the sqrt for the near pairs
+      const d2 = dx*dx + dz*dz;
+      if(d2 >= comfort*comfort) continue;
+      let d = Math.sqrt(d2);
       if(d < 1e-4){ const a = ((e.id*19 + other.id*37) % 360) * Math.PI/180; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
       const pressure = 1 - d/comfort;
       sx += dx/d * pressure; sz += dz/d * pressure;
@@ -540,15 +547,23 @@ export function createArenaEnemySystem({
   }
 
   function resolveBodyCollisions(p){
-    const origins = new Map(enemies.map(e => [e, { x:e.x, z:e.z }]));
+    // Precompute the position-independent separation radius once per enemy (was
+    // recomputed 4*N^2 times), and stash each enemy's pre-resolution origin on the
+    // enemy itself — this replaces a per-frame `new Map(enemies.map(...))` plus N
+    // object literals with zero allocation.
+    for(const e of enemies){ e._sepR = separationRadius(e); e._ox = e.x; e._oz = e.z; }
     for(let pass = 0; pass < 4; pass++){
       for(let i = 0; i < enemies.length; i++){
         const a = enemies[i]; if(a.hp <= 0) continue;
+        const ra = a._sepR;
         for(let j = i+1; j < enemies.length; j++){
           const b = enemies[j]; if(b.hp <= 0) continue;
-          let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx,dz);
-          const min = separationRadius(a) + separationRadius(b) + .22;
-          if(d >= min) continue;
+          let dx = b.x - a.x, dz = b.z - a.z;
+          const min = ra + b._sepR + .22;
+          // squared-distance reject first; only sqrt the near pairs that overlap
+          const d2 = dx*dx + dz*dz;
+          if(d2 >= min*min) continue;
+          let d = Math.sqrt(d2);
           if(d < 1e-4){ const ang = ((a.id*17 + b.id*31) % 360) * Math.PI/180; dx = Math.cos(ang); dz = Math.sin(ang); d = 1; }
           const push = (min - d) * .5 / d;
           a.x -= dx*push; a.z -= dz*push; b.x += dx*push; b.z += dz*push;
@@ -565,8 +580,8 @@ export function createArenaEnemySystem({
     }
     if(navigation?.resolveMovement){
       for(const e of enemies){
-        const origin = origins.get(e) || { x:e.x, z:e.z };
-        const projected = navigation.resolveMovement(origin, { x:e.x - origin.x, z:e.z - origin.z }, collisionRadius(e));
+        const ox = e._ox, oz = e._oz;
+        const projected = navigation.resolveMovement({ x:ox, z:oz }, { x:e.x - ox, z:e.z - oz }, collisionRadius(e));
         e.x = projected.x; e.z = projected.z;
       }
     }
@@ -758,7 +773,10 @@ export function createArenaEnemySystem({
     director.markNearEligible(enemies, lastPlayer);
     director.assignBattleCircleSlots(enemies);
     for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
-    for(const e of [...enemies]) updateEnemy(e, dt, lastPlayer);
+    _updateOrder.length = 0;
+    for(let k = 0; k < enemies.length; k++) _updateOrder.push(enemies[k]);
+    for(let k = 0; k < _updateOrder.length; k++) updateEnemy(_updateOrder[k], dt, lastPlayer);
+    _updateOrder.length = 0;
     resolveBodyCollisions(lastPlayer);
     for(const e of enemies){
       e.maxGroundSpeed = Math.max(.1, e.speed * tuning.speedScale);
