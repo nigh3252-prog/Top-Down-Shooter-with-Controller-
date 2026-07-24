@@ -23,6 +23,7 @@ body.enemy-lab-card-controller #edenAbilityHud{display:none!important}
 body.enemy-lab-card-controller #cardRow{display:flex!important}
 body.enemy-lab-card-controller.card-mode-test #cardRow{display:none!important}
 body.enemy-lab-card-controller #cardRow .scard{isolation:isolate}
+body.enemy-lab-card-controller #cardRow .scard:not(:disabled){opacity:1!important}
 body.enemy-lab-card-controller #cardRow .scard .cicon,
 body.enemy-lab-card-controller #cardRow .scard .crows{visibility:hidden}
 body.enemy-lab-card-controller #cardRow .scard .ckey{position:relative;z-index:4}
