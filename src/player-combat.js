@@ -14,6 +14,7 @@ import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
 import { installDashJetPanel } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
+import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
 
 export function installPlayerCombat(api){
   const PC=installMainPlayerCombat(api);
@@ -58,6 +59,12 @@ export function installPlayerCombat(api){
     getStance:()=>window.__arena?.arena?.stance||null,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
+  const wizardArcanaRuntime=installWizardArcanaRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+  });
 
   // Update syncing normally establishes the bridge before the player can use a
   // card. The required play-time check prevents a visual-only Pilebunker if the
@@ -71,6 +78,7 @@ export function installPlayerCombat(api){
     dashMagicJet.update(dt,now,rawDt);
     const out=updateMainCombat(dt,now,sway,rawDt);
     combatEffectRuntime.update(dt,now);
+    wizardArcanaRuntime.update(dt,now);
     return out;
   };
 
@@ -78,6 +86,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});
