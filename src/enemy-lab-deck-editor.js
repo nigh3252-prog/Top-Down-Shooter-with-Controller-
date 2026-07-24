@@ -165,7 +165,7 @@ export function installEnemyLabDeckEditor(deck){
         saveScroll(values,categories);
         selectedIds.push(card.id);
         applySelected();
-        renderEditor(values,categories,{preserveScroll:true});
+        renderEditor(values,categories);
       });
       add.disabled=inDeck;
       tile.append(info,add);
@@ -177,7 +177,7 @@ export function installEnemyLabDeckEditor(deck){
         saveScroll(values,categories);
         selectedIds=selectedIds.filter(id=>id!==card.id);
         applySelected();
-        renderEditor(values,categories,{preserveScroll:true});
+        renderEditor(values,categories);
       });
       remove.disabled=lastStance;
       tile.append(info,remove);
@@ -196,7 +196,7 @@ export function installEnemyLabDeckEditor(deck){
       const button=makeButton(`deckFamilyBtn${item===family?' on':''}`,item,()=>{
         saveScroll(values,categories);
         family=item;persistUi();
-        renderEditor(values,categories,{preserveScroll:true});
+        renderEditor(values,categories);
       });
       familyBar.appendChild(button);
     }
@@ -205,7 +205,7 @@ export function installEnemyLabDeckEditor(deck){
       saveScroll(values,categories);
       selectedIds=uniqueCards([...selectedCards(),...missing]).map(card=>card.id);
       applySelected();
-      renderEditor(values,categories,{preserveScroll:true});
+      renderEditor(values,categories);
     });
     addShown.disabled=!missing.length;
     toolbar.append(summary,familyBar,addShown);
@@ -242,9 +242,8 @@ export function installEnemyLabDeckEditor(deck){
       for(const button of categories.querySelectorAll('.choice:not([data-deck-editor-category])'))button.classList.remove('on');
     }
   }
-  function renderEditor(values,categories,{preserveScroll=false}={}){
+  function renderEditor(values,categories){
     if(!activeView||rendering)return;
-    if(preserveScroll)saveScroll(values,categories);
     rendering=true;
     values.classList.add('deckEditorActive');
     const root=parentDocument.createElement('div');
@@ -310,8 +309,8 @@ export function installEnemyLabDeckEditor(deck){
       get cardIds(){return selectedIds.slice();},
       get activeView(){return activeView;},
       get family(){return family;},
-      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;selectedIds.push(id);applySelected();if(activeView)renderEditor(values,categories,{preserveScroll:true});return true;},
-      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)renderEditor(values,categories,{preserveScroll:true});return true;},
+      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;if(activeView)saveScroll(values,categories);selectedIds.push(id);applySelected();if(activeView)renderEditor(values,categories);return true;},
+      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;if(activeView)saveScroll(values,categories);selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)renderEditor(values,categories);return true;},
       show(view='browse'){activeView=view==='deck'?'deck':'browse';renderEditor(values,categories);},
     };
   }
