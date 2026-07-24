@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createStanceDeck } from '../src/stance-deck.js';
+import { claimArcanaTileDecoration } from '../src/enemy-lab-deck-editor-refinements.js';
 import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from '../src/wizard-arcana-cards.js';
 import { pointSegmentDistance2D, reflectVelocity2D, segmentIntersection2D } from '../src/wizard-arcana-runtime.js';
 
@@ -13,6 +14,12 @@ assert.equal(WIZARD_ARCANA_CARDS.length,6);
 assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,6);
 assert.ok(WIZARD_ARCANA_CARDS.every(isWizardArcanaCard));
 assert.ok(WIZARD_ARCANA_CARDS.every(card=>card.type==='ability'&&card.playEvent==='wizard-arcana:play'));
+
+const decorationTile={dataset:{}};
+assert.equal(claimArcanaTileDecoration(decorationTile,WIZARD_ARCANA_CARDS[0]),true);
+assert.equal(claimArcanaTileDecoration(decorationTile,WIZARD_ARCANA_CARDS[0]),false);
+assert.equal(decorationTile.dataset.wizardArcanaDecorated,WIZARD_ARCANA_CARDS[0].id);
+assert.equal(claimArcanaTileDecoration({dataset:{}},{id:'ordinary-card'}),false);
 
 assert.equal(pointSegmentDistance2D({x:1,z:1},{x:0,z:0},{x:2,z:0}),1);
 assert.deepEqual(segmentIntersection2D({x:0,z:0},{x:2,z:0},{x:1,z:-1},{x:1,z:1}),{t:.5,u:.5,x:1,z:0});
