@@ -1,17 +1,161 @@
-export function installAbilityTryoutUi({entries,families,defaultDeckIds=[],onMode,onDeckToggle,onApplyDeck,onStarterDeck,onClearDeck,onFilter,onTestSelect,onTestFamily,onResource,onReset,onTestPrev,onTestNext,onTestDown,onTestUp,onToggleDetails,onHandDown,onHandUp,onShuffle}={}){
-  const style=document.createElement('style');style.id='abilityTryoutStyle';style.textContent=`
-body.enemy-lab-card-controller #cardRow,body.enemy-lab-card-controller #edenAbilityHud{display:none!important}#enemyLabCardHud{position:fixed;inset:0;z-index:27;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace}#regularCardHud,#testCardHud{display:none;position:absolute;bottom:max(8px,env(safe-area-inset-bottom));align-items:flex-end;gap:6px}body.card-mode-regular #regularCardHud{display:flex}body.card-mode-test #testCardHud{display:flex}#regularCardHud{left:max(10px,env(safe-area-inset-left))}#testCardHud{left:50%;transform:translateX(-50%)}.labCard,.atNav,#atDetails,#deckShuffle{pointer-events:auto;touch-action:none;border:1px solid #31504d;border-radius:8px;background:rgba(13,24,28,.94);color:#d8eee9;box-shadow:0 3px 0 #071011}.labCard{position:relative;width:76px;height:92px;padding:6px;text-align:left;overflow:hidden}.labCard.held{transform:translateY(2px);box-shadow:0 1px 0 #071011}.labCard.cooling{filter:saturate(.45)}.labCard .family{font-size:6.5px;color:#aa91c7;text-transform:uppercase;white-space:nowrap;overflow:hidden}.labCard b{display:block;margin-top:3px;font-size:9px;line-height:1.08;color:#ffe0a2}.labCard .summary{display:block;margin-top:4px;font-size:6.8px;line-height:1.25;color:#b9d2cc}.labCard .key{position:absolute;right:5px;top:5px;font-size:7px;color:#817998}.labCard .coolShade{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(4,7,12,.78)}.labCard .coolText{position:absolute;inset:0;display:grid;place-items:center;font-size:15px;font-weight:900;color:white;text-shadow:0 2px 5px #000}#deckSide{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:5px;color:#82aaa3;font-size:7px}#deckShuffle{width:32px;height:32px;padding:0;font-size:16px;color:#9fd2c9}.queueDot{width:24px;height:8px;border:1px solid #31504d;border-radius:3px;background:rgba(26,48,49,.72)}.atNav{width:42px;height:70px;font-size:25px}.testMain{position:relative;width:min(290px,49vw);min-height:70px;padding:7px 10px;text-align:left}.testMain .family{font-size:8px;color:#aa91c7;text-transform:uppercase}.testMain b{display:block;margin-top:2px;padding-right:44px;font-size:13px;color:#ffe0a2}.testMain .summary,.testMain .status{display:block;margin-top:3px;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.testMain .summary{color:#c9ded9}.testMain .status{color:#9ed6ca}.testMain .position{position:absolute;right:8px;top:8px;font-size:8px;color:#817998}#atDetails{width:42px;height:70px;font-size:20px}#atDetails.on{border-color:#e8a04c;color:#ffe0a2}#abilityTryoutInfo{position:fixed;left:50%;bottom:max(90px,calc(env(safe-area-inset-bottom) + 90px));transform:translateX(-50%);z-index:26;width:min(470px,72vw);padding:11px 14px;border:1px solid #6e4c8e;border-radius:10px;background:rgba(8,17,20,.94);color:#d8eee9;box-shadow:0 8px 28px #0007;pointer-events:auto}#abilityTryoutInfo.hidden{display:none}.atInfoHead{display:flex;gap:8px}.atInfoTitles{flex:1}.atInfoFamily{font-size:8px;color:#aa91c7;text-transform:uppercase}.atInfoName{font-size:16px;color:#ffe0a2;font-weight:900}.atCollapse{width:34px;height:30px;border:1px solid #6e4c8e;border-radius:7px;background:#102426;color:#d9eee9}.atDescription{margin-top:7px;font-size:9.5px;line-height:1.45}.atChain,.atInfoControl{margin-top:7px;font-size:8.5px;color:#9ed6ca}.atChain{padding:6px;border:1px solid #31504d;border-radius:6px;color:#f2c982}#abilityTryoutNotice{position:fixed;left:0;right:0;top:14%;z-index:31;text-align:center;color:#f0d8b0;font:900 13px ui-monospace;letter-spacing:.12em;text-shadow:0 2px 7px #000;opacity:0;pointer-events:none}#abilityTryoutNotice.on{opacity:1}#abilityTryoutNotice.error{color:#ff9b86}#enemyLabCardsPanel{display:none}.deckEditorRows{display:grid;gap:4px}.deckEditorRows label{display:flex;gap:7px;align-items:flex-start}.deckEditorRows input{margin-top:3px}.deckEditorRows span{font-size:9px}.deckEditorRows small{display:block;color:#7ea39d;font-size:7px}@media(max-width:700px) and (orientation:landscape){#regularCardHud{left:max(112px,calc(env(safe-area-inset-left) + 112px))}.labCard{width:67px;height:76px}.labCard .summary{display:none}#testCardHud{left:max(112px,calc(env(safe-area-inset-left) + 112px));right:max(112px,calc(env(safe-area-inset-right) + 112px));transform:none;justify-content:center}.testMain{width:min(245px,42vw);min-height:62px}.atNav,#atDetails{height:62px}#abilityTryoutInfo{bottom:max(76px,calc(env(safe-area-inset-bottom) + 76px));width:min(430px,60vw);padding:8px 11px}}`;
+function stopPointer(event){
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+function cardGlyph(card){
+  if(!card)return '';
+  if(card.glyph)return card.glyph;
+  if(card.kind==='stance')return '↔ ↔ ↓';
+  if(card.kind==='eden')return '✧';
+  if(card.kind==='warden')return '⚔';
+  return '✦';
+}
+
+export function installAbilityTryoutUi({
+  onTestPrev,onTestNext,onTestDown,onTestUp,onToggleDetails,
+  onHandDown,onHandUp,onShuffle,
+}={}){
+  const style=document.createElement('style');
+  style.id='abilityTryoutStyle';
+  style.textContent=`
+body.enemy-lab-card-controller #edenAbilityHud{display:none!important}
+body.enemy-lab-card-controller #cardRow{display:flex!important}
+body.enemy-lab-card-controller.card-mode-test #cardRow{display:none!important}
+body.enemy-lab-card-controller #cardRow .scard{isolation:isolate}
+body.enemy-lab-card-controller #cardRow .scard .cicon,
+body.enemy-lab-card-controller #cardRow .scard .crows{visibility:hidden}
+body.enemy-lab-card-controller #cardRow .scard .ckey{position:relative;z-index:4}
+body.enemy-lab-card-controller #cardRow .scard.ability-held{transform:translateY(2px);box-shadow:0 1px 0 #081112;background:#2c4a47}
+.abilityCardFace{position:absolute;inset:18px 4px 4px;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;pointer-events:none}
+.abilityCardGlyph{font-size:13px;line-height:1;color:#e8a04c;white-space:nowrap}
+.abilityCardName{max-width:100%;font-size:7px;line-height:1.06;font-weight:900;color:#d8eee9;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.abilityCardFamily{max-width:100%;font-size:5.5px;line-height:1;color:#7ea39d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abilityCardCoolShade{position:absolute;left:0;right:0;bottom:0;z-index:2;height:0;background:rgba(4,7,12,.82);pointer-events:none}
+.abilityCardCoolText{position:absolute;inset:0;z-index:5;display:grid;place-items:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 2px 5px #000;pointer-events:none}
+.abilityDeckCount{font-size:6px;color:#82aaa3;text-align:center;max-width:38px;line-height:1.15}
+#abilityTestHud{display:none;position:fixed;left:50%;bottom:max(8px,env(safe-area-inset-bottom));z-index:27;transform:translateX(-50%);align-items:flex-end;gap:6px;font-family:ui-monospace,Menlo,Consolas,monospace;pointer-events:none}
+body.card-mode-test #abilityTestHud{display:flex}
+.abilityTestButton{pointer-events:auto;touch-action:none;border:1px solid #31504d;border-radius:8px;background:rgba(13,24,28,.94);color:#d8eee9;box-shadow:0 3px 0 #071011}
+.abilityTestNav{width:42px;height:70px;font-size:25px}
+#abilityTestCard{position:relative;width:min(290px,49vw);min-height:70px;padding:7px 10px;text-align:left}
+#abilityTestCard.held{transform:translateY(2px);box-shadow:0 1px 0 #071011}
+#abilityTestFamily{font-size:8px;color:#aa91c7;text-transform:uppercase}
+#abilityTestName{display:block;margin-top:2px;padding-right:44px;font-size:13px;color:#ffe0a2}
+#abilityTestSummary,#abilityTestStatus{display:block;margin-top:3px;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#abilityTestSummary{color:#c9ded9}#abilityTestStatus{color:#9ed6ca}
+#abilityTestPosition{position:absolute;right:8px;top:8px;font-size:8px;color:#817998}
+#abilityTestDetailsButton{width:42px;height:70px;font-size:20px}
+#abilityTestDetailsButton.on{border-color:#e8a04c;color:#ffe0a2}
+#abilityTryoutInfo{position:fixed;left:50%;bottom:max(90px,calc(env(safe-area-inset-bottom) + 90px));transform:translateX(-50%);z-index:26;width:min(470px,72vw);padding:11px 14px;border:1px solid #6e4c8e;border-radius:10px;background:rgba(8,17,20,.94);color:#d8eee9;box-shadow:0 8px 28px #0007;pointer-events:auto;font-family:ui-monospace,Menlo,Consolas,monospace}
+#abilityTryoutInfo.hidden{display:none}.atInfoHead{display:flex;gap:8px}.atInfoTitles{flex:1}.atInfoFamily{font-size:8px;color:#aa91c7;text-transform:uppercase}.atInfoName{font-size:16px;color:#ffe0a2;font-weight:900}.atCollapse{width:34px;height:30px;border:1px solid #6e4c8e;border-radius:7px;background:#102426;color:#d9eee9}.atDescription{margin-top:7px;font-size:9.5px;line-height:1.45}.atChain,.atInfoControl{margin-top:7px;font-size:8.5px;color:#9ed6ca}.atChain{padding:6px;border:1px solid #31504d;border-radius:6px;color:#f2c982}
+#abilityTryoutNotice{position:fixed;left:0;right:0;top:14%;z-index:31;text-align:center;color:#f0d8b0;font:900 13px ui-monospace;letter-spacing:.12em;text-shadow:0 2px 7px #000;opacity:0;pointer-events:none}
+#abilityTryoutNotice.on{opacity:1}#abilityTryoutNotice.error{color:#ff9b86}
+@media(max-width:700px) and (orientation:landscape){
+  #abilityTestHud{left:max(112px,calc(env(safe-area-inset-left) + 112px));right:max(112px,calc(env(safe-area-inset-right) + 112px));transform:none;justify-content:center}
+  #abilityTestCard{width:min(245px,42vw);min-height:62px}.abilityTestNav,#abilityTestDetailsButton{height:62px}
+  #abilityTryoutInfo{bottom:max(76px,calc(env(safe-area-inset-bottom) + 76px));width:min(430px,60vw);padding:8px 11px}
+}`;
   document.head.appendChild(style);
-  const shell=document.createElement('div');shell.id='enemyLabCardHud';shell.innerHTML=`<div id="regularCardHud"><div id="handCards"></div><div id="deckSide"><span id="deckCounts"></span><div class="queueDot"></div><div class="queueDot"></div><button id="deckShuffle" type="button" aria-label="Shuffle deck">↻</button></div></div><div id="testCardHud"><button class="atNav" id="atPrev">‹</button><button class="labCard testMain" id="abilityTryoutCard"><span class="family" id="atFamily"></span><b id="atName"></b><span class="summary" id="atSummary"></span><span class="status" id="atStatus"></span><span class="position" id="atPosition"></span></button><button id="atDetails">ⓘ</button><button class="atNav" id="atNext">›</button></div>`;
-  const info=document.createElement('div');info.id='abilityTryoutInfo';info.className='hidden';info.innerHTML='<div class="atInfoHead"><div class="atInfoTitles"><div class="atInfoFamily"></div><div class="atInfoName"></div></div><button class="atCollapse">×</button></div><div class="atDescription"></div><div class="atChain"></div><div class="atInfoControl"></div>';
-  const notice=document.createElement('div');notice.id='abilityTryoutNotice';document.body.append(shell,info,notice);
-  const panel=document.createElement('section');panel.id='enemyLabCardsPanel';panel.setAttribute('aria-label','CARDS & DECK');panel.innerHTML=`<h3>CARDS & DECK</h3><label for="cardModeSelect">PLAY MODE</label><select id="cardModeSelect"><option value="regular">Regular deck</option><option value="test">Ability test</option></select><label for="deckFamilyFilter">DECK FAMILY</label><select id="deckFamilyFilter"><option value="all">All families</option>${families.map(f=>`<option value="${f}">${f}</option>`).join('')}</select><label for="deckSearch">SEARCH CARDS</label><input id="deckSearch" type="text" placeholder="Name or description"><button id="deckStarter">STARTER / CURRENT DEFAULT</button><button id="deckClear">CLEAR DRAFT</button><button id="deckApply">APPLY & SHUFFLE</button><div id="deckEditorCount"></div><div class="deckEditorRows" id="deckEditorRows"></div><hr><label for="testCardSelect">TEST CARD</label><select id="testCardSelect">${entries.map(e=>`<option value="${e.id}">${e.family} · ${e.shortName}</option>`).join('')}</select><label for="testFamilySelect">JUMP TEST FAMILY</label><select id="testFamilySelect">${families.map(f=>`<option value="${f}">${f}</option>`).join('')}</select><label for="atResource">EDEN RESOURCES</label><select id="atResource"><option value="testing">Unlimited testing mana</option><option value="authored">Authored mana</option></select><button id="atReset">RESET CARD STATE</button>`;document.body.appendChild(panel);
-  const $=id=>document.getElementById(id);let editor={selected:new Set(defaultDeckIds),family:'all',search:''};
-  function renderEditor(){const query=editor.search.trim().toLowerCase(),visible=entries.filter(e=>(editor.family==='all'||e.family===editor.family)&&(!query||`${e.name} ${e.description}`.toLowerCase().includes(query)));$('deckEditorCount').textContent=`DRAFT DECK · ${editor.selected.size} CARDS · ${visible.length} SHOWN`;$('deckEditorRows').innerHTML=visible.map(e=>`<label><input type="checkbox" data-deck-id="${e.id}" ${editor.selected.has(e.id)?'checked':''}><span>${e.shortName}<small>${e.family} · ${e.summary}</small></span></label>`).join('');$('deckEditorRows').querySelectorAll('[data-deck-id]').forEach(input=>input.addEventListener('change',()=>{input.checked?editor.selected.add(input.dataset.deckId):editor.selected.delete(input.dataset.deckId);onDeckToggle?.(input.dataset.deckId,input.checked);renderEditor();}));}
-  $('cardModeSelect').addEventListener('change',e=>onMode?.(e.target.value));$('deckFamilyFilter').addEventListener('change',e=>{editor.family=e.target.value;onFilter?.(editor);renderEditor();});$('deckSearch').addEventListener('input',e=>{editor.search=e.target.value;onFilter?.(editor);renderEditor();});$('deckStarter').addEventListener('click',()=>{editor.selected=new Set(defaultDeckIds);onStarterDeck?.([...editor.selected]);renderEditor();});$('deckClear').addEventListener('click',()=>{editor.selected.clear();onClearDeck?.();renderEditor();});$('deckApply').addEventListener('click',()=>onApplyDeck?.([...editor.selected]));$('testCardSelect').addEventListener('change',e=>onTestSelect?.(e.target.value));$('testFamilySelect').addEventListener('change',e=>onTestFamily?.(e.target.value));$('atResource').addEventListener('change',e=>onResource?.(e.target.value));$('atReset').addEventListener('click',()=>onReset?.());$('atPrev').addEventListener('pointerdown',e=>{e.preventDefault();onTestPrev?.();});$('atNext').addEventListener('pointerdown',e=>{e.preventDefault();onTestNext?.();});$('atDetails').addEventListener('click',()=>onToggleDetails?.());info.querySelector('.atCollapse').addEventListener('click',()=>onToggleDetails?.(false));
-  const testCard=$('abilityTryoutCard');testCard.addEventListener('pointerdown',e=>{e.preventDefault();testCard.setPointerCapture?.(e.pointerId);testCard.classList.add('held');onTestDown?.();});for(const type of['pointerup','pointercancel','pointerleave'])testCard.addEventListener(type,e=>{if(type!=='pointerleave'||e.buttons===0){testCard.classList.remove('held');onTestUp?.();}});$('deckShuffle').addEventListener('pointerdown',e=>{e.preventDefault();onShuffle?.();});
-  const handButtons=[];for(let slot=0;slot<2;slot++){const button=document.createElement('button');button.className='labCard';button.dataset.slot=slot;button.innerHTML='<span class="family"></span><b></b><span class="summary"></span><span class="key"></span><span class="coolShade"></span><span class="coolText"></span>';button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture?.(e.pointerId);button.classList.add('held');onHandDown?.(slot);});for(const type of['pointerup','pointercancel','pointerleave'])button.addEventListener(type,e=>{if(type!=='pointerleave'||e.buttons===0){button.classList.remove('held');onHandUp?.(slot);}});$('handCards').appendChild(button);handButtons.push(button);}
-  let parentCleanup=()=>{};try{const host=parent!==window?parent:window,doc=host.document;if(!doc.getElementById('enemyLabFullscreenBtn')){const s=doc.createElement('style');s.id='enemyLabFullscreenStyle';s.textContent='#enemyLabFullscreenBtn{position:fixed;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));z-index:86;width:42px;height:38px;border:1px solid #31504d;border-radius:8px;background:rgba(16,38,40,.95);color:#e8a04c;font:20px monospace}';const fs=doc.createElement('button');fs.id='enemyLabFullscreenBtn';doc.head.appendChild(s);doc.body.appendChild(fs);const full=()=>doc.fullscreenElement||doc.webkitFullscreenElement,sync=()=>{fs.textContent=full()?'⤢':'⛶';};fs.addEventListener('click',()=>full()?(doc.exitFullscreen||doc.webkitExitFullscreen)?.call(doc):(doc.documentElement.requestFullscreen||doc.documentElement.webkitRequestFullscreen)?.call(doc.documentElement));doc.addEventListener('fullscreenchange',sync);sync();parentCleanup=()=>{fs.remove();s.remove();};}}catch{}
-  renderEditor();
-  return{notice(text,error=false){notice.textContent=text;notice.classList.toggle('error',error);notice.classList.add('on');clearTimeout(this.timer);this.timer=setTimeout(()=>notice.classList.remove('on'),900);},setEditorSelection(ids){editor.selected=new Set(ids);renderEditor();},render(v){document.body.classList.add('enemy-lab-card-controller');document.body.classList.toggle('card-mode-regular',v.mode==='regular');document.body.classList.toggle('card-mode-test',v.mode==='test');$('cardModeSelect').value=v.mode;$('deckCounts').textContent=v.deckCounts;$('deckShuffle').textContent=v.shuffleText;handButtons.forEach((button,slot)=>{const c=v.hand[slot];button.classList.toggle('cooling',!!c?.cooling);button.disabled=!c;button.querySelector('.family').textContent=c?.family||'';button.querySelector('b').textContent=c?.name||'EMPTY';button.querySelector('.summary').textContent=c?.summary||'';button.querySelector('.key').textContent=slot?'RB':'LB';button.querySelector('.coolShade').style.height=`${c?.coolPercent||0}%`;button.querySelector('.coolText').textContent=c?.cooling?c.coolText:'';});const e=v.test;$('atFamily').textContent=e.family;$('atName').textContent=e.name;$('atSummary').textContent=e.summary;$('atStatus').textContent=e.status;$('atPosition').textContent=e.position;$('testCardSelect').value=e.id;$('testFamilySelect').value=e.family;$('atResource').value=v.resourceMode;info.querySelector('.atInfoFamily').textContent=e.family;info.querySelector('.atInfoName').textContent=e.name;info.querySelector('.atDescription').textContent=e.description;const chain=info.querySelector('.atChain');chain.textContent=e.chain;chain.style.display=e.chain?'block':'none';info.querySelector('.atInfoControl').textContent=e.control;info.classList.toggle('hidden',!v.detailsVisible);$('atDetails').classList.toggle('on',v.detailsOpen);},dispose(){parentCleanup();shell.remove();info.remove();notice.remove();panel.remove();style.remove();}};
+
+  const cardRow=document.getElementById('cardRow');
+  const handButtons=[document.getElementById('card0'),document.getElementById('card1')];
+  const drawQueue=document.getElementById('drawQueue');
+  const queueDots=[...(drawQueue?.querySelectorAll('.queuedCard')||[])];
+  const shuffleButton=document.getElementById('shuffleBtn');
+  const deckSide=document.getElementById('deckSide');
+  if(!cardRow||handButtons.some(button=>!button)||!shuffleButton)throw new Error('Combat Arena card HUD was not found.');
+
+  const deckCount=document.createElement('span');
+  deckCount.className='abilityDeckCount';
+  deckSide?.prepend(deckCount);
+
+  const faces=handButtons.map(button=>{
+    const face=document.createElement('span');
+    face.className='abilityCardFace';
+    face.innerHTML='<span class="abilityCardGlyph"></span><span class="abilityCardName"></span><span class="abilityCardFamily"></span>';
+    const shade=document.createElement('span');shade.className='abilityCardCoolShade';
+    const cool=document.createElement('span');cool.className='abilityCardCoolText';
+    button.append(shade,face,cool);
+    return {button,face,shade,cool};
+  });
+
+  const cleanup=[];
+  faces.forEach(({button},slot)=>{
+    const down=event=>{stopPointer(event);button.setPointerCapture?.(event.pointerId);button.classList.add('ability-held');onHandDown?.(slot);};
+    const up=event=>{stopPointer(event);button.classList.remove('ability-held');onHandUp?.(slot);};
+    button.addEventListener('pointerdown',down,true);
+    for(const type of ['pointerup','pointercancel'])button.addEventListener(type,up,true);
+    cleanup.push(()=>{button.removeEventListener('pointerdown',down,true);for(const type of ['pointerup','pointercancel'])button.removeEventListener(type,up,true);});
+  });
+  const shuffleDown=event=>{stopPointer(event);onShuffle?.();};
+  shuffleButton.addEventListener('pointerdown',shuffleDown,true);
+  cleanup.push(()=>shuffleButton.removeEventListener('pointerdown',shuffleDown,true));
+
+  const testHud=document.createElement('div');
+  testHud.id='abilityTestHud';
+  testHud.innerHTML=`<button class="abilityTestButton abilityTestNav" id="abilityTestPrev">‹</button><button class="abilityTestButton" id="abilityTestCard"><span id="abilityTestFamily"></span><b id="abilityTestName"></b><span id="abilityTestSummary"></span><span id="abilityTestStatus"></span><span id="abilityTestPosition"></span></button><button class="abilityTestButton" id="abilityTestDetailsButton">ⓘ</button><button class="abilityTestButton abilityTestNav" id="abilityTestNext">›</button>`;
+  const info=document.createElement('div');
+  info.id='abilityTryoutInfo';info.className='hidden';
+  info.innerHTML='<div class="atInfoHead"><div class="atInfoTitles"><div class="atInfoFamily"></div><div class="atInfoName"></div></div><button class="atCollapse">×</button></div><div class="atDescription"></div><div class="atChain"></div><div class="atInfoControl"></div>';
+  const notice=document.createElement('div');notice.id='abilityTryoutNotice';
+  document.body.append(testHud,info,notice);
+
+  const $=id=>document.getElementById(id);
+  $('abilityTestPrev').addEventListener('pointerdown',event=>{stopPointer(event);onTestPrev?.();});
+  $('abilityTestNext').addEventListener('pointerdown',event=>{stopPointer(event);onTestNext?.();});
+  $('abilityTestDetailsButton').addEventListener('click',()=>onToggleDetails?.());
+  info.querySelector('.atCollapse').addEventListener('click',()=>onToggleDetails?.(false));
+  const testCard=$('abilityTestCard');
+  testCard.addEventListener('pointerdown',event=>{stopPointer(event);testCard.setPointerCapture?.(event.pointerId);testCard.classList.add('held');onTestDown?.();});
+  for(const type of ['pointerup','pointercancel'])testCard.addEventListener(type,event=>{stopPointer(event);testCard.classList.remove('held');onTestUp?.();});
+
+  return {
+    notice(text,error=false){
+      notice.textContent=text;notice.classList.toggle('error',error);notice.classList.add('on');
+      clearTimeout(this.timer);this.timer=setTimeout(()=>notice.classList.remove('on'),900);
+    },
+    render(v){
+      document.body.classList.add('enemy-lab-card-controller');
+      document.body.classList.toggle('card-mode-regular',v.mode==='regular');
+      document.body.classList.toggle('card-mode-test',v.mode==='test');
+      deckCount.textContent=v.deckCounts||'';
+      shuffleButton.textContent=v.shuffleText||'↻';
+      faces.forEach(({button,face,shade,cool},slot)=>{
+        const card=v.hand?.[slot]||null;
+        button.classList.toggle('empty',!card);
+        button.disabled=!card;
+        face.querySelector('.abilityCardGlyph').textContent=cardGlyph(card);
+        face.querySelector('.abilityCardName').textContent=card?.name||'EMPTY';
+        face.querySelector('.abilityCardFamily').textContent=card?.family||'';
+        shade.style.height=`${card?.coolPercent||0}%`;
+        cool.textContent=card?.cooling?card.coolText:'';
+      });
+      queueDots.forEach((dot,index)=>{
+        const queued=v.queue?.[index]||null;
+        dot.classList.toggle('filled',!!queued);
+        dot.dataset.cardId=queued?.id||'';
+        dot.setAttribute('aria-label',queued?`Upcoming ${queued.name}`:'Empty draw slot');
+      });
+      const entry=v.test;
+      $('abilityTestFamily').textContent=entry.family;
+      $('abilityTestName').textContent=entry.name;
+      $('abilityTestSummary').textContent=entry.summary;
+      $('abilityTestStatus').textContent=entry.status;
+      $('abilityTestPosition').textContent=entry.position;
+      info.querySelector('.atInfoFamily').textContent=entry.family;
+      info.querySelector('.atInfoName').textContent=entry.name;
+      info.querySelector('.atDescription').textContent=entry.description;
+      const chain=info.querySelector('.atChain');chain.textContent=entry.chain;chain.style.display=entry.chain?'block':'none';
+      info.querySelector('.atInfoControl').textContent=entry.control;
+      info.classList.toggle('hidden',!v.detailsVisible);
+      $('abilityTestDetailsButton').classList.toggle('on',v.detailsOpen);
+    },
+    dispose(){
+      cleanup.forEach(fn=>fn());
+      for(const {face,shade,cool} of faces){face.remove();shade.remove();cool.remove();}
+      deckCount.remove();testHud.remove();info.remove();notice.remove();style.remove();
+      document.body.classList.remove('enemy-lab-card-controller','card-mode-regular','card-mode-test');
+    },
+  };
 }
