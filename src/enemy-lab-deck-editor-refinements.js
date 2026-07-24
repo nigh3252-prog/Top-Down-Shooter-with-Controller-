@@ -15,7 +15,7 @@ export function installEnemyLabDeckEditorRefinements(){
     style.id=styleId;
     style.textContent=`
       .deckEditorCardsPane,.deckEditorControlsPane{scrollbar-gutter:stable}
-      .deckEditorControlsPane{padding-right:12px}
+      #labDock.deckEditorMode .deckEditorControlsPane{padding-right:12px}
       @media (orientation:landscape){
         #labDock.deckEditorMode{width:min(72vw,940px)!important}
         #labDock.deckEditorMode .deckEditorRoot{grid-template-columns:minmax(300px,1fr) minmax(196px,244px);column-gap:2px}
