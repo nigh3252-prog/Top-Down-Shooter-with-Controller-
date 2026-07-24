@@ -2,9 +2,35 @@ import { isWizardArcanaCard } from './wizard-arcana-cards.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const FIRE=0xff7438;
+const FIRE_HOT=0xfff1a6;
+const FIRE_GOLD=0xffbd45;
+const FIRE_DEEP=0xff4b24;
+const SOOT=0x25100c;
 const GOLD=0xffcf62;
 const AIR=0x8fe8ef;
 const WATER=0x59bdf4;
+
+export const FLAME_CROSS_BEATS=Object.freeze([
+  Object.freeze({time:.08,sides:Object.freeze([1]),finisher:false}),
+  Object.freeze({time:.34,sides:Object.freeze([-1]),finisher:false}),
+  Object.freeze({time:.62,sides:Object.freeze([1,-1]),finisher:true}),
+]);
+
+export function flameCrossWaveSpec({side=1,finisher=false}={}){
+  const sign=side<0?-1:1;
+  return Object.freeze({
+    side:sign,
+    finisher:!!finisher,
+    lateralOffset:sign*(finisher?1.02:.92),
+    lateralAim:-sign*(finisher?.245:.22),
+    speed:finisher?12.4:11.7,
+    range:finisher?11.2:9.8,
+    damage:finisher?9:6,
+    push:finisher?.82:.48,
+    radius:finisher?.66:.58,
+    visualScale:finisher?1.12:1,
+  });
+}
 
 export function pointSegmentDistance2D(point,a,b){
   const abx=b.x-a.x,abz=b.z-a.z,apx=point.x-a.x,apz=point.z-a.z;
@@ -84,10 +110,32 @@ function disposeObject(root){
 function makeMaterial(THREE,color,opacity=.86){
   return new THREE.MeshBasicMaterial({color,transparent:opacity<1,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
 }
+function makeSmokeMaterial(THREE,color=SOOT,opacity=.28){
+  return new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:THREE.DoubleSide});
+}
 function makeOrb(THREE,scene,{radius=.34,color=FIRE,opacity=.9,wireframe=false}={}){
   const material=makeMaterial(THREE,color,opacity);material.wireframe=wireframe;
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(radius,16,10),material);
   mesh.renderOrder=3;scene.add(mesh);return mesh;
+}
+function makeFlameWave(THREE,scene,spec){
+  const group=new THREE.Group();group.name=spec.finisher?'Wizard Arcana Flame Cross finisher wave':'Wizard Arcana Flame Cross wave';
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.34,14,9),makeMaterial(THREE,FIRE_HOT,.96));
+  head.scale.set(1.22,.7,1.05);head.position.set(0,.34,.15);group.add(head);
+  const colors=[FIRE_GOLD,FIRE,FIRE_DEEP,FIRE_GOLD,FIRE_DEEP,FIRE];
+  for(let index=0;index<6;index++){
+    const radius=.30-index*.026;
+    const flame=new THREE.Mesh(new THREE.SphereGeometry(radius,12,8),makeMaterial(THREE,colors[index],.86-index*.075));
+    flame.position.set((index%2?1:-1)*(.08+.025*index),.28+.07*Math.sin(index*1.8),-.28-index*.31);
+    flame.scale.set(1+.15*Math.sin(index),.8+index*.04,1.2);flame.userData.flameIndex=index;flame.userData.baseScaleY=flame.scale.y;group.add(flame);
+  }
+  for(let index=0;index<3;index++){
+    const soot=new THREE.Mesh(new THREE.SphereGeometry(.22-index*.035,10,7),makeSmokeMaterial(THREE,SOOT,.26-index*.055));
+    soot.position.set((index%2?1:-1)*.11,.15,-1.65-index*.34);soot.scale.set(1.25,.45,1.35);soot.userData.soot=true;group.add(soot);
+  }
+  const glow=new THREE.Mesh(new THREE.CircleGeometry(.75,24),makeMaterial(THREE,FIRE,.24));
+  glow.rotation.x=-Math.PI/2;glow.position.set(0,.035,-.4);glow.scale.set(1,1.85,1);glow.userData.groundGlow=true;group.add(glow);
+  group.scale.setScalar(spec.visualScale);group.renderOrder=3;scene.add(group);return group;
 }
 function makeBeam(THREE,scene,start,end,{width=.7,color=FIRE,opacity=.72}={}){
   const dx=end.x-start.x,dz=end.z-start.z,length=Math.hypot(dx,dz)||.01;
@@ -126,16 +174,28 @@ export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem
   }
   function reset(){for(const effect of[...state.effects])remove(effect);}
 
-  function castFlameCross(frame){
-    const center={x:frame.x+frame.forward.x*3.1,z:frame.z+frame.forward.z*3.1};
-    const directions=[normalize2(frame.forward.x+frame.right.x*.82,frame.forward.z+frame.right.z*.82),normalize2(frame.forward.x-frame.right.x*.82,frame.forward.z-frame.right.z*.82)];
-    const lines=directions.map(direction=>({
-      start:{x:center.x-direction.x*2.9,z:center.z-direction.z*2.9},
-      end:{x:center.x+direction.x*2.9,z:center.z+direction.z*2.9},
-      hit:new Set(),
-    }));
-    const meshes=lines.map(line=>makeBeam(THREE,scene,line.start,line.end,{width:.82,color:FIRE,opacity:.78}));
-    add({type:'flameCross',age:0,life:.34,center,lines,meshes});
+  function emitFlameCrossWave(frame,side,finisher){
+    const spec=flameCrossWaveSpec({side,finisher});
+    const direction=normalize2(
+      frame.forward.x+frame.right.x*spec.lateralAim,
+      frame.forward.z+frame.right.z*spec.lateralAim,
+      frame.forward,
+    );
+    const position={
+      x:frame.x+frame.forward.x*.95+frame.right.x*spec.lateralOffset,
+      z:frame.z+frame.forward.z*.95+frame.right.z*spec.lateralOffset,
+    };
+    const mesh=makeFlameWave(THREE,scene,spec);
+    mesh.position.set(position.x,0,position.z);mesh.rotation.y=Math.atan2(direction.x,direction.z);
+    add({
+      type:'flameCrossWave',age:0,position,previous:{...position},direction,
+      velocity:{x:direction.x*spec.speed,z:direction.z*spec.speed},distance:0,
+      spec,hit:new Set(),mesh,walls:[...(getMazeSegments?.()||[])],
+    });
+  }
+
+  function castFlameCross(){
+    add({type:'flameCrossCombo',age:0,nextBeat:0,life:.82});
   }
 
   function castBouncingBlaze(frame){
@@ -192,17 +252,36 @@ export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem
     window.dispatchEvent(new CustomEvent('wizard-arcana:cast',{detail:{card,serial:state.castSerial}}));return true;
   }
 
-  function updateFlameCross(effect,dt,system){
+  function updateFlameCrossCombo(effect,dt){
     effect.age+=dt;
-    for(let index=0;index<effect.lines.length;index++){
-      const line=effect.lines[index],mesh=effect.meshes[index];
-      if(mesh?.material)mesh.material.opacity=.78*Math.pow(1-clamp(effect.age/effect.life,0,1),.55);
-      for(const enemy of aliveEnemies(system)){
-        if(line.hit.has(enemy))continue;
-        if(pointSegmentDistance2D(enemy,line.start,line.end)<=enemyRadius(enemy,system)+.48){line.hit.add(enemy);damageEnemy(system,enemy,11,knockFrom(effect.center,enemy,.7));}
+    while(effect.nextBeat<FLAME_CROSS_BEATS.length&&effect.age>=FLAME_CROSS_BEATS[effect.nextBeat].time){
+      const beat=FLAME_CROSS_BEATS[effect.nextBeat++],frame=playerFrame(getPlayer);
+      for(const side of beat.sides)emitFlameCrossWave(frame,side,beat.finisher);
+    }
+    if(effect.nextBeat>=FLAME_CROSS_BEATS.length&&effect.age>=effect.life)remove(effect);
+  }
+
+  function updateFlameCrossWave(effect,dt,system,now){
+    effect.age+=dt;
+    const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};
+    const wall=firstWallHit(start,end,effect.walls);
+    if(wall){remove(effect);return;}
+    effect.previous=start;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);
+    effect.mesh.position.set(end.x,0,end.z);effect.mesh.rotation.y=Math.atan2(effect.direction.x,effect.direction.z);
+    effect.mesh.children.forEach((child,index)=>{
+      if(child.userData?.groundGlow){child.material.opacity=.18+.08*Math.sin(now*15+effect.age*9);return;}
+      if(child.userData?.soot){child.material.opacity=Math.max(.04,.25-effect.distance*.008)+.035*Math.sin(now*8+index);return;}
+      const pulse=1+.07*Math.sin(now*18+index*1.7);
+      if(Number.isFinite(child.userData?.baseScaleY))child.scale.y=child.userData.baseScaleY*pulse;
+    });
+    for(const enemy of aliveEnemies(system)){
+      if(effect.hit.has(enemy))continue;
+      if(pointSegmentDistance2D(enemy,start,end)<=enemyRadius(enemy,system)+effect.spec.radius){
+        effect.hit.add(enemy);
+        damageEnemy(system,enemy,effect.spec.damage,knockFrom(start,enemy,effect.spec.push),{power:effect.spec.finisher?.46:.28,pop:effect.spec.finisher?.09:.045,flameCrossFinisher:effect.spec.finisher});
       }
     }
-    if(effect.age>=effect.life)remove(effect);
+    if(effect.distance>=effect.spec.range)remove(effect);
   }
 
   function updateBouncingBlaze(effect,dt,system){
@@ -295,13 +374,14 @@ export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem
   }
 
   function update(dt,now=0){
-    const frame=Math.max(0,Number(dt)||0),system=getEnemySystem?.();
+    const frame=Math.max(0,Number(dt)||0),system=getEnemySystem?.(),time=Number(now)||0;
     for(const effect of[...state.effects]){
-      if(effect.type==='flameCross')updateFlameCross(effect,frame,system);
+      if(effect.type==='flameCrossCombo')updateFlameCrossCombo(effect,frame);
+      else if(effect.type==='flameCrossWave')updateFlameCrossWave(effect,frame,system,time);
       else if(effect.type==='bouncingBlaze')updateBouncingBlaze(effect,frame,system);
       else if(effect.type==='homingFlares')updateHomingFlares(effect,frame,system);
       else if(effect.type==='dragonArc')updateDragonArc(effect,frame,system);
-      else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,now);
+      else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,time);
       else if(effect.type==='waterPrison')updateWaterPrison(effect,frame,system);
     }
   }
