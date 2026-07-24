@@ -2,6 +2,14 @@ function isNonStance(card){return card?.type==='ability'||card?.type==='modifier
 function isWizardArcana(card){return card?.sourceGame==='Wizard of Legend'&&typeof card?.arcanaId==='string';}
 function cleanCardName(card){return String(card?.name||card?.id||'CARD').replace(/^S\d+\s*/, '');}
 
+export function claimArcanaTileDecoration(tile,card){
+  if(!tile?.dataset||!isWizardArcana(card))return false;
+  const key=String(card.id||card.arcanaId||'wizard-arcana');
+  if(tile.dataset.wizardArcanaDecorated===key)return false;
+  tile.dataset.wizardArcanaDecorated=key;
+  return true;
+}
+
 export function installEnemyLabDeckEditorRefinements(){
   if(typeof window==='undefined'||window.__enemyLabDeckEditorRefinementsInstalled)return;
   window.__enemyLabDeckEditorRefinementsInstalled=true;
@@ -34,21 +42,28 @@ export function installEnemyLabDeckEditorRefinements(){
   };
 
   const decorateArcanaTile=(tile,card)=>{
-    if(!isWizardArcana(card))return;
+    // The editor is watched by a child-list MutationObserver. Rewriting arcana
+    // details on every observer callback caused an endless self-triggering loop
+    // as soon as Browse Cards rendered these tiles. Claim each newly rendered
+    // tile once, then leave it untouched until the editor naturally rebuilds it.
+    if(!claimArcanaTileDecoration(tile,card))return;
     tile.classList.add('wizardArcanaCard');
     tile.style.setProperty('--arcana-color',card.uiColor||'#e8a04c');
-    const family=tile.querySelector('.deckCardFamily');if(family)family.textContent='WIZARD ARCANA';
-    const description=tile.querySelector('.deckCardDescription');if(description)description.textContent=card.description||'';
-    const summary=tile.querySelector('.deckCardDetailSummary');if(summary)summary.textContent=card.details?.summary||card.description||'';
+    const family=tile.querySelector('.deckCardFamily');if(family&&family.textContent!=='WIZARD ARCANA')family.textContent='WIZARD ARCANA';
+    const description=tile.querySelector('.deckCardDescription'),descriptionText=card.description||'';
+    if(description&&description.textContent!==descriptionText)description.textContent=descriptionText;
+    const summary=tile.querySelector('.deckCardDetailSummary'),summaryText=card.details?.summary||descriptionText;
+    if(summary&&summary.textContent!==summaryText)summary.textContent=summaryText;
     const rows=tile.querySelector('.deckCardDetailRows');
     if(rows&&Array.isArray(card.details?.rows)){
-      rows.replaceChildren();
+      const fragment=parentDocument.createDocumentFragment();
       for(const [label,value] of card.details.rows){
         const row=parentDocument.createElement('div');row.className='deckCardDetailRow';
         const heading=parentDocument.createElement('b');heading.textContent=label;
         const text=parentDocument.createElement('span');text.textContent=value;
-        row.append(heading,text);rows.appendChild(row);
+        row.append(heading,text);fragment.appendChild(row);
       }
+      rows.replaceChildren(fragment);
     }
   };
 
