@@ -13,8 +13,7 @@ function cardGlyph(card){
 }
 
 export function installAbilityTryoutUi({
-  onTestPrev,onTestNext,onTestDown,onTestUp,onToggleDetails,
-  onHandDown,onHandUp,onShuffle,
+  onTestPrev,onTestNext,onTestDown,onTestUp,onToggleDetails,onRegularRelease,
 }={}){
   const style=document.createElement('style');
   style.id='abilityTryoutStyle';
@@ -27,13 +26,10 @@ body.enemy-lab-card-controller #cardRow .scard:not(:disabled){opacity:1!importan
 body.enemy-lab-card-controller #cardRow .scard .cicon,
 body.enemy-lab-card-controller #cardRow .scard .crows{visibility:hidden}
 body.enemy-lab-card-controller #cardRow .scard .ckey{position:relative;z-index:4}
-body.enemy-lab-card-controller #cardRow .scard.ability-held{transform:translateY(2px);box-shadow:0 1px 0 #081112;background:#2c4a47}
 .abilityCardFace{position:absolute;inset:18px 4px 4px;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;pointer-events:none}
 .abilityCardGlyph{font-size:13px;line-height:1;color:#e8a04c;white-space:nowrap}
 .abilityCardName{max-width:100%;font-size:7px;line-height:1.06;font-weight:900;color:#d8eee9;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .abilityCardFamily{max-width:100%;font-size:5.5px;line-height:1;color:#7ea39d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.abilityCardCoolShade{position:absolute;left:0;right:0;bottom:0;z-index:2;height:0;background:rgba(4,7,12,.82);pointer-events:none}
-.abilityCardCoolText{position:absolute;inset:0;z-index:5;display:grid;place-items:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 2px 5px #000;pointer-events:none}
 .abilityDeckCount{font-size:6px;color:#82aaa3;text-align:center;max-width:38px;line-height:1.15}
 #abilityTestHud{display:none;position:fixed;left:50%;bottom:max(8px,env(safe-area-inset-bottom));z-index:27;transform:translateX(-50%);align-items:flex-end;gap:6px;font-family:ui-monospace,Menlo,Consolas,monospace;pointer-events:none}
 body.card-mode-test #abilityTestHud{display:flex}
@@ -75,23 +71,18 @@ body.card-mode-test #abilityTestHud{display:flex}
     const face=document.createElement('span');
     face.className='abilityCardFace';
     face.innerHTML='<span class="abilityCardGlyph"></span><span class="abilityCardName"></span><span class="abilityCardFamily"></span>';
-    const shade=document.createElement('span');shade.className='abilityCardCoolShade';
-    const cool=document.createElement('span');cool.className='abilityCardCoolText';
-    button.append(shade,face,cool);
-    return {button,face,shade,cool};
+    button.append(face);
+    return {button,face};
   });
 
+  // The arena owns pointerdown and therefore owns every play/consume/draw.
+  // Enemy Lab listens only for release so aimed cards can complete their cast.
   const cleanup=[];
   faces.forEach(({button},slot)=>{
-    const down=event=>{stopPointer(event);button.setPointerCapture?.(event.pointerId);button.classList.add('ability-held');onHandDown?.(slot);};
-    const up=event=>{stopPointer(event);button.classList.remove('ability-held');onHandUp?.(slot);};
-    button.addEventListener('pointerdown',down,true);
-    for(const type of ['pointerup','pointercancel'])button.addEventListener(type,up,true);
-    cleanup.push(()=>{button.removeEventListener('pointerdown',down,true);for(const type of ['pointerup','pointercancel'])button.removeEventListener(type,up,true);});
+    const release=()=>onRegularRelease?.(slot);
+    for(const type of ['pointerup','pointercancel'])button.addEventListener(type,release);
+    cleanup.push(()=>{for(const type of ['pointerup','pointercancel'])button.removeEventListener(type,release);});
   });
-  const shuffleDown=event=>{stopPointer(event);onShuffle?.();};
-  shuffleButton.addEventListener('pointerdown',shuffleDown,true);
-  cleanup.push(()=>shuffleButton.removeEventListener('pointerdown',shuffleDown,true));
 
   const testHud=document.createElement('div');
   testHud.id='abilityTestHud';
@@ -121,16 +112,13 @@ body.card-mode-test #abilityTestHud{display:flex}
       document.body.classList.toggle('card-mode-regular',v.mode==='regular');
       document.body.classList.toggle('card-mode-test',v.mode==='test');
       deckCount.textContent=v.deckCounts||'';
-      shuffleButton.textContent=v.shuffleText||'↻';
-      faces.forEach(({button,face,shade,cool},slot)=>{
+      faces.forEach(({button,face},slot)=>{
         const card=v.hand?.[slot]||null;
         button.classList.toggle('empty',!card);
         button.disabled=!card;
         face.querySelector('.abilityCardGlyph').textContent=cardGlyph(card);
         face.querySelector('.abilityCardName').textContent=card?.name||'EMPTY';
         face.querySelector('.abilityCardFamily').textContent=card?.family||'';
-        shade.style.height=`${card?.coolPercent||0}%`;
-        cool.textContent=card?.cooling?card.coolText:'';
       });
       queueDots.forEach((dot,index)=>{
         const queued=v.queue?.[index]||null;
@@ -154,7 +142,7 @@ body.card-mode-test #abilityTestHud{display:flex}
     },
     dispose(){
       cleanup.forEach(fn=>fn());
-      for(const {face,shade,cool} of faces){face.remove();shade.remove();cool.remove();}
+      for(const {face} of faces)face.remove();
       deckCount.remove();testHud.remove();info.remove();notice.remove();style.remove();
       document.body.classList.remove('enemy-lab-card-controller','card-mode-regular','card-mode-test');
     },
