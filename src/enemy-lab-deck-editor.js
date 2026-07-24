@@ -4,6 +4,7 @@ import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
 
 const ENEMY_LAB_DECK_KEY='enemyLab.deck.v1';
 const ENEMY_LAB_DECK_UI_KEY='enemyLab.deck.ui.v1';
+
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
 function uniqueCards(cards){
   const seen=new Set();
@@ -17,14 +18,73 @@ function cardFamily(card){
   return'STANCES';
 }
 function cleanCardName(card){return String(card?.name||card?.id||'CARD').replace(/^S\d+\s*/, '');}
+function humanizeToken(value=''){
+  return String(value)
+    .replace(/([a-z])([A-Z])/g,'$1 $2')
+    .replace(/[-_]+/g,' ')
+    .replace(/\b\w/g,letter=>letter.toUpperCase());
+}
+function attackLabel(key=''){
+  const value=String(key);
+  if(value.startsWith('horizontal'))return'Horizontal slice';
+  if(value.startsWith('vertical'))return'Vertical chop';
+  if(value.startsWith('stab'))return'Forward thrust';
+  return humanizeToken(value)||'Attack';
+}
 function cardDescription(card){
   const family=cardFamily(card);
   if(family==='BING BONG')return'Concussion stance · vertical, vertical, horizontal · stun-focused.';
   if(family==='POWBUNKER')return'Single-use Pilebunker ability card.';
-  if(family==='BLOOD SLASH')return'Temporary horizontal-attack modifier card.';
+  if(family==='BLOOD SLASH')return'Three-charge attack modifier · horizontal attacks gain reach and bleed.';
   const tags=(card?.styleTags||[]).slice(0,4).join(' · ');
-  const weapons=(card?.preferredWeapons||[]).slice(0,3).join(', ');
+  const weapons=(card?.preferredWeapons||[]).slice(0,3).map(humanizeToken).join(', ');
   return`${tags||'stance'}${weapons?` · ${weapons}`:''}`;
+}
+function cardDetails(card){
+  const family=cardFamily(card);
+  if(family==='BING BONG')return{
+    summary:'A blunt concussion stance. Its two vertical lights apply direct pressure, while the horizontal heavy can project a stun wave from a strong blunt impact.',
+    rows:[
+      ['LIGHTS','Vertical chop → Vertical chop'],
+      ['HEAVY','Horizontal slice'],
+      ['EFFECT','Blunt contact creates a concussion wave and a 3 second stun.'],
+      ['WEAPONS','Available to every weapon; stronger blunt contact creates a larger wave.'],
+    ],
+  };
+  if(family==='POWBUNKER')return{
+    summary:'A single-use ability card that fires the dedicated Pilebunker strike without replacing the stance you already have equipped.',
+    rows:[
+      ['PLAY','Activate the Pilebunker piston strike.'],
+      ['DECK','The card is consumed and replaced only after a successful activation.'],
+      ['STANCE','Your current stance remains active.'],
+      ['ROLE','A committed burst attack for testing impact, guard breaks, and knockback.'],
+    ],
+  };
+  if(family==='BLOOD SLASH')return{
+    summary:'Arms three attack charges. Every non-ability attack spends one charge, but horizontal attacks receive the full Blood Slash enlargement and apply movement-linked bleed.',
+    rows:[
+      ['CHARGES','3 attacks'],
+      ['HORIZONTAL','Greatly enlarges the horizontal hit zone and applies bleed.'],
+      ['OTHER ATTACKS','Spend a charge without receiving the enlarged horizontal slash.'],
+      ['BLEED','Stored damage is released as the affected enemy moves.'],
+    ],
+  };
+  const chain=Array.isArray(card?.chain)?card.chain:[];
+  const lights=chain.slice(0,2).map(attackLabel);
+  const heavy=attackLabel(chain[2]);
+  const tags=(card?.styleTags||[]).map(humanizeToken);
+  const weapons=(card?.preferredWeapons||[]).map(humanizeToken);
+  const identity=tags.slice(0,3).join(', ').toLowerCase()||'mixed combat';
+  return{
+    summary:`A ${identity} stance. Its light sequence is ${lights.join(' into ').toLowerCase()}, followed by a ${heavy.toLowerCase()} heavy finisher.`,
+    rows:[
+      ['LIGHTS',lights.join(' → ')||'No authored light chain'],
+      ['HEAVY',heavy],
+      ['GUARD',humanizeToken(card?.guardId||'Standard guard')],
+      ['WEAPONS',weapons.join(' · ')||'Any weapon'],
+      ['STYLE',tags.join(' · ')||'Mixed'],
+    ],
+  };
 }
 function readJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'')??fallback;}catch{return fallback;}}
 function sameIds(a,b){return a.length===b.length&&a.every((id,index)=>id===b[index]);}
@@ -45,7 +105,9 @@ export function installEnemyLabDeckEditor(deck){
   let initialized=false;
   let rendering=false;
   let pendingBaseRestore=false;
-  const scrollPositions=new Map();
+  const baseScrollPositions=new Map();
+  const editorScrollPositions=new Map();
+  const expandedByContext=new Map();
 
   function persistUi(){localStorage.setItem(ENEMY_LAB_DECK_UI_KEY,JSON.stringify({family}));}
   function persistDeck(){localStorage.setItem(ENEMY_LAB_DECK_KEY,JSON.stringify({version:1,cardIds:selectedIds}));}
@@ -90,18 +152,39 @@ export function installEnemyLabDeckEditor(deck){
     const active=[...categories.querySelectorAll('.choice.on:not([data-deck-editor-category])')][0];
     return`base:${(active?.textContent||'TEST').trim()}`;
   }
-  function editorScrollKey(){return activeView==='browse'?`editor:browse:${family}`:'editor:deck';}
-  function saveScroll(values,categories){
-    const key=activeView?editorScrollKey():currentBaseKey(categories);
-    scrollPositions.set(key,{top:values.scrollTop,left:values.scrollLeft});
+  function editorContextKey(view=activeView,currentFamily=family){return view==='browse'?`browse:${currentFamily}`:'deck';}
+  function editorRoot(values){return values.querySelector('.deckEditorRoot');}
+  function saveBaseScroll(values,categories){
+    baseScrollPositions.set(currentBaseKey(categories),{top:values.scrollTop,left:values.scrollLeft});
   }
-  function restoreScroll(values,key){
-    const position=scrollPositions.get(key)||{top:0,left:0};
+  function restoreBaseScroll(values,key){
+    const position=baseScrollPositions.get(key)||{top:0,left:0};
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       values.scrollTop=position.top;
       values.scrollLeft=position.left;
       values.dispatchEvent(new Event('scroll'));
     }));
+  }
+  function saveEditorScroll(values,key=editorContextKey()){
+    const root=editorRoot(values);
+    if(!root)return;
+    const cards=root.querySelector('.deckEditorCardsPane');
+    const controls=root.querySelector('.deckEditorControlsPane');
+    editorScrollPositions.set(key,{cards:cards?.scrollTop||0,controls:controls?.scrollTop||0});
+  }
+  function restoreEditorScroll(values,key=editorContextKey()){
+    const position=editorScrollPositions.get(key)||{cards:0,controls:0};
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const root=editorRoot(values);
+      const cards=root?.querySelector('.deckEditorCardsPane');
+      const controls=root?.querySelector('.deckEditorControlsPane');
+      if(cards)cards.scrollTop=position.cards;
+      if(controls)controls.scrollTop=position.controls;
+    }));
+  }
+  function saveActiveScroll(values,categories){
+    if(activeView)saveEditorScroll(values);
+    else saveBaseScroll(values,categories);
   }
 
   function installStyles(){
@@ -110,32 +193,62 @@ export function installEnemyLabDeckEditor(deck){
     style.id='enemyLabDeckEditorStyles';
     style.textContent=`
       #labCategories .deckEditorCategory b{white-space:normal;line-height:1.12}
-      #labValues.deckEditorActive{padding:8px;overflow-y:auto;overflow-x:hidden;touch-action:pan-y}
-      .deckEditorRoot{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0;min-height:100%}
-      .deckEditorToolbar{position:sticky;top:-8px;z-index:4;display:flex;flex-direction:column;gap:7px;padding:8px;border:1px solid rgba(49,80,77,.85);border-radius:8px;background:rgba(7,19,21,.985);box-shadow:0 5px 15px rgba(0,0,0,.28)}
-      .deckEditorSummary{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:8.5px;letter-spacing:.06em}
-      .deckEditorSummary strong{color:var(--gold);font-size:10.5px}
-      .deckFamilyBar{display:flex;flex-wrap:wrap;gap:5px}
-      .deckFamilyBtn,.deckBatchBtn,.deckCardAction{min-height:34px;border:1px solid var(--line);border-radius:7px;background:rgba(16,38,40,.95);color:var(--text);font-size:8.5px;letter-spacing:.06em;padding:0 9px;touch-action:manipulation}
+      #labValues.deckEditorActive{padding:0!important;overflow:hidden!important;touch-action:none!important}
+      #labDock.deckEditorMode #valueScrollGutter{display:none}
+      .deckEditorRoot{display:grid;grid-template-columns:minmax(280px,1fr) minmax(176px,220px);width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:rgba(0,0,0,.05)}
+      .deckEditorCardsPane,.deckEditorControlsPane{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#8a5630 rgba(0,0,0,.16)}
+      .deckEditorCardsPane::-webkit-scrollbar,.deckEditorControlsPane::-webkit-scrollbar{width:9px}
+      .deckEditorCardsPane::-webkit-scrollbar-track,.deckEditorControlsPane::-webkit-scrollbar-track{background:rgba(0,0,0,.16)}
+      .deckEditorCardsPane::-webkit-scrollbar-thumb,.deckEditorControlsPane::-webkit-scrollbar-thumb{background:#8a5630;border:2px solid #0a1a1c;border-radius:8px}
+      .deckEditorCardsPane{padding:8px}
+      .deckEditorControlsPane{padding:8px;border-left:1px solid rgba(49,80,77,.72);background:rgba(4,14,16,.72)}
+      .deckEditorControlStack{display:flex;flex-direction:column;gap:8px;min-height:100%}
+      .deckEditorControlCard{display:flex;flex-direction:column;gap:7px;padding:9px;border:1px solid rgba(49,80,77,.82);border-radius:8px;background:rgba(12,31,33,.86)}
+      .deckEditorControlTitle{color:var(--teal);font-size:8px;letter-spacing:.13em}
+      .deckEditorSummary{display:flex;flex-direction:column;gap:3px;color:var(--muted);font-size:8.5px;letter-spacing:.05em}
+      .deckEditorSummary strong{color:var(--gold);font-size:12px}
+      .deckFamilyBar{display:grid;grid-template-columns:1fr;gap:6px}
+      .deckFamilyBtn,.deckBatchBtn,.deckCardAction{min-height:36px;border:1px solid var(--line);border-radius:7px;background:rgba(16,38,40,.95);color:var(--text);font-size:8.5px;letter-spacing:.06em;padding:0 9px;touch-action:manipulation}
+      .deckFamilyBtn{text-align:left}
       .deckFamilyBtn.on{border-color:var(--gold);color:var(--gold);background:rgba(232,160,76,.12)}
-      .deckBatchBtn{color:var(--gold);border-color:#8a5630;align-self:flex-start}
+      .deckBatchBtn{width:100%;color:var(--gold);border-color:#8a5630}
       .deckBatchBtn:disabled,.deckCardAction:disabled{opacity:.45}
+      .deckControlNote{color:var(--muted);font-size:7.8px;line-height:1.45}
+      .deckCountList{display:flex;flex-direction:column;gap:5px}
+      .deckCountRow{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:8px}
+      .deckCountRow strong{color:var(--text)}
       .deckCardList{display:flex;flex-direction:column;gap:7px;padding-bottom:4px}
-      .deckCardTile{display:flex;align-items:center;gap:9px;min-height:68px;padding:9px;border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58)}
+      .deckCardTile{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;min-height:70px;padding:8px;border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58)}
       .deckCardTile.inDeck{border-color:rgba(232,160,76,.72);background:rgba(232,160,76,.08)}
-      .deckCardInfo{flex:1;min-width:0}
+      .deckCardTile.expanded{border-color:var(--teal);background:rgba(42,91,85,.17)}
+      .deckCardInfoButton{display:block;min-width:0;width:100%;padding:2px 1px;text-align:left;border:0;background:transparent;color:inherit;touch-action:manipulation}
+      .deckCardInfoButton:active{transform:none;background:transparent}
+      .deckCardTopLine{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
       .deckCardName{display:block;color:var(--text);font-size:10.5px;line-height:1.2}
+      .deckCardDisclosure{flex:0 0 auto;color:var(--muted);font-size:12px;line-height:1;transition:transform .15s}
+      .deckCardTile.expanded .deckCardDisclosure{transform:rotate(180deg);color:var(--gold)}
       .deckCardFamily{display:block;margin-top:3px;color:var(--gold);font-size:7.5px;letter-spacing:.1em}
       .deckCardDescription{display:block;margin-top:4px;color:var(--muted);font-size:8px;line-height:1.35}
-      .deckCardAction{flex:0 0 auto;min-width:68px;color:var(--gold)}
+      .deckCardAction{align-self:center;min-width:68px;color:var(--gold)}
       .deckCardAction.remove{color:#ffad91;border-color:#75402e}
+      .deckCardDetails{grid-column:1/-1;display:none;margin-top:1px;padding:9px;border-top:1px solid rgba(49,80,77,.62);color:var(--muted)}
+      .deckCardTile.expanded .deckCardDetails{display:block}
+      .deckCardDetailSummary{margin:0 0 9px;color:var(--text);font-size:8.5px;line-height:1.5}
+      .deckCardDetailRows{display:flex;flex-direction:column;gap:6px}
+      .deckCardDetailRow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;font-size:7.8px;line-height:1.4}
+      .deckCardDetailRow b{color:var(--gold);font-size:7.5px;letter-spacing:.08em}
       .deckEmpty{padding:18px 10px;text-align:center;color:var(--muted);font-size:9px}
+      @media (orientation:landscape){
+        #labDock.deckEditorMode{width:min(68vw,860px);grid-template-columns:minmax(0,1fr) 0 100px}
+        #labDock.deckEditorMode #dockHead,#labDock.deckEditorMode #message{grid-column:1/4}
+      }
       @media (orientation:portrait){
-        #labValues.deckEditorActive{overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y!important}
-        #labValues.deckEditorActive + #valueScrollGutter{visibility:hidden}
-        .deckEditorRoot{width:100%;min-width:100%;height:auto}
-        .deckEditorToolbar{top:-8px}
-        .deckCardTile{min-width:0;width:100%}
+        #labDock.deckEditorMode{height:min(88dvh,900px);grid-template-rows:auto 1fr 0 58px auto}
+        .deckEditorRoot{grid-template-columns:minmax(160px,1fr) minmax(126px,40%)}
+        .deckEditorCardsPane,.deckEditorControlsPane{padding:6px}
+        .deckCardTile{padding:7px;gap:6px}
+        .deckCardAction{min-width:58px;padding:0 6px}
+        .deckCardDetailRow{grid-template-columns:54px minmax(0,1fr)}
       }
     `;
     parentDocument.head.appendChild(style);
@@ -149,81 +262,163 @@ export function installEnemyLabDeckEditor(deck){
     button.addEventListener('click',onClick);
     return button;
   }
+  function setTileExpanded(tile,button,open){
+    tile.classList.toggle('expanded',open);
+    button.setAttribute('aria-expanded',String(open));
+  }
+  function makeDetails(card){
+    const model=cardDetails(card);
+    const details=parentDocument.createElement('div');
+    details.className='deckCardDetails';
+    const summary=parentDocument.createElement('p');
+    summary.className='deckCardDetailSummary';
+    summary.textContent=model.summary;
+    const rows=parentDocument.createElement('div');
+    rows.className='deckCardDetailRows';
+    for(const [label,value] of model.rows){
+      const row=parentDocument.createElement('div');
+      row.className='deckCardDetailRow';
+      const heading=parentDocument.createElement('b');heading.textContent=label;
+      const text=parentDocument.createElement('span');text.textContent=value;
+      row.append(heading,text);rows.appendChild(row);
+    }
+    details.append(summary,rows);
+    return details;
+  }
   function makeCardTile(card,mode,values,categories){
     const inDeck=selectedIds.includes(card.id);
-    const tile=parentDocument.createElement('div');
+    const tile=parentDocument.createElement('article');
     tile.className=`deckCardTile${inDeck?' inDeck':''}`;
-    const info=parentDocument.createElement('div');
-    info.className='deckCardInfo';
+    tile.dataset.cardId=card.id;
+    const info=parentDocument.createElement('button');
+    info.type='button';
+    info.className='deckCardInfoButton';
+    info.setAttribute('aria-label',`Show details for ${cleanCardName(card)}`);
+    const top=parentDocument.createElement('span');top.className='deckCardTopLine';
     const name=parentDocument.createElement('b');name.className='deckCardName';name.textContent=cleanCardName(card);
+    const disclosure=parentDocument.createElement('span');disclosure.className='deckCardDisclosure';disclosure.textContent='⌄';
+    top.append(name,disclosure);
     const cardFamilyLabel=parentDocument.createElement('span');cardFamilyLabel.className='deckCardFamily';cardFamilyLabel.textContent=cardFamily(card);
     const description=parentDocument.createElement('span');description.className='deckCardDescription';description.textContent=cardDescription(card);
-    info.append(name,cardFamilyLabel,description);
+    info.append(top,cardFamilyLabel,description);
+    const details=makeDetails(card);
+    const context=editorContextKey();
+    const startsExpanded=expandedByContext.get(context)===card.id;
+    setTileExpanded(tile,info,startsExpanded);
+    info.addEventListener('click',()=>{
+      const list=tile.parentElement;
+      const wasOpen=tile.classList.contains('expanded');
+      const other=list?.querySelector('.deckCardTile.expanded');
+      if(other&&other!==tile){
+        const otherButton=other.querySelector('.deckCardInfoButton');
+        if(otherButton)setTileExpanded(other,otherButton,false);
+      }
+      const nextOpen=!wasOpen;
+      setTileExpanded(tile,info,nextOpen);
+      expandedByContext.set(editorContextKey(),nextOpen?card.id:null);
+    });
     if(mode==='browse'){
       const add=makeButton('deckCardAction',inDeck?'IN DECK':'ADD',()=>{
         if(inDeck)return;
-        saveScroll(values,categories);
+        saveEditorScroll(values);
         selectedIds.push(card.id);
         applySelected();
         renderEditor(values,categories);
       });
       add.disabled=inDeck;
-      tile.append(info,add);
+      tile.append(info,add,details);
     }else{
       const remainingStances=selectedCards().filter(item=>!isNonStance(item)).length;
       const lastStance=!isNonStance(card)&&remainingStances<=1;
       const remove=makeButton('deckCardAction remove','REMOVE',()=>{
         if(lastStance){setMessage('The deck needs at least one stance card.');return;}
-        saveScroll(values,categories);
+        saveEditorScroll(values);
         selectedIds=selectedIds.filter(id=>id!==card.id);
+        if(expandedByContext.get(editorContextKey())===card.id)expandedByContext.set(editorContextKey(),null);
         applySelected();
         renderEditor(values,categories);
       });
       remove.disabled=lastStance;
-      tile.append(info,remove);
+      tile.append(info,remove,details);
     }
     return tile;
   }
 
+  function controlCard(title){
+    const card=parentDocument.createElement('section');card.className='deckEditorControlCard';
+    const heading=parentDocument.createElement('b');heading.className='deckEditorControlTitle';heading.textContent=title;
+    card.appendChild(heading);return card;
+  }
   function renderBrowse(root,values,categories){
     const shown=family==='ALL'?catalog:catalog.filter(card=>cardFamily(card)===family);
     const missing=shown.filter(card=>!selectedIds.includes(card.id));
-    const toolbar=parentDocument.createElement('div');toolbar.className='deckEditorToolbar';
+    const cardsPane=parentDocument.createElement('div');cardsPane.className='deckEditorCardsPane';
+    const list=parentDocument.createElement('div');list.className='deckCardList';
+    for(const card of shown)list.appendChild(makeCardTile(card,'browse',values,categories));
+    cardsPane.appendChild(list);
+
+    const controls=parentDocument.createElement('aside');controls.className='deckEditorControlsPane';
+    const stack=parentDocument.createElement('div');stack.className='deckEditorControlStack';
+    const summaryCard=controlCard('BROWSE SUMMARY');
     const summary=parentDocument.createElement('div');summary.className='deckEditorSummary';
-    summary.innerHTML=`<strong>${shown.length} SHOWN</strong><span>${selectedIds.length} IN DECK</span>`;
+    summary.innerHTML=`<strong>${shown.length} SHOWN</strong><span>${selectedIds.length} cards currently in the deck</span>`;
+    summaryCard.appendChild(summary);
+    const familyCard=controlCard('CARD FAMILIES');
     const familyBar=parentDocument.createElement('div');familyBar.className='deckFamilyBar';
     for(const item of families){
       const button=makeButton(`deckFamilyBtn${item===family?' on':''}`,item,()=>{
-        saveScroll(values,categories);
+        const previousKey=editorContextKey();
+        saveEditorScroll(values,previousKey);
         family=item;persistUi();
         renderEditor(values,categories);
       });
       familyBar.appendChild(button);
     }
+    familyCard.appendChild(familyBar);
+    const actionsCard=controlCard('FAMILY ACTIONS');
     const addShown=makeButton('deckBatchBtn',missing.length?`ADD SHOWN · ${missing.length}`:'ALL SHOWN ADDED',()=>{
       if(!missing.length)return;
-      saveScroll(values,categories);
+      saveEditorScroll(values);
       selectedIds=uniqueCards([...selectedCards(),...missing]).map(card=>card.id);
       applySelected();
       renderEditor(values,categories);
     });
     addShown.disabled=!missing.length;
-    toolbar.append(summary,familyBar,addShown);
-    const list=parentDocument.createElement('div');list.className='deckCardList';
-    for(const card of shown)list.appendChild(makeCardTile(card,'browse',values,categories));
-    root.append(toolbar,list);
+    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent='This control column and the card list scroll independently.';
+    actionsCard.append(addShown,note);
+    stack.append(summaryCard,familyCard,actionsCard);controls.appendChild(stack);
+    root.append(cardsPane,controls);
   }
   function renderCurrentDeck(root,values,categories){
     const cards=selectedCards();
     const stanceCount=cards.filter(card=>!isNonStance(card)).length;
-    const toolbar=parentDocument.createElement('div');toolbar.className='deckEditorToolbar';
-    const summary=parentDocument.createElement('div');summary.className='deckEditorSummary';
-    summary.innerHTML=`<strong>${cards.length} CARDS</strong><span>${stanceCount} STANCES · ${cards.length-stanceCount} OTHER</span>`;
-    toolbar.appendChild(summary);
+    const cardsPane=parentDocument.createElement('div');cardsPane.className='deckEditorCardsPane';
     const list=parentDocument.createElement('div');list.className='deckCardList';
     if(!cards.length){const empty=parentDocument.createElement('div');empty.className='deckEmpty';empty.textContent='No cards selected.';list.appendChild(empty);}
     else for(const card of cards)list.appendChild(makeCardTile(card,'deck',values,categories));
-    root.append(toolbar,list);
+    cardsPane.appendChild(list);
+
+    const controls=parentDocument.createElement('aside');controls.className='deckEditorControlsPane';
+    const stack=parentDocument.createElement('div');stack.className='deckEditorControlStack';
+    const summaryCard=controlCard('CURRENT DECK');
+    const summary=parentDocument.createElement('div');summary.className='deckEditorSummary';
+    summary.innerHTML=`<strong>${cards.length} CARDS</strong><span>${stanceCount} stances · ${cards.length-stanceCount} other cards</span>`;
+    summaryCard.appendChild(summary);
+    const countsCard=controlCard('FAMILY COUNTS');
+    const countList=parentDocument.createElement('div');countList.className='deckCountList';
+    for(const item of families.filter(item=>item!=='ALL')){
+      const count=cards.filter(card=>cardFamily(card)===item).length;
+      const row=parentDocument.createElement('div');row.className='deckCountRow';
+      const label=parentDocument.createElement('span');label.textContent=item;
+      const value=parentDocument.createElement('strong');value.textContent=String(count);
+      row.append(label,value);countList.appendChild(row);
+    }
+    countsCard.appendChild(countList);
+    const noteCard=controlCard('EDITING');
+    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent='Remove cards from the list on the left. The final stance stays protected so the combat deck always remains playable.';
+    noteCard.appendChild(note);
+    stack.append(summaryCard,countsCard,noteCard);controls.appendChild(stack);
+    root.append(cardsPane,controls);
   }
   function syncCategoryButtons(categories){
     for(const [view,label] of [['browse','BROWSE CARDS'],['deck','CURRENT DECK']]){
@@ -242,19 +437,25 @@ export function installEnemyLabDeckEditor(deck){
       for(const button of categories.querySelectorAll('.choice:not([data-deck-editor-category])'))button.classList.remove('on');
     }
   }
+  function setEditorMode(dock,values,enabled){
+    dock.classList.toggle('deckEditorMode',enabled);
+    values.classList.toggle('deckEditorActive',enabled);
+  }
   function renderEditor(values,categories){
     if(!activeView||rendering)return;
     rendering=true;
-    values.classList.add('deckEditorActive');
+    const dock=parentDocument.getElementById('labDock');
+    setEditorMode(dock,values,true);
     const root=parentDocument.createElement('div');
     root.className='deckEditorRoot';root.dataset.view=activeView;
     if(activeView==='browse')renderBrowse(root,values,categories);else renderCurrentDeck(root,values,categories);
     values.replaceChildren(root);
+    values.scrollTop=0;values.scrollLeft=0;
     const hint=parentDocument.getElementById('categoryHint');
-    if(hint)hint.textContent=activeView==='browse'?'Filter card families and add cards to the live deck.':'Review the complete live deck and remove cards.';
+    if(hint)hint.textContent=activeView==='browse'?'Browse cards while the family controls remain in their own column.':'Review the complete live deck and remove cards.';
     syncCategoryButtons(categories);
     rendering=false;
-    restoreScroll(values,editorScrollKey());
+    restoreEditorScroll(values);
   }
 
   function finishInstall(){
@@ -274,34 +475,36 @@ export function installEnemyLabDeckEditor(deck){
 
     syncCategoryButtons(categories);
     values.addEventListener('scroll',()=>{
-      if(!initialized)return;
-      const key=activeView?editorScrollKey():currentBaseKey(categories);
-      scrollPositions.set(key,{top:values.scrollTop,left:values.scrollLeft});
+      if(!initialized||activeView)return;
+      saveBaseScroll(values,categories);
     },{passive:true});
     categories.addEventListener('click',event=>{
       const editorButton=event.target.closest?.('[data-deck-editor-category]');
-      saveScroll(values,categories);
+      saveActiveScroll(values,categories);
       if(editorButton){
         event.preventDefault();event.stopPropagation();
         activeView=editorButton.dataset.deckEditorCategory;
         renderEditor(values,categories);
         return;
       }
-      if(activeView){activeView=null;values.classList.remove('deckEditorActive');}
+      if(activeView){
+        activeView=null;
+        setEditorMode(dock,values,false);
+      }
       pendingBaseRestore=true;
     },true);
 
     new MutationObserver(()=>{
       syncCategoryButtons(categories);
+      if(activeView&&!values.querySelector(`.deckEditorRoot[data-view="${activeView}"]`))renderEditor(values,categories);
+    }).observe(categories,{childList:true,subtree:true});
+    new MutationObserver(()=>{
       if(activeView){
         if(!values.querySelector(`.deckEditorRoot[data-view="${activeView}"]`))renderEditor(values,categories);
       }else if(pendingBaseRestore){
         pendingBaseRestore=false;
-        restoreScroll(values,currentBaseKey(categories));
+        restoreBaseScroll(values,currentBaseKey(categories));
       }
-    }).observe(categories,{childList:true,subtree:true});
-    new MutationObserver(()=>{
-      if(activeView&&!values.querySelector(`.deckEditorRoot[data-view="${activeView}"]`))renderEditor(values,categories);
     }).observe(values,{childList:true});
 
     window.__enemyLabDeckEditor={
@@ -309,9 +512,9 @@ export function installEnemyLabDeckEditor(deck){
       get cardIds(){return selectedIds.slice();},
       get activeView(){return activeView;},
       get family(){return family;},
-      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;if(activeView)saveScroll(values,categories);selectedIds.push(id);applySelected();if(activeView)renderEditor(values,categories);return true;},
-      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;if(activeView)saveScroll(values,categories);selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)renderEditor(values,categories);return true;},
-      show(view='browse'){activeView=view==='deck'?'deck':'browse';renderEditor(values,categories);},
+      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;if(activeView)saveEditorScroll(values);selectedIds.push(id);applySelected();if(activeView)renderEditor(values,categories);return true;},
+      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;if(activeView)saveEditorScroll(values);selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)renderEditor(values,categories);return true;},
+      show(view='browse'){if(activeView)saveEditorScroll(values);activeView=view==='deck'?'deck':'browse';renderEditor(values,categories);},
     };
   }
   finishInstall();
