@@ -19,6 +19,7 @@ const improvedText=[
   read('07-fire-standards-1.md'),
   read('08-fire-standards-2.md'),
   read('09-fire-standards-3.md'),
+  read('10-fire-standards-4.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -153,6 +154,12 @@ const sourceMeta=[
   ['Flame Cleaver','Fire','Signature',325,337,331],
   ['Flame Fusion','Fire','Standard',337,342,340],
   ['Raging Inferno','Fire','Standard',342,353,347],
+  ['Ignition Drive','Fire','Standard',353,357,355],
+  ['Fire Wall','Fire','Standard',357,363,360],
+  ['Crashing Meteor','Fire','Signature',363,369,366],
+  ['Engulfing Fissure','Fire','Standard',369,378,375],
+  ['Rapid Fire Agent','Fire','Standard',378,391,384],
+  ['Ward of Flames','Fire','Standard',391,402,397],
 ];
 
 const implementedNames=new Set([

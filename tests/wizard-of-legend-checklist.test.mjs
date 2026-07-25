@@ -12,17 +12,17 @@ const data=JSON.parse(dataMatch[1]);
 const entries=data.entries;
 
 assert.equal(data.schemaVersion,1,'dataset schema must remain explicitly versioned');
-assert.equal(entries.length,50,'the checklist must track 48 source-first analyses plus two entries awaiting reanalysis');
-assert.equal(new Set(entries.map(entry=>entry.id)).size,50,'arcana IDs must be unique');
-assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:50},(_,index)=>index+1),'source order must be stable');
+assert.equal(entries.length,56,'the checklist must track 54 source-first analyses plus two entries awaiting reanalysis');
+assert.equal(new Set(entries.map(entry=>entry.id)).size,56,'arcana IDs must be unique');
+assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:56},(_,index)=>index+1),'source order must be stable');
 
 const improved=entries.filter(entry=>entry.status!=='legacy-replace');
 const implemented=entries.filter(entry=>entry.status==='source-first-implemented');
 const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
-assert.equal(improved.length,48,'48 entries must use the improved source-first analysis');
+assert.equal(improved.length,54,'54 entries must use the improved source-first analysis');
 assert.equal(implemented.length,10,'only ten source-first implementations count as complete');
-assert.equal(pending.length,38,'38 improved analyses must remain implementation-pending');
+assert.equal(pending.length,44,'44 improved analyses must remain implementation-pending');
 assert.deepEqual(legacy.map(entry=>entry.name),['Whirling Tornado','Water Prison'],'legacy reanalysis queue changed unexpectedly');
 assert.deepEqual(entries.filter(entry=>entry.currentImplementation).map(entry=>entry.name),['Homing Flares','Dragon Arc','Whirling Tornado','Water Prison'],'prototype replacement queue changed unexpectedly');
 const homingFlares=entries.find(entry=>entry.name==='Homing Flares');
