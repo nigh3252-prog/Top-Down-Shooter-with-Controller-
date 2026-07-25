@@ -1,7 +1,8 @@
 name: Append Next Ten Wizard Arcana Analyses
 
-# One-time consolidation workflow; this edit triggers the push event.
 on:
+  pull_request:
+    types: [synchronize]
   push:
     branches:
       - "docs/wizard-of-legend-spell-language"
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   append-reference:
+    if: github.event_name == 'push' || github.head_ref == 'docs/wizard-of-legend-spell-language'
     runs-on: ubuntu-latest
     steps:
       - name: Check out source branch
