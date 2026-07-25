@@ -6,7 +6,10 @@
 import {
   ARENA_ENEMY_ARCHETYPES,
   createArenaEnemySystem as createBaseArenaEnemySystem,
-} from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@a256b089bf912aff434f5b1263a29ec060507b5d/src/arena-enemies.js';
+  // Un-pinned from the jsDelivr @a256b089 snapshot to the byte-identical local
+  // module graph (arena-enemies-antelope.js -> arena-enemies-base.js). This makes
+  // the live enemy system locally profilable/optimizable and unblocks offline tests.
+} from './arena-enemies-antelope.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 
 export { ARENA_ENEMY_ARCHETYPES };

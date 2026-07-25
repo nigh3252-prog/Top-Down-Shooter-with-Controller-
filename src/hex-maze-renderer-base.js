@@ -195,9 +195,16 @@ export function createMazeWorld({
   let sealedRoomIds = new Set();
   let openedEdges = new Set(openedDoorEdges || []);
   let activeRoomCleared = false;
+  // Cached wall+door collision segments. getCollisionSegments() is called several
+  // times per frame (player movement, per-enemy line-of-sight raycasts, dash/card
+  // effects); it used to rebuild a fresh array every call. The set only changes
+  // when door state changes, so cache it and invalidate in setDoorStates.
+  // Contract: callers must treat the returned array as read-only.
+  let collisionSegments = null;
   const setDoorStates = ({ sealedRoomIds:sealed = new Set(), openedDoorEdges:opened = new Set(), roomCleared = false } = {}, { animateOpenedEdge = null } = {}) => {
     sealedRoomIds = new Set(sealed || []);
     openedEdges = new Set(opened || []);
+    collisionSegments = null;  // door state changed -> rebuild cached wall segments on next request
     activeRoomCleared = !!roomCleared;
     for(const [key, mesh] of doorMeshes){
       const edge = mesh.userData.edge;
@@ -245,6 +252,7 @@ export function createMazeWorld({
     }
   };
   const getCollisionSegments = () => {
+    if(collisionSegments) return collisionSegments;
     const segments = [...forest.collisionSegments];
     for(const edge of runtimeEdges){
       if(!edge.door) continue;
@@ -252,7 +260,8 @@ export function createMazeWorld({
       const sealed = sealedRoomIds.has(edge.roomA) || sealedRoomIds.has(edge.roomB);
       if(sealed || !openedEdges.has(edge.edge)) segments.push({ ...split.door, blocked:true, part:'door' });
     }
-    return segments;
+    collisionSegments = segments;
+    return collisionSegments;
   };
   const centers = activeCells.map(cell => axialToWorld(cell.q, cell.r, hexSize));
   const center = centers.reduce((sum, point) => ({ x:sum.x + point.x / centers.length, z:sum.z + point.z / centers.length }), { x:0, z:0 });

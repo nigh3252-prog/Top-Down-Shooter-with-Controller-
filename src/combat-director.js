@@ -277,13 +277,17 @@ export function createCombatDirector(options = {}){
     }
     const limit = approachLimit(budget);
     assignDirectEngagement(meleeEnemies, player, limit);
-    while(state.approachers.length < limit){
+    if(state.approachers.length < limit){
       // Start closing before the personal cooldown is fully finished so the next
       // attacker can be in position while the current attacker is recovering.
+      // grantApproach only mutates the enemy it grants, so the candidate set +
+      // ordering are stable across grants: filter and sort once, then grant in
+      // order (was re-filtering and re-sorting on every loop iteration).
       const candidates = meleeGoblins.filter(e => !e.approachPermit && !e.token && e.state === 'idle' && e.stunned <= 0 && (e.approachCooldown || 0) <= 0 && e.cooldown <= 1.2 && e.gesture !== 'rally');
-      if(!candidates.length) break;
       candidates.sort((a,b) => ((a.approachCount || 0)*2 + distSqTo(a,player)*.02) - ((b.approachCount || 0)*2 + distSqTo(b,player)*.02));
-      grantApproach(candidates[0]);
+      for(let ci = 0; ci < candidates.length && state.approachers.length < limit; ci++){
+        grantApproach(candidates[ci]);
+      }
     }
   }
   function update(dt, context = {}){
@@ -304,7 +308,16 @@ export function createCombatDirector(options = {}){
     if(state.activeRally && (!live(state.activeRally) || state.activeRally.stunned > 0 || state.activeRally.gesture !== 'rally')) state.activeRally = null;
     assignApproachPermits(context.enemies || [], context.player || {x:0,z:0}, context);
   }
-  function markNearEligible(enemies, player){ const sorted = enemies.filter(live).sort((a,b) => distSqTo(a, player) - distSqTo(b, player)); const n = state.mode === 'nearFar' ? settings.nearCount : 999; sorted.forEach((e, i) => { e.nearEligible = i < n; }); }
+  const _nearBuf = [];
+  function markNearEligible(enemies, player){
+    // reuse a scratch array instead of allocating filter()+sort() copies each frame
+    _nearBuf.length = 0;
+    for(const e of enemies) if(live(e)) _nearBuf.push(e);
+    _nearBuf.sort((a,b) => distSqTo(a, player) - distSqTo(b, player));
+    const n = state.mode === 'nearFar' ? settings.nearCount : 999;
+    for(let i = 0; i < _nearBuf.length; i++) _nearBuf[i].nearEligible = i < n;
+    _nearBuf.length = 0;
+  }
   function assignBattleCircleSlots(enemies){ if(state.mode !== 'battleCircle') return slots; for(const s of slots) s.enemyId = null; enemies.filter(live).forEach((e, i) => { e.slotIndex = i % slots.length; slots[e.slotIndex].enemyId = e.id; }); return slots; }
 
   function impactTimeFor(attack, startedAt=state.time){
