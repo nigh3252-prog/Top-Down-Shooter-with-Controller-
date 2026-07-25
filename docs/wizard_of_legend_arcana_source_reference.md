@@ -4,6 +4,30 @@ This is the authoritative, source-first reference for the Wizard of Legend arcan
 
 The per-ability analysis below is preserved verbatim from the project conversation. It intentionally separates concrete source behavior from reusable construction units. When this file conflicts with older per-spell summaries in `wizard_of_legend_spell_language.md`, use this file as the source of truth.
 
+
+## Ability index
+
+1. [Flame Strike](#1-flame-strike)
+2. [Flame Cross](#2-flame-cross)
+3. [Bouncing Blaze](#3-bouncing-blaze)
+4. [Wind Slash](#4-wind-slash)
+5. [Air Spinner](#5-air-spinner)
+6. [Perforating Jet](#6-perforating-jet)
+7. [Earth Knuckles](#7-earth-knuckles)
+8. [Bladed Vine](#8-bladed-vine)
+9. [Stone Shot](#9-stone-shot)
+10. [Spark Contact](#10-spark-contact)
+11. [Bolt Rail](#11-bolt-rail)
+12. [Volt Disc](#12-volt-disc)
+13. [Ice Dagger](#13-ice-dagger)
+14. [Rip Tide](#14-rip-tide)
+15. [Aqua Arc](#15-aqua-arc)
+16. [Chaos Crusher](#16-chaos-crusher)
+17. [Searing Rush](#17-searing-rush)
+18. [Flare Rush](#18-flare-rush)
+
+New source-first arcana analyses should be appended to this file. Do not create a separate analysis file for each new batch.
+
 ---
 
 # First three abilities
@@ -2068,3 +2092,842 @@ FourBeatBasic
 ```
 
 The most valuable new idea is probably **payload handoff** from Volt Disc: the same spell can preserve its intended damage while assigning that damage to a different component depending on whether the projectile directly connects or expires naturally.
+
+---
+
+# Next five abilities
+
+The exact next five arcana shown after Ice Dagger are:
+
+1. **Rip Tide**
+2. **Aqua Arc**
+3. **Chaos Crusher**
+4. **Searing Rush**
+5. **Flare Rush**
+
+The analyses below continue to treat the current prototype implementations as irrelevant. They reconstruct the source move first, then extract reusable conceptual units from that reconstruction.
+
+# 14. Rip Tide
+
+## Concrete source form
+
+### Evidence
+
+**[VIDEO — approximately 69–75 seconds]**
+
+Rip Tide is a one-input, rapid three-ripple sequence.
+
+The caster plants in place and releases three pale-blue water ripples one after another along a fixed forward lane:
+
+- Each ripple is a separate moving water shape.
+- Each has a broad crescent or curved-sheet silhouette rather than a spherical body.
+- White foam and spray define the leading edge.
+- The three emissions arrive in very quick succession.
+- The caster does not visibly retarget between them.
+- The sequence completes automatically after the initial input.
+
+The enhanced demonstration preserves the first two central ripples. On the final emission, two additional side ripples appear with the central ripple, creating a three-way spread.
+
+The move reads as a compact defensive burst: the player commits to one direction, rapidly fills that lane with piercing water, and uses the final spread to widen the protected area.
+
+**[DOCUMENTED]**
+
+Rip Tide is a Water Basic Arcana with projectile subtype. One input performs the entire three-ripple combo, and the sequence cannot be interrupted or redirected once it begins. The caster cannot move or adjust aim during the animation.
+
+The three base ripples deal:
+
+```text
+Ripple 1: 8
+Ripple 2: 7
+Ripple 3: 5
+```
+
+Each ripple pierces enemies and destroys enemy projectiles that it contacts.
+
+When enhanced, the final emission gains two additional ripples that spread outward in an arc. This produces five total ripple hits per sequence and allows multiple final ripples to connect at very close range. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Rip_Tide))
+
+## Exact source recipe
+
+```text
+RIP TIDE
+
+Input structure:
+One press begins one complete three-emission sequence
+
+Commitment:
+Sequence is uninterruptible once started
+Caster cannot move during sequence
+Aim cannot change during sequence
+
+Aim:
+Snapshot direction at activation
+Use that direction for every emission
+
+Carrier:
+Independent traveling water ripple
+
+Visual form:
+Broad crescent or curved sheet
+Pale-blue body
+Bright foaming leading edge
+Short spray breakup on expiration or contact
+
+Path:
+Short straight forward lane
+
+Contact:
+Pierces enemies
+Destroys enemy projectiles
+Continues after enemy contact
+
+Emission schedule:
+Emission 1: one central ripple, 8 damage
+Emission 2: one central ripple, 7 damage
+Emission 3: one central ripple, 5 damage
+
+Enhanced final emission:
+Central final ripple
++ one outward-angled side ripple
++ mirrored outward-angled side ripple
+
+Enhanced total:
+Five ripple carriers across the complete sequence
+```
+
+## Important distinction
+
+Rip Tide is not a normal three-button basic combo.
+
+```text
+Normal combo-cast:
+Press → Beat 1
+Press → Beat 2
+Press → Beat 3
+
+Rip Tide:
+Press once
+→ Ripple 1
+→ Ripple 2
+→ Ripple 3 automatically
+```
+
+The inability to move or update aim is part of its source behavior, not an incidental animation limitation. It is the cost paid for an extremely fast, defensive, projectile-clearing sequence.
+
+## Source-faithful acceptance test
+
+1. One button press always begins the complete three-emission base sequence.
+2. Additional presses are not required to advance the sequence.
+3. The caster cannot move while the sequence is executing.
+4. The aim direction is captured at activation and remains fixed.
+5. The base version releases exactly three separate ripple carriers.
+6. Their damage order is 8, then 7, then 5.
+7. Every ripple continues through enemies.
+8. Every ripple can destroy enemy projectiles it contacts.
+9. The enhanced version leaves the first two emissions unchanged.
+10. The enhanced final emission contains three simultaneous ripples.
+11. The two added final ripples spread to opposite sides.
+12. Rip Tide does not become a continuous beam or a lingering water field.
+
+## Units extracted from Rip Tide
+
+### **One-Press Authored Sequence**
+
+One activation schedules several separate emissions without requesting another input.
+
+```text
+Activate
+→ Emission A
+→ Emission B
+→ Emission C
+```
+
+### **Locked-Aim Commitment**
+
+The sequence uses an aim snapshot and rejects later movement or aim updates until it ends.
+
+```text
+activationDirection = currentAim
+movement = locked
+aimUpdates = ignored
+```
+
+### **Defensive Piercing Volley**
+
+The same carriers both damage enemies and erase hostile projectiles while continuing forward.
+
+### **Final-Emission Fan Expansion**
+
+Enhancement mutates only the final scheduled emission:
+
+```text
+Base final:
+Center
+
+Enhanced final:
+Left + Center + Right
+```
+
+---
+
+# 15. Aqua Arc
+
+## Concrete source form
+
+### Evidence
+
+**[VIDEO — approximately 75–80 seconds]**
+
+Aqua Arc is a three-beat ranged basic string made from short, piercing streams of water.
+
+Each ordinary stream:
+
+- Begins just in front of the caster.
+- Travels forward as a compact, curved body of water.
+- Uses a bright white foaming front and a pale-blue trailing body.
+- Occupies a narrow lane.
+- Continues through struck targets.
+- Dissipates after a relatively short travel distance.
+
+The base sequence emits one stream on the first beat, one on the second, and two streams simultaneously on the third.
+
+In the enhanced demonstration, every stream ends in a sharp, star-shaped icy burst at maximum range. The burst visibly extends the threatened endpoint beyond the ordinary water stream.
+
+**[DOCUMENTED]**
+
+Aqua Arc is a Water Basic Arcana with projectile subtype. Each stream deals 8 damage and pierces enemies.
+
+Its three-cast combo is:
+
+```text
+Beat 1: one stream
+Beat 2: one stream
+Beat 3: two simultaneous streams
+```
+
+The complete base combo therefore contains four stream carriers. Their documented knockback progression is 5, 5, 8, and 8.
+
+When enhanced, each stream creates a small icy endpoint burst at maximum range. Each burst deals 5 damage, increases effective range, and raises the full combo from four to eight hit events. The attack button can be held to perform the full combo. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Aqua_Arc))
+
+The final two streams may occasionally display as one combined 16-damage number even though they remain separate source attacks. The icy burst does not convert Aqua Arc into an Ice-classified arcana. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Aqua_Arc))
+
+## Exact source recipe
+
+```text
+AQUA ARC
+
+Input structure:
+Three-beat basic combo
+Hold performs full combo
+
+Carrier:
+Short independent water stream
+
+Visual form:
+Compact curved water body
+Foaming white leading edge
+Pale-blue trailing spray
+
+Path:
+Straight forward lane
+Short range
+
+Contact:
+8 damage per stream
+Pierces enemies
+Continues after contact
+
+Choreography:
+Beat 1: one stream
+Beat 2: one stream
+Beat 3: two simultaneous streams
+
+Base carrier count:
+Four streams per complete combo
+
+Finisher:
+Adds a second simultaneous stream
+Does not replace the original final stream
+
+Enhanced mutation:
+Every stream creates one endpoint ice burst
+Burst occurs at maximum stream range
+Burst deals 5 damage in a small area
+Burst extends effective range
+
+Enhanced carrier/event structure:
+Four piercing stream hits
++ four endpoint burst hits
+```
+
+## Source-faithful acceptance test
+
+1. The base combo contains three input beats.
+2. Beat 1 emits exactly one water stream.
+3. Beat 2 emits exactly one water stream.
+4. Beat 3 emits exactly two simultaneous streams.
+5. Each stream deals 8 damage.
+6. Each stream pierces enemies.
+7. The streams have short range and do not behave as long-lived water balls.
+8. The two final streams remain independently damaging even when one 16-damage number is displayed.
+9. Enhancement adds one endpoint burst to every stream, not only to the finisher.
+10. Endpoint bursts occur at maximum range rather than on the first enemy contacted.
+11. Each endpoint burst deals 5 damage in a small area.
+12. The enhanced icy visual does not add freeze or change the arcana's elemental classification.
+
+## Units extracted from Aqua Arc
+
+### **Short Piercing Stream Carrier**
+
+A compact moving carrier that visually reads as flowing material rather than an orb, beam, or long ribbon.
+
+### **Paired-Carrier Finisher**
+
+The final beat preserves its ordinary carrier and adds a second simultaneous copy.
+
+```text
+A
+→ A
+→ A + A
+```
+
+Unlike Flame Cross, the payoff does not depend on mirrored crossing paths.
+
+### **Per-Carrier Endpoint Overlay**
+
+Enhancement attaches a terminal effect to every carrier created by the combo.
+
+```text
+for each stream:
+    travel
+    expire at max range
+    create endpoint burst
+```
+
+### **Range Extension by Secondary Footprint**
+
+The projectile's own range need not increase. A new endpoint footprint can extend the total threatened distance.
+
+### **Visual Sub-Element Without Classification Rewrite**
+
+An icy visual and payload can be added to a Water spell without converting the source arcana into the Ice subcategory.
+
+---
+
+# 16. Chaos Crusher
+
+## Concrete source form
+
+### Evidence
+
+**[VIDEO — approximately 80–91 seconds]**
+
+Chaos Crusher is a rapid three-beat sequence in which every beat has two linked phases.
+
+For each beat:
+
+1. A large black-violet chaos rift forms at short range in front of the caster.
+2. The rift strikes the nearby area with a bright white contact flash.
+3. The large rift compresses into a much smaller dark projectile.
+4. The compressed projectile shoots forward along the aim lane.
+
+The first phase is broad and proximal. The second is small, fast, and long-ranged.
+
+The large rift does not travel through the room in its expanded state. The spell repeatedly creates a close-range mass, collapses it, and sends the compressed result onward.
+
+This gives every beat two useful ranges:
+
+- A nearby enemy can be struck by both the initial rift and the fired projectile.
+- A distant enemy is reached only by the compressed projectile.
+
+The showcase demonstrates the move repeatedly from both close and longer positions, emphasizing that dual-range identity.
+
+**[DOCUMENTED]**
+
+Chaos Crusher is a Chaos Basic Arcana with both melee and projectile subtypes. Its documented damage values are:
+
+```text
+Initial rift strike: 8
+Compressed projectile: 6
+```
+
+The published hit count is six. Combined with the documented three-cast basic sequence, this supports two attack events per beat:
+
+```text
+3 beats × 2 phases = 6 hits
+```
+
+The compressed projectiles pass through enemies. All portions of the move count as both melee and projectile attacks, and they can destroy some enemy projectiles. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Chaos_Crusher))
+
+Chaos Crusher has no enhanced state documented or demonstrated. Its source topology is fixed rather than having a normal/enhanced pair.
+
+## Exact source recipe
+
+```text
+CHAOS CRUSHER
+
+Input structure:
+Three-beat basic combo
+
+Per-beat phase 1:
+Create large chaos rift at short forward offset
+Rift immediately strikes nearby area
+8 damage
+15 knockback
+
+Per-beat transformation:
+Compress expanded rift into small chaos projectile
+
+Per-beat phase 2:
+Fire compressed projectile forward
+6 damage
+10 knockback
+
+Projectile path:
+Straight
+Long range
+Pierces enemies
+
+Maximum complete-combo hit structure:
+Three proximal rift hits
++ three compressed projectile hits
+= six attack events
+
+Subtype policy:
+Every phase counts as melee
+Every phase counts as projectile
+
+Defensive interaction:
+Can destroy some enemy projectiles
+
+Enhanced mutation:
+None documented
+```
+
+## Important distinction
+
+Chaos Crusher is not:
+
+```text
+Melee attack
+then an unrelated bonus projectile
+```
+
+Its source visual and behavior are a carrier transformation:
+
+```text
+Expanded Rift
+→ compress
+→ Fired Chaos Core
+```
+
+The second phase is the first phase converted into another spatial form.
+
+## Source-faithful acceptance test
+
+1. The complete combo contains three beats.
+2. Every beat begins with one large short-range chaos rift.
+3. The large rift itself produces an 8-damage attack event.
+4. The expanded rift does not travel downrange.
+5. Every rift visibly compresses before the ranged phase.
+6. Every beat then fires one small 6-damage projectile.
+7. The compressed projectile travels much farther than the initial rift reaches.
+8. The projectile pierces enemies.
+9. A close target can receive both phases of the same beat.
+10. A distant target receives only the compressed projectile.
+11. A full close-range combo can produce six source attack events.
+12. All phases retain both melee and projectile subtype behavior.
+13. No invented enhanced version is added.
+
+## Units extracted from Chaos Crusher
+
+### **Per-Beat Carrier Transformation**
+
+One logical carrier changes form inside every combo beat.
+
+```text
+Expanded carrier
+→ compression transition
+→ small traveling carrier
+```
+
+### **Proximal-to-Distal Attack**
+
+One activation covers close and long range through sequential phases rather than one oversized hitbox.
+
+### **Same-Source Two-Phase Hit**
+
+Both attack events are produced by the same visual object at different transformation states.
+
+### **Hybrid Subtype Policy**
+
+A spell component can intentionally participate in more than one interaction taxonomy:
+
+```text
+subtypes = [melee, projectile]
+```
+
+This policy applies to every phase, not only to the component that visibly travels.
+
+### **Fixed-Topology Source Spell**
+
+Not every arcana requires an enhancement mutation. The construction system must support source moves whose complete identity is already present in the base form.
+
+---
+
+# 17. Searing Rush
+
+## Concrete source form
+
+### Evidence
+
+**[VIDEO — approximately 91–99.5 seconds]**
+
+Searing Rush is a directional dash that paints a short-lived line of fire along the space the caster just crossed.
+
+In the base demonstration:
+
+- The caster rapidly relocates along the movement direction.
+- A dense row of yellow-orange flame plumes occupies the dash path behind them.
+- The line remains in the world after the caster reaches the destination.
+- Individual plumes merge visually into one continuous hazardous strip.
+- Dark smoke and scorch-like marks briefly remain as the fire expires.
+- Enemies contacting the line receive burn ticks.
+
+In the enhanced demonstration, the same path trail appears, but the destination also erupts in a separate, larger fire burst. The endpoint event is visually distinct from the narrow line left behind.
+
+The flame trail is not attached to the caster after the dash. It is deposited into world space.
+
+**[DOCUMENTED]**
+
+Searing Rush is a Fire Dash Arcana with movement subtype.
+
+The dash leaves a flame trail that lasts approximately 0.35 seconds and applies a documented 28-damage burn payload to enemies on contact. The flames block enemy projectiles.
+
+Its cooldown is 5.5 seconds. The locomotion remains available while the arcana is on cooldown, but a cooldown dash creates no flame trail.
+
+When enhanced, the dash creates a separate explosion at its endpoint. The explosion deals 16 immediate damage, applies the burn payload, and can knock back and stun enemies. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Searing_Rush))
+
+No inherent invulnerability or evasion is documented for the base move; those properties are supplied by separate relic interactions rather than by Searing Rush itself. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Searing_Rush))
+
+## Exact source recipe
+
+```text
+SEARING RUSH
+
+Input structure:
+Directional dash activation
+
+Direction:
+Current movement direction
+
+Caster carrier:
+Player body performs rapid dash displacement
+
+Magical path payload:
+Deposit flame segments along completed dash path
+Segments visually merge into continuous line
+
+Trail lifetime:
+Approximately 0.35 seconds
+
+Trail contact:
+Apply burn
+Documented burn payload: 28
+Destroy or block enemy projectiles
+
+Cooldown:
+5.5 seconds
+
+Cooldown fallback:
+Dash movement remains available
+Do not create trail
+Do not apply burn
+Do not block projectiles
+
+Enhanced endpoint overlay:
+Create separate explosion at dash destination
+16 immediate damage
+Apply burn
+Knockback/stun interaction
+
+Defensive state:
+No inherent invulnerability documented
+```
+
+## Source-faithful acceptance test
+
+1. Activating the move rapidly relocates the caster in the movement direction.
+2. An available magical payload leaves fire along the traveled path.
+3. The fire is deposited in world space and does not continue following the caster.
+4. The trail is visually continuous enough to read as one line.
+5. The trail lasts approximately 0.35 seconds.
+6. Contact with the trail applies burn.
+7. The trail blocks enemy projectiles.
+8. Using the dash on cooldown still performs the full movement.
+9. A cooldown dash creates no flame trail.
+10. A cooldown dash creates no burn or projectile-blocking effect.
+11. The enhanced endpoint explosion occurs at the destination only.
+12. The enhanced explosion remains distinct from the trail.
+13. The move does not gain undocumented invulnerability.
+
+## Units extracted from Searing Rush
+
+### **Movement/Payload Decoupling**
+
+The locomotion system and magical payload have separate availability states.
+
+```text
+movementReady = always
+payloadReady = cooldown-dependent
+```
+
+### **Path Deposition**
+
+A moving owner creates stationary world-space segments along its traveled route.
+
+```text
+for distance along dash:
+    place trail segment
+```
+
+### **Fleeting Line Hazard**
+
+Several short-lived segments visually and mechanically form one continuous temporary lane.
+
+### **Cooldown Fallback**
+
+An ability retains its baseline movement behavior while omitting all magical components during cooldown.
+
+### **Endpoint Enhancement Overlay**
+
+Enhancement preserves the complete base path behavior and adds a new destination event.
+
+### **Active Defensive Trail**
+
+Defense comes from deliberately placing a projectile-erasing line rather than receiving passive damage reduction.
+
+---
+
+# 18. Flare Rush
+
+## Concrete source form
+
+### Evidence
+
+**[VIDEO — approximately 99.5–104 seconds]**
+
+Flare Rush is a forward dash followed by a delayed, parallel volley of fireballs traveling along the same direction.
+
+The source sequence is visibly staged:
+
+1. The caster dashes forward.
+2. Three fireballs form behind the caster rather than at the destination.
+3. The fireballs begin moving after the caster has already advanced.
+4. They travel along three roughly parallel lanes aligned with the dash direction.
+5. The volley follows through the space the caster just crossed and continues ahead into enemies.
+
+The fireballs do not orbit, home, or ricochet. Their relationship to the dash is directional and temporal: the caster goes first, and the trailing volley follows.
+
+The delay is important. The caster reaches the forward position before the fireballs catch up, creating a brief moment where the player has committed near the enemy but the supporting damage has not yet arrived.
+
+In the showcase, direct fireball impacts display 10-damage numbers, followed by smaller burn ticks.
+
+**[DOCUMENTED]**
+
+Flare Rush is a Fire Dash Arcana with movement and projectile subtypes. It summons three fireballs behind the caster, or five when enhanced, and sends them in the dash direction. The dash remains usable while on cooldown, but cooldown uses summon no fireballs. Its cooldown is 5.5 seconds. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Flare_Rush))
+
+The wiki prose states that each fireball deals 10 direct damage and applies burn, matching the visible 10-damage impact numbers in the supplied showcase. The same page's summary table currently lists a different damage pair of 18 and 16 burn. Because the prose and supplied video agree while the summary table conflicts, a showcase-faithful duplicate should initially use the observed 10-damage impact and keep the table values marked as version-dependent or unresolved. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Flare_Rush))
+
+## Exact source recipe
+
+```text
+FLARE RUSH
+
+Input structure:
+Directional dash activation
+
+Direction:
+Current movement direction
+
+Phase 1:
+Caster performs rapid forward dash
+
+Phase 2:
+Spawn trailing fireball formation behind caster
+
+Base formation:
+Three independent fireballs
+Roughly parallel lanes
+Aligned to dash direction
+
+Temporal relationship:
+Caster moves first
+Fireballs launch after or during late dash phase
+Volley takes time to reach the caster's new forward position
+
+Projectile path:
+Straight
+No homing
+No orbit
+No wall-ricochet identity
+
+Projectile contact:
+Observed direct impact: 10 damage
+Apply burn
+Projectile resolves on contact unless direct testing proves otherwise
+
+Cooldown:
+5.5 seconds
+
+Cooldown fallback:
+Dash remains available
+No fireballs are summoned
+
+Enhanced mutation:
+Increase trailing formation from three fireballs to five
+Preserve dash-first, volley-follows choreography
+```
+
+## Damage-source discrepancy
+
+Available evidence currently contains two numeric claims:
+
+```text
+Showcase impact numbers:
+10 direct damage per fireball
+
+Wiki prose:
+10 direct damage per fireball + burn
+
+Wiki summary table:
+18 direct damage + 16 burn
+```
+
+For an exact duplicate of the supplied showcase, the first prototype should follow the visible 10-damage behavior. The summary-table values should not silently replace what the reference video demonstrates.
+
+## Source-faithful acceptance test
+
+1. The caster dashes before the projectile volley reaches the forward lane.
+2. Fireballs spawn behind the moving or newly relocated caster.
+3. The base version creates exactly three fireballs.
+4. The three fireballs are independent carriers.
+5. They travel in roughly parallel lanes aligned with the dash direction.
+6. They do not home toward nearby enemies.
+7. They do not orbit the caster.
+8. They do not use wall ricochet as their defining path behavior.
+9. There is a readable delay before the trailing volley catches up.
+10. Direct showcase-faithful impacts display 10 damage before burn ticks.
+11. A cooldown use still performs the dash.
+12. A cooldown use creates no fireballs.
+13. Enhancement changes the formation count from three to five.
+14. Enhancement preserves the same dash-first, volley-follows timing.
+
+## Units extracted from Flare Rush
+
+### **Trailing Volley Dash**
+
+The caster's movement is followed by projectiles that traverse the same general direction after a delay.
+
+```text
+Dash
+→ spawn behind
+→ trailing volley
+```
+
+### **Delayed Pursuit Formation**
+
+The projectiles are not attached to the caster, but their delayed launch makes them chase the caster's movement route.
+
+### **Parallel-Lane Formation**
+
+Several independent carriers share direction and timing while using lateral offsets.
+
+```text
+lane -1
+lane  0
+lane +1
+```
+
+### **Commitment Before Support**
+
+The player reaches the aggressive position before the supporting payload arrives. That temporal vulnerability is part of the spell's feel.
+
+### **Count-Only Formation Enhancement**
+
+Enhancement adds carriers while preserving carrier type, path, timing, and contact behavior:
+
+```text
+Base formation: 3
+Enhanced formation: 5
+```
+
+### **Dash Cooldown Fallback**
+
+Like Searing Rush, the movement remains available while the magical payload is omitted.
+
+# What these five add to the construction language
+
+| Spell | Newly clarified unit |
+|---|---|
+| Rip Tide | One-press locked sequence and defensive final-emission spread |
+| Aqua Arc | Per-carrier endpoint overlays and range extension by secondary footprint |
+| Chaos Crusher | Per-beat carrier transformation and close-to-long-range two-phase coverage |
+| Searing Rush | Movement/payload decoupling with world-space path deposition |
+| Flare Rush | Dash-first trailing volley with delayed parallel support |
+
+Their compact source-derived recipes are:
+
+```text
+RIP TIDE =
+OnePressAuthoredSequence
++ LockedAimCommitment
++ PiercingProjectileEraseRipples
++ EnhancedFinalFan
+```
+
+```text
+AQUA ARC =
+ThreeBeatBasic
++ ShortPiercingWaterStream
++ PairedCarrierFinisher
++ EnhancedPerCarrierEndpointBurst
+```
+
+```text
+CHAOS CRUSHER =
+ThreeBeatBasic
++ ProximalRiftHit
++ PerBeatCarrierCompression
++ LongRangePiercingChaosCore
++ HybridMeleeProjectileSubtype
+```
+
+```text
+SEARING RUSH =
+DirectionalDash
++ CooldownFallbackMovement
++ WorldSpaceFlameTrail
++ ProjectileErase
++ EnhancedEndpointExplosion
+```
+
+```text
+FLARE RUSH =
+DirectionalDash
++ DelayedTrailingFormation
++ ParallelFireballVolley
++ CooldownFallbackMovement
++ EnhancedCarrierCount
+```
+
+The strongest new distinction is between two dash payload topologies:
+
+```text
+Searing Rush:
+The dash deposits danger behind the player.
+
+Flare Rush:
+The dash schedules mobile damage that follows after the player.
+```
+
+Both begin with the same broad movement action, but one creates a stationary path and the other creates delayed traveling support.
