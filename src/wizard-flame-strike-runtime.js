@@ -134,7 +134,9 @@ export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemyS
     for(const enemy of aliveEnemies(system)){
       if(!pointInFlameStrikePlume({originX,originZ,forwardX:frame.forward.x,forwardZ:frame.forward.z,targetX:enemy.x,targetZ:enemy.z,range:spec.range*size,width:spec.width*size,targetRadius:enemyRadius(enemy,system)}))continue;
       const direction=normalize2(enemy.x-frame.x,enemy.z-frame.z);
-      system.damageEnemy?.(enemy,spec.damage,{x:direction.x*spec.push,z:direction.z*spec.push},{source:'wizardArcana',power:spec.charged?.72:(spec.beat===3?.48:.30),pop:spec.charged?.18:.08,flameStrike:true,charged:spec.charged});
+      const power=spec.charged ? .72 : (spec.beat===3 ? .48 : .30);
+      const pop=spec.charged ? .18 : .08;
+      system.damageEnemy?.(enemy,spec.damage,{x:direction.x*spec.push,z:direction.z*spec.push},{source:'wizardArcana',power,pop,flameStrike:true,charged:spec.charged});
       const scale=(system.heightScale||1)*(enemy.currentTargetScale||enemy.targetScale||1),height=(enemy.height||2)*scale;
       flashes.push(makeImpactFlash(THREE,scene,enemy.x,(enemy.targetYOffset||enemy.rootLift||0)+height*.55,enemy.z,size*(spec.charged?1.4:1)));
     }
@@ -176,7 +178,11 @@ export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemyS
     effect.mesh.children.forEach((child,index)=>{
       if(child.userData?.soot)child.material.opacity=.25*Math.pow(1-k,.75);
       else if(child.userData?.glow)child.material.opacity=.24*Math.pow(1-k,.55);
-      else{child.material.opacity=Math.max(0,(child.userData?.core?.98:.86)*Math.pow(1-k,.48));if(child.userData?.flame)child.scale.y=child.userData.baseY*(1+.10*Math.sin(now*20+index));}
+      else{
+        const baseOpacity=child.userData?.core ? .98 : .86;
+        child.material.opacity=Math.max(0,baseOpacity*Math.pow(1-k,.48));
+        if(child.userData?.flame)child.scale.y=child.userData.baseY*(1+.10*Math.sin(now*20+index));
+      }
     });
     for(const flash of effect.flashes||[]){flash.material.opacity=.96*Math.pow(1-k,.35);flash.scale.setScalar(1+k*1.9);}
     if(k>=1)remove(effect);
@@ -185,15 +191,16 @@ export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemyS
   function cardSlotFromTarget(target){const card=target?.closest?.('.scard');if(card?.id==='card0')return 0;if(card?.id==='card1')return 1;return-1;}
   const onPointerDown=event=>{const slot=cardSlotFromTarget(event.target);if(slot>=0)state.pointerHeld[slot]=true;};
   const onPointerEnd=event=>{const slot=cardSlotFromTarget(event.target);if(slot>=0)state.pointerHeld[slot]=false;else state.pointerHeld.fill(false);};
+  const onBlur=()=>state.pointerHeld.fill(false);
   const onPlay=event=>{if(event?.detail?.card?.arcanaId==='FLAME-STRIKE')startCombo();};
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   document.addEventListener('pointerdown',onPointerDown,true);
-  window.addEventListener('pointerup',onPointerEnd,true);window.addEventListener('pointercancel',onPointerEnd,true);window.addEventListener('blur',()=>state.pointerHeld.fill(false));
+  window.addEventListener('pointerup',onPointerEnd,true);window.addEventListener('pointercancel',onPointerEnd,true);window.addEventListener('blur',onBlur);
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
 
   return{
     state,reset,
     update(dt,now=0){for(const effect of[...state.effects]){if(effect.type==='flameStrikeCombo')updateCombo(effect,Math.max(0,dt));else if(effect.type==='flameStrikeBurst')updateBurst(effect,Math.max(0,dt),Number(now)||0);}},
-    dispose(){document.removeEventListener('pointerdown',onPointerDown,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerEnd,true);window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();},
+    dispose(){document.removeEventListener('pointerdown',onPointerDown,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerEnd,true);window.removeEventListener('blur',onBlur);window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();},
   };
 }
