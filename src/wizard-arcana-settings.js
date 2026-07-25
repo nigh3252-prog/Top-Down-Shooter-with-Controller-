@@ -39,6 +39,8 @@ export function readArcanaTweaks(storage=globalThis.localStorage){
 }
 
 export function writeArcanaTweaks(value,{storage=globalThis.localStorage,eventTarget=globalThis.window}={}){
+  // Merge partial UI updates with the saved settings so moving the size slider
+  // cannot reset damage and moving the damage slider cannot reset size.
   const current=readArcanaTweaks(storage);
   const settings=normalizeArcanaTweaks({...current,...value});
   try{storage?.setItem?.(ARCANA_TWEAKS_KEY,JSON.stringify(settings));}catch{}
