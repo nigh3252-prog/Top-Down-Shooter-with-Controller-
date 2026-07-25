@@ -90,24 +90,25 @@ function makeWindSlashVisual(THREE,scene,spec,size){
   const group=new THREE.Group();group.name=`Wizard Arcana Wind Slash beat ${spec.beat}`;
   const start=Math.PI/2-spec.halfAngle,length=spec.halfAngle*2;
   const swept=makeArcLayer(THREE,{inner:spec.innerRadius,outer:spec.outerRadius,start,length,color:AIR_BODY,opacity:.14});
-  swept.position.y=.22;swept.userData.swept=true;group.add(swept);
+  swept.position.y=.22;swept.userData.swept=true;swept.userData.baseOpacity=.14;group.add(swept);
   const bladeThickness=.42+.05*spec.beat;
   const blade=makeArcLayer(THREE,{inner:spec.outerRadius-bladeThickness,outer:spec.outerRadius,start,length,color:AIR_CORE,opacity:.88});
-  blade.position.y=.42;blade.userData.blade=true;group.add(blade);
+  blade.position.y=.42;blade.userData.blade=true;blade.userData.baseOpacity=.88;group.add(blade);
   const edge=makeArcLayer(THREE,{inner:spec.outerRadius-.13,outer:spec.outerRadius+.02,start,length,color:AIR_HOT,opacity:.98});
-  edge.position.y=.48;edge.userData.edge=true;group.add(edge);
+  edge.position.y=.48;edge.userData.edge=true;edge.userData.baseOpacity=.98;group.add(edge);
   for(let index=0;index<3;index++){
     const radius=spec.outerRadius-.70-index*.22;
-    const streak=makeArcLayer(THREE,{inner:radius-.035,outer:radius+.035,start:start+.08+index*.05,length:length*.72,color:index===0?AIR_CORE:AIR_TRAIL,opacity:.42-index*.09});
-    streak.position.y=.28-index*.035;streak.userData.streak=index;group.add(streak);
+    const opacity=.42-index*.09;
+    const streak=makeArcLayer(THREE,{inner:radius-.035,outer:radius+.035,start:start+.08+index*.05,length:length*.72,color:index===0?AIR_CORE:AIR_TRAIL,opacity});
+    streak.position.y=.28-index*.035;streak.userData.streak=index;streak.userData.baseOpacity=opacity;group.add(streak);
   }
   group.scale.setScalar(size*spec.visualScale);group.renderOrder=5;scene.add(group);return group;
 }
 
 function makeImpactFlash(THREE,scene,x,y,z,size){
   const group=new THREE.Group();group.name='Wizard Arcana Wind Slash impact';
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.31*size,12,8),makeMaterial(THREE,AIR_HOT,.96));group.add(core);
-  const ring=new THREE.Mesh(new THREE.RingGeometry(.34*size,.46*size,26),makeMaterial(THREE,AIR_CORE,.72));ring.rotation.x=Math.PI/2;group.add(ring);
+  const core=new THREE.Mesh(new THREE.SphereGeometry(.31*size,12,8),makeMaterial(THREE,AIR_HOT,.96));core.userData.baseOpacity=.96;group.add(core);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.34*size,.46*size,26),makeMaterial(THREE,AIR_CORE,.72));ring.rotation.x=Math.PI/2;ring.userData.baseOpacity=.72;group.add(ring);
   group.position.set(x,y,z);group.renderOrder=8;scene.add(group);return group;
 }
 
@@ -138,7 +139,9 @@ export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySys
         halfAngle:spec.halfAngle,targetRadius:enemyRadius(enemy,system),
       }))continue;
       const direction=normalize2(enemy.x-frame.x,enemy.z-frame.z);
-      system.damageEnemy?.(enemy,spec.damage,{x:direction.x*spec.push,z:direction.z*spec.push},{source:'wizardArcana',power:spec.beat===3?.48:.30,pop:spec.beat===3?.11:.06,windSlash:true,beat:spec.beat});
+      const power=spec.beat===3 ? .48 : .30;
+      const pop=spec.beat===3 ? .11 : .06;
+      system.damageEnemy?.(enemy,spec.damage,{x:direction.x*spec.push,z:direction.z*spec.push},{source:'wizardArcana',power,pop,windSlash:true,beat:spec.beat});
       const scale=(system.heightScale||1)*(enemy.currentTargetScale||enemy.targetScale||1),height=(enemy.height||2)*scale;
       flashes.push(makeImpactFlash(THREE,scene,enemy.x,(enemy.targetYOffset||enemy.rootLift||0)+height*.55,enemy.z,size*(.9+spec.beat*.08)));
     }
@@ -167,12 +170,14 @@ export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySys
     effect.age+=dt;const k=clamp(effect.age/effect.life,0,1),ease=1-Math.pow(1-k,3);
     effect.mesh.rotation.y=effect.baseYaw+effect.spec.sweepSign*effect.sweepAmount*(ease-.52);
     effect.mesh.children.forEach((child,index)=>{
-      const base=child.userData?.edge?.98:(child.userData?.blade?.88:(child.userData?.swept?.14:.36));
-      child.material.opacity=base*Math.pow(1-k,.52);
+      child.material.opacity=(child.userData?.baseOpacity??.36)*Math.pow(1-k,.52);
       if(child.userData?.streak!==undefined)child.rotation.z+=effect.spec.sweepSign*dt*(1.8+child.userData.streak*.5);
       if(child.userData?.blade)child.scale.setScalar(1+.035*Math.sin(now*22+index));
     });
-    for(const flash of effect.flashes||[]){flash.children.forEach(child=>child.material.opacity*=Math.pow(1-k,.28));flash.scale.setScalar(1+k*1.5);}
+    for(const flash of effect.flashes||[]){
+      flash.children.forEach(child=>{child.material.opacity=(child.userData?.baseOpacity??.8)*Math.pow(1-k,.35);});
+      flash.scale.setScalar(1+k*1.5);
+    }
     if(k>=1)remove(effect);
   }
 
