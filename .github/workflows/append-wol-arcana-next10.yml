@@ -1,5 +1,6 @@
 name: Append Next Ten Wizard Arcana Analyses
 
+# One-time consolidation workflow; this edit triggers the push event.
 on:
   push:
     branches:
