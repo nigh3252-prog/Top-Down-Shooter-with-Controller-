@@ -17,6 +17,7 @@ import { installCombatCardEffects } from './combat-card-effects.js';
 import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
 import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.js';
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
+import { installWizardAirBasicsRuntime } from './wizard-air-basics-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
 import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
 
@@ -81,6 +82,12 @@ export function installPlayerCombat(api){
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
   });
+  const wizardAirBasicsRuntime=installWizardAirBasicsRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+  });
 
   // Update syncing normally establishes the bridge before the player can use a
   // card. The required play-time check prevents a visual-only Pilebunker if the
@@ -98,6 +105,7 @@ export function installPlayerCombat(api){
     wizardArcanaRuntime.update(dt,now);
     wizardFlameStrikeRuntime.update(dt,now);
     wizardWindSlashRuntime.update(dt,now);
+    wizardAirBasicsRuntime.update(dt,now);
     return out;
   };
 
@@ -109,6 +117,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardFlameStrikeRuntime',{value:wizardFlameStrikeRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardWindSlashRuntime',{value:wizardWindSlashRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardAirBasicsRuntime',{value:wizardAirBasicsRuntime,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});
