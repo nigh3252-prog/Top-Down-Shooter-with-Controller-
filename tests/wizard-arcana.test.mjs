@@ -1,9 +1,23 @@
 import assert from 'node:assert/strict';
 import { createStanceDeck } from '../src/stance-deck.js';
-import { claimArcanaTileDecoration } from '../src/enemy-lab-deck-editor-refinements.js';
+import {
+  claimArcanaTileDecoration,
+  wizardArcanaCards,
+} from '../src/enemy-lab-deck-editor-refinements.js';
 import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from '../src/wizard-arcana-cards.js';
 import {
+  ARCANA_SIZE_MAX,
+  ARCANA_SIZE_MIN,
+  ARCANA_TWEAKS_EVENT,
+  clampArcanaSize,
+  readArcanaTweaks,
+  writeArcanaTweaks,
+} from '../src/wizard-arcana-settings.js';
+import {
+  BOUNCING_BLAZE_BEATS,
   FLAME_CROSS_BEATS,
+  bouncingBlazeHeightAtDistance,
+  bouncingBlazeShotSpec,
   flameCrossWaveSpec,
   pointSegmentDistance2D,
   reflectVelocity2D,
@@ -21,6 +35,13 @@ assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,6);
 assert.ok(WIZARD_ARCANA_CARDS.every(isWizardArcanaCard));
 assert.ok(WIZARD_ARCANA_CARDS.every(card=>card.type==='ability'&&card.playEvent==='wizard-arcana:play'));
 
+const groupedArcana=wizardArcanaCards([
+  {id:'S-ORDINARY',type:'stance'},
+  ...WIZARD_ARCANA_CARDS,
+  {id:'A-ORDINARY',type:'ability'},
+]);
+assert.deepEqual(groupedArcana.map(card=>card.id),WIZARD_ARCANA_CARDS.map(card=>card.id));
+
 const flameCross=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='FLAME-CROSS');
 assert.match(flameCross.description,/one diagonal flame wave/i);
 assert.deepEqual(FLAME_CROSS_BEATS.map(beat=>beat.sides.length),[1,1,2]);
@@ -34,6 +55,47 @@ assert.ok(baseLeft.lateralOffset<0&&baseLeft.lateralAim>0,'left-starting wave mu
 assert.equal(baseRight.damage,6);
 assert.equal(finisher.damage,9);
 assert.ok(finisher.range>baseRight.range&&finisher.push>baseRight.push);
+
+const bouncingBlaze=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='BOUNCING-BLAZE');
+assert.match(bouncingBlaze.description,/three large fireballs/i);
+assert.match(bouncingBlaze.description,/hop twice/i);
+assert.doesNotMatch(bouncingBlaze.description,/ricochet/i);
+assert.equal(BOUNCING_BLAZE_BEATS.length,3);
+assert.ok(BOUNCING_BLAZE_BEATS.every((beat,index,beats)=>index===0||beat.time>beats[index-1].time));
+const blazeGaps=BOUNCING_BLAZE_BEATS.slice(1).map((beat,index)=>beat.time-BOUNCING_BLAZE_BEATS[index].time);
+assert.ok(blazeGaps.every(gap=>gap>=.18&&gap<=.32),'release spacing should stay in the quick three-shot range observed in the showcase');
+const blazeBase=bouncingBlazeShotSpec();
+const blazeEnhanced=bouncingBlazeShotSpec({enhanced:true});
+assert.equal(blazeBase.damage,12);
+assert.equal(blazeBase.bounceCount,2);
+assert.equal(blazeBase.range,blazeBase.bounceSpacing*blazeBase.bounceCount);
+assert.equal(blazeBase.enhanced,false);
+assert.equal(blazeEnhanced.enhanced,true);
+assert.equal(bouncingBlazeHeightAtDistance(0,blazeBase),blazeBase.groundY);
+assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.bounceSpacing*.5,blazeBase)-(blazeBase.groundY+blazeBase.hopHeight))<1e-9);
+assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.bounceSpacing,blazeBase)-blazeBase.groundY)<1e-9);
+assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.bounceSpacing*1.5,blazeBase)-(blazeBase.groundY+blazeBase.hopHeight))<1e-9);
+assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.range,blazeBase)-blazeBase.groundY)<1e-9);
+
+assert.equal(ARCANA_SIZE_MIN,1);
+assert.equal(ARCANA_SIZE_MAX,5);
+assert.equal(clampArcanaSize(-4),1);
+assert.equal(clampArcanaSize(12),5);
+assert.equal(clampArcanaSize(2.63),2.75);
+const stored=new Map();
+const storage={
+  getItem:key=>stored.has(key)?stored.get(key):null,
+  setItem:(key,value)=>stored.set(key,value),
+};
+const tweakEvents=[];
+const eventTarget={dispatchEvent:event=>{tweakEvents.push(event);return true;}};
+assert.equal(readArcanaTweaks(storage).sizeMultiplier,1);
+const savedTweaks=writeArcanaTweaks({sizeMultiplier:4.87},{storage,eventTarget});
+assert.equal(savedTweaks.sizeMultiplier,4.75);
+assert.equal(readArcanaTweaks(storage).sizeMultiplier,4.75);
+assert.equal(tweakEvents.length,1);
+assert.equal(tweakEvents[0].type,ARCANA_TWEAKS_EVENT);
+assert.equal(tweakEvents[0].detail.sizeMultiplier,4.75);
 
 const decorationTile={dataset:{}};
 assert.equal(claimArcanaTileDecoration(decorationTile,WIZARD_ARCANA_CARDS[0]),true);
