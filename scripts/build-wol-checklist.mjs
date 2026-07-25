@@ -20,6 +20,7 @@ const improvedText=[
   read('08-fire-standards-2.md'),
   read('09-fire-standards-3.md'),
   read('10-fire-standards-4.md'),
+  read('11-air-standards-1.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -160,6 +161,12 @@ const sourceMeta=[
   ['Engulfing Fissure','Fire','Standard',369,378,375],
   ['Rapid Fire Agent','Fire','Standard',378,391,384],
   ['Ward of Flames','Fire','Standard',391,402,397],
+  ['Evading Zephyr','Air','Standard',402,407,405],
+  ['Spiraling Typhoon','Air','Signature',407,418,414],
+  ['Dragon Blast','Air','Standard',418,420,419],
+  ['Whirling Tornado','Air','Signature',420,430,427],
+  ['Scales of Babylon','Air','Standard',430,434,432],
+  ['Mentis Imperium','Air','Standard',434,438,436],
 ];
 
 const implementedNames=new Set([
@@ -216,7 +223,7 @@ const legacyImplementationNotes=new Map([
 ]);
 const replacementChecklist='1. Rewatch the bounded source clip frame by frame.\n2. Replace the initial-pass claims with a full source-first analysis and explicit evidence labels.\n3. Implement the replacement in a separate ability task; do not polish the current prototype.\n4. Run the acceptance tests and compare the replacement side by side with the source clip.\n5. Check the three completion stages only after each is actually complete.';
 
-for(const name of ['Homing Flares','Dragon Arc']){
+for(const name of ['Homing Flares','Dragon Arc','Whirling Tornado']){
   const entry=entries.find(item=>item.name===name);
   if(!entry)throw new Error(`Missing reanalyzed replacement entry for ${name}`);
   entry.lineage='replacement-analyzed';
