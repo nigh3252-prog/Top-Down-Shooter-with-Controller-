@@ -30,7 +30,7 @@ export function flameStrikeBurstSpec({beat=1,charged=false}={}){
   return Object.freeze({
     beat:finisher?3:Math.max(1,beat),charged:false,damage:finisher?14:7,
     range:finisher?3.65:2.75,width:finisher?1.78:1.30,originOffset:.82,
-    activeDuration:finisher?.27:.20,push:finisher?1.10:.66,visualScale:finisher?1.28:1,
+    activeDuration:finisher ? .27 : .20,push:finisher?1.10:.66,visualScale:finisher?1.28:1,
   });
 }
 
@@ -82,7 +82,7 @@ function makeBurstVisual(THREE,scene,spec,size){
     flame.position.set(Math.sin(angle)*spec.width*(.30+.48*progress),.34+.28*Math.sin(progress*Math.PI),z);
     flame.scale.set(1.12+.28*progress,.76+progress*.48,1.10);flame.userData.flame=true;flame.userData.baseY=flame.scale.y;group.add(flame);
   }
-  const core=new THREE.Mesh(new THREE.SphereGeometry(spec.charged?.68:.48,16,10),makeMaterial(THREE,HOT,.98));
+  const core=new THREE.Mesh(new THREE.SphereGeometry(spec.charged ? .68 : .48,16,10),makeMaterial(THREE,HOT,.98));
   core.position.set(0,.48,.78);core.scale.set(1.2,.72,1.32);core.userData.core=true;group.add(core);
   const sootCount=spec.charged?5:3;
   for(let index=0;index<sootCount;index++){
