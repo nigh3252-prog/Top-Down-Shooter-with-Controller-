@@ -4,11 +4,16 @@ import {
   claimArcanaTileDecoration,
   wizardArcanaCards,
 } from '../src/enemy-lab-deck-editor-refinements.js';
+import { setTextIfChanged } from '../src/enemy-lab-arcana-controls-hotfix.js';
 import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from '../src/wizard-arcana-cards.js';
+import { scaleWizardArcanaDamage } from '../src/wizard-arcana-damage-scaler.js';
 import {
+  ARCANA_DAMAGE_MAX,
+  ARCANA_DAMAGE_MIN,
+  ARCANA_TWEAKS_EVENT,
   ARCANA_SIZE_MAX,
   ARCANA_SIZE_MIN,
-  ARCANA_TWEAKS_EVENT,
+  clampArcanaDamage,
   clampArcanaSize,
   readArcanaTweaks,
   writeArcanaTweaks,
@@ -79,9 +84,18 @@ assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.range,blazeBase)-blaz
 
 assert.equal(ARCANA_SIZE_MIN,1);
 assert.equal(ARCANA_SIZE_MAX,5);
+assert.equal(ARCANA_DAMAGE_MIN,1);
+assert.equal(ARCANA_DAMAGE_MAX,5);
 assert.equal(clampArcanaSize(-4),1);
 assert.equal(clampArcanaSize(12),5);
 assert.equal(clampArcanaSize(2.63),2.75);
+assert.equal(clampArcanaDamage(-4),1);
+assert.equal(clampArcanaDamage(12),5);
+assert.equal(clampArcanaDamage(3.12),3);
+assert.equal(scaleWizardArcanaDamage(12,1),12);
+assert.equal(scaleWizardArcanaDamage(12,2.5),30);
+assert.equal(scaleWizardArcanaDamage(12,99),60);
+
 const stored=new Map();
 const storage={
   getItem:key=>stored.has(key)?stored.get(key):null,
@@ -89,13 +103,28 @@ const storage={
 };
 const tweakEvents=[];
 const eventTarget={dispatchEvent:event=>{tweakEvents.push(event);return true;}};
-assert.equal(readArcanaTweaks(storage).sizeMultiplier,1);
-const savedTweaks=writeArcanaTweaks({sizeMultiplier:4.87},{storage,eventTarget});
-assert.equal(savedTweaks.sizeMultiplier,4.75);
-assert.equal(readArcanaTweaks(storage).sizeMultiplier,4.75);
-assert.equal(tweakEvents.length,1);
-assert.equal(tweakEvents[0].type,ARCANA_TWEAKS_EVENT);
-assert.equal(tweakEvents[0].detail.sizeMultiplier,4.75);
+assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:1,damageMultiplier:1});
+const savedSize=writeArcanaTweaks({sizeMultiplier:4.87},{storage,eventTarget});
+assert.deepEqual(savedSize,{sizeMultiplier:4.75,damageMultiplier:1});
+const savedDamage=writeArcanaTweaks({damageMultiplier:3.12},{storage,eventTarget});
+assert.deepEqual(savedDamage,{sizeMultiplier:4.75,damageMultiplier:3});
+assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:4.75,damageMultiplier:3});
+assert.equal(tweakEvents.length,2);
+assert.equal(tweakEvents[1].type,ARCANA_TWEAKS_EVENT);
+assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:3});
+
+let textWrites=0;
+const observedText={
+  _value:'6 SHOWN',
+  get textContent(){return this._value;},
+  set textContent(value){textWrites++;this._value=value;},
+};
+assert.equal(setTextIfChanged(observedText,'6 SHOWN'),false);
+assert.equal(textWrites,0,'identical filter labels must not mutate the observed DOM');
+assert.equal(setTextIfChanged(observedText,'5 SHOWN'),true);
+assert.equal(textWrites,1);
+assert.equal(setTextIfChanged(observedText,'5 SHOWN'),false);
+assert.equal(textWrites,1,'reapplying the active filter must remain idempotent');
 
 const decorationTile={dataset:{}};
 assert.equal(claimArcanaTileDecoration(decorationTile,WIZARD_ARCANA_CARDS[0]),true);
