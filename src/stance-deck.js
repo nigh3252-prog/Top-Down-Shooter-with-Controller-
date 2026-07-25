@@ -7,6 +7,7 @@ import { POW_BUNKER_CARD } from './powbunker-card.js';
 import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
 import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from './wizard-arcana-cards.js';
 import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
+import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
 
@@ -23,10 +24,11 @@ function isEnemyLabRuntime(){
 
 function sourceOrderedEnemyLabArcana(){
   const windIndex=WIZARD_ARCANA_CARDS.findIndex(card=>card?.arcanaId==='WIND-SLASH');
-  if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS];
+  if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS];
   return[
     ...WIZARD_ARCANA_CARDS.slice(0,windIndex+1),
     ...WIZARD_AIR_BASIC_CARDS,
+    ...WIZARD_NEXT_SOURCE_CARDS,
     ...WIZARD_ARCANA_CARDS.slice(windIndex+1),
   ];
 }
