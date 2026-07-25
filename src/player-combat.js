@@ -59,11 +59,14 @@ export function installPlayerCombat(api){
     return{x:playerWorld.x,z:playerWorld.z,forwardX:playerForward.x,forwardZ:playerForward.z};
   }
   function advanceArenaPlayer(dx,dz){
+    const moveX=Number(dx)||0,moveZ=Number(dz)||0;
     const position=window.__arena?.actorPos;
     if(!position)return false;
-    if(Number.isFinite(position.x))position.x+=Number(dx)||0;
-    if(Number.isFinite(position.y))position.y+=Number(dz)||0;
-    else if(Number.isFinite(position.z))position.z+=Number(dz)||0;
+    if(Number.isFinite(position.x))position.x+=moveX;
+    if(Number.isFinite(position.y))position.y+=moveZ;
+    else if(Number.isFinite(position.z))position.z+=moveZ;
+    const root=api.actorVisual?.parent;
+    if(root?.position){root.position.x+=moveX;root.position.z+=moveZ;}
     return true;
   }
 
