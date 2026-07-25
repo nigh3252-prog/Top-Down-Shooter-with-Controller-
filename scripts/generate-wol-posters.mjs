@@ -15,7 +15,7 @@ const posterDir=path.join(root,'media','wizard-of-legend','posters');
 fs.mkdirSync(posterDir,{recursive:true});
 
 for(const entry of data.entries){
-  const midpoint=(entry.start+entry.end)/2;
+  const midpoint=entry.posterTime??(entry.start+entry.end)/2;
   const output=path.join(root,entry.poster);
   execFileSync(ffmpeg,[
     '-y','-hide_banner','-loglevel','error','-ss',String(midpoint),'-i',video,
@@ -23,4 +23,3 @@ for(const entry of data.entries){
   ],{stdio:'inherit'});
   console.log(`Poster: ${entry.name} @ ${midpoint.toFixed(2)}s`);
 }
-

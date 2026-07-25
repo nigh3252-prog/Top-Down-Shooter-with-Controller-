@@ -15,6 +15,8 @@ const improvedText=[
   read('03-spike-toxic.md'),
   read('04-snare-thunder.md'),
   read('05-circuit-shock.md'),
+  read('06-water-chaos-dashes.md'),
+  read('07-fire-standards-1.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -129,6 +131,15 @@ const sourceMeta=[
   ['Thunder Line','Lightning','Dash',151.4,157.8],
   ['Circuit Line','Lightning','Dash',157.9,165.8],
   ['Shock Line','Lightning','Dash',165.9,168.3],
+  ['Wave Front','Water','Dash',168.4,180],
+  ['Frost Feint','Ice','Dash',180,183],
+  ['Frost Wing','Ice','Dash',183,194],
+  ['Chaotic Rift','Chaos','Dash',194,205],
+  ['Fuelled Berserk','Fire','Standard',205,217,211],
+  ['Flame Breath','Fire','Signature',217,227,224],
+  ['Searing Crown','Fire','Standard',227,233,230],
+  ['Heroic Blaze','Fire','Signature',233,244,238],
+  ['Blazing Lariat','Fire','Signature',244,255,250],
 ];
 
 const implementedNames=new Set([
@@ -148,14 +159,14 @@ const revisionHistory=new Map([
 
 const improvedSections=extractNumberedH1(improvedText);
 const entries=sourceMeta.map((meta,index)=>{
-  const [name,element,category,start,end]=meta;
+  const [name,element,category,start,end,posterTime]=meta;
   const source=improvedSections.get(index+1);
   if(!source||source.name!==name)throw new Error(`Source section ${index+1} mismatch: expected ${name}, received ${source?.name}`);
   const markdown=source.markdown;
   const implemented=implementedNames.has(name);
   const lineage=rebuiltNames.has(name)?'rebuilt':implemented?'source-first':'analyzed';
   return{
-    id:slugify(name),order:index+1,name,element,category,start,end,lineage,
+    id:slugify(name),order:index+1,name,element,category,start,end,posterTime,lineage,
     status:implemented?'source-first-implemented':'not-implemented',
     defaults:{analysis:true,implementation:implemented,comparison:false},
     summary:summaryFor(name,markdown),

@@ -17,7 +17,7 @@
 <main class="shell">
   <section class="hero">
     <div class="hero-main">
-      <div class="eyebrow">Standalone source notebook · 32 tracked arcana</div>
+      <div class="eyebrow">Standalone source notebook · <span id="tracked-count">0</span> tracked arcana</div>
       <h1>Wizard of Legend Arcana Checklist</h1>
       <p>A source-first implementation notebook for adding Wizard of Legend-inspired abilities to the Top Down Android Game. Improved analysis, legacy prototypes, exact showcase clips, construction recipes, and acceptance checks live together here.</p>
       <div class="notice danger"><strong>Legacy rule:</strong> Homing Flares, Dragon Arc, Whirling Tornado, and Water Prison have first-pass prototypes in the game. Do not polish them. Re-analyze and replace them with source-first implementations.</div>
@@ -30,9 +30,9 @@
     <aside class="panel progress-panel" aria-label="Checklist progress">
       <div class="eyebrow">Current progress</div>
       <div class="progress-grid">
-        <div class="metric"><strong id="metric-analysis">28</strong><span>source-first analyses</span></div>
-        <div class="metric"><strong id="metric-implemented">10</strong><span>source-first builds</span></div>
-        <div class="metric"><strong id="metric-legacy">4</strong><span>legacy replacements</span></div>
+        <div class="metric"><strong id="metric-analysis">0</strong><span>source-first analyses</span></div>
+        <div class="metric"><strong id="metric-implemented">0</strong><span>source-first builds</span></div>
+        <div class="metric"><strong id="metric-legacy">0</strong><span>legacy replacements</span></div>
         <div class="metric"><strong id="metric-compared">0</strong><span>source checks passed</span></div>
       </div>
       <div><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div><small id="progress-label">Progress is saved on this device.</small></div>
@@ -141,7 +141,7 @@
     const legacy=entry.lineage==='legacy';
     const citations=entry.citations.length?`<ul>${entry.citations.map((url,index)=>`<li><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Source ${index+1}</a></li>`).join('')}</ul>`:'<p>The supplied showcase is the primary source for this entry.</p>';
     return `<article class="arcana-card" id="arcana-${entry.id}" data-id="${entry.id}" data-lineage="${entry.lineage}" style="--accent:${elements[entry.element]??'var(--gold)'}">
-      <div class="poster"><img loading="lazy" src="${entry.poster}" alt="${escapeHtml(entry.name)} showcase frame"><div class="poster-meta"><span class="order">${entry.order<=28?`Source #${entry.order}`:'Legacy rebuild queue'}</span><span class="time">${formatTime(entry.start)}–${formatTime(entry.end)}</span></div></div>
+      <div class="poster"><img loading="lazy" src="${entry.poster}" alt="${escapeHtml(entry.name)} showcase frame"><div class="poster-meta"><span class="order">${entry.status!=='legacy-replace'?`Source #${entry.order}`:'Legacy rebuild queue'}</span><span class="time">${formatTime(entry.start)}–${formatTime(entry.end)}</span></div></div>
       <div class="card-body">
         <div class="title-row"><div><div class="badges"><span class="badge">${entry.element}</span><span class="badge">${entry.category}</span></div><h2>${escapeHtml(entry.name)}</h2></div></div>
         <div class="badges"><span class="badge ${lineageClass(entry)}">${lineageLabels[entry.lineage]}</span><span class="badge ${entry.status==='source-first-implemented'?'implemented':entry.status==='legacy-replace'?'legacy':''}">${statusLabels[entry.status]}</span></div>
@@ -201,6 +201,7 @@
   document.getElementById('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{const incoming=JSON.parse(await file.text());if(incoming.schemaVersion!==1||!incoming.entries)throw new Error();progress={...defaultProgress(),...incoming.entries};saveProgress();renderCatalog();toast('Progress imported.');}catch{toast('That progress file is not valid.');}event.target.value='';});
   document.getElementById('reset-progress').addEventListener('click',()=>{if(!confirm('Reset all checklist progress to the project defaults?'))return;progress=defaultProgress();saveProgress();renderCatalog();toast('Progress reset.');});
   document.getElementById('framework-content').innerHTML=markdownToHtml(data.frameworkMarkdown);
+  document.getElementById('tracked-count').textContent=data.entries.length;
   populateFilters();renderCatalog();updateMetrics();
   if(!revealHashEntry())setClip(data.entries[0],false);
   window.addEventListener('hashchange',()=>revealHashEntry());

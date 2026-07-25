@@ -12,17 +12,17 @@ const data=JSON.parse(dataMatch[1]);
 const entries=data.entries;
 
 assert.equal(data.schemaVersion,1,'dataset schema must remain explicitly versioned');
-assert.equal(entries.length,32,'the checklist must track exactly 32 arcana');
-assert.equal(new Set(entries.map(entry=>entry.id)).size,32,'arcana IDs must be unique');
-assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:32},(_,index)=>index+1),'source order must be stable');
+assert.equal(entries.length,41,'the checklist must track 37 source-first analyses plus four legacy replacements');
+assert.equal(new Set(entries.map(entry=>entry.id)).size,41,'arcana IDs must be unique');
+assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:41},(_,index)=>index+1),'source order must be stable');
 
 const improved=entries.filter(entry=>entry.status!=='legacy-replace');
 const implemented=entries.filter(entry=>entry.status==='source-first-implemented');
 const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
-assert.equal(improved.length,28,'28 entries must use the improved source-first analysis');
+assert.equal(improved.length,37,'37 entries must use the improved source-first analysis');
 assert.equal(implemented.length,10,'only ten source-first implementations count as complete');
-assert.equal(pending.length,18,'18 improved analyses must remain implementation-pending');
+assert.equal(pending.length,27,'27 improved analyses must remain implementation-pending');
 assert.deepEqual(legacy.map(entry=>entry.name),['Homing Flares','Dragon Arc','Whirling Tornado','Water Prison'],'legacy replacement queue changed unexpectedly');
 
 for(const name of ['Flame Cross','Bouncing Blaze']){
@@ -35,6 +35,7 @@ for(const name of ['Flame Cross','Bouncing Blaze']){
 for(const entry of entries){
   assert.match(entry.id,/^[a-z0-9]+(?:-[a-z0-9]+)*$/,'IDs must be stable anchor-safe slugs');
   assert.ok(Number.isFinite(entry.start)&&Number.isFinite(entry.end)&&entry.start>=0&&entry.end>entry.start,`${entry.name} must have a valid clip range`);
+  assert.ok(entry.posterTime===undefined||(Number.isFinite(entry.posterTime)&&entry.posterTime>=entry.start&&entry.posterTime<=entry.end),`${entry.name} poster time must fit its clip`);
   assert.ok(entry.end<=data.video.duration,`${entry.name} clip must fit inside the source video`);
   assert.ok(entry.summary.trim(),`${entry.name} needs an observed-behavior summary`);
   assert.ok(entry.analysisMarkdown.trim(),`${entry.name} needs preserved analysis detail`);
