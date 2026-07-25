@@ -113,6 +113,8 @@ assert.equal(tweakEvents.length,2);
 assert.equal(tweakEvents[1].type,ARCANA_TWEAKS_EVENT);
 assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:3});
 
+// The previous freeze was a self-triggering MutationObserver loop. Reapplying
+// the same filter labels must therefore perform zero child-list text writes.
 let textWrites=0;
 const observedText={
   _value:'6 SHOWN',
