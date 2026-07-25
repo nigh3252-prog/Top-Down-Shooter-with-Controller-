@@ -1,0 +1,98 @@
+name: Append Next Ten Wizard Arcana Analyses
+
+on:
+  pull_request:
+    types: [synchronize]
+  push:
+    branches:
+      - "docs/wizard-of-legend-spell-language"
+    paths:
+      - ".github/workflows/append-wol-arcana-next10.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  append-reference:
+    if: github.event_name == 'push' || github.head_ref == 'docs/wizard-of-legend-spell-language'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          ref: docs/wizard-of-legend-spell-language
+
+      - name: Update index and append analyses
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          target = Path("docs/wizard_of_legend_arcana_source_reference.md")
+          staging = Path(".tmp-wol-append-4")
+          text = target.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "The per-ability analysis below is preserved verbatim from the project conversation.",
+              "The per-ability analysis below is preserved in full from the project analysis passes.",
+          )
+
+          index = """## Ability index
+
+1. [Flame Strike](#1-flame-strike)
+2. [Flame Cross](#2-flame-cross)
+3. [Bouncing Blaze](#3-bouncing-blaze)
+4. [Wind Slash](#4-wind-slash)
+5. [Air Spinner](#5-air-spinner)
+6. [Perforating Jet](#6-perforating-jet)
+7. [Earth Knuckles](#7-earth-knuckles)
+8. [Bladed Vine](#8-bladed-vine)
+9. [Stone Shot](#9-stone-shot)
+10. [Spark Contact](#10-spark-contact)
+11. [Bolt Rail](#11-bolt-rail)
+12. [Volt Disc](#12-volt-disc)
+13. [Ice Dagger](#13-ice-dagger)
+14. [Rip Tide](#14-rip-tide)
+15. [Aqua Arc](#15-aqua-arc)
+16. [Chaos Crusher](#16-chaos-crusher)
+17. [Searing Rush](#17-searing-rush)
+18. [Flare Rush](#18-flare-rush)
+19. [Ignition Rush](#19-ignition-rush)
+20. [Air Burst](#20-air-burst)
+21. [Gust Burst](#21-gust-burst)
+22. [Razor Burst](#22-razor-burst)
+23. [Spike Track](#23-spike-track)
+24. [Toxic Trap](#24-toxic-trap)
+25. [Snare Track](#25-snare-track)
+26. [Thunder Line](#26-thunder-line)
+27. [Circuit Line](#27-circuit-line)
+28. [Shock Line](#28-shock-line)
+
+New source-first arcana analyses should be appended to this file. Do not create a separate analysis file for each new batch."""
+
+          pattern = re.compile(
+              r"## Ability index\n\n.*?New source-first arcana analyses should be appended to this file\. Do not create a separate analysis file for each new batch\.",
+              re.S,
+          )
+          if not pattern.search(text):
+              raise RuntimeError("Could not locate existing ability index")
+          text = pattern.sub(index, text, count=1)
+
+          if "# 19. Ignition Rush" not in text:
+              additions = [p.read_text(encoding="utf-8").strip() for p in sorted(staging.glob("*.md"))]
+              if len(additions) != 5:
+                  raise RuntimeError(f"Expected five staging chunks, found {len(additions)}")
+              text = text.rstrip() + "\n\n" + "\n\n".join(additions) + "\n"
+
+          target.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit consolidated reference and remove temporary files
+        run: |
+          rm -rf .tmp-wol-append-4
+          rm -f .github/workflows/append-wol-arcana-next10.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Append ten Wizard of Legend source analyses"
+          git push origin HEAD:docs/wizard-of-legend-spell-language

@@ -2,8 +2,12 @@
 // hand slots. Ability/modifier cards preserve the active stance while their
 // dedicated events resolve.
 
+import { STANCE_CARDS } from './stance-cards.js';
 import { POW_BUNKER_CARD } from './powbunker-card.js';
 import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
+import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from './wizard-arcana-cards.js';
+import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
+import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
 
@@ -16,6 +20,23 @@ function isEnemyLabRuntime(){
     const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
     return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
   }catch{return false;}
+}
+
+function sourceOrderedEnemyLabArcana(){
+  const windIndex=WIZARD_ARCANA_CARDS.findIndex(card=>card?.arcanaId==='WIND-SLASH');
+  if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS];
+  return[
+    ...WIZARD_ARCANA_CARDS.slice(0,windIndex+1),
+    ...WIZARD_AIR_BASIC_CARDS,
+    ...WIZARD_NEXT_SOURCE_CARDS,
+    ...WIZARD_ARCANA_CARDS.slice(windIndex+1),
+  ];
+}
+
+function registerEnemyLabArcanaCatalog(){
+  for(const card of sourceOrderedEnemyLabArcana()){
+    if(!STANCE_CARDS.some(existing=>existing?.id===card.id))STANCE_CARDS.push(card);
+  }
 }
 
 export function cardRestoresStamina(card){
@@ -37,6 +58,12 @@ function queueNonStanceEffect(eventName,card,staminaSnapshot){
   if(typeof queueMicrotask==='function')queueMicrotask(fire);else setTimeout(fire,0);
 }
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
+function canPlayAbility(card){
+  if(typeof window==='undefined')return false;
+  if(card?.id===POW_BUNKER_CARD.id)return typeof window.__POWBUNKER_CAN_PLAY__==='function'&&window.__POWBUNKER_CAN_PLAY__();
+  if(typeof window.__ABILITY_CARD_CAN_PLAY__==='function')return window.__ABILITY_CARD_CAN_PLAY__(card)!==false;
+  return true;
+}
 
 export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
   const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false};
@@ -62,17 +89,21 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     for(let i=0;i<2;i++){
       const el=document.getElementById(`card${i}`);if(!el)continue;
       const card=s.hand[i],icon=el.querySelector('.cicon'),rows=el.querySelector('.crows');
-      const ability=card?.type==='ability',modifier=card?.type==='modifier',bing=card?.effectId==='bingBong';
+      const ability=card?.type==='ability',modifier=card?.type==='modifier',bing=card?.effectId==='bingBong',arcana=isWizardArcanaCard(card);
       const type=ability?'ability':(modifier?'modifier':'stance');el.dataset.cardType=card?type:'empty';
       el.setAttribute('aria-label',card?`Play ${card.name.replace(/^S\d+\s*/,'')} ${type} card`:'Empty card slot');
       if(rows)rows.style.display=modifier?'none':'flex';
       if(icon){
-        icon.textContent=ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':''));icon.style.display='grid';icon.style.placeItems='center';icon.style.textAlign='center';icon.style.whiteSpace='pre-line';
-        icon.style.lineHeight=modifier||bing?'1.02':'';icon.style.fontWeight=ability||modifier||bing?'900':'';icon.style.fontSize=ability?'16px':(modifier||bing?'10px':'');icon.style.letterSpacing=ability?'.08em':(modifier||bing?'.04em':'');
-        icon.style.color=ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':''));icon.style.borderColor=ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':''));
-        icon.style.background=ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':''));
+        icon.textContent=arcana?(card.icon||'ARC'):(ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':'')));
+        icon.style.display='grid';icon.style.placeItems='center';icon.style.textAlign='center';icon.style.whiteSpace='pre-line';
+        icon.style.lineHeight=modifier||bing?'1.02':'';icon.style.fontWeight=ability||modifier||bing?'900':'';
+        icon.style.fontSize=arcana?'13px':(ability?'16px':(modifier||bing?'10px':''));
+        icon.style.letterSpacing=arcana?'.05em':(ability?'.08em':(modifier||bing?'.04em':''));
+        icon.style.color=arcana?(card.uiColor||'#ffd47b'):(ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':'')));
+        icon.style.borderColor=arcana?(card.uiBorder||'rgba(255,208,123,.72)'):(ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':'')));
+        icon.style.background=arcana?(card.uiBackground||'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))'):(ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':'')));
       }
-      el.style.borderColor=ability?'#a95b35':(modifier?'#b62d43':(bing?'#b98639':''));
+      el.style.borderColor=arcana?(card.uiColor||'#b98639'):(ability?'#a95b35':(modifier?'#b62d43':(bing?'#b98639':'')));
     }
   }
   function scheduleDecoration(){if(typeof queueMicrotask==='function')queueMicrotask(decorateCards);else setTimeout(decorateCards,0);}
@@ -91,7 +122,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     play(slot){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){
-        const canPlay=typeof window!=='undefined'&&typeof window.__POWBUNKER_CAN_PLAY__==='function'?window.__POWBUNKER_CAN_PLAY__():false;if(!canPlay)return null;
+        if(!canPlayAbility(card))return null;
         const proxy=proxyActiveStance(card,'__abilityProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina);scheduleDecoration();return proxy;
       }
       if(card.type==='modifier'){
@@ -104,6 +135,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
   };
 
   if(isEnemyLabRuntime()){
+    registerEnemyLabArcanaCatalog();
     installEnemyLabDeckEditor(api);
     installEnemyLabDeckEditorRefinements();
   }

@@ -1,0 +1,81 @@
+const makeCard=({id,name,icon,element,styleTags,description,summary,rows,chain,uiColor,uiBorder,uiBackground})=>Object.freeze({
+  id:`WOL-${id}`,
+  arcanaId:id,
+  sourceGame:'Wizard of Legend',
+  type:'ability',
+  name,
+  icon,
+  element,
+  playEvent:'wizard-arcana:play',
+  description,
+  details:Object.freeze({summary,rows:Object.freeze(rows.map(row=>Object.freeze(row.slice())))}),
+  chain:Object.freeze(chain),
+  preferredWeapons:Object.freeze(['any']),
+  styleTags:Object.freeze(['Wizard Arcana',element,...styleTags]),
+  uiColor,uiBorder,uiBackground,
+});
+
+export const WIZARD_NEXT_SOURCE_CARDS=Object.freeze([
+  makeCard({
+    id:'EARTH-KNUCKLES',name:'Earth Knuckles',icon:'EK',element:'Earth',
+    styleTags:['two-beat string','summoned body extension','self advance','heavy knockback'],
+    description:'Advance behind two enormous stone fists: a 16-damage punch followed by a slightly stronger 18-damage punch.',
+    summary:'A source-driven two-beat earth string. Each beat summons one giant fist as a temporary forward body extension, advances the caster to chase the knockback, and then retracts rather than becoming a free projectile.',
+    rows:[
+      ['RHYTHM','Heavy punch → brief gap → heavier punch.'],
+      ['DAMAGE','16 → 18, with strong outward knockback on both beats.'],
+      ['CARRIER','One giant fist connected to the caster by an earthen forearm and debris.'],
+      ['MOVEMENT','Each beat advances the caster a short collision-checked distance.'],
+      ['ENHANCED SOURCE','Enhancement collapses the two-beat string into one larger 28-damage fist; structured but not enabled yet.'],
+    ],
+    chain:['stab6','stab6','horizontal6'],
+    uiColor:'#d8b77b',uiBorder:'rgba(193,151,87,.88)',uiBackground:'radial-gradient(circle,rgba(200,159,91,.28),rgba(43,31,17,.68))',
+  }),
+  makeCard({
+    id:'BLADED-VINE',name:'Bladed Vine',icon:'BV',element:'Earth',
+    styleTags:['three-beat string','attached flexible strike','visual strand bundle'],
+    description:'Whip twice with attached thorny vines, then thrust a longer three-strand bundle as one 15-damage finisher.',
+    summary:'A source-driven flexible-melee string. The first two beats are attached vine whips for 7 damage each; the third uses three visible strands but one shared 15-damage hit ledger.',
+    rows:[
+      ['RHYTHM','Whip → mirrored whip → long bundled thrust.'],
+      ['DAMAGE','7 → 7 → 15. The three finisher strands are one logical hit.'],
+      ['CARRIER','Flexible vines stay visually connected to the caster; they are not autonomous projectiles.'],
+      ['FOOTPRINT','Long narrow coverage, with the bundled finisher reaching farther and covering a denser lane.'],
+      ['ENHANCED SOURCE','Enhancement repeats the entire bundle three times for three separate 9-damage hits; not enabled yet.'],
+    ],
+    chain:['horizontal3','horizontal3','stab6'],
+    uiColor:'#b8df67',uiBorder:'rgba(130,178,65,.88)',uiBackground:'radial-gradient(circle,rgba(160,205,77,.28),rgba(22,43,12,.68))',
+  }),
+  makeCard({
+    id:'STONE-SHOT',name:'Stone Shot',icon:'SS',element:'Earth',
+    styleTags:['three-beat projectile string','finisher carrier swap','strong knockback'],
+    description:'Fire two compact stones, then replace the third shot with a larger spiked boulder.',
+    summary:'A source-driven ranged earth combo. The first two beats each fire one 12-damage stone; the third swaps to a distinct 15-damage spiked boulder with heavier impact emphasis.',
+    rows:[
+      ['RHYTHM','Small stone → Small stone → Spiked boulder.'],
+      ['DAMAGE','12 → 12 → 15.'],
+      ['CARRIER','Three independent straight projectiles; the finisher has a distinct silhouette, not merely more scale.'],
+      ['CONTROL','Every impact applies noticeable knockback; the boulder is strongest.'],
+      ['ENHANCED SOURCE','Beats 1–2 become two-shot 8-damage doublets while Beat 3 stays unchanged; structured but not enabled yet.'],
+    ],
+    chain:['stab6','stab6','stab6'],
+    uiColor:'#c8a36f',uiBorder:'rgba(171,129,75,.88)',uiBackground:'radial-gradient(circle,rgba(184,139,78,.27),rgba(40,29,19,.68))',
+  }),
+  makeCard({
+    id:'SPARK-CONTACT',name:'Spark Contact',icon:'SC',element:'Lightning',
+    styleTags:['four-beat string','self-advancing contact','final-beat overlay'],
+    description:'Rush through four compact electric contact strikes, with a broad 10-damage arc layered onto the final hit.',
+    summary:'A source-driven four-motion lightning string producing five damage events. Compact hits rise from 6 to 9 damage while every beat advances the caster; the fourth also emits a separate 10-damage electric arc.',
+    rows:[
+      ['RHYTHM','Strike + step ×4, performed exceptionally quickly.'],
+      ['DAMAGE','6 → 7 → 8 → 9, plus a separate 10-damage arc on Beat 4.'],
+      ['CARRIER','Short caster-anchored electrical contact footprints; no traveling projectile.'],
+      ['MOVEMENT','Every beat advances the caster slightly to stay attached to the target.'],
+      ['ENHANCED SOURCE','Enhancement adds shock specifically to the final arc without changing earlier beats; not enabled yet.'],
+    ],
+    chain:['stab4','stab4','horizontal5'],
+    uiColor:'#ffe063',uiBorder:'rgba(244,201,60,.90)',uiBackground:'radial-gradient(circle,rgba(255,225,89,.30),rgba(53,43,5,.70))',
+  }),
+]);
+
+export const WIZARD_NEXT_SOURCE_BY_ID=new Map(WIZARD_NEXT_SOURCE_CARDS.map(card=>[card.id,card]));
