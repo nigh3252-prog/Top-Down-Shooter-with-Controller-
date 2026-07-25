@@ -28,6 +28,12 @@ import {
   reflectVelocity2D,
   segmentIntersection2D,
 } from '../src/wizard-arcana-runtime.js';
+import {
+  FLAME_STRIKE_BEATS,
+  FLAME_STRIKE_CHARGE,
+  flameStrikeBurstSpec,
+  pointInFlameStrikePlume,
+} from '../src/wizard-flame-strike-runtime.js';
 
 if(typeof globalThis.CustomEvent==='undefined'){
   globalThis.CustomEvent=class CustomEvent{
@@ -35,8 +41,8 @@ if(typeof globalThis.CustomEvent==='undefined'){
   };
 }
 
-assert.equal(WIZARD_ARCANA_CARDS.length,6);
-assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,6);
+assert.equal(WIZARD_ARCANA_CARDS.length,7);
+assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,7);
 assert.ok(WIZARD_ARCANA_CARDS.every(isWizardArcanaCard));
 assert.ok(WIZARD_ARCANA_CARDS.every(card=>card.type==='ability'&&card.playEvent==='wizard-arcana:play'));
 
@@ -46,6 +52,26 @@ const groupedArcana=wizardArcanaCards([
   {id:'A-ORDINARY',type:'ability'},
 ]);
 assert.deepEqual(groupedArcana.map(card=>card.id),WIZARD_ARCANA_CARDS.map(card=>card.id));
+
+const flameStrike=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='FLAME-STRIKE');
+assert.ok(flameStrike);
+assert.match(flameStrike.description,/two compact frontal fire plumes/i);
+assert.match(flameStrike.description,/held/i);
+assert.deepEqual(FLAME_STRIKE_BEATS.map(beat=>beat.damage),[7,7,14]);
+assert.ok(FLAME_STRIKE_BEATS.every((beat,index,beats)=>index===0||beat.time>beats[index-1].time));
+const strikeOne=flameStrikeBurstSpec({beat:1});
+const strikeThree=flameStrikeBurstSpec({beat:3});
+const strikeCharged=flameStrikeBurstSpec({charged:true});
+assert.equal(strikeOne.damage,7);
+assert.equal(strikeThree.damage,14);
+assert.equal(strikeCharged.damage,28);
+assert.equal(FLAME_STRIKE_CHARGE.damage,28);
+assert.ok(strikeThree.range>strikeOne.range&&strikeThree.width>strikeOne.width);
+assert.ok(strikeCharged.range>strikeThree.range&&strikeCharged.width>strikeThree.width);
+assert.equal(pointInFlameStrikePlume({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:2,range:3,width:1.5}),true);
+assert.equal(pointInFlameStrikePlume({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:-1,range:3,width:1.5}),false);
+assert.equal(pointInFlameStrikePlume({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:3,targetZ:1,range:3,width:1}),false);
+assert.equal(pointInFlameStrikePlume({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:1.2,targetZ:2.7,range:3,width:1.5}),true);
 
 const flameCross=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='FLAME-CROSS');
 assert.match(flameCross.description,/one diagonal flame wave/i);
@@ -95,6 +121,7 @@ assert.equal(clampArcanaDamage(3.12),3);
 assert.equal(scaleWizardArcanaDamage(12,1),12);
 assert.equal(scaleWizardArcanaDamage(12,2.5),30);
 assert.equal(scaleWizardArcanaDamage(12,99),60);
+assert.equal(scaleWizardArcanaDamage(strikeCharged.damage,5),140);
 
 const stored=new Map();
 const storage={
@@ -117,15 +144,15 @@ assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:3})
 // the same filter labels must therefore perform zero child-list text writes.
 let textWrites=0;
 const observedText={
-  _value:'6 SHOWN',
+  _value:'7 SHOWN',
   get textContent(){return this._value;},
   set textContent(value){textWrites++;this._value=value;},
 };
-assert.equal(setTextIfChanged(observedText,'6 SHOWN'),false);
+assert.equal(setTextIfChanged(observedText,'7 SHOWN'),false);
 assert.equal(textWrites,0,'identical filter labels must not mutate the observed DOM');
-assert.equal(setTextIfChanged(observedText,'5 SHOWN'),true);
+assert.equal(setTextIfChanged(observedText,'6 SHOWN'),true);
 assert.equal(textWrites,1);
-assert.equal(setTextIfChanged(observedText,'5 SHOWN'),false);
+assert.equal(setTextIfChanged(observedText,'6 SHOWN'),false);
 assert.equal(textWrites,1,'reapplying the active filter must remain idempotent');
 
 const decorationTile={dataset:{}};
