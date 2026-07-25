@@ -28,50 +28,46 @@ export function installEnemyLabArcanaControlsHotfix(){
   const queue=callback=>typeof queueMicrotask==='function'?queueMicrotask(callback):setTimeout(callback,0);
   const setMessage=text=>{const message=parentDocument.getElementById('message');if(message)setTextIfChanged(message,text);};
 
+  if(!parentDocument.getElementById('enemyLabArcanaFilterHotfixStyles')){
+    const style=parentDocument.createElement('style');
+    style.id='enemyLabArcanaFilterHotfixStyles';
+    style.textContent=`
+      .deckEditorRoot.wizardArcanaOnly .deckCardTile:not(.wizardArcanaCard){display:none!important}
+      .deckEditorRoot.wizardArcanaOnly .deckFamilyBtn[data-wizard-arcana-family]{border-color:#ffd09a;color:#ffd09a;background:rgba(255,117,47,.14)}
+      .deckEditorRoot.wizardArcanaOnly .deckFamilyBtn:not([data-wizard-arcana-family]){border-color:var(--line);color:var(--text);background:rgba(16,38,40,.95)}
+    `;
+    parentDocument.head.appendChild(style);
+  }
+
   function editor(){return window.__enemyLabDeckEditor||null;}
   function browseRoot(){return parentDocument.querySelector('.deckEditorRoot[data-view="browse"]');}
-
-  function replaceArcanaButton(root){
-    const current=root?.querySelector('[data-wizard-arcana-family]');
-    if(!current)return null;
-    if(current.dataset.arcanaFilterHotfixed==='1')return current;
-    // The refinement layer's original button updated text from inside the same
-    // MutationObserver that watched the card panel. Clone it once to remove that
-    // listener, then let this idempotent controller own the filter interaction.
-    const button=current.cloneNode(true);
-    button.dataset.arcanaFilterHotfixed='1';
-    current.replaceWith(button);
-    button.addEventListener('click',event=>{
-      event.preventDefault();
-      event.stopPropagation();
-      state.arcanaFilter=true;
-      applyFilter();
-    });
+  function arcanaButton(root){
+    let button=root?.querySelector('[data-wizard-arcana-family]');
+    if(button)return button;
+    button=[...(root?.querySelectorAll('.deckFamilyBtn')||[])].find(item=>item.textContent.trim()==='WIZARD ARCANA')||null;
+    if(button)button.dataset.wizardArcanaFamily='1';
     return button;
+  }
+
+  function markArcanaTiles(root,deckEditor){
+    const byId=new Map(deckEditor.catalog.map(card=>[card.id,card]));
+    for(const tile of root.querySelectorAll('.deckCardTile')){
+      tile.classList.toggle('wizardArcanaCard',isWizardArcana(byId.get(tile.dataset.cardId)));
+    }
   }
 
   function applyFilter(){
     const root=browseRoot(),deckEditor=editor();
     if(!root||!deckEditor)return;
-    const button=replaceArcanaButton(root);
-    const byId=new Map(deckEditor.catalog.map(card=>[card.id,card]));
-    const arcana=deckEditor.catalog.filter(isWizardArcana);
-    const selected=new Set(deckEditor.cardIds);
+    const button=arcanaButton(root);
+    markArcanaTiles(root,deckEditor);
+    root.classList.toggle('wizardArcanaOnly',state.arcanaFilter);
+    button?.classList.toggle('on',state.arcanaFilter);
 
-    if(!state.arcanaFilter){
-      button?.classList.remove('on');
-      return;
-    }
-
-    for(const coreButton of root.querySelectorAll('.deckFamilyBtn:not([data-wizard-arcana-family])'))coreButton.classList.remove('on');
-    button?.classList.add('on');
-    for(const tile of root.querySelectorAll('.deckCardTile')){
-      tile.style.display=isWizardArcana(byId.get(tile.dataset.cardId))?'':'none';
-    }
-
+    if(!state.arcanaFilter)return;
+    const arcana=deckEditor.catalog.filter(isWizardArcana),selected=new Set(deckEditor.cardIds);
     const summary=root.querySelector('.deckEditorSummary strong');
     setTextIfChanged(summary,`${arcana.length} SHOWN`);
-
     const batch=root.querySelector('.deckBatchBtn');
     if(batch){
       const missing=arcana.filter(card=>!selected.has(card.id));
@@ -148,8 +144,14 @@ export function installEnemyLabArcanaControlsHotfix(){
   }
 
   parentDocument.addEventListener('click',event=>{
+    const arcana=event.target.closest?.('.deckFamilyBtn[data-wizard-arcana-family]');
+    if(arcana){
+      event.preventDefault();event.stopImmediatePropagation();
+      state.arcanaFilter=true;applyFilter();return;
+    }
+
     const coreFamily=event.target.closest?.('.deckFamilyBtn:not([data-wizard-arcana-family])');
-    if(coreFamily)state.arcanaFilter=false;
+    if(coreFamily){state.arcanaFilter=false;browseRoot()?.classList.remove('wizardArcanaOnly');}
 
     const batch=event.target.closest?.('.deckBatchBtn[data-safe-arcana-batch="1"]');
     if(batch&&state.arcanaFilter){
