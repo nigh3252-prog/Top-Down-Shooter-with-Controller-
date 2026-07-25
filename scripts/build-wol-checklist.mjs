@@ -17,6 +17,8 @@ const improvedText=[
   read('05-circuit-shock.md'),
   read('06-water-chaos-dashes.md'),
   read('07-fire-standards-1.md'),
+  read('08-fire-standards-2.md'),
+  read('09-fire-standards-3.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -140,6 +142,17 @@ const sourceMeta=[
   ['Searing Crown','Fire','Standard',227,233,230],
   ['Heroic Blaze','Fire','Signature',233,244,238],
   ['Blazing Lariat','Fire','Signature',244,255,250],
+  ['Blazing Vault','Fire','Standard',255,259,257],
+  ['Explosive Charge','Fire','Standard',259,265,262],
+  ['Blazing Blitz','Fire','Signature',265,274,270],
+  ['Blazing Onslaught','Fire','Standard',274,279,277],
+  ['Homing Flares','Fire','Signature',279,299,286],
+  ['Tracer Barrage','Fire','Signature',299,310,307],
+  ['Dragon Arc','Fire','Signature',310,315,313],
+  ['Exploding Fireball','Fire','Signature',315,325,322],
+  ['Flame Cleaver','Fire','Signature',325,337,331],
+  ['Flame Fusion','Fire','Standard',337,342,340],
+  ['Raging Inferno','Fire','Standard',342,353,347],
 ];
 
 const implementedNames=new Set([
@@ -194,8 +207,18 @@ const legacyImplementationNotes=new Map([
   ['Whirling Tornado','The game currently creates a traveling circular pull zone that applies small repeated hits for about three seconds. The source base move is a stationary vortex around the caster that destroys projectiles, delivers an authored tick count, and ends with one strong space-making blast.'],
   ['Water Prison','The game currently launches one bubble, attaches it to the first enemy, repeatedly stuns and damages that target for about 2.15 seconds, then deals a final hit. It does not yet model the source two-charge ammo system, roughly five-to-six-second prison, documented impact-plus-five-tick schedule, stack behavior, or full position lock.'],
 ]);
+const replacementChecklist='1. Rewatch the bounded source clip frame by frame.\n2. Replace the initial-pass claims with a full source-first analysis and explicit evidence labels.\n3. Implement the replacement in a separate ability task; do not polish the current prototype.\n4. Run the acceptance tests and compare the replacement side by side with the source clip.\n5. Check the three completion stages only after each is actually complete.';
+
+for(const name of ['Homing Flares','Dragon Arc']){
+  const entry=entries.find(item=>item.name===name);
+  if(!entry)throw new Error(`Missing reanalyzed replacement entry for ${name}`);
+  entry.lineage='replacement-analyzed';
+  entry.currentImplementation=legacyImplementationNotes.get(name);
+  entry.replacementChecklist=replacementChecklist;
+}
 
 for(const [name,element,category,start,end,section] of legacyMeta){
+  if(entries.some(entry=>entry.name===name))continue;
   const markdown=extractNumberedH2(spellLanguage,section,name);
   if(!markdown)throw new Error(`Missing legacy source section for ${name}`);
   entries.push({
@@ -209,7 +232,7 @@ for(const [name,element,category,start,end,section] of legacyMeta){
     units:[],citations:linksFor(markdown),analysisMarkdown:markdown,supplementMarkdown:'',
     revisionHistory:'',
     currentImplementation:legacyImplementationNotes.get(name),
-    replacementChecklist:'1. Rewatch the bounded source clip frame by frame.\n2. Replace the initial-pass claims with a full source-first analysis and explicit evidence labels.\n3. Implement the replacement in a separate ability task; do not polish the current prototype.\n4. Run the acceptance tests and compare the replacement side by side with the source clip.\n5. Check the three completion stages only after each is actually complete.',
+    replacementChecklist,
     poster:`media/wizard-of-legend/posters/${slugify(name)}.webp`,
   });
 }

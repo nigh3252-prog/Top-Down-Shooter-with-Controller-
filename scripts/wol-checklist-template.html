@@ -44,7 +44,7 @@
     <label class="sr-only" for="search">Search arcana</label><input id="search" type="search" placeholder="Search names, recipes, units, or notes…">
     <label class="sr-only" for="element-filter">Element</label><select id="element-filter"><option value="all">All elements</option></select>
     <label class="sr-only" for="category-filter">Category</label><select id="category-filter"><option value="all">All categories</option></select>
-    <label class="sr-only" for="lineage-filter">Analysis lineage</label><select id="lineage-filter"><option value="all">All lineages</option><option value="source-first">Source-first from outset</option><option value="rebuilt">Initial pass → rebuilt</option><option value="legacy">Legacy replacement required</option><option value="analyzed">Analyzed, not implemented</option></select>
+    <label class="sr-only" for="lineage-filter">Analysis lineage</label><select id="lineage-filter"><option value="all">All lineages</option><option value="source-first">Source-first from outset</option><option value="rebuilt">Initial pass → rebuilt</option><option value="replacement-analyzed">Legacy → reanalyzed; replacement pending</option><option value="legacy">Legacy analysis and replacement required</option><option value="analyzed">Analyzed, not implemented</option></select>
     <label class="sr-only" for="status-filter">Implementation status</label><select id="status-filter"><option value="all">All statuses</option><option value="source-first-implemented">Source-first implemented</option><option value="not-implemented">Not implemented</option><option value="legacy-replace">Legacy: replace</option></select>
     <label class="sr-only" for="sort-order">Sort order</label><select id="sort-order"><option value="source">Source order</option><option value="name">Name A–Z</option><option value="element">Element, then source</option></select>
     <div class="tool-actions">
@@ -88,7 +88,7 @@
   const elements={Fire:'var(--fire)',Air:'var(--air)',Earth:'var(--earth)',Lightning:'var(--lightning)',Water:'var(--water)',Ice:'var(--ice)',Chaos:'var(--chaos)'};
   const lineageLabels={
     'source-first':'Source-first from outset',rebuilt:'Initial pass → source-first rebuild',
-    legacy:'Legacy first-pass · replace',analyzed:'Analyzed · not implemented',
+    'replacement-analyzed':'Legacy → source-first analysis · replace',legacy:'Legacy first-pass · reanalyze and replace',analyzed:'Analyzed · not implemented',
   };
   const statusLabels={'source-first-implemented':'Source-first implemented','not-implemented':'Not implemented','legacy-replace':'Legacy replacement required'};
   const catalog=document.getElementById('catalog');
@@ -135,17 +135,18 @@
   function defaultProgress(){return Object.fromEntries(data.entries.map(entry=>[entry.id,{...entry.defaults}]));}
   function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved?.schemaVersion===1&&saved.entries)return{...defaultProgress(),...saved.entries};}catch{}return defaultProgress();}
   function saveProgress(){localStorage.setItem(STORAGE_KEY,JSON.stringify({schemaVersion:1,entries:progress,updatedAt:new Date().toISOString()}));updateMetrics();}
-  function lineageClass(entry){return entry.lineage==='legacy'?'legacy':entry.lineage==='rebuilt'?'rebuilt':'';}
+  function lineageClass(entry){return entry.lineage==='legacy'||entry.lineage==='replacement-analyzed'?'legacy':entry.lineage==='rebuilt'?'rebuilt':'';}
   function cardTemplate(entry){
     const checked=progress[entry.id]??entry.defaults;
     const legacy=entry.lineage==='legacy';
+    const replacement=Boolean(entry.currentImplementation);
     const citations=entry.citations.length?`<ul>${entry.citations.map((url,index)=>`<li><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Source ${index+1}</a></li>`).join('')}</ul>`:'<p>The supplied showcase is the primary source for this entry.</p>';
     return `<article class="arcana-card" id="arcana-${entry.id}" data-id="${entry.id}" data-lineage="${entry.lineage}" style="--accent:${elements[entry.element]??'var(--gold)'}">
       <div class="poster"><img loading="lazy" src="${entry.poster}" alt="${escapeHtml(entry.name)} showcase frame"><div class="poster-meta"><span class="order">${entry.status!=='legacy-replace'?`Source #${entry.order}`:'Legacy rebuild queue'}</span><span class="time">${formatTime(entry.start)}–${formatTime(entry.end)}</span></div></div>
       <div class="card-body">
         <div class="title-row"><div><div class="badges"><span class="badge">${entry.element}</span><span class="badge">${entry.category}</span></div><h2>${escapeHtml(entry.name)}</h2></div></div>
         <div class="badges"><span class="badge ${lineageClass(entry)}">${lineageLabels[entry.lineage]}</span><span class="badge ${entry.status==='source-first-implemented'?'implemented':entry.status==='legacy-replace'?'legacy':''}">${statusLabels[entry.status]}</span></div>
-        ${legacy?'<div class="notice danger"><strong>Replace, do not polish.</strong> A first-pass prototype exists, but it does not count as a source-first implementation.</div>':''}
+        ${replacement?`<div class="notice danger"><strong>Replace, do not polish.</strong> ${legacy?'Source-first reanalysis is still required.':'Source-first analysis is complete, but the first-pass game prototype still does not count as a correct implementation.'}</div>`:''}
         ${entry.revisionHistory?`<div class="notice"><strong>Revision history:</strong> ${escapeHtml(entry.revisionHistory)}</div>`:''}
         <p class="summary">${escapeHtml(entry.summary)}</p>
         <div class="stages" aria-label="${escapeHtml(entry.name)} progress">
@@ -156,7 +157,7 @@
         <div class="card-actions"><button class="watch" type="button" data-action="watch">▶ Watch clip</button><button type="button" data-action="copy">Copy implementation brief</button></div>
         <div class="details-stack">
           <details><summary>${legacy?'Initial-pass research (historical)':'Source-first analysis notebook'}</summary><div class="detail-content">${markdownToHtml(entry.analysisMarkdown)}</div></details>
-          ${legacy?`<details open><summary>Current game prototype & replacement plan</summary><div class="detail-content"><h3>What currently exists</h3><p>${escapeHtml(entry.currentImplementation)}</p><h3>Future source-first replacement checklist</h3>${markdownToHtml(entry.replacementChecklist)}</div></details>`:''}
+          ${replacement?`<details open><summary>Current game prototype & replacement plan</summary><div class="detail-content"><h3>What currently exists</h3><p>${escapeHtml(entry.currentImplementation)}</p><h3>Future source-first replacement checklist</h3>${markdownToHtml(entry.replacementChecklist)}</div></details>`:''}
           ${entry.supplementMarkdown?`<details><summary>Detailed implementation supplement</summary><div class="detail-content">${markdownToHtml(entry.supplementMarkdown)}</div></details>`:''}
           <details><summary>Recipe, acceptance, and issues</summary><div class="detail-content">${markdownToHtml([entry.recipe,entry.acceptance,entry.issues].filter(Boolean).join('\n\n'))}</div></details>
           <details><summary>Sources & stable reference</summary><div class="detail-content"><p><code>#arcana-${entry.id}</code></p>${citations}</div></details>
@@ -178,7 +179,7 @@
     renderCatalog();
   }
   function renderCatalog(){catalog.innerHTML=visibleEntries.length?visibleEntries.map(cardTemplate).join(''):'<div class="empty">No arcana match these filters.</div>';document.getElementById('shown-count').textContent=`${visibleEntries.length} of ${data.entries.length} shown`;if(location.hash){const target=document.querySelector(location.hash);if(target)setTimeout(()=>target.scrollIntoView({block:'start'}),0);}}
-  function updateMetrics(){const values=Object.values(progress);const analysis=values.filter(item=>item.analysis).length;const implementation=values.filter(item=>item.implementation).length;const compared=values.filter(item=>item.comparison).length;document.getElementById('metric-analysis').textContent=analysis;document.getElementById('metric-implemented').textContent=implementation;document.getElementById('metric-legacy').textContent=data.entries.filter(entry=>entry.status==='legacy-replace').length;document.getElementById('metric-compared').textContent=compared;const total=data.entries.length*3;const complete=values.reduce((sum,item)=>sum+Number(item.analysis)+Number(item.implementation)+Number(item.comparison),0);document.getElementById('progress-fill').style.width=`${complete/total*100}%`;document.getElementById('progress-label').textContent=`${complete} of ${total} source-first stages complete · saved on this device.`;}
+  function updateMetrics(){const values=Object.values(progress);const analysis=values.filter(item=>item.analysis).length;const implementation=values.filter(item=>item.implementation).length;const compared=values.filter(item=>item.comparison).length;document.getElementById('metric-analysis').textContent=analysis;document.getElementById('metric-implemented').textContent=implementation;document.getElementById('metric-legacy').textContent=data.entries.filter(entry=>entry.currentImplementation).length;document.getElementById('metric-compared').textContent=compared;const total=data.entries.length*3;const complete=values.reduce((sum,item)=>sum+Number(item.analysis)+Number(item.implementation)+Number(item.comparison),0);document.getElementById('progress-fill').style.width=`${complete/total*100}%`;document.getElementById('progress-label').textContent=`${complete} of ${total} source-first stages complete · saved on this device.`;}
   function setClip(entry,autoplay=true){activeEntry=entry;activeEnd=entry.end;document.getElementById('video-name').textContent=entry.name;document.getElementById('video-range').textContent=`${formatTime(entry.start)}–${formatTime(entry.end)} · ${lineageLabels[entry.lineage]}`;video.poster=entry.poster;const seek=()=>{video.currentTime=entry.start;if(autoplay)video.play().catch(()=>{});};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{once:true});}
   function stepClip(direction){const list=visibleEntries.length?visibleEntries:data.entries;let index=activeEntry?list.findIndex(entry=>entry.id===activeEntry.id):-1;if(index<0)index=0;else index=(index+direction+list.length)%list.length;setClip(list[index]);}
   function revealHashEntry(){const entry=data.entries.find(item=>`#arcana-${item.id}`===location.hash);if(!entry)return false;document.getElementById('search').value='';for(const id of ['element-filter','category-filter','lineage-filter','status-filter'])document.getElementById(id).value='all';document.getElementById('sort-order').value='source';applyFilters();setClip(entry,false);setTimeout(()=>document.getElementById(`arcana-${entry.id}`)?.scrollIntoView({block:'start'}),0);return true;}
