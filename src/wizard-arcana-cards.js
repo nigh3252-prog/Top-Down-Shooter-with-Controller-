@@ -35,6 +35,26 @@ const makeArcana = ({
 
 export const WIZARD_ARCANA_CARDS = Object.freeze([
   makeArcana({
+    id:'FLAME-STRIKE',
+    name:'Flame Strike',
+    icon:'FS',
+    element:'Fire',
+    styleTags:['caster-anchored burst','three-beat string','charged finisher'],
+    description:'Two compact frontal fire plumes, then a stronger finisher that becomes a much larger blast when the card input is held.',
+    summary:'A three-beat close-range fire string built entirely from brief caster-anchored bursts. The first two plumes deal 7 damage, the normal finisher deals 14, and holding the card input through the final beat charges a larger 28-damage plume.',
+    rows:[
+      ['RHYTHM','Compact burst → Compact burst → Stronger burst.'],
+      ['CHARGE','Keep LB/RB or the touch card held through Beat 3; release to fire the enlarged charged finisher.'],
+      ['DAMAGE','7 → 7 → 14, or replace the final 14 with a charged 28.'],
+      ['FOOTPRINT','Broad, rounded frontal plumes attached to the caster; no traveling fireball or ribbon.'],
+      ['ENHANCED SOURCE','The source enhanced charged finisher burns enemies and destroys enemy projectiles; those mutations are documented but not enabled yet.'],
+    ],
+    chain:['horizontal4','horizontal4','horizontal6'],
+    uiColor:'#ff9a47',
+    uiBorder:'rgba(255,137,64,.86)',
+    uiBackground:'radial-gradient(circle,rgba(255,178,72,.32),rgba(55,14,4,.68))',
+  }),
+  makeArcana({
     id:'FLAME-CROSS',
     name:'Flame Cross',
     icon:'FX',
