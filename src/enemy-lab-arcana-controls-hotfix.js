@@ -35,6 +35,9 @@ export function installEnemyLabArcanaControlsHotfix(){
     const current=root?.querySelector('[data-wizard-arcana-family]');
     if(!current)return null;
     if(current.dataset.arcanaFilterHotfixed==='1')return current;
+    // The refinement layer's original button updated text from inside the same
+    // MutationObserver that watched the card panel. Clone it once to remove that
+    // listener, then let this idempotent controller own the filter interaction.
     const button=current.cloneNode(true);
     button.dataset.arcanaFilterHotfixed='1';
     current.replaceWith(button);
