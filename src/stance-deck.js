@@ -21,8 +21,18 @@ function isEnemyLabRuntime(){
   }catch{return false;}
 }
 
+function sourceOrderedEnemyLabArcana(){
+  const windIndex=WIZARD_ARCANA_CARDS.findIndex(card=>card?.arcanaId==='WIND-SLASH');
+  if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS];
+  return[
+    ...WIZARD_ARCANA_CARDS.slice(0,windIndex+1),
+    ...WIZARD_AIR_BASIC_CARDS,
+    ...WIZARD_ARCANA_CARDS.slice(windIndex+1),
+  ];
+}
+
 function registerEnemyLabArcanaCatalog(){
-  for(const card of[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS]){
+  for(const card of sourceOrderedEnemyLabArcana()){
     if(!STANCE_CARDS.some(existing=>existing?.id===card.id))STANCE_CARDS.push(card);
   }
 }
