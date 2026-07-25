@@ -34,6 +34,12 @@ import {
   flameStrikeBurstSpec,
   pointInFlameStrikePlume,
 } from '../src/wizard-flame-strike-runtime.js';
+import {
+  WIND_SLASH_BEATS,
+  WIND_SLASH_ENHANCED_GUST_DAMAGE,
+  pointInWindSlashArc,
+  windSlashArcSpec,
+} from '../src/wizard-wind-slash-runtime.js';
 
 if(typeof globalThis.CustomEvent==='undefined'){
   globalThis.CustomEvent=class CustomEvent{
@@ -41,8 +47,8 @@ if(typeof globalThis.CustomEvent==='undefined'){
   };
 }
 
-assert.equal(WIZARD_ARCANA_CARDS.length,7);
-assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,7);
+assert.equal(WIZARD_ARCANA_CARDS.length,8);
+assert.equal(new Set(WIZARD_ARCANA_CARDS.map(card=>card.id)).size,8);
 assert.ok(WIZARD_ARCANA_CARDS.every(isWizardArcanaCard));
 assert.ok(WIZARD_ARCANA_CARDS.every(card=>card.type==='ability'&&card.playEvent==='wizard-arcana:play'));
 
@@ -108,6 +114,32 @@ assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.bounceSpacing,blazeBa
 assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.bounceSpacing*1.5,blazeBase)-(blazeBase.groundY+blazeBase.hopHeight))<1e-9);
 assert.ok(Math.abs(bouncingBlazeHeightAtDistance(blazeBase.range,blazeBase)-blazeBase.groundY)<1e-9);
 
+const windSlash=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='WIND-SLASH');
+assert.ok(windSlash);
+assert.match(windSlash.description,/three pale air crescents/i);
+assert.deepEqual(WIND_SLASH_BEATS.map(beat=>beat.damage),[8,10,12]);
+assert.ok(WIND_SLASH_BEATS.every((beat,index,beats)=>index===0||beat.time>beats[index-1].time));
+const windOne=windSlashArcSpec({beat:1});
+const windTwo=windSlashArcSpec({beat:2});
+const windThree=windSlashArcSpec({beat:3});
+assert.equal(windOne.primary.damage,8);
+assert.equal(windTwo.primary.damage,10);
+assert.equal(windThree.primary.damage,12);
+assert.ok(windTwo.primary.outerRadius>windOne.primary.outerRadius);
+assert.ok(windThree.primary.outerRadius>windTwo.primary.outerRadius);
+assert.ok(windTwo.primary.halfAngle>windOne.primary.halfAngle);
+assert.ok(windThree.primary.halfAngle>windTwo.primary.halfAngle);
+assert.deepEqual(WIND_SLASH_ENHANCED_GUST_DAMAGE,[3,3,4]);
+const enhancedWind=windSlashArcSpec({beat:3,enhanced:true});
+assert.equal(enhancedWind.gust.damage,4);
+assert.ok(enhancedWind.gust.outerRadius>enhancedWind.primary.outerRadius);
+assert.equal(enhancedWind.gust.piercesEnemies,true);
+assert.equal(enhancedWind.gust.destroysProjectiles,true);
+assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:2,innerRadius:.2,outerRadius:3,halfAngle:.8}),true);
+assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:-2,innerRadius:.2,outerRadius:3,halfAngle:.8}),false);
+assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:4,targetZ:1,innerRadius:.2,outerRadius:3,halfAngle:.8}),false);
+assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:1.5,targetZ:2.2,innerRadius:.2,outerRadius:3,halfAngle:.8}),true);
+
 assert.equal(ARCANA_SIZE_MIN,1);
 assert.equal(ARCANA_SIZE_MAX,5);
 assert.equal(ARCANA_DAMAGE_MIN,1);
@@ -122,6 +154,7 @@ assert.equal(scaleWizardArcanaDamage(12,1),12);
 assert.equal(scaleWizardArcanaDamage(12,2.5),30);
 assert.equal(scaleWizardArcanaDamage(12,99),60);
 assert.equal(scaleWizardArcanaDamage(strikeCharged.damage,5),140);
+assert.equal(scaleWizardArcanaDamage(windThree.primary.damage,5),60);
 
 const stored=new Map();
 const storage={
@@ -144,15 +177,15 @@ assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:3})
 // the same filter labels must therefore perform zero child-list text writes.
 let textWrites=0;
 const observedText={
-  _value:'7 SHOWN',
+  _value:'8 SHOWN',
   get textContent(){return this._value;},
   set textContent(value){textWrites++;this._value=value;},
 };
-assert.equal(setTextIfChanged(observedText,'7 SHOWN'),false);
+assert.equal(setTextIfChanged(observedText,'8 SHOWN'),false);
 assert.equal(textWrites,0,'identical filter labels must not mutate the observed DOM');
-assert.equal(setTextIfChanged(observedText,'6 SHOWN'),true);
+assert.equal(setTextIfChanged(observedText,'7 SHOWN'),true);
 assert.equal(textWrites,1);
-assert.equal(setTextIfChanged(observedText,'6 SHOWN'),false);
+assert.equal(setTextIfChanged(observedText,'7 SHOWN'),false);
 assert.equal(textWrites,1,'reapplying the active filter must remain idempotent');
 
 const decorationTile={dataset:{}};
