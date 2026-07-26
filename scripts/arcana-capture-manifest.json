@@ -841,7 +841,7 @@
     },
     "SNARE-TRACK": {
       "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "SNARE-TRACK", "layout": "none" },
-      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 20, 40, 70, 100], "sourceClip": { "start": 147.4, "end": 151.3, "timelineStart": 147.4, "timelineEnd": 149.9 }, "reset": { "fixtures": { "targets": [{ "id": "snare-target", "forward": -4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SNARE-TRACK" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 20, 40, 70, 100], "sourceClip": { "start": 147.4, "end": 151.3, "timelineStart": 147.4, "timelineEnd": 149.9 }, "reset": { "fixtures": { "targets": [{ "id": "snare-target", "forward": -6, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SNARE-TRACK" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "THUNDER-LINE": {
       "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "THUNDER-LINE", "layout": "none" },

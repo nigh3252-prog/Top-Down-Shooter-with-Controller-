@@ -56,6 +56,7 @@ for(const abilityId of nextTwentyIds.slice(4,19).filter(id=>id!=='CIRCUIT-LINE')
 assert.ok(manifest.acceptanceProfiles['FLARE-RUSH'].checks.some(check=>check.metric==='captureDerived.eventDeclaredCounts.payload-emitted'&&check.value===3));
 assert.ok(manifest.acceptanceProfiles['FROST-WING'].checks.some(check=>check.metric==='captureDerived.resolvedProjectiles'&&check.value===4));
 assert.ok(manifest.acceptanceProfiles['TOXIC-TRAP'].checks.some(check=>check.metric==='captureDerived.eventCounts.status-tick'&&check.value===5));
+assert.equal(manifest.abilities['SNARE-TRACK'].scenarios['source-base'].reset.fixtures.targets[0].forward,-6,'Snare capture must measure one center-lane contact after the outer vines have visibly diverged');
 assert.deepEqual(expandCaptureStages('all'),['contract','source','style']);
 assert.deepEqual(expandCaptureStages('motion,style,motion'),['motion','style']);
 
