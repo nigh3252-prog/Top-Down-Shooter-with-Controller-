@@ -30,10 +30,6 @@ Frame-by-frame visual review of the base release around `311.5â€“312.7` sec
 
 Several dragons overlap during the rapid stream, but their bright heads remain individually readable. Their bodies flicker independently; the volley does not move as one synchronized ribbon.
 
-**[IMPLEMENTATION COMPARISON — local Enemy Lab render]**
-
-An automated side-view cast and screenshot pass exposed that the interim replacement still collapsed into a narrow row of touching fire-arrow silhouettes. The corrected carrier uses a broader angular head, visibly separated upper and lower jaw planes, a short wide three-color flame body, and independently moving edge tongues. Emission speed and cadence now place neighboring carrier centers about `3.3` world units apart, leaving a readable gap while the complete eight-dragon release remains a rapid roughly `1.4`-second stream.
-
 **[DOCUMENTED]**
 
 Dragon Arc is a Fire Signature Arcana with projectile and dragon classifications. It passively stores up to eight charges, each recovering in 0.6 seconds. Activating it spends all charges currently available, releasing one piercing dragon per charge; each deals 8 damage with 8 knockback. It can be cast with any nonzero stock, and aim may be adjusted during the stream.

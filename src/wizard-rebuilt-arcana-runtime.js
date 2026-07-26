@@ -19,8 +19,8 @@ export const HOMING_FLARES_SPEC=Object.freeze({
   chargedGenerationDuration:4,chargedTotalCap:32,chargedDamageMultiplier:2,
 });
 export const DRAGON_ARC_SPEC=Object.freeze({
-  stockMax:8,rechargeInterval:.6,damage:8,sourceKnockback:8,emissionInterval:.20,
-  speed:16.5,range:17,enhancedStockMax:10,enhancedPerBeat:2,chargedCount:20,
+  stockMax:8,rechargeInterval:.6,damage:8,sourceKnockback:8,emissionInterval:.14,
+  speed:13.6,range:17,enhancedStockMax:10,enhancedPerBeat:2,chargedCount:20,
 });
 export const WHIRLING_TORNADO_TICKS=Object.freeze([.12,.30,.48,.66]);
 export const WHIRLING_TORNADO_SPEC=Object.freeze({
@@ -81,28 +81,25 @@ function makeFlareVisual(THREE,scene,size){
 }
 function makeDragonVisual(THREE,scene,size){
   const group=new THREE.Group();group.name='Wizard Arcana Dragon Arc projectile';
-  const outerBody=new THREE.Mesh(new THREE.ConeGeometry(.68*size,1.55*size,7),makeMaterial(THREE,FIRE_DEEP,.98,{additive:false}));outerBody.rotation.x=-Math.PI/2;outerBody.position.z=-.28*size;outerBody.scale.set(1,1,.74);outerBody.userData.dragonBodyLayer=0;outerBody.userData.baseScaleZ=.74;outerBody.renderOrder=7;group.add(outerBody);
-  const goldBody=new THREE.Mesh(new THREE.ConeGeometry(.51*size,1.30*size,7),makeMaterial(THREE,FIRE,.98,{additive:false}));goldBody.rotation.x=-Math.PI/2;goldBody.position.set(0,.08*size,-.20*size);goldBody.scale.set(1,1,.66);goldBody.userData.dragonBodyLayer=1;goldBody.userData.baseScaleZ=.66;goldBody.renderOrder=8;group.add(goldBody);
-  const hotBody=new THREE.Mesh(new THREE.ConeGeometry(.32*size,.92*size,6),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));hotBody.rotation.x=-Math.PI/2;hotBody.position.set(0,.16*size,-.07*size);hotBody.scale.set(1,1,.56);hotBody.userData.dragonBodyLayer=2;hotBody.userData.baseScaleZ=.56;hotBody.renderOrder=9;group.add(hotBody);
+  const outerBody=new THREE.Mesh(new THREE.ConeGeometry(.56*size,1.92*size,7),makeMaterial(THREE,FIRE_DEEP,.98,{additive:false}));outerBody.rotation.x=-Math.PI/2;outerBody.position.z=-.46*size;outerBody.scale.set(1,1,.74);outerBody.userData.dragonBodyLayer=0;outerBody.userData.baseScaleZ=.74;outerBody.renderOrder=7;group.add(outerBody);
+  const goldBody=new THREE.Mesh(new THREE.ConeGeometry(.43*size,1.66*size,7),makeMaterial(THREE,FIRE,.98,{additive:false}));goldBody.rotation.x=-Math.PI/2;goldBody.position.set(0,.08*size,-.35*size);goldBody.scale.set(1,1,.66);goldBody.userData.dragonBodyLayer=1;goldBody.userData.baseScaleZ=.66;goldBody.renderOrder=8;group.add(goldBody);
+  const hotBody=new THREE.Mesh(new THREE.ConeGeometry(.27*size,1.18*size,6),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));hotBody.rotation.x=-Math.PI/2;hotBody.position.set(0,.16*size,-.17*size);hotBody.scale.set(1,1,.56);hotBody.userData.dragonBodyLayer=2;hotBody.userData.baseScaleZ=.56;hotBody.renderOrder=9;group.add(hotBody);
 
-  const head=new THREE.Mesh(new THREE.BoxGeometry(1.10*size,.50*size,.72*size),makeMaterial(THREE,FIRE_DEEP,.99,{additive:false}));head.position.set(0,.06*size,.34*size);head.scale.set(1.28,1,1);head.userData.dragonHead=true;head.userData.baseScaleX=1.28;head.renderOrder=7;group.add(head);
-  const face=new THREE.Mesh(new THREE.BoxGeometry(.88*size,.38*size,.60*size),makeMaterial(THREE,FIRE,.99,{additive:false}));face.position.set(0,.11*size,.66*size);face.scale.set(1.18,1,1);face.userData.dragonFace=true;face.userData.baseScaleX=1.18;face.renderOrder=8;group.add(face);
-  const brow=new THREE.Mesh(new THREE.BoxGeometry(.68*size,.10*size,.40*size),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));brow.position.set(0,.30*size,.73*size);brow.renderOrder=9;group.add(brow);
-  const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(.72*size,.14*size,.70*size),makeMaterial(THREE,FIRE,.99,{additive:false}));upperJaw.position.set(0,.32*size,.98*size);upperJaw.rotation.z=-.035;upperJaw.userData.dragonJaw=1;upperJaw.userData.baseJawY=.27;upperJaw.renderOrder=8;group.add(upperJaw);
-  const upperJawHot=new THREE.Mesh(new THREE.BoxGeometry(.50*size,.05*size,.52*size),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));upperJawHot.position.set(0,-.075*size,.04*size);upperJawHot.renderOrder=9;upperJaw.add(upperJawHot);
-  const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(.64*size,.13*size,.62*size),makeMaterial(THREE,FIRE,.99,{additive:false}));lowerJaw.position.set(0,-.25*size,.94*size);lowerJaw.rotation.z=.035;lowerJaw.userData.dragonJaw=-1;lowerJaw.userData.baseJawY=-.20;lowerJaw.renderOrder=9;group.add(lowerJaw);
-  const lowerJawHot=new THREE.Mesh(new THREE.BoxGeometry(.46*size,.045*size,.45*size),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));lowerJawHot.position.set(0,.07*size,.035*size);lowerJawHot.renderOrder=10;lowerJaw.add(lowerJawHot);
-  const mouth=new THREE.Mesh(new THREE.BoxGeometry(.30*size,.055*size,.34*size),makeMaterial(THREE,FIRE_HOT,.98,{additive:false}));mouth.position.set(0,.015*size,1.16*size);mouth.userData.dragonMouth=true;mouth.renderOrder=10;group.add(mouth);
+  const head=new THREE.Mesh(new THREE.ConeGeometry(.50*size,1.12*size,6),makeMaterial(THREE,FIRE_DEEP,.99,{additive:false}));head.rotation.x=Math.PI/2;head.position.set(0,.02*size,.24*size);head.scale.set(1,1,.80);head.userData.dragonHead=true;head.renderOrder=7;group.add(head);
+  const face=new THREE.Mesh(new THREE.ConeGeometry(.36*size,.90*size,6),makeMaterial(THREE,FIRE,.99,{additive:false}));face.rotation.x=Math.PI/2;face.position.set(0,.10*size,.38*size);face.scale.set(1,1,.68);face.userData.dragonFace=true;face.renderOrder=8;group.add(face);
+  const upperJaw=new THREE.Mesh(new THREE.ConeGeometry(.23*size,.75*size,5),makeMaterial(THREE,FIRE,.99,{additive:false}));upperJaw.rotation.x=Math.PI/2;upperJaw.position.set(0,.18*size,.72*size);upperJaw.scale.set(1,1,.52);upperJaw.userData.dragonJaw=1;upperJaw.renderOrder=8;group.add(upperJaw);
+  const lowerJaw=new THREE.Mesh(new THREE.ConeGeometry(.20*size,.69*size,5),makeMaterial(THREE,FIRE_GOLD,.99,{additive:false}));lowerJaw.rotation.x=Math.PI/2;lowerJaw.position.set(0,-.16*size,.69*size);lowerJaw.scale.set(1,1,.48);lowerJaw.userData.dragonJaw=-1;lowerJaw.renderOrder=9;group.add(lowerJaw);
+  const mouth=new THREE.Mesh(new THREE.ConeGeometry(.085*size,.42*size,5),makeMaterial(THREE,FIRE_HOT,.86));mouth.rotation.x=Math.PI/2;mouth.position.set(0,-.01*size,.81*size);mouth.scale.set(1,1,.40);mouth.userData.dragonMouth=true;mouth.renderOrder=10;group.add(mouth);
   for(const side of[-1,1]){
-    const eye=new THREE.Mesh(new THREE.SphereGeometry(.055*size,9,6),makeMaterial(THREE,0xffffff,.98,{additive:false}));eye.position.set(side*.37*size,.31*size,.76*size);eye.userData.dragonEye=true;eye.renderOrder=10;group.add(eye);
-    const horn=new THREE.Mesh(new THREE.ConeGeometry(.11*size,.55*size,5),makeMaterial(THREE,FIRE_GOLD,.96,{additive:false}));horn.rotation.x=-Math.PI/2;horn.rotation.z=side*.42;horn.position.set(side*.43*size,.25*size,.12*size);horn.renderOrder=9;group.add(horn);
+    const eye=new THREE.Mesh(new THREE.SphereGeometry(.045*size,9,6),makeMaterial(THREE,0xffffff,.96,{additive:false}));eye.position.set(side*.19*size,.19*size,.57*size);eye.userData.dragonEye=true;eye.renderOrder=10;group.add(eye);
+    const horn=new THREE.Mesh(new THREE.ConeGeometry(.085*size,.48*size,5),makeMaterial(THREE,FIRE_GOLD,.96,{additive:false}));horn.rotation.x=-Math.PI/2;horn.rotation.z=side*.34;horn.position.set(side*.27*size,.22*size,.13*size);horn.renderOrder=9;group.add(horn);
   }
   for(let index=0;index<10;index++){
-    const side=index%2?-1:1,progress=index/9,tongue=new THREE.Mesh(new THREE.ConeGeometry((.17-progress*.065)*size,(.64-progress*.16)*size,5),makeMaterial(THREE,index%3===0?FIRE_DEEP:(index%3===1?FIRE:FIRE_GOLD),.92,{additive:false}));
-    tongue.rotation.x=-Math.PI/2;tongue.rotation.z=side*(.22+.14*progress);tongue.position.set(side*(.46-progress*.21)*size,(index%3-1)*.10*size,(.05-progress*1.12)*size);tongue.userData.dragonTongue=index;tongue.userData.baseX=tongue.position.x;tongue.userData.baseY=tongue.position.y;group.add(tongue);
+    const side=index%2?-1:1,progress=index/9,tongue=new THREE.Mesh(new THREE.ConeGeometry((.12-progress*.035)*size,(.58-progress*.13)*size,5),makeMaterial(THREE,index%3===0?FIRE_DEEP:(index%3===1?FIRE:FIRE_GOLD),.92,{additive:false}));
+    tongue.rotation.x=-Math.PI/2;tongue.rotation.z=side*(.20+.12*progress);tongue.position.set(side*(.31-progress*.13)*size,(index%3-1)*.09*size,(.05-progress*1.36)*size);tongue.userData.dragonTongue=index;tongue.userData.baseX=tongue.position.x;tongue.userData.baseY=tongue.position.y;group.add(tongue);
   }
   for(let index=0;index<5;index++){
-    const ember=new THREE.Mesh(new THREE.DodecahedronGeometry((.07+index%2*.025)*size,0),makeMaterial(THREE,index%2?FIRE_GOLD:FIRE_DEEP,.84,{additive:false}));ember.position.set((index%2?1:-1)*(.16+.06*index)*size,(index%3-1)*.11*size,-(.82+index*.15)*size);ember.userData.dragonEmber=index;ember.userData.baseX=ember.position.x;group.add(ember);
+    const ember=new THREE.Mesh(new THREE.DodecahedronGeometry((.07+index%2*.025)*size,0),makeMaterial(THREE,index%2?FIRE_GOLD:FIRE_DEEP,.84,{additive:false}));ember.position.set((index%2?1:-1)*(.16+.06*index)*size,(index%3-1)*.11*size,-(1.04+index*.22)*size);ember.userData.dragonEmber=index;ember.userData.baseX=ember.position.x;group.add(ember);
   }
   group.renderOrder=7;scene.add(group);return group;
 }
@@ -221,8 +218,8 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
       if(Number.isFinite(child.userData?.dragonBodyLayer)){const index=child.userData.dragonBodyLayer,pulse=Math.sin(now*19-index*.9+effect.age*7+phase);child.scale.x=1+pulse*(.08-index*.015);child.scale.z=child.userData.baseScaleZ*(1-pulse*.07);child.rotation.z=pulse*(.025+index*.008);}
       else if(Number.isFinite(child.userData?.dragonTongue)){const index=child.userData.dragonTongue,wave=Math.sin(now*22-index*.73+effect.age*9+phase);child.position.x=child.userData.baseX+wave*(.08+.008*index)*effect.size;child.position.y=child.userData.baseY+Math.cos(now*18-index*.61+phase)*.045*effect.size;child.rotation.y=wave*.18;}
       else if(Number.isFinite(child.userData?.dragonEmber)){const index=child.userData.dragonEmber;child.position.x=child.userData.baseX+Math.sin(now*14+index*1.8+phase)*.12*effect.size;child.position.y=Math.cos(now*17+index+phase)*.10*effect.size;child.scale.setScalar(.75+.28*Math.sin(now*20+index+phase));}
-      else if(Number.isFinite(child.userData?.dragonJaw)){const open=.050+.015*Math.sin(now*16+effect.age*8+phase);child.position.y=(child.userData.baseJawY+child.userData.dragonJaw*open)*effect.size;}
-      else if(child.userData?.dragonHead||child.userData?.dragonFace){const pulse=1+.045*Math.sin(now*17+effect.age*6+phase);child.scale.x=(child.userData.baseScaleX||1)*pulse;}
+      else if(Number.isFinite(child.userData?.dragonJaw)){const open=.035+.035*Math.sin(now*16+effect.age*8+phase);child.position.y=child.userData.dragonJaw*(.16+open)*effect.size;}
+      else if(child.userData?.dragonHead||child.userData?.dragonFace){const pulse=1+.045*Math.sin(now*17+effect.age*6+phase);child.scale.x=pulse;}
       else if(child.userData?.dragonMouth)child.material.opacity=.70+.16*Math.sin(now*24+phase);
     });
     for(const enemy of aliveEnemies(system)){if(effect.hit.has(enemy))continue;if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+.52*effect.size)continue;effect.hit.add(enemy);damageEnemy(system,enemy,effect.spec.damage,knockFrom(start,enemy,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,dragonArc:true});const impact=makeDragonImpactVisual(THREE,scene,{x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},effect.size);add({type:'dragonImpact',age:0,life:.24,mesh:impact});}

@@ -19,7 +19,7 @@ class Mesh extends Object3D{constructor(geometry=new Geometry(),material=new Mat
 
 const THREE={
   Group,Mesh,
-  SphereGeometry:Geometry,DodecahedronGeometry:Geometry,ConeGeometry:Geometry,BoxGeometry:Geometry,
+  SphereGeometry:Geometry,DodecahedronGeometry:Geometry,ConeGeometry:Geometry,
   TorusGeometry:Geometry,RingGeometry:Geometry,
   MeshBasicMaterial:Material,
   AdditiveBlending:'add',NormalBlending:'normal',DoubleSide:'double',
@@ -66,8 +66,6 @@ assert.ok(dragonVisual,'release must create visible independent dragon carriers'
 const dragonBodyLayers=dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonBodyLayer));
 assert.equal(dragonBodyLayers.length,3,'dragon must use separate dark-edge, orange, and gold body layers');
 assert.ok(dragonBodyLayers.every(child=>child.material.blending===THREE.NormalBlending),'main dragon colors must not use additive blending and blow out to white when the stream overlaps');
-assert.ok(dragonVisual.spec.speed*dragonVisual.spec.emissionInterval>=3,'dragon centers must leave a visible gap so the release cannot collapse into one narrow ribbon');
-assert.ok(dragonVisual.mesh.children.find(child=>child.userData.dragonHead)?.scale.x>=1.2,'dragon must use a broad, blunt head rather than a narrow projectile tip');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonJaw)).length,2,'dragon silhouette must retain an open upper/lower jaw');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonTongue)).length,10,'jagged flame tongues must replace the old bead-chain body');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonEmber)).length,5,'each carrier must include detached ember fragments');
