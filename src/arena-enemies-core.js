@@ -14,11 +14,20 @@ import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
 import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
+import { resolveArenaEnemyMove } from './arena-enemies-base.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES));
+
+export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){
+  const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
+  if(!owner)return false;
+  const mover=owner.moveEnemyResolved||owner.moveEnemy;
+  if(typeof mover==='function')return mover.call(owner,enemy,target,options);
+  return typeof fallback==='function'?fallback(owner,enemy,target,options):false;
+}
 
 export function createArenaEnemySystem(options={}){
   const externalEncounterCleared=options.onEncounterCleared;
@@ -282,6 +291,41 @@ export function createArenaEnemySystem(options={}){
     return owner?.damageEnemy(enemy,...args)??false;
   }
 
+  function moveEnemyResolved(enemy,target,moveOptions={}){
+    const fallback=(owner,ownedEnemy,requested,childOptions={})=>{
+      const result=resolveArenaEnemyMove(ownedEnemy,requested,{
+        navigation:options.navigation,
+        radius:Number.isFinite(Number(childOptions.radius))?Number(childOptions.radius):Math.max(.1,(Number(ownedEnemy.radius)||1)*(Number(owner.heightScale)||1)),
+        arenaRadius:Number(options.arenaRadius)||18,
+        clampMargin:1,
+      });
+      ownedEnemy.x=result.current.x;ownedEnemy.z=result.current.z;
+      if(childOptions.resetVelocity===true)ownedEnemy.vx=ownedEnemy.vz=ownedEnemy.knockX=ownedEnemy.knockZ=0;
+      if(ownedEnemy.root?.position?.set)ownedEnemy.root.position.set(ownedEnemy.x,(Number(ownedEnemy.yOff)||0)+(Number(ownedEnemy.rootLift)||0),ownedEnemy.z);
+      else if(ownedEnemy.mesh?.position?.set)ownedEnemy.mesh.position.set(ownedEnemy.x,ownedEnemy.mesh.position.y||0,ownedEnemy.z);
+      return result;
+    };
+    if(!combinedMode){
+      const mover=active.moveEnemyResolved||active.moveEnemy;
+      return typeof mover==='function'?mover.call(active,enemy,target,moveOptions):fallback(active,enemy,target,moveOptions);
+    }
+    return routeArenaEnemyMove(systems,enemy,target,moveOptions,fallback);
+  }
+  const moveEnemy=(enemy,target,options={})=>moveEnemyResolved(enemy,target,options);
+
+  function damagePlayer(damage,options={}){
+    if(!combinedMode)return active.damagePlayer?.(damage,options)??0;
+    const before=Number(active.playerHp)||0,applied=active.damagePlayer?.(damage,options)??0,after=Number(active.playerHp)||before;
+    globalPlayerHp=Math.max(0,globalPlayerHp-Math.max(0,before-after));hpSnapshots.set(active,after);return applied;
+  }
+
+  function setPlayerDamageInterceptor(interceptor){for(const system of systems)system.setPlayerDamageInterceptor?.(interceptor);}
+  function applyStatus(enemy,...args){return owningSystem(enemy)?.applyStatus?.(enemy,...args)??false;}
+  function stunEnemy(enemy,...args){return owningSystem(enemy)?.stunEnemy?.(enemy,...args)??false;}
+  function registerWizardDecoy(decoy){for(const system of visibleSystems())system.registerWizardDecoy?.(decoy);return decoy?.id||decoy?.stableId||null;}
+  function unregisterWizardDecoy(id){for(const system of systems)system.unregisterWizardDecoy?.(id);}
+  function consumeWizardDecoyAttacks(){return visibleSystems().flatMap(system=>system.consumeWizardDecoyAttacks?.()||[]);}
+
   function launchRigidBody(enemy,launch={}){
     return !!owningSystem(enemy)?.launchRigidBody?.(enemy,launch);
   }
@@ -321,7 +365,8 @@ export function createArenaEnemySystem(options={}){
     get hostileProjectiles(){return visibleSystems().flatMap(system=>system.hostileProjectiles||[]);},
     get group(){return active.group;},
     get director(){return active.director;},
-    update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
+    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,setPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
+    launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
     setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
     setCycleOnWaveClear:all('setCycleOnWaveClear'),setWaveSize,setSpeedScale:all('setSpeedScale'),
     setHeightScale:all('setHeightScale'),setHpScale:all('setHpScale'),setIdleRangeScale:all('setIdleRangeScale'),

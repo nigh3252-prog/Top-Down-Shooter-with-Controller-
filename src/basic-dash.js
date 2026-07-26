@@ -20,15 +20,25 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   const state = {
     active:false,
     postActive:false,
+    source:'idle',
+    motionId:0,
+    cancelled:false,
     elapsed:0,
     postElapsed:0,
     plannedDistance:0,
+    actualDistance:0,
+    blocked:false,
     direction:{ x:0, z:1 },
+    resolvedDirection:{ x:0, z:1 },
     facingForward:{ x:0, z:1 },
     facingAngle:0,
     localDashForward:0,
     localDashRight:0,
     position:null,
+    previous:null,
+    start:null,
+    end:null,
+    path:[],
     lastStablePosition:null,
     lastForward:{ x:0, z:1 },
     poseModel:null,
@@ -93,7 +103,9 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
       config.playerRadius,
       collisionSegments(handle),
     );
-    return { x:result.x, z:result.z };
+    const position={ x:result.x, z:result.z };
+    const applied=Math.hypot(position.x-start.x,position.z-start.z);
+    return { position, applied, blocked:applied+1e-5<Math.max(0,distance) };
   }
 
   function syncPosition(handle, position){
@@ -154,32 +166,66 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     state.poseBase = null;
   }
 
-  function beginDash(handle){
+  function recordPath(position){
+    if(!position)return;
+    const last=state.path[state.path.length-1];
+    if(last&&Math.hypot(last.x-position.x,last.z-position.z)<1e-5)return;
+    state.path.push({x:position.x,z:position.z});
+    if(state.path.length>128)state.path.splice(1,state.path.length-128);
+  }
+
+  function completedPathDirection(fallback=state.direction){
+    for(let index=state.path.length-1;index>0;index--){
+      const dx=state.path[index].x-state.path[index-1].x,dz=state.path[index].z-state.path[index-1].z;
+      const direction=normalizeDirection(dx,dz);if(direction)return direction;
+    }
+    return normalizeDirection(fallback.x,fallback.z)||{x:0,z:1};
+  }
+
+  function beginDash(handle,options={}){
     const facing = normalizeDirection(state.lastForward.x, state.lastForward.z) || { x:0, z:1 };
-    const direction = selectDashDirection({ input:movementInput(), forward:facing, config });
+    const requested=normalizeDirection(Number(options.direction?.x)||0,Number(options.direction?.z)||0);
+    const direction = requested || selectDashDirection({ input:movementInput(), forward:facing, config });
     const current = handle.actorPos;
     state.active = true;
     state.postActive = false;
+    state.source=String(options.source||'ordinary-dodge');
+    state.motionId++;
+    state.cancelled=false;
     state.elapsed = 0;
     state.postElapsed = 0;
     state.plannedDistance = 0;
+    state.actualDistance = 0;
+    state.blocked = false;
     state.direction = direction;
+    state.resolvedDirection = {...direction};
     state.facingForward = facing;
     state.facingAngle = Math.atan2(facing.x, facing.z);
     state.position = state.lastStablePosition
       ? { ...state.lastStablePosition }
       : { x:current.x, z:current.y };
+    state.previous={...state.position};
+    state.start={...state.position};
+    state.end=null;
+    state.path=[];
+    recordPath(state.position);
     capturePose();
     syncPosition(handle, state.position);
     holdFacing(handle);
     applyPose();
+    return state.motionId;
   }
 
   function updateActiveDash(handle, dt){
     state.elapsed = Math.min(config.duration, state.elapsed + dt);
     const targetDistance = dashDistanceAt(state.elapsed, config);
     const stepDistance = Math.max(0, targetDistance - state.plannedDistance);
-    state.position = moveFrom(handle, state.position, state.direction, stepDistance);
+    state.previous={...state.position};
+    const movement=moveFrom(handle, state.position, state.direction, stepDistance);
+    state.position = movement.position;
+    state.actualDistance += movement.applied;
+    state.blocked = state.blocked || movement.blocked;
+    recordPath(state.position);
     state.plannedDistance = targetDistance;
     syncPosition(handle, state.position);
     holdFacing(handle);
@@ -198,6 +244,8 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
       state.active = false;
       state.postActive = true;
       state.postElapsed = 0;
+      state.end={...state.position};
+      state.resolvedDirection=completedPathDirection(state.direction);
       handle.arena.dodge.t = -1;
     }
   }
@@ -207,7 +255,10 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     const input = movementInput();
     const direction = postDashDirection(state.direction, input, state.postElapsed, config);
     const speed = postDashSpeed(input, state.postElapsed, config);
-    state.position = moveFrom(handle, state.position, direction, speed * dt);
+    state.previous={...state.position};
+    const movement=moveFrom(handle, state.position, direction, speed * dt);
+    state.position = movement.position;
+    state.blocked = state.blocked || movement.blocked;
     state.direction = direction;
     syncPosition(handle, state.position);
 
@@ -222,12 +273,78 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   }
 
   function cancel(handle){
+    state.cancelled=state.active||state.postActive;
     state.active = false;
     state.postActive = false;
     state.position = null;
     state.plannedDistance = 0;
     resetPose();
     if(handle?.arena?.dodge) handle.arena.dodge.t = -1;
+  }
+
+  function motionSnapshot(id=state.motionId){
+    const current=id===state.motionId;
+    return{
+      id,
+      current,
+      source:current?state.source:'expired',
+      phase:!current?'expired':state.active?'moving':state.postActive?'post':state.cancelled?'cancelled':state.end?'complete':'idle',
+      active:current&&(state.active||state.postActive),
+      movementComplete:current&&!!state.end,
+      complete:current&&!!state.end&&!state.active&&!state.postActive&&!state.cancelled,
+      cancelled:current&&state.cancelled,
+      start:current&&state.start?{...state.start}:null,
+      previous:current&&state.previous?{...state.previous}:null,
+      current:current&&state.position?{...state.position}:null,
+      end:current&&state.end?{...state.end}:null,
+      direction:current?{...state.direction}:null,
+      resolvedDirection:current?{...state.resolvedDirection}:null,
+      elapsed:current?state.elapsed:0,
+      postElapsed:current?state.postElapsed:0,
+      plannedDistance:current?state.plannedDistance:0,
+      distance:current?state.actualDistance:0,
+      blocked:current&&state.blocked,
+      path:current?state.path.map(point=>({...point})):[],
+    };
+  }
+
+  function startDashMotion(options={}){
+    const handle=arenaHandle();
+    if(!handle||handle.arena?.deadT>=0||handle.roomTransition?.active||state.active||state.postActive||handle.arena?.dodge?.t>=0)return null;
+    const id=beginDash(handle,{...options,source:options.source||'arcana'});
+    state.sawArenaDash=true;
+    if(options.applyDodgeCooldown)handle.arena.dodge.cool=Math.max(Number(handle.arena.dodge.cool)||0,Number(options.dodgeCooldown)||.55);
+    if(options.grantIframes)handle.arena.invulnT=Math.max(Number(handle.arena.invulnT)||0,Number(options.iframeDuration)||.30);
+    const token={
+      id,
+      snapshot:()=>motionSnapshot(id),
+      cancel:()=>{if(id===state.motionId)cancel(arenaHandle());},
+    };
+    return Object.freeze(token);
+  }
+
+  function reset(){
+    const handle=arenaHandle();
+    cancel(handle);
+    state.motionId=0;
+    state.source='ordinary-dodge';
+    state.cancelled=false;
+    state.elapsed=0;
+    state.postElapsed=0;
+    state.plannedDistance=0;
+    state.actualDistance=0;
+    state.blocked=false;
+    state.resolvedDirection={x:0,z:1};
+    state.start=null;
+    state.previous=null;
+    state.end=null;
+    state.path=[];
+    state.sawArenaDash=false;
+    state.lastForward=currentForward();
+    // A room transition/respawn deliberately cancels before the arena moves the
+    // player. Do not retain that old position: the next dash must sample the
+    // arena's new authoritative position even if it starts before another tick.
+    state.lastStablePosition=null;
   }
 
   function update(dt){
@@ -243,7 +360,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
 
     const arenaDashActive = dodge.t >= 0;
     if(arenaDashActive && !state.active && !state.postActive && !state.sawArenaDash){
-      beginDash(handle);
+      beginDash(handle,{source:'ordinary-dodge'});
     }
 
     if(state.active) updateActiveDash(handle, dt);
@@ -260,5 +377,5 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     globalThis.removeEventListener?.('keyup', onKeyUp);
   }
 
-  return { state, config, update, dispose };
+  return { state, config, update, reset, dispose, startDashMotion, snapshot:motionSnapshot, get busy(){return state.active||state.postActive;} };
 }

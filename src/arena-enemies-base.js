@@ -19,6 +19,105 @@ import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 
+export function advanceWizardEnemyControl(enemy,dt=0){
+  if(!enemy)return enemy;
+  const elapsed=Math.max(0,Number(dt)||0);
+  for(const key of['wizardSlowRemaining','wizardFreezeRemaining','wizardEntangleRemaining','stunStateRemaining']){
+    if(Number(enemy[key])>0)enemy[key]=Math.max(0,Number(enemy[key])-elapsed);
+  }
+  if(enemy.stunStateRemaining<=0&&/^wizard/i.test(String(enemy.stunState||'')))enemy.stunState=null;
+  return enemy;
+}
+
+export function wizardEnemyMovementScale(enemy){
+  if(!enemy||enemy.movementLocked===true||Number(enemy.moveSpeedMultiplier)===0)return 0;
+  const explicit=Number.isFinite(Number(enemy.moveSpeedMultiplier))?Math.max(0,Math.min(1,Number(enemy.moveSpeedMultiplier))):1;
+  const slow=Number(enemy.wizardSlowRemaining)>0
+    ?Math.max(.05,Math.min(1,Number.isFinite(Number(enemy.wizardSlowMultiplier))?Number(enemy.wizardSlowMultiplier):.45))
+    :1;
+  return Math.min(explicit,slow);
+}
+
+export function wizardEnemyAttackLocked(enemy){
+  return !!enemy&&(Number(enemy.stunned)>0||Number(enemy.wizardFreezeRemaining)>0||Number(enemy.wizardAttackLockRemaining)>0);
+}
+
+export function applyWizardEnemyStatus(enemy,kind,duration,options={}){
+  if(!enemy)return false;
+  const seconds=Math.max(0,Number(duration)||0),status=String(kind||'').toLowerCase();
+  if(status==='slow'){
+    enemy.wizardSlowRemaining=Math.max(Number(enemy.wizardSlowRemaining)||0,seconds);
+    if(Number.isFinite(Number(options.multiplier)))enemy.wizardSlowMultiplier=Math.max(.05,Math.min(1,Number(options.multiplier)));
+  }else if(status==='freeze')enemy.wizardFreezeRemaining=Math.max(Number(enemy.wizardFreezeRemaining)||0,seconds);
+  else if(status==='entangle')enemy.wizardEntangleRemaining=Math.max(Number(enemy.wizardEntangleRemaining)||0,seconds);
+  else if(status==='shock'&&seconds>0)enemy.stunStateRemaining=Math.max(Number(enemy.stunStateRemaining)||0,seconds);
+  return true;
+}
+
+// Damage-over-time and movement-only control effects still need to reduce HP,
+// but they must be able to opt out of the ordinary struck-body response. The
+// aggregate `hitReaction:false` switch disables stun, attack cancellation, and
+// visual flinch together; each facet can still be overridden independently.
+// Defaults deliberately preserve the pre-existing damageEnemy behavior.
+export function applyArenaEnemyDamageState(enemy,amount,knock={x:0,z:0},options={},hooks={}){
+  if(!enemy||Number(enemy.hp)<=0)return{accepted:false,killed:false};
+  const clampValue=(value,min,max)=>Math.max(min,Math.min(max,value));
+  const reactionEnabled=options.hitReaction!==false;
+  const hitStun=options.hitStun===undefined?reactionEnabled:options.hitStun!==false;
+  const cancelAttack=options.cancelAttack===undefined?reactionEnabled:options.cancelAttack!==false;
+  const damageFlash=options.damageFlash===undefined?reactionEnabled:options.damageFlash!==false;
+  const power=options.power??clampValue((Number(amount)||0)/28,.4,2);
+  const pop=options.pop??1;
+
+  if(cancelAttack){
+    hooks.endRally?.(enemy);
+    hooks.releaseAttack?.(enemy);
+  }
+  enemy.hp-=amount;
+  if(damageFlash){
+    enemy.flash=.12+power*.08;
+    enemy.squash=Math.min(1,(.22+power*.28)*pop);
+    enemy.squashT=enemy.squashMax=.18+power*.10;
+    const random=typeof hooks.random==='function'?hooks.random:Math.random;
+    enemy.spinVel+=(random()<.5?-1:1)*(1.6+power*2.6)*pop;
+    if(power>.95)enemy.vyOff+=(1.4+power*1.9)*pop;
+  }
+  if(hitStun)enemy.stunned=Math.max(Number(enemy.stunned)||0,.18+power*.06);
+  if(cancelAttack&&(enemy.state==='windup'||enemy.state==='active'||enemy.state==='recovery')){
+    enemy.state='idle';
+    enemy.stateTime=0;
+  }
+  enemy.knockX+=(knock.x||0)*.65;
+  enemy.knockZ+=(knock.z||0)*.65;
+  return{accepted:true,killed:enemy.hp<=0,power,pop,hitStun,cancelAttack,damageFlash};
+}
+
+// Resolve an absolute enemy target position through the same navigation service
+// used by the autonomous enemy update. Keeping this pure makes carries and pulls
+// deterministic and lets callers inspect how much motion scenery clipped.
+export function resolveArenaEnemyMove(start,target,{navigation=null,radius=0,arenaRadius=18,clampMargin=1}={}){
+  const previous={x:Number(start?.x)||0,z:Number(start?.z)||0};
+  const requested={
+    x:Number.isFinite(Number(target?.x))?Number(target.x):previous.x,
+    z:Number.isFinite(Number(target?.z))?Number(target.z):previous.z,
+  };
+  let current={...requested};
+  if(typeof navigation?.resolveMovement==='function'){
+    const resolved=navigation.resolveMovement(previous,{x:requested.x-previous.x,z:requested.z-previous.z},Math.max(0,Number(radius)||0));
+    if(resolved&&Number.isFinite(Number(resolved.x))&&Number.isFinite(Number(resolved.z)))current={x:Number(resolved.x),z:Number(resolved.z)};
+  }else{
+    const limit=Math.max(0,(Number(arenaRadius)||0)-(Number(clampMargin)||0));
+    const distance=Math.hypot(current.x,current.z);
+    if(distance>limit&&distance>0){current.x*=limit/distance;current.z*=limit/distance;}
+  }
+  const requestedDelta={x:requested.x-previous.x,z:requested.z-previous.z};
+  const actualDelta={x:current.x-previous.x,z:current.z-previous.z};
+  return{
+    previous,requested,current,requestedDelta,actualDelta,
+    blocked:Math.hypot(current.x-requested.x,current.z-requested.z)>1e-6,
+  };
+}
+
 // Goblin weapons are built at their final readable size by goblin-weapons.js.
 // Real attack reach is derived from each weapon's own rig metadata.
 const GOBLIN_WEAPON_SCALE = 1;
@@ -98,6 +197,9 @@ export function createArenaEnemySystem({
   let wave = 1, kills = 0, waveKills = 0, spawnedThisWave = 0, waveClearT = 0, nextId = 1, time = 0;
   let activeEncounterRoomId = null;
   let lastPlayer = { x:0, z:0, invulnerable:false };
+  let playerDamageInterceptor = null;
+  const wizardDecoys = new Map();
+  const wizardDecoyAttacks = [];
 
   const PLAYER_R = .25 * S;
   const CLAMP_MARGIN = 1.0;
@@ -106,6 +208,56 @@ export function createArenaEnemySystem({
   const HOLD    = () => 1.55 * S * rangeK();
   const KEEP_NEAR = () => 1.35 * S * rangeK();
   const KEEP_FAR  = () => 2.4 * S * rangeK();
+
+  function registerWizardDecoy(decoy){
+    const id=String(decoy?.id||'');
+    if(!id||!Number.isFinite(Number(decoy?.x))||!Number.isFinite(Number(decoy?.z)))return false;
+    wizardDecoys.set(id,{...decoy,id,x:Number(decoy.x),z:Number(decoy.z),radius:Math.max(.2,Number(decoy.radius)||PLAYER_R)});
+    return id;
+  }
+  function unregisterWizardDecoy(id){return wizardDecoys.delete(String(id||''));}
+  function nearestWizardDecoy(enemy){
+    let best=null,bestDistance=Infinity;
+    for(const decoy of wizardDecoys.values()){
+      const distance=Math.hypot(decoy.x-enemy.x,decoy.z-enemy.z);
+      if(distance<bestDistance){best=decoy;bestDistance=distance;}
+    }
+    return best;
+  }
+  function targetForEnemy(enemy,player){
+    const decoy=nearestWizardDecoy(enemy);
+    if(decoy)return{x:decoy.x,z:decoy.z,invulnerable:false,targetable:true,__wizardDecoyId:decoy.id,__wizardDecoyRadius:decoy.radius};
+    return player?.targetable===false?null:player;
+  }
+  function strikeWizardDecoy(id,attack={}){
+    const key=String(id||''),decoy=wizardDecoys.get(key);
+    if(!decoy)return false;
+    wizardDecoys.delete(key);
+    const entry={decoyId:key,...attack};wizardDecoyAttacks.push(entry);
+    try{decoy.onAttack?.(entry);}catch{}
+    return true;
+  }
+  function consumeWizardDecoyAttacks(){return wizardDecoyAttacks.splice(0);}
+
+  function stunEnemy(enemy,duration,{kind='wizardStun'}={}){
+    if(!enemy||Number(enemy.hp)<=0)return false;
+    const seconds=Math.max(0,Number(duration)||0);
+    if(seconds<=0)return false;
+    endRally(enemy);director.release(enemy);
+    enemy.stunned=Math.max(Number(enemy.stunned)||0,seconds);
+    enemy.stunState=String(kind||'wizardStun');enemy.stunStateRemaining=Math.max(Number(enemy.stunStateRemaining)||0,seconds);
+    enemy.vx=enemy.vz=0;
+    if(enemy.state==='windup'||enemy.state==='active'||enemy.state==='recovery'){
+      enemy.state='idle';enemy.stateTime=0;enemy.attack=null;enemy.hitDone=false;
+    }
+    return true;
+  }
+
+  function applyStatus(enemy,kind,duration,options={}){
+    if(!applyWizardEnemyStatus(enemy,kind,duration,options))return false;
+    if(String(kind||'').toLowerCase()==='freeze')stunEnemy(enemy,duration,{kind:'wizardFreeze'});
+    return true;
+  }
 
   /* ---------- real-combat (grunt) pose mapping ---------- */
   // The goblin rig holds a weapon built with these blade coords (goblin-rig.js RIG).
@@ -426,23 +578,33 @@ export function createArenaEnemySystem({
     const closeRadius = (e.headCollisionRadius > 0 ? e.headCollisionRadius*tuning.heightScale : collisionRadius(e)) + PLAYER_R + .26;
     if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < closeRadius){
       e.hitDone = true;
+      if(p.__wizardDecoyId){strikeWizardDecoy(p.__wizardDecoyId,{enemyId:e.id,kind:e.kind,attack:e.attack.name,projectile:false});return;}
       hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
     }
   }
-  function hitPlayer(dmg, kind, name, dir = null){
-    if(lastPlayer.invulnerable) return;
-    tuning.playerHp = Math.max(0, tuning.playerHp - dmg);
-    tuning.lastPlayerHit = `${kind} ${name} hit for ${dmg}`;
+  function hitPlayer(dmg, kind, name, dir = null, {ignoreInvulnerability=false} = {}){
+    if(lastPlayer.invulnerable&&!ignoreInvulnerability) return 0;
+    const requested=Math.max(0,Number(dmg)||0);
+    let applied=requested;
+    if(typeof playerDamageInterceptor==='function'){
+      const intercepted=playerDamageInterceptor({damage:requested,kind,name,dir:dir?{x:dir.x,z:dir.z}:null,playerHp:tuning.playerHp});
+      if(intercepted===false)applied=0;
+      else if(Number.isFinite(Number(intercepted)))applied=Math.max(0,Number(intercepted));
+      else if(intercepted&&Number.isFinite(Number(intercepted.damage)))applied=Math.max(0,Number(intercepted.damage));
+    }
+    tuning.playerHp = Math.max(0, tuning.playerHp - applied);
+    tuning.lastPlayerHit = `${kind} ${name} hit for ${applied}`;
     tuning.lastPlayerHitDir = dir ? { x:dir.x, z:dir.z } : null;
+    return applied;
   }
   const playerDead = () => tuning.playerHp <= 0;
 
   /* ---------- projectiles (rock) ---------- */
-  function spawnProjectile(e){
+  function spawnProjectile(e,p=null){
     const f = e.facing;
     let pr = projectiles.find(q => q.dead);
     if(!pr){ pr = { mesh:null, dead:true }; projectiles.push(pr); }
-    Object.assign(pr, { x:e.x + f.x*.35*S, z:e.z + f.z*.35*S, vx:f.x*2.2*S, vz:f.z*2.2*S, life:2.4, r:.09*S, damage:e.attack.damage, dead:false });
+    Object.assign(pr, { x:e.x + f.x*.35*S, z:e.z + f.z*.35*S, vx:f.x*2.2*S, vz:f.z*2.2*S, life:2.4, r:.09*S, damage:e.attack.damage, dead:false, targetDecoyId:p?.__wizardDecoyId||null });
     if(!pr.mesh){
       pr.mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(.39, 0), mats.matIron);
       group.add(pr.mesh);
@@ -455,7 +617,11 @@ export function createArenaEnemySystem({
       const previous = { x:pr.x, z:pr.z };
       pr.life -= dt; pr.x += pr.vx*dt; pr.z += pr.vz*dt;
       if(navigation?.raycastWalls?.(previous, { x:pr.x, z:pr.z })) pr.life = 0;
-      if(Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
+      for(const decoy of wizardDecoys.values()){
+        if(Math.hypot(pr.x-decoy.x,pr.z-decoy.z)>=pr.r+decoy.radius)continue;
+        strikeWizardDecoy(decoy.id,{kind:'rock',attack:'Rock Throw',projectile:true});pr.life=0;break;
+      }
+      if(pr.life>0&&p.targetable!==false&&Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
         hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz)); pr.life = 0;
       }
       if(pr.life <= 0){ pr.dead = true; if(pr.mesh) pr.mesh.visible = false; }
@@ -466,6 +632,7 @@ export function createArenaEnemySystem({
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
+    const movementScale=wizardEnemyMovementScale(e);
     const previous = { x:e.x, z:e.z };
     e.stateTime += dt;
     e.flash = Math.max(0, e.flash - dt);
@@ -476,7 +643,9 @@ export function createArenaEnemySystem({
     }
     updateFusionAccessibility(e);
     // knock decay (arena hit reaction)
-    e.x += e.knockX*dt; e.z += e.knockZ*dt; e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
+    if(movementScale>0){e.x += e.knockX*dt; e.z += e.knockZ*dt;}
+    else e.knockX=e.knockZ=0;
+    e.knockX *= Math.pow(.08, dt); e.knockZ *= Math.pow(.08, dt);
     // hit-feel body reaction: vertical pop, hit spin, squash timer
     if(e.yOff > 0 || e.vyOff !== 0){
       e.vyOff -= 22*dt;
@@ -502,7 +671,7 @@ export function createArenaEnemySystem({
       }
       if(e.stateTime >= e.windup){
         e.state = 'active'; e.stateTime = 0;
-        if(e.attack.projectile){ spawnProjectile(e); e.hitDone = true; }
+        if(e.attack.projectile){ spawnProjectile(e,p); e.hitDone = true; }
       }
     }
     else if(e.state === 'active'){
@@ -510,7 +679,7 @@ export function createArenaEnemySystem({
         const lungeScale = e.fusion
           ? ({ pounce:1.05, dart:.72, snatch:.38, chomp:.28, harvest:.18, stomp:.12, charge:1.55, dive:.92, snap:.22, stab:.48 }[e.attack.movement] || .5) * S
           : 1.9*S;
-        e.x += e.facing.x*lungeScale*dt; e.z += e.facing.z*lungeScale*dt;   // lunge-commit
+        e.x += e.facing.x*lungeScale*dt*movementScale; e.z += e.facing.z*lungeScale*dt*movementScale;   // lunge-commit
         if(!e.hitDone) resolveEnemyMelee(e, p);
       }
       if(e.stateTime >= e.active){ e.state = 'recovery'; e.stateTime = 0; }
@@ -524,17 +693,17 @@ export function createArenaEnemySystem({
       if(e.fusion){ e.facing=norm(dx,dz); e.facingAngle=Math.atan2(e.facing.x,e.facing.z); }
       const permitted = director.hasApproachPermit(e);
       const alignment = e.role === 'goblin' ? Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle)) : 0;
-      const att = (e.cooldown <= 0 && e.stunned <= 0 && !playerDead()) ? chooseAttack(e, d, p) : null;
+      const att = (e.cooldown <= 0 && !wizardEnemyAttackLocked(e) && !playerDead()) ? chooseAttack(e, d, p) : null;
       if(att && permitted && alignment <= e.attackAlign && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
         startEnemyAttack(e, att, p);
-      } else {
+      } else if(movementScale>0) {
         if(e.fusion){
           const wantRange=e.preferredRange;
           if(d>wantRange+.45*S) seekPlayer(e,p,dt); else moveFusion(e,p,dt,d);
         } else if(!updateGoblinRally(e,p,dt,d)) moveGoblin(e,p,dt,d);
         applySeparationSteering(e, dt);
-        e.x += e.vx*dt; e.z += e.vz*dt;
-      }
+        e.x += e.vx*dt*movementScale; e.z += e.vz*dt*movementScale;
+      }else e.vx=e.vz=0;
     }
     updateFusionAccessibility(e);
     if(navigation?.resolveMovement){
@@ -708,23 +877,13 @@ export function createArenaEnemySystem({
     if(!e.fusion) disposeEnemyGeometry(e.root);
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
-    if(e.hp <= 0) return false;
-    endRally(e);
-    // hit power (~1 average swing, ~2 charged haymaker) drives the body reaction
-    const power = opts.power ?? clamp(amount / 28, .4, 2);
-    const pop = opts.pop ?? 1;
-    e.hp -= amount;
-    e.flash = .12 + power * .08;
-    e.stunned = Math.max(e.stunned, .18 + power * .06);
-    director.releaseAllForEnemy(e);
-    if(e.state === 'windup' || e.state === 'active' || e.state === 'recovery'){ e.state = 'idle'; e.stateTime = 0; }
-    e.knockX += (knock.x || 0) * .65; e.knockZ += (knock.z || 0) * .65;
-    // squash-and-stretch + spin + vertical pop on heavy hits
-    e.squash = Math.min(1, (.22 + power * .28) * pop);
-    e.squashT = e.squashMax = .18 + power * .10;
-    e.spinVel += (Math.random() < .5 ? -1 : 1) * (1.6 + power * 2.6) * pop;
-    if(power > .95) e.vyOff += (1.4 + power * 1.9) * pop;
-    if(e.hp <= 0){
+    const result=applyArenaEnemyDamageState(e,amount,knock,opts,{endRally,releaseAttack:enemy=>director.releaseAllForEnemy(enemy)});
+    if(!result.accepted)return false;
+    const {power}=result;
+    if(result.killed){
+      // Even a non-reactive damage tick must relinquish its director ownership if
+      // it kills an enemy; hitReaction:false only preserves living attacks.
+      if(!result.cancelAttack)director.releaseAllForEnemy(e);
       kills++; waveKills++;
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
@@ -741,6 +900,22 @@ export function createArenaEnemySystem({
     return false;
   }
 
+  function moveEnemyResolved(e,target,options={}){
+    if(!e||Number(e.hp)<=0||!enemies.includes(e))return false;
+    const result=resolveArenaEnemyMove(e,target,{
+      navigation,
+      radius:Number.isFinite(Number(options.radius))?Number(options.radius):collisionRadius(e),
+      arenaRadius,
+      clampMargin:CLAMP_MARGIN,
+    });
+    e.x=result.current.x;e.z=result.current.z;
+    if(options.resetVelocity===true){e.vx=e.vz=e.knockX=e.knockZ=0;}
+    if(e.root?.position?.set)e.root.position.set(e.x,(Number(e.yOff)||0)+(Number(e.rootLift)||0),e.z);
+    else if(e.mesh?.position?.set)e.mesh.position.set(e.x,e.mesh.position.y||0,e.z);
+    return result;
+  }
+  const moveEnemy=(e,target,options={})=>moveEnemyResolved(e,target,options);
+
   /* ---------- lifecycle ---------- */
   function clearDeathPieces(){ deathPieces.forEach(p => { if(p.mesh){ p.mesh.parent?.remove(p.mesh); p.mesh.geometry?.dispose?.(); } }); deathPieces.length = 0; }
   function clearEnemies(){
@@ -751,6 +926,7 @@ export function createArenaEnemySystem({
       if(e.root.parent) e.root.parent.remove(e.root);
     });
     projectiles.forEach(pr => { pr.dead = true; if(pr.mesh) pr.mesh.visible = false; });
+    wizardDecoys.clear(); wizardDecoyAttacks.length=0;
     clearDeathPieces();
   }
   function startRoomEncounter(roomId){
@@ -775,11 +951,15 @@ export function createArenaEnemySystem({
     for(const e of enemies){ e._visualStartX = e.x; e._visualStartZ = e.z; }
     _updateOrder.length = 0;
     for(let k = 0; k < enemies.length; k++) _updateOrder.push(enemies[k]);
-    for(let k = 0; k < _updateOrder.length; k++) updateEnemy(_updateOrder[k], dt, lastPlayer);
+    for(let k = 0; k < _updateOrder.length; k++){
+      const enemy=_updateOrder[k];advanceWizardEnemyControl(enemy,dt);const target=targetForEnemy(enemy,lastPlayer);
+      if(target)updateEnemy(enemy,dt,target);
+      else{enemy.vx*=Math.pow(.02,dt);enemy.vz*=Math.pow(.02,dt);enemy.cooldown=Math.max(0,enemy.cooldown-dt);enemy.stunned=Math.max(0,(Number(enemy.stunned)||0)-dt);}
+    }
     _updateOrder.length = 0;
     resolveBodyCollisions(lastPlayer);
     for(const e of enemies){
-      e.maxGroundSpeed = Math.max(.1, e.speed * tuning.speedScale);
+      e.maxGroundSpeed = Math.max(.1, e.speed * tuning.speedScale*wizardEnemyMovementScale(e));
       e.visualGroundSpeed = Math.min(e.maxGroundSpeed, Math.hypot(e.x - e._visualStartX, e.z - e._visualStartZ) / Math.max(dt, .001));
     }
     updateProjectiles(dt, lastPlayer);
@@ -802,7 +982,11 @@ export function createArenaEnemySystem({
   if(!roomEncounterMode) startWave();
 
   return {
-    enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
+    enemies, group, director, update, damageEnemy, moveEnemy, moveEnemyResolved, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
+    damagePlayer:(damage,{kind='capture',name='fixture',dir=null,ignoreInvulnerability=false,targetableIndependent=false}={})=>hitPlayer(damage,kind,name,dir,{ignoreInvulnerability:ignoreInvulnerability||targetableIndependent}),
+    setPlayerDamageInterceptor:(interceptor)=>{playerDamageInterceptor=typeof interceptor==='function'?interceptor:null;},
+    applyStatus,stunEnemy,
+    registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
     get hostileProjectiles(){ return projectiles.filter(projectile=>!projectile.dead); },
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },

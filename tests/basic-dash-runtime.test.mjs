@@ -88,4 +88,37 @@ assert.ok(Math.abs(sidewaysEnd.z)<1e-8);
 assert.equal(sideways.facing,0,'sideways travel must preserve target-facing yaw');
 assert.equal(sideways.actorVisual.quaternion.angle,0,'sideways dash must not rotate the visual toward travel');
 
+const arcana=makeScenario({moveX:1});
+arcana.runtime.update(.016);
+const token=arcana.runtime.startDashMotion({
+  source:'arcana',
+  direction:{x:1,z:0},
+  grantIframes:false,
+  applyDodgeCooldown:false,
+});
+assert.ok(token,'an idle runtime should accept an authored Arcana dash');
+assert.equal(arcana.runtime.state.source,'arcana');
+assert.equal(arcana.handle.arena.invulnT,undefined,'Arcana motion must not grant ordinary dodge iframes');
+assert.equal(arcana.handle.arena.dodge.cool,undefined,'Arcana motion must not spend the ordinary dodge cooldown');
+assert.equal(arcana.runtime.startDashMotion({source:'arcana'}),null,'overlapping authored dashes must be rejected');
+let motionEnd=null;
+for(let frame=0;frame<60;frame++){
+  arcana.runtime.update(.016);
+  const snapshot=token.snapshot();
+  if(snapshot.movementComplete&&!motionEnd)motionEnd=snapshot;
+}
+assert.ok(motionEnd,'the motion token should report the completed movement phase');
+assert.ok(Math.abs(motionEnd.end.x-8.4)<1e-8,'authored Arcana motion must reuse the exact four-width dash distance');
+assert.equal(motionEnd.blocked,false);
+assert.ok(motionEnd.path.length>2,'the motion token should retain the actual sampled route');
+assert.deepEqual(motionEnd.resolvedDirection,{x:1,z:0},'the shared motion token exposes its completed-path tangent independently of recovery steering');
+assert.equal(token.snapshot().complete,true,'the motion token should finish after the shared post-dash recovery');
+assert.equal(arcana.runtime.busy,false);
+arcana.actorPos.set(0,0);arcana.actorVisual.parent.position.set(0,0,0);
+arcana.runtime.reset();
+arcana.actorPos.set(4,-3);arcana.actorVisual.parent.position.set(4,0,-3);
+const replayToken=arcana.runtime.startDashMotion({source:'arcana',direction:{x:1,z:0}});
+assert.equal(replayToken.snapshot().id,1,'capture reset should restore deterministic motion ids');
+assert.deepEqual(replayToken.snapshot().start,{x:4,z:-3},'a dash starting after a room/respawn relocation must sample the new authoritative player position');
+
 console.log('basic dash runtime tests passed');

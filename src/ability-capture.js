@@ -1,22 +1,9 @@
-import { WIZARD_ARCANA_CARDS } from './wizard-arcana-cards.js';
-import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
-import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
+import { WIZARD_ARCANA_CATALOG, wizardArcanaCardById } from './wizard-arcana-catalog.js';
 
 export const ABILITY_CAPTURE_FIXED_DT=1/60;
 export const ABILITY_CAPTURE_CHECKPOINTS=Object.freeze([.25,.5,.75,1,1.25]);
 
-function sourceOrderedArcana(){
-  const windIndex=WIZARD_ARCANA_CARDS.findIndex(card=>card?.arcanaId==='WIND-SLASH');
-  if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS];
-  return[
-    ...WIZARD_ARCANA_CARDS.slice(0,windIndex+1),
-    ...WIZARD_AIR_BASIC_CARDS,
-    ...WIZARD_NEXT_SOURCE_CARDS,
-    ...WIZARD_ARCANA_CARDS.slice(windIndex+1),
-  ];
-}
-
-export const ABILITY_CAPTURE_CARDS=Object.freeze(sourceOrderedArcana());
+export const ABILITY_CAPTURE_CARDS=WIZARD_ARCANA_CATALOG;
 export const ABILITY_CAPTURE_CARD_SUMMARIES=Object.freeze(ABILITY_CAPTURE_CARDS.map(card=>Object.freeze({
   id:card.arcanaId,
   cardId:card.id,
@@ -34,12 +21,12 @@ export const ABILITY_CAPTURE_AIMS=Object.freeze({
 
 export function normalizeCaptureArcanaId(value,fallback='DRAGON-ARC'){
   const key=String(value||'').trim().toUpperCase().replace(/^WOL-/,'');
-  return ABILITY_CAPTURE_CARDS.some(card=>card.arcanaId===key)?key:fallback;
+  return wizardArcanaCardById(key)?key:fallback;
 }
 
 export function captureCardById(value){
   const id=normalizeCaptureArcanaId(value,'');
-  return ABILITY_CAPTURE_CARDS.find(card=>card.arcanaId===id)||null;
+  return wizardArcanaCardById(id);
 }
 
 export function normalizeCaptureAim(value='right'){
@@ -165,6 +152,13 @@ function vector(value){
   const length=Math.hypot(result.x,result.z);
   return{...result,length};
 }
+
+export function normalizeCaptureMove(value={}){
+  const source=typeof value==='string'?ABILITY_CAPTURE_AIMS[String(value).toLowerCase()]||{}:value||{};
+  const rawX=finite(source.x??source.moveX??source.mx)??0,rawZ=finite(source.z??source.moveZ??source.mz)??0,length=Math.hypot(rawX,rawZ),requested=finite(source.magnitude);
+  const magnitude=Math.max(0,Math.min(1,requested??Math.min(1,length)));
+  return length>1e-6?{x:rawX/length*magnitude,z:rawZ/length*magnitude,magnitude}:{x:0,z:0,magnitude:0};
+}
 function jsonSafe(value,depth=0){
   if(depth>7)return undefined;
   if(value===null||typeof value==='string'||typeof value==='boolean')return value;
@@ -240,6 +234,7 @@ function captureOptions(options={},previous={}){
   return{
     arcanaId:normalizeCaptureArcanaId(options.arcanaId||options.arcana||previous.arcanaId||'DRAGON-ARC'),
     aim,
+    move:normalizeCaptureMove(options.move??previous.move??{}),
     player:{x:finite(playerInput.x)??0,z:finite(playerInput.z)??0,aimX:aim.x,aimZ:aim.z},
     camera:{mode:String(options.camera?.mode||previous.camera?.mode||'capture')},
     rngSeed:options.rngSeed??previous.rngSeed??4401,
@@ -256,6 +251,7 @@ export function createAbilityCaptureController({
   resetRuntimes=()=>{},
   castCard=()=>false,
   setAimWorld=()=>{},
+  setMoveWorld=()=>{},
   performWorldAction=()=>false,
   advanceWorld=()=>{},
   renderWorld=()=>{},
@@ -284,6 +280,7 @@ export function createAbilityCaptureController({
     return{
       enabled:state.enabled,ready:state.ready,paused:state.paused,time:state.time,frame:state.frame,
       fixedDt:ABILITY_CAPTURE_FIXED_DT,arcanaId:state.config.arcanaId,aim:{...state.config.aim},
+      move:{...state.config.move},
       stage:state.config.stage,effects:state.config.effects,renderMode:state.config.renderMode,
       dummy:{...state.config.dummy},fixtures:jsonSafe(state.config.fixtures),...world,activeEffects,projectiles,runtimes:runtime,
     };
@@ -313,7 +310,7 @@ export function createAbilityCaptureController({
     setPaused(true);
     state.config=captureOptions(options,state.config);
     state.time=0;state.frame=0;random=createCaptureRandom(state.config.rngSeed);
-    withRandom(()=>{resetWorld({...state.config});resetRuntimes({...state.config});renderWorld({time:0,frame:0,config:state.config});});
+    withRandom(()=>{resetWorld({...state.config});setMoveWorld({...state.config.move},{...state.config});resetRuntimes({...state.config});renderWorld({time:0,frame:0,config:state.config});});
     state.ready=true;return snapshot();
   }
   function cast(value=state.config.arcanaId,action={}){
@@ -337,10 +334,17 @@ export function createAbilityCaptureController({
     renderWorld({time:state.time,frame:state.frame,config:state.config});
     return snapshot();
   }
+  function setMove(value={}){
+    state.config={...state.config,move:normalizeCaptureMove(value)};
+    withRandom(()=>setMoveWorld({...state.config.move},{...state.config}));
+    renderWorld({time:state.time,frame:state.frame,config:state.config});
+    return snapshot();
+  }
   function perform(action={}){
     const op=String(action.op||action.type||'').trim().toLowerCase();
     if(op==='cast'||op==='press'||op==='hold')return cast(action.arcanaId||action.id||state.config.arcanaId,{...action,input:action.input||op});
     if(op==='setaim'||op==='aim')return setAim(action.aim??action.player??action);
+    if(op==='setmove'||op==='move')return setMove(action.move??action.direction??action);
     if(op==='release'){
       withRandom(()=>performWorldAction({...action,op},{time:state.time,frame:state.frame,config:{...state.config}}));
       renderWorld({time:state.time,frame:state.frame,config:state.config});
@@ -369,7 +373,7 @@ export function createAbilityCaptureController({
 
   return{
     ready:()=>state.enabled&&state.ready,
-    reset,cast,step,snapshot,setPaused,checkpoint,setAim,perform,act:perform,
+    reset,cast,step,snapshot,setPaused,checkpoint,setAim,setMove,perform,act:perform,
     pause:()=>setPaused(true),play:()=>setPaused(false),
     catalog:ABILITY_CAPTURE_CARD_SUMMARIES,
     checkpoints:ABILITY_CAPTURE_CHECKPOINTS,

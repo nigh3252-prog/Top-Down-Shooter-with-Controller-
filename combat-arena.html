@@ -397,6 +397,7 @@ const arena = {
   dodge:  { t:-1, dirX:0, dirZ:1, cool:0 },
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
+  arcanaMovementLocked:false, arcanaFacingLock:null, arcanaUntargetable:false, arcanaPlayerHidden:false,
   paused:false, started:false, cycleMode:false,
   combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
   stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
@@ -552,6 +553,14 @@ function rebuildDeck(){
 }
 function playCard(slot){
   if(arena.deadT >= 0 || roomTransition?.active) return;
+  if(arena.arcanaMovementLocked){exhaustFlash();announce('ARCANA COMMITMENT',.55);return;}
+  const queuedCard=deck.hand[slot];
+  if(queuedCard?.dashMotion&&combatState.attack){
+    exhaustFlash();announce('FINISH ATTACK FIRST',.55);return;
+  }
+  if(queuedCard?.dashMotion&&(arena.dodge.t>=0||PC.basicDashRuntime?.busy||PC.wizardNextTwentyDashRuntime?.busy)){
+    exhaustFlash();announce('DASH IN PROGRESS',.55);return;
+  }
   const card = deck.play(slot);
   if(!card){ exhaustFlash(); return; }   // empty slot or mid-shuffle
   const pool = stancePoolForWeapon();
@@ -702,6 +711,9 @@ function beginRoomTransition(doorTarget, toRoomId){
     start:{ x:actorPos.x, z:actorPos.y },
     end:{ x:doorTarget.center.x + direction.x * HEX_SIZE * .38, z:doorTarget.center.z + direction.z * HEX_SIZE * .38 },
   };
+  // Live Arcana motion/effects belong to the room being exited. Resource
+  // cooldowns and charge progress persist across a normal room transition.
+  PC.resetArcanaRuntimeState?.({preserveResources:true});
   enemySystem.clearRoomRuntime();
   clearRoomEffects();
   arena.charge.active = false;
@@ -746,6 +758,7 @@ function nearestEnemy(maxDist=Infinity){
   return best;
 }
 function resolveDesiredFacing(){
+  if(arena.arcanaFacingLock) return { angle:arena.arcanaFacingLock.angle, source:'arcana-lock' };
   const target = nearestEnemy(AUTO_FACE_RANGE);
   if(target) return { angle: Math.atan2(target.x-actorPos.x, target.z-actorPos.y), source:'auto' };
   if(Math.hypot(input.mx,input.mz) > .15) return { angle: Math.atan2(input.mx, input.mz), source:'move' };
@@ -821,7 +834,8 @@ function chainMove(slot){
   const att = PC.ATTACKS[key];
   return att ? { key, slot, att } : null;
 }
-function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && arena.chain.inputLockT <= 0 && !!arena.stance; }
+function arcanaDashBusy(){return !!(PC.basicDashRuntime?.busy||PC.wizardNextTwentyDashRuntime?.busy);}
+function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && !arcanaDashBusy() && !arena.arcanaMovementLocked && arena.chain.inputLockT <= 0 && !!arena.stance; }
 function chargeCap(att){ return att.phases[0].t1 * .98; }
 function startChainMove(move, stage){
   arena.chain.stage = stage;
@@ -960,7 +974,7 @@ function updateCharge(dt){
 /* ---------- dodge ---------- */
 function triggerDodge(){
   const d = arena.dodge;
-  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || arena.arcanaMovementLocked) return;
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
@@ -1151,10 +1165,17 @@ function flashVignette(){
   v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
 }
 function respawn(){
+  // Respawn is a full scene reset: unlike a room transition it restores the
+  // authored Arcana charge/cooldown banks to their default state.
+  PC.resetArcanaRuntimeState?.({preserveResources:false});
   roomTransition?.reset();
   transitionOverlay.style.opacity = 0;
   transitionView.cameraPush = 0;
   arena.deadT = -1;
+  arena.arcanaMovementLocked = false;
+  arena.arcanaFacingLock = null;
+  arena.arcanaUntargetable = false;
+  arena.arcanaPlayerHidden = false;
   actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
@@ -1553,12 +1574,12 @@ function updateAttackPreviews(){
     : null;
   const hitAllowsLink = !mode.requireHitToLink || (combatState.hitIds?.size || 0) > 0;
   const canBufferLight = !!combatState.attack && !!followup && hitAllowsLink;
-  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0
+  const lightDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arcanaDashBusy() || arena.arcanaMovementLocked || arena.chain.inputLockT > 0
     || (mode.postSecondLock && (arena.chain.lightLockT > 0 || arena.chain.stage === 'finisher'))
     || (!!combatState.attack && !canBufferLight);
   const canBufferHeavy = !!combatState.attack && mode.allowHeavyBuffer
     && (arena.chain.activeSlot === 0 || arena.chain.activeSlot === 1);
-  const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arena.chain.inputLockT > 0
+  const heavyDisabled = arena.deadT >= 0 || arena.dodge.t >= 0 || arcanaDashBusy() || arena.arcanaMovementLocked || arena.chain.inputLockT > 0
     || (!!combatState.attack && !canBufferHeavy);
   setTgl(atkBtn, 'disabled', lightDisabled);
   setTgl(heavyBtn, 'disabled', heavyDisabled);
@@ -1613,7 +1634,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
   if(arena.charge.active) spd *= CHARGE_MOVE_MULT;
   else if(combatState.attack) spd *= PC.combatMovePenalty();
 
-  const isMoving = Math.hypot(input.mx, input.mz) > .01;
+  const isMoving = !arena.arcanaMovementLocked && !arena.arcanaUntargetable && Math.hypot(input.mx, input.mz) > .01;
   if(d.t >= 0){
     d.t += dt;
     const u = clamp(d.t/DODGE_TIME, 0, 1);
@@ -1664,7 +1685,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
   const sway = isMoving && d.t < 0 ? Math.sin(walkPhase*.5)*.03 : 0;
   actorVisual.position.y = 0.02 + bob;
   // hurt blink
-  actorVisual.visible = !(arena.invulnT > .45 && Math.floor(simulationNow*1000/90)%2===0);
+  actorVisual.visible = !arena.arcanaPlayerHidden && !(arena.invulnT > .45 && Math.floor(simulationNow*1000/90)%2===0);
 
   updateCharge(dt);
   PC.updateCombat(dt, simulationNow, sway, rawDt);
@@ -1693,10 +1714,12 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
         if(updateEnemies){
           enemySystem.update(dt, {
             x: actorPos.x, z: actorPos.y,
-            invulnerable: capture || arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
+            targetable:!arena.arcanaUntargetable,
+            invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
           });
           watchPlayerState(rawDt);
         }
+        PC.wizardNextTwentyDashRuntime?.postEnemyUpdate?.();
       }
     }
   }
@@ -1706,7 +1729,49 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
   updateHud(rawDt);
 }
 function renderArena(){
+  const hiddenCaptureTrails=[];
+  if(ABILITY_CAPTURE_CLEAN)scene.traverse(object=>{
+    if(!object?.isMesh||object.frustumCulled!==false||!object.geometry?.getAttribute?.('color')||object.material?.vertexColors!==true||!object.visible)return;
+    hiddenCaptureTrails.push(object);object.visible=false;
+  });
   renderer.render(scene, camera);
+  for(const object of hiddenCaptureTrails)object.visible=true;
+}
+function arenaMoveInput(){return{x:Number(input.mx)||0,z:Number(input.mz)||0};}
+function setArcanaMovementLock(locked=true){arena.arcanaMovementLocked=!!locked;return arena.arcanaMovementLocked;}
+function setArcanaFacingLock(direction=null){
+  const x=Number(direction?.x??direction?.forwardX)||0,z=Number(direction?.z??direction?.forwardZ)||0,length=Math.hypot(x,z);
+  if(!direction||length<1e-6){arena.arcanaFacingLock=null;return null;}
+  const lock={x:x/length,z:z/length,angle:Math.atan2(x,z)};
+  arena.arcanaFacingLock=lock;actorFacing=lock.angle;actorYawCurrent=lock.angle;
+  yawQ.setFromAxisAngle(Y_AXIS,lock.angle);actorVisual.quaternion.copy(yawQ);
+  return{...lock};
+}
+function setArcanaTargetable(targetable=true){arena.arcanaUntargetable=!targetable;return!arena.arcanaUntargetable;}
+function setArcanaPlayerVisible(visible=true){arena.arcanaPlayerHidden=!visible;actorVisual.visible=!!visible;return!arena.arcanaPlayerHidden;}
+function translateArcanaPlayer(dx=0,dz=0){
+  const start={x:actorPos.x,z:actorPos.y},delta={x:Number(dx)||0,z:Number(dz)||0};
+  const result=resolveCircleMovement(start,delta,PLAYER_RADIUS,captureMazeWorld().getCollisionSegments());
+  actorPos.set(result.x,result.z);actorRoot.position.set(result.x,0,result.z);
+  return{start,end:{x:result.x,z:result.z},applied:{x:result.x-start.x,z:result.z-start.z},blocked:!!result.collided};
+}
+function validateArcanaTeleportEndpoint(desired={}){
+  const start={x:actorPos.x,z:actorPos.y},rawX=Number(desired?.x),rawZ=Number(desired?.z);
+  if(!Number.isFinite(rawX)||!Number.isFinite(rawZ))return{ok:false,start,end:{...start},reason:'invalid-coordinates'};
+  const requested={x:rawX,z:rawZ};
+  const cell=findCellAtPoint(dungeon,requested,HEX_SIZE);
+  if(!cell)return{ok:false,start,end:{...start},reason:'outside-maze'};
+  const resolved=resolveCircleMovement(requested,{x:0,z:0},PLAYER_RADIUS,captureMazeWorld().getCollisionSegments());
+  if(resolved.collided||Math.hypot(resolved.x-requested.x,resolved.z-requested.z)>.005)return{ok:false,start,requested,end:{...start},reason:'blocked-endpoint'};
+  const validCell=findCellAtPoint(dungeon,resolved,HEX_SIZE);
+  if(!validCell)return{ok:false,start,end:{...start},reason:'invalid-endpoint'};
+  return{ok:true,start,requested,end:{x:resolved.x,z:resolved.z},adjusted:false};
+}
+function teleportArcanaPlayer(desired={}){
+  const validation=validateArcanaTeleportEndpoint(desired);
+  if(!validation.ok)return validation;
+  actorPos.set(validation.end.x,validation.end.z);actorRoot.position.set(validation.end.x,0,validation.end.z);
+  return validation;
 }
 function frame(){
   requestAnimationFrame(frame);
@@ -1725,12 +1790,15 @@ if(ABILITY_CAPTURE_MODE&&baseHostileProjectilesDescriptor?.get){
 }
 function captureRuntimes(){
   return{
+    basicDash:PC.basicDashRuntime,
     wizardArcana:PC.wizardArcanaRuntime,
     wizardRebuiltArcana:PC.wizardRebuiltArcanaRuntime,
     wizardFlameStrike:PC.wizardFlameStrikeRuntime,
     wizardWindSlash:PC.wizardWindSlashRuntime,
     wizardAirBasics:PC.wizardAirBasicsRuntime,
     wizardNextSource:PC.wizardNextSourceRuntime,
+    wizardNextTwentyBasics:PC.wizardNextTwentyBasicsRuntime,
+    wizardNextTwentyDash:PC.wizardNextTwentyDashRuntime,
   };
 }
 function resetCaptureRuntimes(config={}){
@@ -1786,6 +1854,9 @@ function advanceCaptureFixtures(dt,frame=0){
 function performCaptureWorldAction(action={}){
   const op=String(action.op||action.type||'').toLowerCase();
   if(op==='release'){arena.charge.buttonHeld=false;return true;}
+  if(op==='damageplayer')return Number(enemySystem.damagePlayer?.(Math.max(0,Number(action.damage)||0),{kind:'capture',name:String(action.name||'fixture'),dir:action.dir||null,ignoreInvulnerability:true}))>=0;
+  if(op==='strikedecoy')return !!captureRuntimes().wizardNextTwentyDash?.strikeDecoy?.(action.decoyId||action.id,{damage:Number(action.damage)||1});
+  if(op==='applyplayerstatus')return !!captureRuntimes().wizardNextTwentyDash?.applyPlayerStatus?.(String(action.status||'capture-dot'),{damage:Number(action.damage)||1,ticks:Math.max(1,Math.trunc(Number(action.ticks)||1)),interval:Math.max(1/60,Number(action.interval)||.25)});
   if(op==='settargethp'){
     const target=captureDummies.find(enemy=>enemy.__abilityCaptureDummyId===action.targetId);if(!target)return false;target.hp=Math.max(0,Number(action.hp)||0);if(target.root)target.root.visible=target.hp>0;return true;
   }
@@ -1844,14 +1915,21 @@ function resetCaptureWorld(config){
   actorPos.set(Number.isFinite(Number(player.x))?Number(player.x):0,Number.isFinite(Number(player.z))?Number(player.z):0);
   actorFacing=Number.isFinite(Number(aim.angle))?Number(aim.angle):Math.atan2(Number(aim.x)||1,Number(aim.z)||0);
   actorYawCurrent=actorFacing;yawQ.setFromAxisAngle(Y_AXIS,actorFacing);
-  actorRoot.position.set(actorPos.x,0,actorPos.y);actorVisual.quaternion.copy(yawQ);actorVisual.position.y=.02;actorVisual.visible=true;
+  actorRoot.position.set(actorPos.x,0,actorPos.y);actorVisual.quaternion.copy(yawQ);actorVisual.position.y=.02;arena.arcanaPlayerHidden=false;actorVisual.visible=true;
   camFollow.set(actorPos.x,0,actorPos.y);shake.set(0,0,0);shakeVel.set(0,0,0);
   updateCamera(0);updateHud(0);
   placeCaptureFixtures(config);
 }
 function setCaptureAim(aim){
+  if(arena.arcanaFacingLock)return false;
   actorFacing=Number.isFinite(Number(aim?.angle))?Number(aim.angle):Math.atan2(Number(aim?.x)||1,Number(aim?.z)||0);
   actorYawCurrent=actorFacing;yawQ.setFromAxisAngle(Y_AXIS,actorFacing);actorVisual.quaternion.copy(yawQ);
+}
+function setCaptureMove(value={}){
+  const source=typeof value==='string'?normalizeCaptureAim(value):(value||{}),rawX=Number(source.x??source.moveX??source.mx)||0,rawZ=Number(source.z??source.moveZ??source.mz)||0,length=Math.hypot(rawX,rawZ),requestedMagnitude=Number(source.magnitude);
+  const magnitude=Math.min(1,Math.max(0,Number.isFinite(requestedMagnitude)?requestedMagnitude:length));
+  if(length>1e-6){input.mx=rawX/length*magnitude;input.mz=rawZ/length*magnitude;}else{input.mx=0;input.mz=0;}
+  return arenaMoveInput();
 }
 function castCaptureCard(card,captureConfig={}){
   if(!card?.playEvent)return false;
@@ -1868,7 +1946,7 @@ function captureWorldSnapshot(){
     stationary:!!enemy.__abilityCaptureDummy,role:enemy.__abilityCaptureRole||'',layout:enemy.__abilityCaptureLayout||'',
   }));
   return{
-    player:{x:actorPos.x,z:actorPos.y,facing:actorFacing,forwardX:forward.x,forwardZ:forward.z},
+    player:{x:actorPos.x,z:actorPos.y,facing:actorFacing,forwardX:forward.x,forwardZ:forward.z,hp:Number(enemySystem.playerHp)||0,targetable:!arena.arcanaUntargetable,movementLocked:arena.arcanaMovementLocked,facingLocked:!!arena.arcanaFacingLock,move:arenaMoveInput(),dashMotion:PC.basicDashRuntime?.snapshot?.()||null},
     playerFootprint:PLAYER_RADIUS*2,
     camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},
     enemies,
@@ -1899,6 +1977,7 @@ function captureInitialOptions(){
 /* ---------- boot ---------- */
 // console/testing handle
 window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel, dungeon, encounterState,
+  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; } };
 spawnCharacter();
 const savedArenaWeapon=normalizeStoneWeaponId(StoneSettings.get('arena.weapon','longsword'));
@@ -1912,13 +1991,14 @@ updateModePanel();
 
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
+  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
   playCard, startDeckShuffle };
 
 if(ABILITY_CAPTURE_MODE){
   window.__abilityCapture=createAbilityCaptureController({
     enabled:true,initial:captureInitialOptions(),resetWorld:resetCaptureWorld,resetRuntimes:resetCaptureRuntimes,
-    castCard:castCaptureCard,setAimWorld:setCaptureAim,performWorldAction:performCaptureWorldAction,
+    castCard:castCaptureCard,setAimWorld:setCaptureAim,setMoveWorld:setCaptureMove,performWorldAction:performCaptureWorldAction,
     advanceWorld:(dt,simulationNow,{frame}={})=>{advanceCaptureFixtures(dt,frame);advanceArenaSimulation(dt,{capture:true,simulationNow,updateEnemies:false});},
     renderWorld:renderArena,snapshotWorld:captureWorldSnapshot,getRuntimes:captureRuntimes,
   });

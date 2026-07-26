@@ -19,6 +19,8 @@ import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.j
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
 import { installWizardAirBasicsRuntime } from './wizard-air-basics-runtime.js';
 import { installWizardNextSourceRuntime } from './wizard-next-source-runtime.js';
+import { installWizardNextTwentyBasicsRuntime } from './wizard-next-twenty-basics-runtime.js';
+import { installWizardNextTwentyDashRuntime } from './wizard-next-twenty-dash-runtime.js';
 import { installWizardRebuiltArcanaRuntime } from './wizard-rebuilt-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
 import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
@@ -114,6 +116,65 @@ export function installPlayerCombat(api){
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
     advancePlayer:advanceArenaPlayer,
   });
+  const wizardNextTwentyBasicsRuntime=installWizardNextTwentyBasicsRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    translatePlayer:(dx,dz)=>window.__arena?.translateArcanaPlayer?.(dx,dz),
+    setMovementLock:(locked)=>window.__arena?.setArcanaMovementLock?.(locked),
+    setFacingLock:(direction)=>window.__arena?.setArcanaFacingLock?.(direction),
+  });
+  let arcanaDamageAdapter=null,arcanaDamageSystem=null;
+  function syncArcanaDamageInterceptor(){
+    let system=null;try{system=getArenaEnemySystem();}catch{return false;}
+    if(system===arcanaDamageSystem)return true;
+    arcanaDamageSystem?.setPlayerDamageInterceptor?.(null);
+    arcanaDamageSystem=system;
+    system?.setPlayerDamageInterceptor?.(arcanaDamageAdapter);
+    return true;
+  }
+  const wizardNextTwentyDashRuntime=installWizardNextTwentyDashRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    startDashMotion:(options)=>basicDashRuntime.startDashMotion(options),
+    validateTeleportEndpoint:(endpoint)=>window.__arena?.validateArcanaTeleportEndpoint?.(endpoint)??{ok:false,reason:'arena-unavailable'},
+    teleportPlayer:(endpoint)=>window.__arena?.teleportArcanaPlayer?.(endpoint),
+    setPlayerTargetable:(targetable)=>window.__arena?.setArcanaTargetable?.(targetable),
+    setPlayerVisible:(visible)=>window.__arena?.setArcanaPlayerVisible?.(visible),
+    registerPlayerDamageInterceptor:(interceptor)=>{
+      arcanaDamageAdapter=hit=>{
+        const result=interceptor?.(Number(hit?.damage)||0,hit)||{};
+        return{damage:Math.max(0,Number(result?.remaining) || 0)};
+      };
+      syncArcanaDamageInterceptor();
+      return()=>{arcanaDamageAdapter=null;arcanaDamageSystem?.setPlayerDamageInterceptor?.(null);arcanaDamageSystem=null;};
+    },
+    registerDecoy:(decoy)=>getArenaEnemySystem()?.registerWizardDecoy?.(decoy),
+    unregisterDecoy:(id)=>getArenaEnemySystem()?.unregisterWizardDecoy?.(id),
+    damagePlayer:(amount,options)=>getArenaEnemySystem()?.damagePlayer?.(amount,{kind:'arcana-status',name:options?.status||'Status',targetableIndependent:options?.targetableIndependent===true}),
+  });
+
+  function resetArcanaRuntimeState({preserveResources=false}={}){
+    const preserved=preserveResources
+      ? Object.fromEntries(Object.entries(wizardNextTwentyDashRuntime.state?.resources||{}).map(([id,value])=>[id,{...value}]))
+      : null;
+    // Cancel shared locomotion before disposing path-bound payloads.
+    basicDashRuntime.reset?.();
+    dashMagicJet.clear?.();
+    wizardNextTwentyBasicsRuntime.reset?.();
+    wizardNextTwentyDashRuntime.reset?.();
+    if(preserved&&wizardNextTwentyDashRuntime.state){
+      wizardNextTwentyDashRuntime.state.resources=Object.fromEntries(
+        Object.entries(preserved).map(([id,value])=>[id,{...value}]),
+      );
+    }
+    return{preservedResources:!!preserved};
+  }
 
   // Update syncing normally establishes the bridge before the player can use a
   // card. The required play-time check prevents a visual-only Pilebunker if the
@@ -123,6 +184,7 @@ export function installPlayerCombat(api){
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
+    syncArcanaDamageInterceptor();
     basicDashRuntime.update(dt);
     dashMagicJet.update(dt,now,rawDt);
     const out=updateMainCombat(dt,now,sway,rawDt);
@@ -134,6 +196,8 @@ export function installPlayerCombat(api){
     wizardWindSlashRuntime.update(dt,now);
     wizardAirBasicsRuntime.update(dt,now);
     wizardNextSourceRuntime.update(dt,now);
+    wizardNextTwentyBasicsRuntime.update(dt,now);
+    wizardNextTwentyDashRuntime.update(dt,now);
     return out;
   };
 
@@ -148,6 +212,9 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'wizardWindSlashRuntime',{value:wizardWindSlashRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardAirBasicsRuntime',{value:wizardAirBasicsRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardNextSourceRuntime',{value:wizardNextSourceRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardNextTwentyBasicsRuntime',{value:wizardNextTwentyBasicsRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardNextTwentyDashRuntime',{value:wizardNextTwentyDashRuntime,enumerable:true});
+  Object.defineProperty(PC,'resetArcanaRuntimeState',{value:resetArcanaRuntimeState,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'combatSwingInstances',{value:{state:combatEffectRuntime.state,update(){},isCurrentBoosted:combatEffectRuntime.isBloodSlashEmpowered},enumerable:true});

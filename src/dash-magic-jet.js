@@ -131,6 +131,15 @@ export function installDashMagicJet({
     const state = getDashState();
     if(!state) return;
 
+    // Arcana reuse the exact locomotion controller, but own their elemental
+    // payload rendering. Keeping the ordinary dodge's cyan fluid jet here
+    // would obscure source-lock silhouettes such as Searing Rush and Wave
+    // Front, so the jet remains an ordinary-dodge-only effect.
+    if(state.source === 'arcana'){
+      if(phase !== 'idle') clear();
+      return;
+    }
+
     if(state.active && phase !== 'dashing') beginJet(state);
 
     if(phase === 'idle') return;
