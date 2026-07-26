@@ -6,7 +6,6 @@ const TAU=Math.PI*2;
 const FIRE=0xff6c31;
 const FIRE_GOLD=0xffc74d;
 const FIRE_HOT=0xffffc7;
-const FIRE_DEEP=0xa52b16;
 const AIR=0x8ee9ef;
 const AIR_HOT=0xe7ffff;
 const WATER=0x57bdf2;
@@ -81,42 +80,11 @@ function makeFlareVisual(THREE,scene,size){
 }
 function makeDragonVisual(THREE,scene,size){
   const group=new THREE.Group();group.name='Wizard Arcana Dragon Arc projectile';
-  const outerBody=new THREE.Mesh(new THREE.ConeGeometry(.53*size,1.88*size,7),makeMaterial(THREE,FIRE,.94));outerBody.rotation.x=-Math.PI/2;outerBody.position.z=-.46*size;outerBody.scale.set(1,1,.72);outerBody.userData.dragonBodyLayer=0;outerBody.userData.baseScaleZ=.72;group.add(outerBody);
-  const goldBody=new THREE.Mesh(new THREE.ConeGeometry(.36*size,1.58*size,7),makeMaterial(THREE,FIRE_GOLD,.96));goldBody.rotation.x=-Math.PI/2;goldBody.position.set(0,.015*size,-.35*size);goldBody.scale.set(1,1,.66);goldBody.userData.dragonBodyLayer=1;goldBody.userData.baseScaleZ=.66;group.add(goldBody);
-  const hotBody=new THREE.Mesh(new THREE.ConeGeometry(.19*size,1.12*size,6),makeMaterial(THREE,FIRE_HOT,.98));hotBody.rotation.x=-Math.PI/2;hotBody.position.set(0,.02*size,-.17*size);hotBody.scale.set(1,1,.58);hotBody.userData.dragonBodyLayer=2;hotBody.userData.baseScaleZ=.58;group.add(hotBody);
-
-  const head=new THREE.Mesh(new THREE.ConeGeometry(.49*size,1.12*size,6),makeMaterial(THREE,FIRE,.98));head.rotation.x=Math.PI/2;head.position.set(0,.02*size,.24*size);head.scale.set(1,1,.78);head.userData.dragonHead=true;group.add(head);
-  const face=new THREE.Mesh(new THREE.ConeGeometry(.31*size,.88*size,6),makeMaterial(THREE,FIRE_GOLD,.99));face.rotation.x=Math.PI/2;face.position.set(0,.025*size,.38*size);face.scale.set(1,1,.68);face.userData.dragonFace=true;group.add(face);
-  const upperJaw=new THREE.Mesh(new THREE.ConeGeometry(.22*size,.74*size,5),makeMaterial(THREE,FIRE,.98));upperJaw.rotation.x=Math.PI/2;upperJaw.position.set(0,.18*size,.72*size);upperJaw.scale.set(1,1,.52);upperJaw.userData.dragonJaw=1;group.add(upperJaw);
-  const lowerJaw=new THREE.Mesh(new THREE.ConeGeometry(.19*size,.68*size,5),makeMaterial(THREE,FIRE_GOLD,.98));lowerJaw.rotation.x=Math.PI/2;lowerJaw.position.set(0,-.16*size,.69*size);lowerJaw.scale.set(1,1,.48);lowerJaw.userData.dragonJaw=-1;group.add(lowerJaw);
-  const mouth=new THREE.Mesh(new THREE.ConeGeometry(.105*size,.48*size,5),makeMaterial(THREE,FIRE_HOT,1));mouth.rotation.x=Math.PI/2;mouth.position.set(0,-.01*size,.81*size);mouth.scale.set(1,1,.42);mouth.userData.dragonMouth=true;group.add(mouth);
-  for(const side of[-1,1]){
-    const eye=new THREE.Mesh(new THREE.SphereGeometry(.055*size,9,6),makeMaterial(THREE,0xffffff,1));eye.position.set(side*.19*size,.13*size,.57*size);eye.userData.dragonEye=true;group.add(eye);
-    const horn=new THREE.Mesh(new THREE.ConeGeometry(.085*size,.48*size,5),makeMaterial(THREE,FIRE_HOT,.94));horn.rotation.x=-Math.PI/2;horn.rotation.z=side*.34;horn.position.set(side*.27*size,.22*size,.13*size);group.add(horn);
-  }
-  for(let index=0;index<10;index++){
-    const side=index%2?-1:1,progress=index/9,tongue=new THREE.Mesh(new THREE.ConeGeometry((.12-progress*.035)*size,(.58-progress*.13)*size,5),makeMaterial(THREE,index%3===0?FIRE_DEEP:(index%3===1?FIRE:FIRE_GOLD),.82));
-    tongue.rotation.x=-Math.PI/2;tongue.rotation.z=side*(.20+.12*progress);tongue.position.set(side*(.31-progress*.13)*size,(index%3-1)*.09*size,(.05-progress*1.36)*size);tongue.userData.dragonTongue=index;tongue.userData.baseX=tongue.position.x;tongue.userData.baseY=tongue.position.y;group.add(tongue);
-  }
-  for(let index=0;index<5;index++){
-    const ember=new THREE.Mesh(new THREE.DodecahedronGeometry((.07+index%2*.025)*size,0),makeMaterial(THREE,index%2?FIRE_GOLD:FIRE_DEEP,.72));ember.position.set((index%2?1:-1)*(.16+.06*index)*size,(index%3-1)*.11*size,-(1.04+index*.22)*size);ember.userData.dragonEmber=index;ember.userData.baseX=ember.position.x;group.add(ember);
-  }
-  const groundGlow=new THREE.Mesh(new THREE.RingGeometry(.22*size,.54*size,28),makeMaterial(THREE,FIRE_GOLD,.18));groundGlow.rotation.x=-Math.PI/2;groundGlow.position.set(0,-.68*size,-.18*size);groundGlow.userData.dragonGroundGlow=true;group.add(groundGlow);
+  const head=new THREE.Mesh(new THREE.DodecahedronGeometry(.34*size,1),makeMaterial(THREE,FIRE,.96));head.scale.set(1.05,.74,1.35);head.position.z=.18*size;head.userData.dragonHead=true;group.add(head);
+  const crown=new THREE.Mesh(new THREE.ConeGeometry(.16*size,.46*size,7),makeMaterial(THREE,FIRE_HOT,.92));crown.position.set(0,.18*size,.25*size);crown.rotation.x=Math.PI/2;group.add(crown);
+  for(let index=0;index<7;index++){const segment=new THREE.Mesh(new THREE.SphereGeometry((.25-index*.018)*size,12,8),makeMaterial(THREE,index%2?FIRE_GOLD:FIRE,.86-index*.045));segment.position.z=-(.27+index*.29)*size;segment.scale.set(1,.68,1.18);segment.userData.dragonSegment=index;group.add(segment);}
+  for(const side of[-1,1]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.045*size,8,6),makeMaterial(THREE,FIRE_HOT,1));eye.position.set(side*.18*size,.08*size,.44*size);group.add(eye);}
   group.renderOrder=7;scene.add(group);return group;
-}
-function makeDragonMuzzleVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard Arcana Dragon Arc muzzle flare';
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.24*size,12,8),makeMaterial(THREE,FIRE_HOT,.98));core.position.z=.28*size;core.userData.baseOpacity=.98;group.add(core);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(.34*size,.055*size,7,24),makeMaterial(THREE,FIRE_GOLD,.82));ring.position.z=.18*size;ring.userData.baseOpacity=.82;group.add(ring);
-  for(let index=0;index<7;index++){const angle=index*TAU/7,petal=new THREE.Mesh(new THREE.ConeGeometry(.10*size,.58*size,5),makeMaterial(THREE,index%2?FIRE:FIRE_GOLD,.84));petal.rotation.x=Math.PI/2;petal.rotation.z=angle;petal.position.set(Math.cos(angle)*.25*size,Math.sin(angle)*.25*size,.16*size);petal.userData.baseOpacity=.84;group.add(petal);}
-  group.renderOrder=8;scene.add(group);return group;
-}
-function makeDragonImpactVisual(THREE,scene,position,size){
-  const group=new THREE.Group();group.name='Wizard Arcana Dragon Arc impact flash';
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.34*size,13,9),makeMaterial(THREE,0xffffff,.98));core.position.y=.06*size;core.userData.baseOpacity=.98;group.add(core);
-  const gold=new THREE.Mesh(new THREE.SphereGeometry(.48*size,12,8),makeMaterial(THREE,FIRE_GOLD,.58));gold.userData.baseOpacity=.58;group.add(gold);
-  for(let index=0;index<9;index++){const angle=index*TAU/9,shard=new THREE.Mesh(new THREE.ConeGeometry(.08*size,.62*size,5),makeMaterial(THREE,index%3?FIRE_GOLD:FIRE,.88));shard.rotation.z=-angle;shard.position.set(Math.cos(angle)*.38*size,(index%3-1)*.08*size,Math.sin(angle)*.38*size);shard.userData.baseOpacity=.88;group.add(shard);}
-  group.position.set(position.x,position.y,position.z);group.renderOrder=10;scene.add(group);return group;
 }
 function makeTornadoVisual(THREE,scene,size){
   const group=new THREE.Group();group.name='Wizard Arcana Whirling Tornado source-first vortex';
@@ -144,7 +112,7 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
   const inert={state:{effects:[],sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,waterAmmo:WATER_PRISON_SPEC.ammoMax},update(){},reset(){},dispose(){}};
   if(!THREE||!scene||!isEnemyLabRuntime())return inert;
   const prisonLocks=new WeakMap();
-  const state={effects:[],sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,dragonRechargeT:0,dragonVisualSerial:0,waterAmmo:WATER_PRISON_SPEC.ammoMax,waterRechargeT:0,lastCast:null};
+  const state={effects:[],sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,dragonRechargeT:0,waterAmmo:WATER_PRISON_SPEC.ammoMax,waterRechargeT:0,lastCast:null};
   const add=effect=>(state.effects.push(effect),effect);
   function releasePrison(effect){
     const enemy=effect?.captured,lock=enemy&&prisonLocks.get(enemy);if(!lock)return;
@@ -156,7 +124,7 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
     if(effect.mesh)disposeObject(effect.mesh);for(const mesh of effect.meshes||[])disposeObject(mesh);for(const flare of effect.flares||[])disposeObject(flare.mesh);
     const index=state.effects.indexOf(effect);if(index>=0)state.effects.splice(index,1);
   }
-  function reset(){for(const effect of[...state.effects])remove(effect);state.dragonStock=DRAGON_ARC_SPEC.stockMax;state.dragonRechargeT=0;state.dragonVisualSerial=0;state.waterAmmo=WATER_PRISON_SPEC.ammoMax;state.waterRechargeT=0;}
+  function reset(){for(const effect of[...state.effects])remove(effect);state.dragonStock=DRAGON_ARC_SPEC.stockMax;state.dragonRechargeT=0;state.waterAmmo=WATER_PRISON_SPEC.ammoMax;state.waterRechargeT=0;}
   const currentSize=()=>clampArcanaSize(state.sizeMultiplier);
   function addPulse(position,color,size,ring=false,life=.28){add({type:'pulse',age:0,life,mesh:makePulse(THREE,scene,{x:position.x,y:position.y,z:position.z,color,size,ring})});}
 
@@ -172,8 +140,7 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
   function emitDragon(){
     const frame=playerFrame(getPlayer),spec=DRAGON_ARC_SPEC,size=currentSize(),position={x:frame.x+frame.forward.x*.9,z:frame.z+frame.forward.z*.9},mesh=makeDragonVisual(THREE,scene,size);
     mesh.position.set(position.x,.72*size,position.z);mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);
-    add({type:'dragonProjectile',age:0,phase:(state.dragonVisualSerial++%13)*1.37,position,previous:{...position},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.speed,z:frame.forward.z*spec.speed},distance:0,spec,size,hit:new Set(),mesh,walls:[...(getMazeSegments?.()||[])]});
-    const muzzle=makeDragonMuzzleVisual(THREE,scene,size);muzzle.position.set(frame.x+frame.forward.x*.62,.70*size,frame.z+frame.forward.z*.62);muzzle.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);add({type:'dragonMuzzle',age:0,life:.18,mesh:muzzle});
+    add({type:'dragonProjectile',age:0,position,previous:{...position},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.speed,z:frame.forward.z*spec.speed},distance:0,spec,size,hit:new Set(),mesh,walls:[...(getMazeSegments?.()||[])]});
   }
   function castWhirlingTornado(){
     const frame=playerFrame(getPlayer),spec=whirlingTornadoSpec(),size=currentSize(),mesh=makeTornadoVisual(THREE,scene,size),position={x:frame.x,z:frame.z};mesh.position.set(position.x,0,position.z);
@@ -215,20 +182,11 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
   }
   function updateDragonRelease(effect,dt){effect.age+=dt;while(effect.remaining>0&&effect.age>=effect.nextEmission){emitDragon();effect.remaining--;effect.emitted++;effect.nextEmission+=DRAGON_ARC_SPEC.emissionInterval;}if(effect.remaining<=0&&effect.age>=effect.nextEmission+.08)remove(effect);}
   function updateDragonProjectile(effect,dt,system,now){
-    effect.age+=dt;const phase=effect.phase||0,start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};if(firstWallHit(start,end,effect.walls)){addPulse({x:start.x,y:.55,z:start.z},FIRE_GOLD,effect.size,true,.2);remove(effect);return;}effect.previous=start;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,(.72+.045*Math.sin(now*13+phase))*effect.size,end.z);effect.mesh.rotation.y=Math.atan2(effect.direction.x,effect.direction.z);
-    effect.mesh.children.forEach(child=>{
-      if(Number.isFinite(child.userData?.dragonBodyLayer)){const index=child.userData.dragonBodyLayer,pulse=Math.sin(now*19-index*.9+effect.age*7+phase);child.scale.x=1+pulse*(.08-index*.015);child.scale.z=child.userData.baseScaleZ*(1-pulse*.07);child.rotation.z=pulse*(.025+index*.008);}
-      else if(Number.isFinite(child.userData?.dragonTongue)){const index=child.userData.dragonTongue,wave=Math.sin(now*22-index*.73+effect.age*9+phase);child.position.x=child.userData.baseX+wave*(.08+.008*index)*effect.size;child.position.y=child.userData.baseY+Math.cos(now*18-index*.61+phase)*.045*effect.size;child.rotation.y=wave*.18;}
-      else if(Number.isFinite(child.userData?.dragonEmber)){const index=child.userData.dragonEmber;child.position.x=child.userData.baseX+Math.sin(now*14+index*1.8+phase)*.12*effect.size;child.position.y=Math.cos(now*17+index+phase)*.10*effect.size;child.scale.setScalar(.75+.28*Math.sin(now*20+index+phase));}
-      else if(Number.isFinite(child.userData?.dragonJaw)){const open=.035+.035*Math.sin(now*16+effect.age*8+phase);child.position.y=child.userData.dragonJaw*(.16+open)*effect.size;}
-      else if(child.userData?.dragonHead||child.userData?.dragonFace){const pulse=1+.045*Math.sin(now*17+effect.age*6+phase);child.scale.x=pulse;}
-      else if(child.userData?.dragonMouth)child.material.opacity=.82+.18*Math.sin(now*24+phase);
-      else if(child.userData?.dragonGroundGlow){const pulse=.92+.14*Math.sin(now*13+phase);child.scale.setScalar(pulse);child.material.opacity=.13+.07*Math.sin(now*15+phase);}
-    });
-    for(const enemy of aliveEnemies(system)){if(effect.hit.has(enemy))continue;if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+.52*effect.size)continue;effect.hit.add(enemy);damageEnemy(system,enemy,effect.spec.damage,knockFrom(start,enemy,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,dragonArc:true});const impact=makeDragonImpactVisual(THREE,scene,{x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},effect.size);add({type:'dragonImpact',age:0,life:.24,mesh:impact});}
+    effect.age+=dt;const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};if(firstWallHit(start,end,effect.walls)){addPulse({x:start.x,y:.55,z:start.z},FIRE_GOLD,effect.size,true,.2);remove(effect);return;}effect.previous=start;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.72*effect.size,end.z);effect.mesh.rotation.y=Math.atan2(effect.direction.x,effect.direction.z);
+    effect.mesh.children.forEach(child=>{if(Number.isFinite(child.userData?.dragonSegment)){const index=child.userData.dragonSegment;child.position.x=Math.sin(now*18-index*.78)*(.10+.025*index)*effect.size;child.position.y=Math.cos(now*15-index*.63)*.045*effect.size;}});
+    for(const enemy of aliveEnemies(system)){if(effect.hit.has(enemy))continue;if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+.46*effect.size)continue;effect.hit.add(enemy);damageEnemy(system,enemy,effect.spec.damage,knockFrom(start,enemy,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,dragonArc:true});addPulse({x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},FIRE_HOT,effect.size,false,.18);}
     if(effect.distance>=effect.spec.range)remove(effect);
   }
-  function updateDragonFlash(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1),muzzle=effect.type==='dragonMuzzle';effect.mesh.traverse(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??child.material.opacity??.8)*Math.pow(1-k,muzzle?.46:.38);});effect.mesh.scale.setScalar(1+k*(muzzle?.85:1.45));effect.mesh.rotation.z+=(muzzle?1:-1)*dt*3.4;if(k>=1)remove(effect);}
   function resolveTornadoTick(effect,system){for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*effect.size+enemyRadius(enemy,system))continue;const inward=normalize2(effect.position.x-enemy.x,effect.position.z-enemy.z);damageEnemy(system,enemy,effect.spec.tickDamage,{x:inward.x*.34,z:inward.z*.34},{power:.22,pop:.025,whirlingTornadoTick:true,tick:effect.nextTick+1});}}
   function resolveTornadoFinisher(effect,system){for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*1.12*effect.size+enemyRadius(enemy,system))continue;damageEnemy(system,enemy,effect.spec.finisherDamage,knockFrom(effect.position,enemy,1.85),{power:.62,pop:.18,whirlingTornadoFinisher:true});}addPulse({x:effect.position.x,y:.06,z:effect.position.z},AIR_HOT,effect.spec.radius*effect.size,true,.38);}
   function updateWhirlingTornado(effect,dt,system,now){
@@ -253,5 +211,5 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
   const onPlay=event=>cast(event?.detail?.card);
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);window.__WIZARD_REBUILT_ARCANA_RUNTIME__=state;
-  return{state,cast,reset,update(dt,now=0){const frame=Math.max(0,Number(dt)||0),time=Number(now)||0,system=getEnemySystem?.();updateResources(frame);for(const effect of[...state.effects]){if(effect.type==='homingFlares')updateHomingFlares(effect,frame,system,time);else if(effect.type==='dragonRelease')updateDragonRelease(effect,frame);else if(effect.type==='dragonProjectile')updateDragonProjectile(effect,frame,system,time);else if(effect.type==='dragonMuzzle'||effect.type==='dragonImpact')updateDragonFlash(effect,frame);else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,time);else if(effect.type==='waterPrison')updateWaterPrison(effect,frame,system,time);else if(effect.type==='pulse')updatePulse(effect,frame);}},dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_REBUILT_ARCANA_RUNTIME__===state)delete window.__WIZARD_REBUILT_ARCANA_RUNTIME__;}};
+  return{state,cast,reset,update(dt,now=0){const frame=Math.max(0,Number(dt)||0),time=Number(now)||0,system=getEnemySystem?.();updateResources(frame);for(const effect of[...state.effects]){if(effect.type==='homingFlares')updateHomingFlares(effect,frame,system,time);else if(effect.type==='dragonRelease')updateDragonRelease(effect,frame);else if(effect.type==='dragonProjectile')updateDragonProjectile(effect,frame,system,time);else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,time);else if(effect.type==='waterPrison')updateWaterPrison(effect,frame,system,time);else if(effect.type==='pulse')updatePulse(effect,frame);}},dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_REBUILT_ARCANA_RUNTIME__===state)delete window.__WIZARD_REBUILT_ARCANA_RUNTIME__;}};
 }

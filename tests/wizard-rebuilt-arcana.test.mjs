@@ -60,15 +60,7 @@ runtime.reset();hits.length=0;system.enemies=[];
 
 assert.equal(cast('DRAGON-ARC'),true);
 assert.equal(runtime.state.dragonStock,0,'Dragon Arc must snapshot and spend all available stock');
-const dragonTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[dragonTarget];runtime.update(.2,.2);
-const dragonVisual=runtime.state.effects.find(effect=>effect.type==='dragonProjectile');
-assert.ok(dragonVisual,'release must create visible independent dragon carriers');
-assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonBodyLayer)).length,3,'dragon must use separate orange, gold, and white-hot body layers');
-assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonJaw)).length,2,'dragon silhouette must retain an open upper/lower jaw');
-assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonTongue)).length,10,'jagged flame tongues must replace the old bead-chain body');
-assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonEmber)).length,5,'each carrier must include detached ember fragments');
-assert.ok(runtime.state.effects.some(effect=>effect.type==='dragonMuzzle'),'each emission must have a dedicated launch flare');
-step(2);
+const dragonTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[dragonTarget];step(2.2);
 assert.equal(hits.filter(hit=>hit.options.dragonArc).length,8,'full base stock must emit eight piercing dragons');
 assert.ok(hits.filter(hit=>hit.options.dragonArc).every(hit=>hit.amount===8));
 assert.ok(runtime.state.dragonStock>=3,'Dragon Arc must recover one stock every 0.6 seconds');

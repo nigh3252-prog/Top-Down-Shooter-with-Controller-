@@ -144,7 +144,6 @@ export const WIZARD_ARCANA_CARDS = Object.freeze([
       ['STOCK','Stores up to 8 dragons and recovers one charge every 0.6 seconds.'],
       ['RELEASE','Casting spends the available stock as one dragon per emission beat.'],
       ['AIM','Every dragon samples current aim; the stream can be steered while it is releasing.'],
-      ['CARRIER','Broad open-jawed flame dragons with a white-hot face, yellow core, jagged orange body, and independent flicker.'],
       ['CONTACT','Each dragon pierces, deals 8 damage once per target, and applies 8 source knockback.'],
       ['ENHANCED / CHARGED','Enhanced stores 10 and emits pairs. Charged fires a 20-dragon wide barrage; structured but not enabled yet.'],
     ],
