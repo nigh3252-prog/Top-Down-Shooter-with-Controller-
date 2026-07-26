@@ -17,6 +17,18 @@ The source sequence shows:
 5. Aim can change during the release, bending later dragons toward a different lane.
 6. The caster can interrupt the long full-stock release with movement rather than being committed until every possible dragon has fired.
 
+Frame-by-frame visual review of the base release around `311.5â€“312.7` seconds shows that every carrier has a readable dragon silhouette rather than a generic fireball or chain of beads:
+
+- A broad, angular head with an open upper/lower jaw.
+- A near-white eye and mouth flash.
+- A hot yellow inner face and body.
+- A thick orange outer silhouette with a darker orange-red edge.
+- A long tapered flame body with jagged mane/tongue shapes rather than round body segments.
+- Small detached ember fragments behind and between carriers.
+- A strong white contact flash with gold/orange fragments at every pierced target.
+
+Several dragons overlap during the rapid stream, but their bright heads remain individually readable. Their bodies flicker independently; the volley does not move as one synchronized ribbon.
+
 **[DOCUMENTED]**
 
 Dragon Arc is a Fire Signature Arcana with projectile and dragon classifications. It passively stores up to eight charges, each recovering in 0.6 seconds. Activating it spends all charges currently available, releasing one piercing dragon per charge; each deals 8 damage with 8 knockback. It can be cast with any nonzero stock, and aim may be adjusted during the stream.
@@ -77,10 +89,13 @@ This source-first analysis supersedes the current one-projectile sinusoidal prot
 7. One dragon hits each target at most once.
 8. Each hit uses the documented 8 damage and 8 knockback.
 9. A declared dash/movement cancel ends future emissions cleanly without duplicating or refunding spent charges.
-10. Enhancement stores ten charges and emits two dragons per release beat.
-11. Enhancement shortens the stream without reducing one-dragon-per-charge output.
-12. Charged Signature launches exactly twenty dragons in a wide area.
-13. The current sinusoidal single-projectile prototype does not count as source-first implementation completion.
+10. Each visible carrier reads as a tapered, open-jawed flame dragon rather than a sphere, caterpillar, or undifferentiated ribbon.
+11. Yellow-white core, orange body, darker edge fragments, and white-hot impact punctuation remain separable from the top-down camera.
+12. Overlapping dragons retain distinct heads and independently phased flame motion.
+13. Enhancement stores ten charges and emits two dragons per release beat.
+14. Enhancement shortens the stream without reducing one-dragon-per-charge output.
+15. Charged Signature launches exactly twenty dragons in a wide area.
+16. The current sinusoidal single-projectile prototype does not count as source-first implementation completion.
 
 ## Units extracted from Dragon Arc
 
@@ -512,4 +527,3 @@ The outward blast and burn are discrete rewards reserved for reaching the declar
 ### **Risk-Preserving Vulnerable Charge**
 
 The longer recipe is purchased with stationary, interruptible preparation time.
-
