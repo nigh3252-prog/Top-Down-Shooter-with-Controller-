@@ -318,6 +318,7 @@ export function createArenaEnemySystem(options={}){
 
   const api={
     get enemies(){return visibleSystems().flatMap(system=>system.enemies);},
+    get hostileProjectiles(){return visibleSystems().flatMap(system=>system.hostileProjectiles||[]);},
     get group(){return active.group;},
     get director(){return active.director;},
     update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,

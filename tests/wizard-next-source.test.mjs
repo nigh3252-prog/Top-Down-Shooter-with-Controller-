@@ -5,19 +5,23 @@ import {
   BLADED_VINE_BEATS,
   STONE_SHOT_BEATS,
   SPARK_CONTACT_BEATS,
+  BOLT_RAIL_BEATS,
+  VOLT_DISC_BEATS,
   earthKnucklesBeatSpec,
   bladedVineBeatSpec,
   stoneShotProjectileSpec,
   sparkContactBeatSpec,
+  boltRailStreamSpec,
+  voltDiscProjectileSpec,
   pointInForwardStrip,
   pointInForwardArc,
   safeAdvanceDistance,
 } from '../src/wizard-next-source-runtime.js';
 import { scaleWizardArcanaDamage } from '../src/wizard-arcana-damage-scaler.js';
 
-assert.equal(WIZARD_NEXT_SOURCE_CARDS.length,4);
+assert.equal(WIZARD_NEXT_SOURCE_CARDS.length,6);
 assert.deepEqual(WIZARD_NEXT_SOURCE_CARDS.map(card=>card.arcanaId),[
-  'EARTH-KNUCKLES','BLADED-VINE','STONE-SHOT','SPARK-CONTACT',
+  'EARTH-KNUCKLES','BLADED-VINE','STONE-SHOT','SPARK-CONTACT','BOLT-RAIL','VOLT-DISC',
 ]);
 assert.ok(WIZARD_NEXT_SOURCE_CARDS.every(card=>card.sourceGame==='Wizard of Legend'&&card.type==='ability'));
 
@@ -65,6 +69,28 @@ assert.equal(sparkEnhanced.overlay.shock,true);
 assert.ok(sparkFour.range>sparkOne.range);
 assert.equal(SPARK_CONTACT_BEATS.length+1,5,'four motions create five potential damage events');
 
+assert.equal(BOLT_RAIL_BEATS.length,5);
+assert.deepEqual(BOLT_RAIL_BEATS.map(beat=>beat.damage),[5,5,5,5,5]);
+const boltOne=boltRailStreamSpec({beat:1});
+const boltFive=boltRailStreamSpec({beat:5});
+const boltEnhanced=boltRailStreamSpec({beat:5,enhanced:true});
+assert.equal(boltOne.finisher,false);
+assert.equal(boltFive.finisher,true);
+assert.equal(boltFive.burst.damage,10);
+assert.equal(boltFive.ignoresWorldCollision,true);
+assert.equal(boltEnhanced.burst.chains,true);
+
+assert.equal(VOLT_DISC_BEATS.length,3);
+assert.deepEqual(VOLT_DISC_BEATS.map(beat=>beat.damage),[9,9,9]);
+const volt=voltDiscProjectileSpec();
+const voltEnhanced=voltDiscProjectileSpec({enhanced:true});
+assert.equal(volt.damage,9);
+assert.equal(volt.missBurstDamage,9);
+assert.equal(volt.directBurstDamage,0);
+assert.equal(volt.redirects,false);
+assert.equal(voltEnhanced.redirects,true);
+assert.ok(volt.range<10&&volt.radius>0,'Volt Disc must remain a short-range hollow carrier');
+
 assert.equal(pointInForwardStrip({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:4,range:5,halfWidth:.5}),true);
 assert.equal(pointInForwardStrip({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:1.2,targetZ:4,range:5,halfWidth:.5}),false);
 assert.equal(pointInForwardStrip({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:-1,range:5,halfWidth:.5}),false);
@@ -80,5 +106,7 @@ assert.equal(scaleWizardArcanaDamage(earthEnhanced.damage,5),140);
 assert.equal(scaleWizardArcanaDamage(vineFinisher.damage,2),30);
 assert.equal(scaleWizardArcanaDamage(stoneThree.damage,3),45);
 assert.equal(scaleWizardArcanaDamage(sparkFour.overlay.damage,4),40);
+assert.equal(scaleWizardArcanaDamage(boltFive.burst.damage,3),30);
+assert.equal(scaleWizardArcanaDamage(volt.damage,5),45);
 
 console.log('wizard next source abilities tests passed');

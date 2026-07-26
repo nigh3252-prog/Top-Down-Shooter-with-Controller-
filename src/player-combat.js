@@ -19,6 +19,7 @@ import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.j
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
 import { installWizardAirBasicsRuntime } from './wizard-air-basics-runtime.js';
 import { installWizardNextSourceRuntime } from './wizard-next-source-runtime.js';
+import { installWizardRebuiltArcanaRuntime } from './wizard-rebuilt-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
 import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
 
@@ -84,6 +85,12 @@ export function installPlayerCombat(api){
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
+  const wizardRebuiltArcanaRuntime=installWizardRebuiltArcanaRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+  });
   const wizardFlameStrikeRuntime=installWizardFlameStrikeRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
@@ -122,6 +129,7 @@ export function installPlayerCombat(api){
     combatEffectRuntime.update(dt,now);
     wizardArcanaDamageScaler.update();
     wizardArcanaRuntime.update(dt,now);
+    wizardRebuiltArcanaRuntime.update(dt,now);
     wizardFlameStrikeRuntime.update(dt,now);
     wizardWindSlashRuntime.update(dt,now);
     wizardAirBasicsRuntime.update(dt,now);
@@ -135,6 +143,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaDamageScaler',{value:wizardArcanaDamageScaler,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardRebuiltArcanaRuntime',{value:wizardRebuiltArcanaRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardFlameStrikeRuntime',{value:wizardFlameStrikeRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardWindSlashRuntime',{value:wizardWindSlashRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardAirBasicsRuntime',{value:wizardAirBasicsRuntime,enumerable:true});

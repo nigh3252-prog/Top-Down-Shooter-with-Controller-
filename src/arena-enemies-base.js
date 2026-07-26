@@ -803,6 +803,7 @@ export function createArenaEnemySystem({
 
   return {
     enemies, group, director, update, damageEnemy, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
+    get hostileProjectiles(){ return projectiles.filter(projectile=>!projectile.dead); },
     setDirectorMode:(m)=>director.setMode(m),
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
     setAggression:(v)=>{ tuning.aggression = clamp(Number(v) || 1, .25, 3); director.settings.aggression = tuning.aggression; },

@@ -22,6 +22,7 @@ const improvedText=[
   read('10-fire-standards-4.md'),
   read('11-air-standards-1.md'),
   read('12-air-standards-2.md'),
+  read('13-water-prison.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -174,13 +175,15 @@ const sourceMeta=[
   ['Shearing Chain','Air','Signature',461,472,468],
   ['Rushing Typhoon','Air','Standard',472,476,474],
   ['Gale-force Alignment','Air','Standard',476,480,478],
+  ['Water Prison','Water','Standard',1048.5,1060,1054.5],
 ];
 
 const implementedNames=new Set([
   'Flame Strike','Flame Cross','Bouncing Blaze','Wind Slash','Air Spinner',
   'Perforating Jet','Earth Knuckles','Bladed Vine','Stone Shot','Spark Contact',
+  'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
 ]);
-const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze']);
+const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']);
 const supplements=new Map([
   ['Flame Strike',read('wizard_of_legend_flame_strike_spec.md')],
   ['Flame Cross',read('wizard_of_legend_flame_cross_spec.md')],
@@ -189,6 +192,10 @@ const supplements=new Map([
 const revisionHistory=new Map([
   ['Flame Cross','The first version spawned two stationary crossing bars immediately. Source-first review showed a three-beat 1 → 1 → 2 string of moving, piercing diagonal waves, with the final pair able to overlap-hit a centered target; the implementation was rebuilt around that cadence and geometry.'],
   ['Bouncing Blaze','The first version was one fireball ricocheting from room walls. Source-first review showed a three-shot Basic combo whose projectiles make two authored forward ground hops, stop on base enemy contact, and gain piercing only when enhanced; the implementation was rebuilt as that projectile family.'],
+  ['Homing Flares','The first version created five pre-timed seeking shots. Source-first review established seven independently owned stored flares, a four-second caster-following halo, 7 damage with documented knockback, and hostile-projectile interception; the prototype was replaced with that base behavior.'],
+  ['Dragon Arc','The first version was one projectile following a sinusoidal world path. Source-first review established passive eight-charge stock, 0.6-second recovery, one piercing 8-damage dragon per spent charge, and live aim sampled throughout release; the prototype was replaced with that stock-fed stream.'],
+  ['Whirling Tornado','The first version was a traveling three-second pull zone with frame-timed damage. Source-first review established one stationary 0.8-second protective vortex, exactly four 8-damage ticks, projectile erasure, and one 10-damage outward finisher; the prototype was replaced around that authored schedule.'],
+  ['Water Prison','The first version was one short 2.15-second stun bubble with rapid ticks and an invented final hit. Frame review and documentation established two-charge ammo, 15 impact plus exactly five 5-damage ticks, a five-to-six-second position lock, and independently timed stacking; the prototype was replaced with those ownership rules.'],
 ]);
 
 const improvedSections=extractNumberedH1(improvedText);
@@ -230,12 +237,10 @@ const legacyImplementationNotes=new Map([
 ]);
 const replacementChecklist='1. Rewatch the bounded source clip frame by frame.\n2. Replace the initial-pass claims with a full source-first analysis and explicit evidence labels.\n3. Implement the replacement in a separate ability task; do not polish the current prototype.\n4. Run the acceptance tests and compare the replacement side by side with the source clip.\n5. Check the three completion stages only after each is actually complete.';
 
-for(const name of ['Homing Flares','Dragon Arc','Whirling Tornado']){
+for(const name of ['Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']){
   const entry=entries.find(item=>item.name===name);
   if(!entry)throw new Error(`Missing reanalyzed replacement entry for ${name}`);
-  entry.lineage='replacement-analyzed';
-  entry.currentImplementation=legacyImplementationNotes.get(name);
-  entry.replacementChecklist=replacementChecklist;
+  entry.lineage='rebuilt';
 }
 
 for(const [name,element,category,start,end,section] of legacyMeta){
@@ -265,7 +270,7 @@ for(const entry of entries){
 
 const payload={
   schemaVersion:1,
-  generatedFrom:'Archived Wizard of Legend research notes',
+  generatedFrom:'Archived Wizard of Legend source-first research notes',
   video:{src:'media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4',duration:1329.296,sourceUrl:showcaseUrl},
   entries,
   frameworkMarkdown:spellLanguage,

@@ -40,6 +40,18 @@ import {
   pointInWindSlashArc,
   windSlashArcSpec,
 } from '../src/wizard-wind-slash-runtime.js';
+import {
+  DRAGON_ARC_SPEC,
+  HOMING_FLARES_SPEC,
+  WATER_PRISON_SPEC,
+  WHIRLING_TORNADO_SPEC,
+  WHIRLING_TORNADO_TICKS,
+  clockwiseOrbitPosition,
+  dragonArcStockSpec,
+  homingFlaresSpec,
+  waterPrisonSpec,
+  whirlingTornadoSpec,
+} from '../src/wizard-rebuilt-arcana-runtime.js';
 
 if(typeof globalThis.CustomEvent==='undefined'){
   globalThis.CustomEvent=class CustomEvent{
@@ -139,6 +151,40 @@ assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targ
 assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:-2,innerRadius:.2,outerRadius:3,halfAngle:.8}),false);
 assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:4,targetZ:1,innerRadius:.2,outerRadius:3,halfAngle:.8}),false);
 assert.equal(pointInWindSlashArc({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:1.5,targetZ:2.2,innerRadius:.2,outerRadius:3,halfAngle:.8}),true);
+
+const homingFlares=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='HOMING-FLARES');
+assert.match(homingFlares.description,/seven golden flares/i);
+assert.equal(HOMING_FLARES_SPEC.count,7);
+assert.equal(HOMING_FLARES_SPEC.storageDuration,4);
+assert.equal(HOMING_FLARES_SPEC.damage,7);
+assert.deepEqual([homingFlaresSpec({enhanced:true}).count,homingFlaresSpec({charged:true}).totalCap],[10,32]);
+const orbitStart=clockwiseOrbitPosition({slot:0,count:7,age:0,radius:2});
+const orbitLater=clockwiseOrbitPosition({slot:0,count:7,age:.1,radius:2});
+assert.ok(orbitLater.z<orbitStart.z,'stored flares must orbit clockwise');
+
+const dragonArc=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='DRAGON-ARC');
+assert.match(dragonArc.description,/eight passively stored charges/i);
+assert.equal(DRAGON_ARC_SPEC.stockMax,8);
+assert.equal(DRAGON_ARC_SPEC.rechargeInterval,.6);
+assert.equal(DRAGON_ARC_SPEC.damage,8);
+assert.deepEqual([dragonArcStockSpec({enhanced:true}).stockMax,dragonArcStockSpec({enhanced:true}).perBeat,dragonArcStockSpec({charged:true}).releaseCount],[10,2,20]);
+
+const whirlingTornado=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='WHIRLING-TORNADO');
+assert.match(whirlingTornado.description,/four 8-damage ticks/i);
+assert.equal(WHIRLING_TORNADO_SPEC.duration,.8);
+assert.equal(WHIRLING_TORNADO_SPEC.finisherDamage,10);
+assert.equal(WHIRLING_TORNADO_TICKS.length,4);
+assert.equal(whirlingTornadoSpec({enhanced:true}).tickCount,6);
+assert.equal(whirlingTornadoSpec({charged:true}).vortexCount,5);
+
+const waterPrison=WIZARD_ARCANA_CARDS.find(card=>card.arcanaId==='WATER-PRISON');
+assert.match(waterPrison.description,/two ammo charges/i);
+assert.equal(WATER_PRISON_SPEC.ammoMax,2);
+assert.equal(WATER_PRISON_SPEC.impactDamage,15);
+assert.deepEqual(WATER_PRISON_SPEC.tickTimes,[1,2,3,4,5]);
+assert.equal(WATER_PRISON_SPEC.impactDamage+WATER_PRISON_SPEC.tickDamage*WATER_PRISON_SPEC.tickTimes.length,40);
+assert.equal(waterPrisonSpec({enhanced:true}).ammoMax,3);
+assert.ok(waterPrisonSpec({enhanced:true}).projectileSpeed>WATER_PRISON_SPEC.projectileSpeed);
 
 assert.equal(ARCANA_SIZE_MIN,1);
 assert.equal(ARCANA_SIZE_MAX,5);

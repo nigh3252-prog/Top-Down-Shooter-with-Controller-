@@ -76,6 +76,36 @@ export const WIZARD_NEXT_SOURCE_CARDS=Object.freeze([
     chain:['stab4','stab4','horizontal5'],
     uiColor:'#ffe063',uiBorder:'rgba(244,201,60,.90)',uiBackground:'radial-gradient(circle,rgba(255,225,89,.30),rgba(53,43,5,.70))',
   }),
+  makeCard({
+    id:'BOLT-RAIL',name:'Bolt Rail',icon:'BR',element:'Lightning',
+    styleTags:['five-beat string','instant short stream','contact-gated finisher'],
+    description:'Pulse five short lightning rails directly in front of the caster; a fifth-pulse contact detonates a separate 10-damage burst.',
+    summary:'A source-driven five-beat lightning basic. Every brief caster-anchored stream deals 5 damage and ignores world collision; only a successful fifth stream creates the compact 10-damage electrical finisher.',
+    rows:[
+      ['RHYTHM','Five separate lightning pulses in a rapid held combo.'],
+      ['CARRIER','Instant short stream attached to the caster; no traveling projectile.'],
+      ['DAMAGE','Each stream deals 5. A successful fifth stream triggers a separate 10-damage burst.'],
+      ['FAILURE RULE','If Beat 5 misses, no finisher appears elsewhere.'],
+      ['ENHANCED SOURCE','The finisher chains from the struck target to nearby enemies and applies shock; structured but not enabled yet.'],
+    ],
+    chain:['stab4','stab4','horizontal5'],
+    uiColor:'#ffe56d',uiBorder:'rgba(250,211,68,.92)',uiBackground:'radial-gradient(circle,rgba(255,230,94,.32),rgba(48,38,4,.72))',
+  }),
+  makeCard({
+    id:'VOLT-DISC',name:'Volt Disc',icon:'VD',element:'Lightning',
+    styleTags:['three-beat projectile string','hollow ring carrier','terminal burst'],
+    description:'Launch three short-range hollow electric discs that either hit directly or expire in a 9-damage terminal burst.',
+    summary:'A source-driven three-disc combo. Each 9-damage ring travels a short straight lane; a miss ends in a damaging burst, while direct contact deals its damage through the carrier and still emits a separate zero-damage burst event.',
+    rows:[
+      ['RHYTHM','Three separately emitted discs in a quick combo.'],
+      ['CARRIER','Glowing hollow circular ring traveling straight over short range.'],
+      ['MISS END','Maximum range creates a 9-damage electrical burst.'],
+      ['DIRECT HIT','Disc deals 9, then creates a separate 0-damage burst contact and expires.'],
+      ['ENHANCED SOURCE','After the first direct hit, redirects toward one additional target; structured but not enabled yet.'],
+    ],
+    chain:['stab5','stab5','horizontal5'],
+    uiColor:'#f4e95d',uiBorder:'rgba(237,219,62,.92)',uiBackground:'radial-gradient(circle,rgba(229,238,77,.30),rgba(39,42,5,.72))',
+  }),
 ]);
 
 export const WIZARD_NEXT_SOURCE_BY_ID=new Map(WIZARD_NEXT_SOURCE_CARDS.map(card=>[card.id,card]));
