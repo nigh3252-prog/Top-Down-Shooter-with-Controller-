@@ -7,12 +7,14 @@ import {
   ABILITY_CAPTURE_CHECKPOINTS,
   ABILITY_CAPTURE_FIXED_DT,
   captureDummyPlacements,
+  captureTargetPlacements,
   captureRuntimeMetric,
   createAbilityCaptureController,
   createCaptureRandom,
   normalizeCaptureAim,
   normalizeCaptureArcanaId,
   normalizeCaptureDummy,
+  normalizeCaptureFixtures,
 } from '../src/ability-capture.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -30,6 +32,15 @@ assert.deepEqual(captureDummyPlacements('source-line',2.1),[
   {id:'capture-dummy-negative',role:'corridor-edge-negative',forward:11.5,lateral:-2.1},
   {id:'capture-dummy-positive',role:'corridor-edge-positive',forward:11.5,lateral:2.1},
 ],'source-line should bracket the measured Dragon Arc corridor around a stable primary dummy');
+const fixtures=normalizeCaptureFixtures({
+  targets:[{id:'late',forward:5,lateral:-1,spawnFrame:60,hp:250}],
+  hostileProjectiles:[{id:'hostile',spawnFrame:12}],
+  walls:[{id:'wall',a:{forward:2,lateral:-1},b:{forward:2,lateral:1}}],
+  resources:[{runtimeId:'wizardRebuiltArcana',key:'waterAmmo',value:2},{runtimeId:'',key:'bad',value:1}],
+  deck:{primaryArcanaId:'VOLT-DISC',oppositeArcanaId:'BOLT-RAIL'},
+});
+assert.deepEqual({spawn:fixtures.targets[0].spawnFrame,hp:fixtures.targets[0].hp,hostileSpawn:fixtures.hostileProjectiles[0].spawnFrame,resources:fixtures.resources.length,primary:fixtures.deck.primaryArcanaId},{spawn:60,hp:250,hostileSpawn:12,resources:1,primary:'VOLT-DISC'});
+assert.equal(captureTargetPlacements(fixtures,'none')[0].id,'late');
 
 const randomA=createCaptureRandom(4401),randomB=createCaptureRandom(4401);
 assert.deepEqual(Array.from({length:8},randomA),Array.from({length:8},randomB),'capture RNG should repeat from the same seed');
@@ -73,6 +84,13 @@ const played=playController.setPaused(true);assert.equal(played.frame,2);assert.
 playController.reset({stage:'reference'});assert.equal(playController.snapshot().effects,true,'post-motion capture stages should enable impact polish by default');
 playController.reset({stage:'style',effects:false});assert.equal(playController.snapshot().effects,false,'explicit effects override should win for any stage');
 
+const inputActions=[];let inputCasts=0,inputAim=null;
+const inputController=createAbilityCaptureController({
+  initial:{arcanaId:'VOLT-DISC'},resetWorld(){},resetRuntimes(){},castCard(card,config){inputCasts++;inputActions.push(config.input);},setAimWorld(aim){inputAim=aim.id;},performWorldAction(action){inputActions.push(action.op);return action.op==='release';},renderWorld(){},snapshotWorld(){return{};},getRuntimes(){return{};},requestFrame:null,cancelFrame:null,
+});
+inputController.reset();assert.equal(inputController.act({op:'press',arcanaId:'VOLT-DISC'}).ok,true);assert.equal(inputController.act({op:'hold',arcanaId:'BOLT-RAIL'}).ok,true);assert.equal(inputController.act({op:'release',arcanaId:'BOLT-RAIL'}).ok,true);inputController.act({op:'setAim',aim:'down'});
+assert.deepEqual({casts:inputCasts,actions:inputActions,aim:inputAim},{casts:2,actions:['press','hold','release'],aim:'down'},'press/hold must cast while release remains a deterministic non-casting input action');
+
 const explicit=captureRuntimeMetric({state:{effects:[]},snapshot:()=>({points:[{x:1,z:2}],unsafe:new Set([1]),effects:[{type:'dragonProjectile',body:[{index:0,x:3,z:4,tangent:{x:.8,z:.6}}]}]})},'runtime');
 assert.deepEqual(explicit.snapshot.unsafe,{size:1});
 assert.deepEqual(explicit.snapshot.effects[0].body[0],{index:0,x:3,z:4,tangent:{x:.8,z:.6}},'semantic body samples must survive capture serialization for downstream motion review');
@@ -82,10 +100,13 @@ const arena=fs.readFileSync(path.join(root,'combat-arena.html'),'utf8');
 assert.match(enemyLab,/inner\.set\('capture','1'\)/,'Enemy Lab should propagate capture mode into its iframe');
 assert.match(enemyLab,/dataset\.testid='arcana-capture-select'/);
 assert.match(enemyLab,/window\.__abilityCapture/,'Enemy Lab should forward the capture hook');
+assert.match(enemyLab,/act:action=>/,'Enemy Lab should forward the generic deterministic action interface');
 assert.match(enemyLab,/restoredCategory==='capture'\?'test':restoredCategory/,'normal Enemy Lab must not restore the capture-only category');
 assert.match(enemyLab,/arcana-capture-status/,'manual PLAY should expose a live status readout');
 assert.match(arena,/if\(ABILITY_CAPTURE_MODE\)/);
 assert.match(arena,/window\.__abilityCapture=createAbilityCaptureController/);
+assert.match(arena,/if\(op==='release'\)\{arena\.charge\.buttonHeld=false;return true;\}/,'base-form release must be a supported deterministic input no-op');
+assert.match(arena,/knockX:Number\(enemy\.knockX\)/,'capture telemetry must expose target knock for Tornado contract validation');
 assert.doesNotMatch(arena,/if\(ABILITY_CAPTURE_MODE\)HitFeel\.tuning\.master=0/,'capture mode must not disable polish for every stage');
 assert.match(arena,/config\?\.effects===false\|\|config\?\.stage==='motion'\?0:CAPTURE_HIT_FEEL_MASTER/);
 assert.match(arena,/else frame\(\)/,'the normal autonomous arena loop should remain enabled outside capture mode');

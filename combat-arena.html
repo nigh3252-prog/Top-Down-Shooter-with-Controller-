@@ -277,7 +277,7 @@ import { createMazeWorld } from './src/hex-maze-renderer.js';
 import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWalls, resolveCircleMovement } from './src/hex-maze-navigation.js';
 import { createRoomEncounterState } from './src/room-encounters.js';
 import { createRoomTransitionController } from './src/room-transition.js';
-import { captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './src/ability-capture.js';
+import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './src/ability-capture.js';
 
 /* ============================================================
    COMBAT ARENA
@@ -1716,7 +1716,7 @@ function frame(){
 }
 
 /* ---------- deterministic ability capture ---------- */
-let captureDummy=null,captureDummies=[],captureWallSegments=[],captureWallMeshes=[],captureHostileProjectiles=[],captureHostileDefinitions=[];
+let captureDummy=null,captureDummies=[],captureWallSegments=[],captureWallMeshes=[],captureHostileProjectiles=[],captureHostileDefinitions=[],captureFixtureDeck=null;
 const baseHostileProjectilesDescriptor=Object.getOwnPropertyDescriptor(enemySystem,'hostileProjectiles');
 if(ABILITY_CAPTURE_MODE&&baseHostileProjectilesDescriptor?.get){
   Object.defineProperty(enemySystem,'hostileProjectiles',{configurable:true,enumerable:true,get(){
@@ -1735,11 +1735,15 @@ function captureRuntimes(){
 }
 function resetCaptureRuntimes(config={}){
   window.__ARCANA_CAPTURE_CONFIG__={...config,capture:true};
-  for(const runtime of Object.values(captureRuntimes())){
+  const runtimes=captureRuntimes();
+  for(const runtime of Object.values(runtimes)){
     runtime?.reset?.();
     if(runtime?.state&&Object.hasOwn(runtime.state,'castSerial'))runtime.state.castSerial=0;
     if(runtime?.state&&Object.hasOwn(runtime.state,'lastCast'))runtime.state.lastCast=null;
   }
+  for(const resource of normalizeCaptureFixtures(config.fixtures).resources){const runtime=runtimes[resource.runtimeId];if(runtime?.state&&Object.hasOwn(runtime.state,resource.key))runtime.state[resource.key]=resource.value;}
+  const deckFixture=normalizeCaptureFixtures(config.fixtures).deck,existingCaptureDeck=captureFixtureDeck;captureFixtureDeck=null;
+  if(deckFixture){const stance=STANCE_CARDS[0],primary=captureCardById(deckFixture.primaryArcanaId),opposite=captureCardById(deckFixture.oppositeArcanaId);if(stance&&primary&&opposite){captureFixtureDeck=existingCaptureDeck||createStanceDeck({rng:()=>0});captureFixtureDeck.beginRun([stance,primary,opposite],{openingStanceId:stance.id});}}
 }
 function captureForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};}
 function captureLocalPoint(value={}){
@@ -1767,6 +1771,7 @@ function spawnCaptureHostile(definition){
   captureHostileProjectiles.push(projectile);return projectile;
 }
 function advanceCaptureFixtures(dt,frame=0){
+  captureFixtureDeck?.update?.(dt);
   for(const enemy of captureDummies){
     if(!enemy.__abilityCapturePending||frame<enemy.__abilityCaptureSpawnFrame)continue;
     enemy.__abilityCapturePending=false;enemy.hp=enemy.__abilityCaptureHp;enemy.maxHp=enemy.__abilityCaptureHp;if(enemy.root)enemy.root.visible=true;
@@ -1777,6 +1782,18 @@ function advanceCaptureFixtures(dt,frame=0){
     if(projectile.mesh)projectile.mesh.position.set(projectile.x,.35,projectile.z);
     if(projectile.life<=0){projectile.dead=true;if(projectile.mesh)projectile.mesh.visible=false;}
   }
+}
+function performCaptureWorldAction(action={}){
+  const op=String(action.op||action.type||'').toLowerCase();
+  if(op==='release'){arena.charge.buttonHeld=false;return true;}
+  if(op==='settargethp'){
+    const target=captureDummies.find(enemy=>enemy.__abilityCaptureDummyId===action.targetId);if(!target)return false;target.hp=Math.max(0,Number(action.hp)||0);if(target.root)target.root.visible=target.hp>0;return true;
+  }
+  if(op==='deckplay')return !!captureFixtureDeck?.play?.(Math.max(0,Math.min(1,Math.trunc(Number(action.slot)||0))));
+  if(op==='setresource'){
+    const runtime=captureRuntimes()[action.runtimeId];if(!runtime?.state||!Object.hasOwn(runtime.state,String(action.key||'')))return false;runtime.state[action.key]=action.value;return true;
+  }
+  return false;
 }
 function captureMazeWorld(){
   if(!ABILITY_CAPTURE_MODE||!captureWallSegments.length)return mazeWorld;
@@ -1847,6 +1864,7 @@ function captureWorldSnapshot(){
   const enemies=(enemySystem.enemies||[]).filter(enemy=>enemy?.hp>0).map(enemy=>({
     id:enemy.__abilityCaptureDummyId||(enemy.id??null),kind:enemy.kind||enemy.spawnKind||'',x:Number(enemy.x)||0,z:Number(enemy.z)||0,
     hp:Number(enemy.hp)||0,maxHp:Number(enemy.maxHp)||0,radius:Number(enemy.radius)||0,
+    knockX:Number(enemy.knockX)||0,knockZ:Number(enemy.knockZ)||0,stunned:Number(enemy.stunned)||0,
     stationary:!!enemy.__abilityCaptureDummy,role:enemy.__abilityCaptureRole||'',layout:enemy.__abilityCaptureLayout||'',
   }));
   return{
@@ -1860,6 +1878,7 @@ function captureWorldSnapshot(){
     captureDummies:enemies.filter(enemy=>enemy.stationary),
     captureHostileProjectiles:captureHostileProjectiles.map(projectile=>({id:projectile.id,x:projectile.x,z:projectile.z,r:projectile.r,life:projectile.life,dead:projectile.dead})),
     captureWalls:captureWallSegments.map(wall=>({id:wall.id,a:{...wall.a},b:{...wall.b}})),
+    captureDeck:captureFixtureDeck?{hand:captureFixtureDeck.hand.map(card=>card?.arcanaId||card?.id||null),manualSequence:captureFixtureDeck.manualSequence,drawCount:captureFixtureDeck.drawCount,discardCount:captureFixtureDeck.discardCount}:null,
     arenaEffects:effects.length,
   };
 }
@@ -1899,7 +1918,7 @@ window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, du
 if(ABILITY_CAPTURE_MODE){
   window.__abilityCapture=createAbilityCaptureController({
     enabled:true,initial:captureInitialOptions(),resetWorld:resetCaptureWorld,resetRuntimes:resetCaptureRuntimes,
-    castCard:castCaptureCard,setAimWorld:setCaptureAim,
+    castCard:castCaptureCard,setAimWorld:setCaptureAim,performWorldAction:performCaptureWorldAction,
     advanceWorld:(dt,simulationNow,{frame}={})=>{advanceCaptureFixtures(dt,frame);advanceArenaSimulation(dt,{capture:true,simulationNow,updateEnemies:false});},
     renderWorld:renderArena,snapshotWorld:captureWorldSnapshot,getRuntimes:captureRuntimes,
   });

@@ -126,6 +126,7 @@ const captureFacade=window.__abilityCapture={
   step:(frames=1,dt=1/60)=>captureBridge()?.step?.(frames,dt)??{ok:false,error:'Arcana Capture is still loading.'},
   setAim:aim=>captureBridge()?.setAim?.(aim)??{ok:false,error:'Arcana Capture is still loading.'},
   perform:action=>captureBridge()?.perform?.(action)??{ok:false,error:'Arcana Capture is still loading.'},
+  act:action=>(captureBridge()?.act||captureBridge()?.perform)?.call(captureBridge(),action)??{ok:false,error:'Arcana Capture is still loading.'},
   snapshot:()=>captureBridge()?.snapshot?.()??{enabled:capturePage,ready:false,paused:true,time:0,frame:0,activeEffects:[],projectiles:[]},
   setPaused:paused=>captureBridge()?.setPaused?.(paused)??{ok:false,error:'Arcana Capture is still loading.'},
   checkpoint:seconds=>captureBridge()?.checkpoint?.(seconds)??{ok:false,error:'Arcana Capture is still loading.'},

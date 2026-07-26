@@ -56,6 +56,25 @@ for(const name of ['Bolt Rail','Volt Disc']){
   assert.deepEqual(entry?.defaults,{analysis:true,implementation:true,comparison:false},`${name} completion stages are incorrect`);
 }
 
+const referenceLockWindows=new Map([
+  ['Whirling Tornado',{start:420.8,end:421.7}],
+  ['Water Prison',{start:1051.83,end:1060}],
+  ['Homing Flares',{start:280.4,end:282.5}],
+  ['Bolt Rail',{start:53.3,end:53.95}],
+  ['Volt Disc',{start:58.2,end:59.1}],
+]);
+for(const [name,window] of referenceLockWindows){
+  const entry=entries.find(item=>item.name===name);
+  assert.deepEqual(entry?.referenceWindow,window,`${name} must expose its frame-audited base-form review window`);
+  assert.match(entry?.revisionHistory,/reference-lock pass/i,`${name} must record the source-lock rebuild`);
+  assert.match(entry?.revisionHistory,/final visual source comparison remains pending user review/i,`${name} must preserve the final user approval gate`);
+  assert.match(entry?.analysisMarkdown,/Reference-lock frame audit/i,`${name} must retain its detailed frame audit`);
+  assert.match(entry?.analysisMarkdown,/\[EVIDENCE[^\]]*\]/i,`${name} must label observed or documented evidence`);
+  assert.match(entry?.analysisMarkdown,/\[INFERENCE[^\]]*\]/i,`${name} must keep authored inference separate from source claims`);
+}
+assert.match(html,/Five-card reference-lock:/,'the checklist must explain the pending five-card review batch');
+assert.match(html,/entry\.referenceWindow\?\?entry/,'clip playback must prefer the audited base-form window');
+
 for(const name of ['Flame Cross','Bouncing Blaze']){
   const entry=entries.find(item=>item.name===name);
   assert.equal(entry?.lineage,'rebuilt',`${name} must retain initial-pass → source-first rebuild lineage`);

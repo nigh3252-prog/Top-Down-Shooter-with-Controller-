@@ -183,6 +183,50 @@ const implementedNames=new Set([
   'Perforating Jet','Earth Knuckles','Bladed Vine','Stone Shot','Spark Contact',
   'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
 ]);
+const referenceLockWindows=new Map([
+  ['Whirling Tornado',{start:420.80,end:421.70}],
+  ['Water Prison',{start:1051.83,end:1060.00}],
+  ['Homing Flares',{start:280.40,end:282.50}],
+  ['Bolt Rail',{start:53.30,end:53.95}],
+  ['Volt Disc',{start:58.20,end:59.10}],
+]);
+const referenceLockAddenda=new Map([
+  ['Whirling Tornado',`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, 07:00.80–07:01.70]** The base cast stays centered on the caster. Its visible white, ice-blue, and turquoise brushstrokes fill the same broad circular footprint as the damaging zone, remain dense through the four authored ticks, then collapse into one readable outward blast.
+
+**[EVIDENCE — documented contract]** The base form lasts 0.8 seconds, damages at 0.12 / 0.30 / 0.48 / 0.66 seconds for 8 each, destroys eligible hostile projectiles, and ends with one 10-damage outward finisher.
+
+**[INFERENCE — Top Down Game construction]** Individual brushstroke count, procedural curl, glow falloff, and transient opacity are authored approximations. Preserve the measured footprint, stationary ownership, tick schedule, projectile interception, and collapse silhouette when tuning them.`],
+  ['Water Prison',`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, 17:31.83–17:40.00]** Water Prison begins as a very small pale carrier and transforms on first contact into a substantially larger, target-attached translucent globe with a bright moving core, rim, and orbiting droplets. A later cast can coexist with an earlier prison.
+
+**[EVIDENCE — documented contract]** Base ammo is two. First contact deals 15 damage, five one-second ticks deal 5 each, the lock lasts 5.4 seconds in this implementation, instances stack independently, and target death releases and cleans its owned prison.
+
+**[INFERENCE — Top Down Game construction]** Shell layer count, core orbit, droplet paths, and exact alpha are procedural approximations. The tiny-carrier / large-attached-prison scale change and independent ownership are mandatory comparison anchors.`],
+  ['Homing Flares',`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, 04:40.40–04:42.50]** Seven large orange-gold flame lobes form a wide clockwise owner-following halo. Stored flares have hot cores and tapered tails, then peel away on expressive curves and resolve with chunky contact flashes rather than reading as small beads.
+
+**[EVIDENCE — documented contract]** Each of seven flares independently acquires the nearest eligible target, deals 7 damage and 15 knockback, can trade itself for an eligible hostile projectile, and an unused stored flare expires at exactly 4.0 seconds. Launched carriers keep their own flight lifetime.
+
+**[INFERENCE — Top Down Game construction]** The precise launch spline, smoke cadence, and ember density are authored approximations. Count, clockwise ownership, four-second unused expiry, independent acquisition, split targeting, and interception are contract-locked.`],
+  ['Bolt Rail',`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, 00:53.30–00:53.95]** A complete base string presents five rapid beats as one thick, irregular yellow-white lightning stream from the caster toward the actual contact point, with smaller side branches and endpoint blooms. The successful fifth-contact burst is clearly stronger and appears around 00:53.75–00:53.80.
+
+**[EVIDENCE — documented contract]** Each successful stream deals 5 damage, streams bypass ordinary world collision, and only a fifth beat that contacts an enemy creates the additional 10-damage burst.
+
+**[INFERENCE — Top Down Game construction]** Branch placement, jitter phase, glow thickness, and bloom particle count are deterministic authored approximations. The renderer must stop at the actual contact/range endpoint and must not restore the rejected parallel full-range lines.`],
+  ['Volt Disc',`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, 00:58.20–00:59.10]** The base combo emits one compact bright hollow electric ring per press. Each carrier has a hot rim, rotating fragments, a short travel trail, and a compact gold-white resolution rather than a solid ball or a continuous auto-fired string.
+
+**[EVIDENCE — documented contract]** The carrier deals 9 damage; maximum-range resolution carries a separate 9-damage burst; direct contact also emits a zero-damage event that must not create ordinary health, stun, knockback, or damage-flash side effects.
+
+**[INFERENCE — temporary Top Down Game input rule]** The three-press same-slot lock and 0.9-second rolling timeout are an explicit temporary integration choice. The supplied base window does not establish a damaging wall burst, so wall contact remains a harmless cleanup/fizzle unless later frame evidence disproves it.`],
+]);
 const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']);
 const supplements=new Map([
   ['Flame Strike',read('wizard_of_legend_flame_strike_spec.md')],
@@ -192,10 +236,12 @@ const supplements=new Map([
 const revisionHistory=new Map([
   ['Flame Cross','The first version spawned two stationary crossing bars immediately. Source-first review showed a three-beat 1 → 1 → 2 string of moving, piercing diagonal waves, with the final pair able to overlap-hit a centered target; the implementation was rebuilt around that cadence and geometry.'],
   ['Bouncing Blaze','The first version was one fireball ricocheting from room walls. Source-first review showed a three-shot Basic combo whose projectiles make two authored forward ground hops, stop on base enemy contact, and gain piercing only when enhanced; the implementation was rebuilt as that projectile family.'],
-  ['Homing Flares','The first version created five pre-timed seeking shots. Source-first review established seven independently owned stored flares, a four-second caster-following halo, 7 damage with documented knockback, and hostile-projectile interception; the prototype was replaced with that base behavior.'],
+  ['Homing Flares','The first version created five pre-timed seeking shots. Source-first review established seven independently owned stored flares, a four-second caster-following halo, 7 damage with documented knockback, and hostile-projectile interception. The later reference-lock pass corrected unused flare expiry to exactly four seconds and rebuilt the carrier as seven large orange-gold flame lobes with tapered trails and distinct launch, impact, and interception states. Final visual source comparison remains pending user review.'],
   ['Dragon Arc','The first version was one projectile following a broad sinusoidal world path: its motion idea was useful, but its ownership and stock rules were wrong. Source-first gameplay review established passive eight-charge stock, 0.6-second recovery, one piercing 8-damage dragon per spent charge, and live aim sampled throughout release. Three later visual passes corrected those rules but incorrectly replaced the large intertwined S motion with a narrow straight stream and were rejected. The replacement was rebuilt from a metric-validated deterministic double-helix motion proxy, then finished with an articulated segmented dragon silhouette and layered fire FX; final visual source comparison remains pending user review.'],
-  ['Whirling Tornado','The first version was a traveling three-second pull zone with frame-timed damage. Source-first review established one stationary 0.8-second protective vortex, exactly four 8-damage ticks, projectile erasure, and one 10-damage outward finisher; the prototype was replaced around that authored schedule.'],
-  ['Water Prison','The first version was one short 2.15-second stun bubble with rapid ticks and an invented final hit. Frame review and documentation established two-charge ammo, 15 impact plus exactly five 5-damage ticks, a five-to-six-second position lock, and independently timed stacking; the prototype was replaced with those ownership rules.'],
+  ['Whirling Tornado','The first version was a traveling three-second pull zone with frame-timed damage. Source-first review established one stationary 0.8-second protective vortex, exactly four 8-damage ticks, projectile erasure, and one 10-damage outward finisher. The reference-lock pass aligned the visible footprint with the full damaging radius and replaced the undersized geometric rings with a broad layered white-blue brushstroke vortex and readable final blast. Final visual source comparison remains pending user review.'],
+  ['Water Prison','The first version was one short 2.15-second stun bubble with rapid ticks and an invented final hit. Frame review and documentation established two-charge ammo, 15 impact plus exactly five 5-damage ticks, a five-to-six-second position lock, and independently timed stacking. The reference-lock pass separated the tiny traveling carrier from the large attached layered globe and added explicit attachment, tick, stacking, release, and cleanup telemetry. Final visual source comparison remains pending user review.'],
+  ['Bolt Rail','The source-first gameplay pass established five instantaneous 5-damage streams, world-collision bypass, and a contact-gated 10-damage fifth-beat finisher. The reference-lock pass replaced the thin parallel-line placeholder with one irregular caster-to-contact yellow-white bolt, branching filaments, endpoint blooms, and a distinctly stronger successful finisher. Final visual source comparison remains pending user review.'],
+  ['Volt Disc','The source-first gameplay pass established three short-range hollow carriers, 9 carrier damage, a 9-damage maximum-range burst, and a separate zero-damage direct-contact event. The reference-lock pass restored one disc per press through a temporary three-step card-slot lock, removed the unsupported damaging wall burst, isolated zero-damage contact semantics from ordinary damage reactions, and rebuilt the carrier and terminal FX. Final visual source comparison remains pending user review.'],
 ]);
 
 const improvedSections=extractNumberedH1(improvedText);
@@ -206,8 +252,11 @@ const entries=sourceMeta.map((meta,index)=>{
   const markdown=source.markdown;
   const implemented=implementedNames.has(name);
   const lineage=rebuiltNames.has(name)?'rebuilt':implemented?'source-first':'analyzed';
+  const referenceWindow=referenceLockWindows.get(name);
+  const referenceLockAddendum=referenceLockAddenda.get(name);
   return{
     id:slugify(name),order:index+1,name,element,category,start,end,posterTime,lineage,
+    ...(referenceWindow?{referenceWindow}:{}),
     status:implemented?'source-first-implemented':'not-implemented',
     defaults:{analysis:true,implementation:implemented,comparison:false},
     summary:summaryFor(name,markdown),
@@ -216,7 +265,7 @@ const entries=sourceMeta.map((meta,index)=>{
     issues:issueBlocks(markdown),
     units:unitsFor(markdown),
     citations:linksFor(markdown),
-    analysisMarkdown:markdown,
+    analysisMarkdown:[markdown,referenceLockAddendum].filter(Boolean).join('\n\n'),
     supplementMarkdown:supplements.get(name)??'',
     revisionHistory:revisionHistory.get(name)??'',
     poster:`media/wizard-of-legend/posters/${slugify(name)}.webp`,

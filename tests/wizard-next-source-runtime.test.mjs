@@ -58,7 +58,8 @@ const boltTarget={id:'bolt-target',x:0,z:2.6,hp:1000,radius:.4};
 system.enemies=[boltTarget];walls.push({a:{x:-2,z:1},b:{x:2,z:1}});
 assert.equal(cast('BOLT-RAIL'),true);step(.8);
 assert.deepEqual(hits.map(hit=>hit.amount),[5,5,5,5,5,10],'five instant streams plus the gated finisher must resolve through world geometry');
-assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream').length,5);
+const successfulStreamIds=runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream').map(event=>event.stableId);
+assert.equal(successfulStreamIds.length,5);assert.equal(new Set(successfulStreamIds).size,5);assert.deepEqual(successfulStreamIds,['BOLT-RAIL:0001:stream:01','BOLT-RAIL:0001:stream:02','BOLT-RAIL:0001:stream:03','BOLT-RAIL:0001:stream:04','BOLT-RAIL:0001:stream:05']);
 const successfulFinisher=runtime.snapshot().semanticEvents.find(event=>event.kind==='bolt-rail-finisher');
 assert.equal(successfulFinisher.triggered,true);assert.equal(successfulFinisher.primaryTargetId,'bolt-target');
 assert.ok(runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream').every(event=>event.instantaneous&&event.ignoresWorldCollision&&event.visualMode==='contract'));
@@ -68,6 +69,7 @@ const boltNear={id:'bolt-near',x:0,z:1.8,hp:1000,radius:.3},boltFar={id:'bolt-fa
 assert.equal(cast('BOLT-RAIL'),true);step(.8);
 const multiStreams=runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream');
 assert.equal(multiStreams.length,5);assert.ok(multiStreams.every(event=>event.endpointTargetId==='bolt-far'&&event.endpointPolicy==='farthest-hit'),'the visible carrier must reach the farthest damaged target so every per-hit bloom remains connected');
+assert.deepEqual(multiStreams.map(event=>event.stableId),successfulStreamIds,'reset must deterministically restart authored Bolt emission IDs');
 const multiFinisher=runtime.snapshot().semanticEvents.find(event=>event.kind==='bolt-rail-finisher');
 assert.equal(multiFinisher.primaryTargetId,'bolt-near');assert.equal(multiFinisher.primaryPolicy,'nearest-hit','the documented primary contact owns the fifth-beat burst');
 
@@ -91,6 +93,7 @@ player.forwardX=0;player.forwardZ=1;cast('VOLT-DISC');
 player.forwardX=1;player.forwardZ=0;cast('VOLT-DISC');
 let discs=runtime.snapshot().effects.filter(effect=>effect.type==='voltDiscProjectile');
 assert.deepEqual(discs.map(effect=>effect.press),[1,2]);
+assert.deepEqual(discs.map(effect=>effect.stableId),['VOLT-DISC:0001:disc:01','VOLT-DISC:0001:disc:02']);
 assert.deepEqual(discs.map(effect=>effect.direction),[{x:0,z:1},{x:1,z:0}],'every manual press must sample live aim');
 assert.equal(runtime.snapshot().voltDiscCombo.press,2);assert.equal(runtime.snapshot().voltDiscCombo.remaining,.9);
 step(.91,.01);assert.equal(runtime.snapshot().voltDiscCombo.active,false);assert.equal(runtime.snapshot().semanticEvents.at(-1).kind,'volt-disc-combo-expired');
@@ -109,6 +112,13 @@ cast('VOLT-DISC');step(.7);
 assert.deepEqual(hits.map(hit=>hit.amount),[9]);assert.equal(hits[0].options.terminal,true);
 const terminalEvent=runtime.snapshot().semanticEvents.find(event=>event.kind==='volt-disc-terminal-burst');
 assert.equal(terminalEvent.damage,9);assert.deepEqual(terminalEvent.targetIds,['terminal-target']);
+
+runtime.reset();hits.length=0;walls.length=0;player.forwardX=0;player.forwardZ=1;
+const nearBoltTarget={id:'near-bolt-target',x:0,z:1.8,hp:1000,radius:.3},farBoltTarget={id:'far-bolt-target',x:0,z:3.4,hp:1000,radius:.3};system.enemies=[farBoltTarget,nearBoltTarget];
+cast('BOLT-RAIL');step(.8);const multiTargetBoltEvents=runtime.snapshot().semanticEvents,finalMultiStream=multiTargetBoltEvents.filter(event=>event.kind==='bolt-rail-stream').at(-1),multiTargetFinisher=multiTargetBoltEvents.find(event=>event.kind==='bolt-rail-finisher');
+assert.deepEqual({endpointTargetId:finalMultiStream.endpointTargetId,endpointPolicy:finalMultiStream.endpointPolicy,endpoint:finalMultiStream.endpoint},{endpointTargetId:'far-bolt-target',endpointPolicy:'farthest-hit',endpoint:{x:0,z:3.4}},'a piercing stream must remain visibly connected through its farthest contact');
+assert.deepEqual(new Set(finalMultiStream.hitTargetIds),new Set(['near-bolt-target','far-bolt-target']),'every contacted target must retain its own per-hit bloom contract');
+assert.deepEqual({primaryTargetId:multiTargetFinisher.primaryTargetId,primaryPolicy:multiTargetFinisher.primaryPolicy,position:multiTargetFinisher.position},{primaryTargetId:'near-bolt-target',primaryPolicy:'nearest-hit',position:{x:0,z:1.8}},'the gated finisher deliberately erupts from the first contacted target even though the piercing stream continues farther');
 
 runtime.reset();hits.length=0;runtime.state.sizeMultiplier=1.4;system.enemies=[boltTarget];globalThis.location.search='?enemyLab=1&capture=1&stage=reference';window.__abilityCapture.snapshot=()=>({stage:'reference'});
 cast('BOLT-RAIL');runtime.update(.05,0);let boltVisual=runtime.state.effects.find(effect=>effect.type==='boltRailStrike');

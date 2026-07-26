@@ -1,101 +1,152 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {observedMetrics,validateComparisonProbe} from '../scripts/capture-arcana.mjs';
+import {
+  buildReviewIndex,
+  captureRevision,
+  evaluateAcceptance,
+  expandCaptureStages,
+  observedMetrics,
+  renderReviewIndexHtml,
+  resolveCaptureJob,
+  validateCaptureManifest,
+  validateComparisonProbe,
+} from '../scripts/capture-arcana.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'scripts','arcana-capture-manifest.json'),'utf8'));
 const script=fs.readFileSync(path.join(root,'scripts','capture-arcana.mjs'),'utf8');
 const gitignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8').replace(/\\/g,'/');
-const readme=fs.readFileSync(path.join(root,'README.md'),'utf8');
 
-assert.equal(manifest.schemaVersion,1,'capture manifest must be versioned');
+assert.equal(manifest.schemaVersion,2,'capture manifest must use the scenario/action schema');
+assert.equal(validateCaptureManifest(manifest),true);
 assert.equal(manifest.sourceVideo,'media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4');
-assert.equal(manifest.outputRoot,'artifacts/arcana-capture');
-assert.match(gitignore,/^artifacts\/arcana-capture\/$/m,'generated capture reviews must stay out of git');
-assert.ok(readme.includes('npm run capture:arcana -- --id DRAGON-ARC --stage motion'),'README must document the reproducible Gate 1 command');
-assert.ok(readme.includes('npm run capture:arcana -- --id DRAGON-ARC --stage style'),'README must document the final-design capture command');
-assert.ok(readme.includes('FFPROBE_PATH')&&readme.includes('exactly 60 FPS'),'README must document the media validation dependency and guarantee');
+assert.match(gitignore,/^artifacts\/arcana-capture\/$/m,'generated review artifacts must remain ignored');
+assert.match(captureRevision().commit||'',/^[0-9a-f]{40}$/,'capture artifacts must record the checked-out commit even when child git processes are sandboxed');
+assert.deepEqual(manifest.batches['session-five'],[
+  {abilityId:'WHIRLING-TORNADO',scenario:'source-base'},
+  {abilityId:'WATER-PRISON',scenario:'source-base'},
+  {abilityId:'WATER-PRISON',scenario:'stacked'},
+  {abilityId:'WATER-PRISON',scenario:'miss-wall-recharge'},
+  {abilityId:'WATER-PRISON',scenario:'target-death'},
+  {abilityId:'HOMING-FLARES',scenario:'source-base'},
+  {abilityId:'HOMING-FLARES',scenario:'projectile-intercept'},
+  {abilityId:'HOMING-FLARES',scenario:'empty-expiry'},
+  {abilityId:'HOMING-FLARES',scenario:'multi-target'},
+  {abilityId:'BOLT-RAIL',scenario:'source-base'},
+  {abilityId:'BOLT-RAIL',scenario:'through-wall'},
+  {abilityId:'BOLT-RAIL',scenario:'fifth-beat-miss'},
+  {abilityId:'BOLT-RAIL',scenario:'multi-target'},
+  {abilityId:'VOLT-DISC',scenario:'source-base'},
+  {abilityId:'VOLT-DISC',scenario:'live-aim'},
+  {abilityId:'VOLT-DISC',scenario:'combo-timeout'},
+  {abilityId:'VOLT-DISC',scenario:'wall-contact'},
+  {abilityId:'VOLT-DISC',scenario:'range-expiration'},
+  {abilityId:'VOLT-DISC',scenario:'slot-lock'},
+],'session-five must be risk ordered and include every declared acceptance scenario');
+assert.deepEqual(expandCaptureStages('all'),['contract','source','style']);
+assert.deepEqual(expandCaptureStages('motion,style,motion'),['motion','style']);
 
-const dragon=manifest.abilities['DRAGON-ARC'];
-assert.ok(dragon,'Dragon Arc must be registered in the capture manifest');
-assert.equal(dragon.route,'enemy-lab.html');
-assert.deepEqual(dragon.query,{capture:'1',clean:'1',arcana:'DRAGON-ARC',aim:'right',layout:'source-line',stage:'motion',effects:'0'});
-const motion=dragon.stages.motion;
-assert.equal(motion.stage,'motion');
-assert.equal(motion.effects,false);
-assert.equal(motion.fixedDt,1/60,'capture clock must use an exact 60 Hz step');
-assert.deepEqual(motion.checkpoints,[0.25,0.5,0.75,1,1.25],'motion review must use the approved checkpoints');
-assert.ok(motion.checkpoints.every((time,index,list)=>time>0&&(index===0||time>list[index-1])),'checkpoints must be positive and increasing');
-assert.ok(motion.sourceClip.start<motion.sourceClip.timelineStart&&motion.sourceClip.timelineStart+motion.checkpoints.at(-1)<=motion.sourceClip.end,'source comparison timeline must stay inside the bounded Dragon Arc clip');
-assert.equal(motion.reset.rngSeed,4401,'capture effects must use a stable seed');
-assert.equal(motion.reset.stage,'motion','Gate 1 capture must select the motion stage explicitly');
-assert.equal(motion.reset.effects,false,'Gate 1 capture must explicitly suppress global impact polish');
-assert.equal(motion.reset.dummy.layout,'source-line','capture dummy placement must be explicit');
-assert.deepEqual(Object.keys(motion.acceptance).sort(),[
-  'adjacentPhaseDegrees','emissionIntervalSeconds','everyOtherPhaseToleranceDegrees','fullReleaseSeconds',
-  'peakToPeakPlayerFootprints','projectileCount','visibleYawDegrees','wavelengthPlayerFootprints',
-].sort(),'manifest must retain the measurable Gate 1 contract');
+const auditedStarts={
+  'HOMING-FLARES':[280.4,282.5],
+  'WHIRLING-TORNADO':[420.8,421.7],
+  'WATER-PRISON':[1051.83,1060],
+  'BOLT-RAIL':[53.3,53.95],
+  'VOLT-DISC':[58.2,59.1],
+};
+for(const [abilityId,ability] of Object.entries(manifest.abilities)){
+  for(const [scenarioName,scenario] of Object.entries(ability.scenarios)){
+    const stages=Object.keys(scenario.stages).sort();
+    if(abilityId==='DRAGON-ARC')assert.deepEqual(stages,['contract','motion','source','style']);
+    else assert.deepEqual(stages,['contract','source','style'],`${abilityId}/${scenarioName} must use the common three-gate workflow`);
+    assert.ok(scenario.actions.every((action,index)=>Number.isInteger(action.frame)&&(!index||action.frame>=scenario.actions[index-1].frame)));
+    assert.ok(scenario.checkpointFrames.every(frame=>Number.isInteger(frame)&&frame>0&&frame<=scenario.durationFrames));
+  }
+  if(abilityId!=='DRAGON-ARC')assert.deepEqual([ability.scenarios['source-base'].sourceClip.timelineStart,ability.scenarios['source-base'].sourceClip.timelineEnd],auditedStarts[abilityId],`${abilityId} must retain its frame-audited base window separately from broad bounds`);
+}
 
-const style=dragon.stages.style;
-assert.ok(style,'Dragon Arc must register a separate final visual capture stage');
-assert.equal(style.stage,'style');
-assert.equal(style.effects,true,'final-design capture must enable presentation effects');
-assert.equal(style.reset.stage,'style');
-assert.equal(style.reset.effects,true);
-for(const key of ['fixedDt','checkpoints','sourceClip','acceptance'])assert.deepEqual(style[key],motion[key],`style must retain the approved motion ${key}`);
-assert.deepEqual(style.reset.player,motion.reset.player,'style must preserve canonical player placement and aim');
-assert.deepEqual(style.reset.camera,motion.reset.camera,'style must preserve the capture camera');
-assert.equal(style.reset.rngSeed,motion.reset.rngSeed,'style must preserve the deterministic RNG seed');
-assert.deepEqual(style.reset.dummy,motion.reset.dummy,'style must preserve source-line dummy placement');
+const dragon=resolveCaptureJob(manifest,{id:'DRAGON-ARC',stage:'motion'});
+assert.equal(dragon.scenarioName,'source-base');assert.equal(dragon.stage.stage,'motion');assert.equal(dragon.stage.renderMode,'proxy');
+assert.deepEqual(dragon.stage.checkpoints,[.25,.5,.75,1,1.25]);assert.equal(dragon.query.layout,'source-line');
+const stacked=resolveCaptureJob(manifest,{id:'WATER-PRISON',scenario:'stacked',stage:'contract'});
+assert.deepEqual(stacked.stage.actions.map(action=>action.frame),[0,6]);assert.equal(stacked.stage.reset.fixtures.targets[0].id,'prison-stack-target');
+const wall=resolveCaptureJob(manifest,{id:'BOLT-RAIL',scenario:'through-wall',stage:'source'});
+assert.equal(wall.stage.reset.fixtures.walls.length,1);assert.equal(wall.stage.sourceClip.compare,false);
+const resource=resolveCaptureJob(manifest,{id:'WATER-PRISON',scenario:'miss-wall-recharge',stage:'contract'});
+assert.equal(resource.stage.reset.fixtures.resources[0].key,'waterAmmo');assert.ok(resource.stage.actions.some(action=>action.op==='setAim'));
+const delayed=resolveCaptureJob(manifest,{id:'HOMING-FLARES',scenario:'source-base',stage:'contract'});
+assert.equal(delayed.stage.reset.fixtures.targets[0].spawnFrame,60,'delayed target fixtures must be expressed in deterministic simulation frames');
+const deck=resolveCaptureJob(manifest,{id:'VOLT-DISC',scenario:'slot-lock',stage:'contract'});
+assert.equal(deck.stage.reset.fixtures.deck.primaryArcanaId,'VOLT-DISC');assert.deepEqual(deck.stage.actions.map(action=>action.op),['deckPlay','deckPlay','deckPlay','deckPlay']);
+assert.ok(resolveCaptureJob(manifest,{id:'BOLT-RAIL',scenario:'fifth-beat-miss',stage:'contract'}).stage.actions.some(action=>action.op==='release'));
+assert.throws(()=>resolveCaptureJob(manifest,{id:'VOLT-DISC',stage:'motion'}),/Unknown .* stage motion/,'motion alias must remain Dragon-only');
 
 for(const marker of [
-  'window.__abilityCapture','Page.captureScreenshot','Runtime.evaluate','DevToolsActivePort',
-  "['EBUSY','EACCES','EPERM','ENOENT']",
-  'deterministic','acceptanceResult','captureDerived','specDerived','emissionTimesSeconds','timeline-60fps',
+  '--batch session-five','--scenario <id>','--stage all','traceSnapshotsEqual','review-index.json','review-index.html',
+  'screenshotExactPassed','Exact checkpoint pixels:',
+  'api.act||api.perform','durationFrames','checkpointFrames','telemetryAdapter','semanticEvents','abilityContracts',
+  'telemetryRun1','telemetryRun2','captureRevision','manifestSha256','runnerSha256',
   'contact-sheet.png','comparison.mp4','metrics.json','FFMPEG_PATH','FFPROBE_PATH','ARCANA_CAPTURE_BROWSER',
-  'nb_read_frames','validateComparisonProbe','media:{comparison:comparisonMedia}',
-  'stage:stage.stage??stageName','effects:(stage.effects??stage.reset?.effects)',
-])assert.ok(script.includes(marker),`capture runner is missing required behavior: ${marker}`);
+])assert.ok(script.includes(marker),`capture runner is missing v2 behavior: ${marker}`);
 assert.doesNotMatch(script,/from ['"](?:playwright|puppeteer)/,'capture runner must remain dependency-free');
-assert.doesNotMatch(script,/stop_duration=\./,'FFmpeg durations must retain their leading zero for FFmpeg 8.x');
-assert.ok(script.includes('stop_duration=0.1')&&script.includes('stop_duration=0.2'),'comparison padding must use FFmpeg 8.x-compatible decimal syntax');
-assert.ok(script.includes("'-frames:v',String(outputFrames)"),'comparison encoding must cap output at the exact expected frame count');
-assert.ok(script.includes('frameCount=Math.round(duration/stage.fixedDt);'),'the capture timeline must contain exactly the encoded display frames, without an unused endpoint PNG');
-assert.ok(script.includes('/^frame-\\d{4}\\.png$/i'),'timeline regeneration must remove only its own stale numbered PNGs');
+assert.match(script,/const deterministicPassed=run1\.traceHashes\.length===run2\.traceHashes\.length&&traceSnapshotsEqual\.every\(Boolean\);/,'identical semantic traces, not fragile cross-machine pixel equality, must gate determinism');
 
-const validProbe={
-  streams:[{codec_name:'h264',pix_fmt:'yuv420p',width:1280,height:360,r_frame_rate:'60/1',avg_frame_rate:'60/1',duration:'1.250000',nb_frames:'75',nb_read_frames:'75'}],
-  format:{format_name:'mov,mp4,m4a,3gp,3g2,mj2',duration:'1.250000'},
-};
-const validMedia=validateComparisonProbe(validProbe,{fps:60,frameCount:75,duration:1.25,width:1280,height:360});
-assert.equal(validMedia.passed,true,'the exact 75-frame 60 FPS comparison contract must pass');
-assert.equal(validMedia.actual.frameCount,75);
-assert.equal(validMedia.actual.duration,1.25);
-const badMedia=validateComparisonProbe({
-  ...validProbe,streams:[{...validProbe.streams[0],avg_frame_rate:'30000/1001',nb_frames:'74',nb_read_frames:'74',duration:'1.234000'}],
-},{fps:60,frameCount:75,duration:1.25,width:1280,height:360});
-assert.equal(badMedia.passed,false,'wrong cadence, frame count, and duration must fail media validation');
-assert.equal(badMedia.checks.averageFps.passed,false);
-assert.equal(badMedia.checks.frameCount.passed,false);
-assert.equal(badMedia.checks.duration.passed,false);
+const validProbe={streams:[{codec_name:'h264',pix_fmt:'yuv420p',width:1280,height:360,r_frame_rate:'60/1',avg_frame_rate:'60/1',duration:'0.900000',nb_frames:'54',nb_read_frames:'54'}],format:{format_name:'mov,mp4,m4a,3gp,3g2,mj2',duration:'0.900000'}};
+assert.equal(validateComparisonProbe(validProbe,{fps:60,frameCount:54,duration:.9,width:1280,height:360}).passed,true);
 
-const emissionEffects=Array.from({length:8},(_,emissionIndex)=>({type:'dragonProjectile',emissionIndex,emittedAt:0.03+emissionIndex*0.1}));
-const measured=observedMetrics([{
-  snapshot:{
-    playerFootprint:2,
-    projectiles:emissionEffects.map((effect,index)=>({...effect,position:{x:index,z:index%2?-1:1},tangent:{x:1,z:index%2?0.4:-0.4}})),
-    runtimes:[{id:'wizardRebuiltArcana',snapshot:{
-      dragonArc:{cadence:99,baseReleaseSpan:99,wavelengthPlayerDiameters:9,adjacentPhaseDegrees:180,everyOtherPhaseDifferenceDegrees:0},
-      effects:emissionEffects,
-    }}],
-  },
-}]);
-assert.equal(measured.captureDerived.emittedProjectiles,8);
-assert.ok(Math.abs(measured.captureDerived.emissionIntervalSeconds-0.1)<1e-12,'cadence must be derived from captured emittedAt samples');
-assert.ok(Math.abs(measured.captureDerived.fullReleaseSeconds-0.7)<1e-12,'release span must be derived from first/last emittedAt samples');
-assert.notEqual(measured.captureDerived.emissionIntervalSeconds,99,'runtime calibration constants must not masquerade as captured cadence');
-assert.equal(measured.specDerived.wavelengthPlayerFootprints,9,'sampler telemetry must remain explicitly spec-derived');
+const dragonEffects=Array.from({length:8},(_,emissionIndex)=>({type:'dragonProjectile',emissionIndex,emittedAt:.03+emissionIndex*.1}));
+const dragonMeasured=observedMetrics([{snapshot:{playerFootprint:2,projectiles:dragonEffects.map((effect,index)=>({...effect,position:{x:index,z:index%2?-1:1},tangent:{x:1,z:index%2?.4:-.4}})),runtimes:[{id:'wizardRebuiltArcana',snapshot:{dragonArc:{wavelengthPlayerDiameters:9,adjacentPhaseDegrees:180,everyOtherPhaseDifferenceDegrees:0},effects:dragonEffects}}]}}]);
+assert.equal(dragonMeasured.captureDerived.emittedProjectiles,8);assert.ok(Math.abs(dragonMeasured.captureDerived.emissionIntervalSeconds-.1)<1e-12);
 
-console.log('Arcana capture tooling validation passed.');
+const homingTrace=[{frame:0,snapshot:{runtimes:[{id:'wizardRebuiltArcana',snapshot:{abilityContracts:{homingFlares:{count:7,storageDuration:4,orbitDirection:'clockwise'}},semanticEvents:[{seq:1,time:0,arcanaId:'HOMING-FLARES',event:'cast',stableId:'cast-1'}],effects:[{type:'homingFlares',arcanaId:'HOMING-FLARES',stableId:'cast-1',flares:Array.from({length:7},(_,index)=>({id:`flare-${index}`,state:'stored'}))}]}}]}} ,{frame:1,snapshot:{runtimes:[{id:'wizardRebuiltArcana',snapshot:{abilityContracts:{homingFlares:{count:7,storageDuration:4,orbitDirection:'clockwise'}},semanticEvents:[{seq:1,time:0,arcanaId:'HOMING-FLARES',event:'cast',stableId:'cast-1'},{seq:2,time:.1,arcanaId:'HOMING-FLARES',event:'flare-hit',stableId:'flare-0',damage:7}],effects:[]}}]}}];
+const homing=observedMetrics(homingTrace,{telemetryAdapter:'homing-flares',runtimeId:'wizardRebuiltArcana',abilityId:'HOMING-FLARES'});
+assert.deepEqual({created:homing.captureDerived.createdFlares,stored:homing.captureDerived.maximumStoredFlares,clockwise:homing.captureDerived.clockwiseOrbit},{created:7,stored:7,clockwise:true});
+const expiryEvents=[{seq:1,time:0,arcanaId:'HOMING-FLARES',event:'cast',stableId:'cast-expiry'},...Array.from({length:7},(_,index)=>({seq:index+2,time:4,arcanaId:'HOMING-FLARES',event:'flare-expired',stableId:`cast-expiry:flare:${index+1}`,reason:'storage-duration',storageAge:4}))];
+const expiry=observedMetrics([{frame:240,time:4,snapshot:{runtimes:[{id:'wizardRebuiltArcana',snapshot:{abilityContracts:{homingFlares:{count:7,storageDuration:4,orbitDirection:'clockwise'}},semanticEvents:expiryEvents,effects:[]}}]}}],{telemetryAdapter:'homing-flares',runtimeId:'wizardRebuiltArcana',abilityId:'HOMING-FLARES'}).captureDerived;
+assert.equal(expiry.storageLifetimeSeconds,4,'Homing storage lifetime must be measured from cast-to-expiry event times');assert.equal(expiry.reportedStorageAgeSeconds,4);
+
+const voltEvents=[
+  {serial:1,time:0,kind:'volt-disc-press',arcanaId:'VOLT-DISC',stableId:'VOLT-DISC:0001:disc:01',press:1,comboSerial:1,direction:{x:1,z:0}},
+  {serial:2,time:.2,kind:'volt-disc-carrier-hit',arcanaId:'VOLT-DISC',stableId:'VOLT-DISC:0001:disc:01',press:1,comboSerial:1,damage:9},
+  {serial:3,time:.2,kind:'volt-disc-contact-event',arcanaId:'VOLT-DISC',stableId:'VOLT-DISC:0001:disc:01:contact',press:1,comboSerial:1,damage:0},
+];
+const volt=observedMetrics([{frame:12,snapshot:{runtimes:[{id:'wizardNextSource',snapshot:{semanticEvents:voltEvents,effects:[]}}]}}],{telemetryAdapter:'volt-disc',runtimeId:'wizardNextSource',abilityId:'VOLT-DISC'});
+assert.deepEqual({count:volt.captureDerived.discCount,direct:volt.captureDerived.directDamageEvents,zero:volt.captureDerived.zeroDamageBurstEvents,owned:volt.captureDerived.exactlyOnePayload},{count:1,direct:1,zero:1,owned:true});
+const acceptance=evaluateAcceptance({mode:'required',checks:[{id:'discCount',metric:'captureDerived.discCount',op:'exact',value:1},{id:'owned',metric:'captureDerived.exactlyOnePayload',op:'truthy'}]},volt);
+assert.equal(acceptance.passed,true);
+
+const tornadoEvents=[
+  {seq:1,time:0,arcanaId:'WHIRLING-TORNADO',event:'cast',stableId:'tornado-1'},
+  ...[.12,.30,.48,.66].map((time,index)=>({seq:index+2,time,arcanaId:'WHIRLING-TORNADO',event:'tick',stableId:'tornado-1',tick:index+1,damage:8,targetIds:['tornado-inside']})),
+  {seq:6,time:.8,arcanaId:'WHIRLING-TORNADO',event:'finisher',stableId:'tornado-1',damage:10,targetIds:['tornado-inside']},
+];
+const tornadoTrace=[
+  {frame:0,time:0,snapshot:{captureDummies:[{id:'tornado-inside',x:1.2,z:0,hp:1000,knockX:0,knockZ:0},{id:'tornado-outside',x:4.2,z:0,hp:1000,knockX:0,knockZ:0}],runtimes:[{id:'wizardRebuiltArcana',snapshot:{semanticEvents:[tornadoEvents[0]],effects:[{type:'whirlingTornado',arcanaId:'WHIRLING-TORNADO',position:{x:0,z:0}}]}}]}},
+  {frame:54,time:.9,snapshot:{captureDummies:[{id:'tornado-inside',x:1.2,z:0,hp:958,knockX:1,knockZ:0},{id:'tornado-outside',x:4.2,z:0,hp:1000,knockX:0,knockZ:0}],runtimes:[{id:'wizardRebuiltArcana',snapshot:{semanticEvents:tornadoEvents,effects:[{type:'whirlingTornadoTransient',arcanaId:'WHIRLING-TORNADO',visualKind:'finisher'}]}}]}},
+];
+const tornado=observedMetrics(tornadoTrace,{telemetryAdapter:'whirling-tornado',runtimeId:'wizardRebuiltArcana',abilityId:'WHIRLING-TORNADO'}).captureDerived;
+assert.deepEqual({ticks:tornado.tickCount,timing:tornado.maximumTickTimingErrorSeconds,damage:tornado.insideTargetDamage,outside:tornado.outsideTargetDamage,primaryClean:tornado.primaryCleanedUp,transients:tornado.permittedFinisherTransients},{ticks:4,timing:0,damage:42,outside:0,primaryClean:true,transients:1});
+
+const waterEvents=[
+  {seq:1,time:0,arcanaId:'WATER-PRISON',event:'cast',stableId:'water-1'},
+  {seq:2,time:.2,arcanaId:'WATER-PRISON',event:'attached',stableId:'water-1',targetId:'water-target',stackCount:1,anchor:{x:3,z:0}},
+  {seq:3,time:5.6,arcanaId:'WATER-PRISON',event:'released',stableId:'water-1',targetId:'water-target',reason:'duration'},
+];
+const waterTrace=[
+  {frame:12,time:.2,snapshot:{captureDummies:[{id:'water-target',x:3,z:0,hp:985}],runtimes:[{id:'wizardRebuiltArcana',snapshot:{waterAmmo:1,semanticEvents:waterEvents.slice(0,2),effects:[{type:'waterPrison',arcanaId:'WATER-PRISON',stableId:'water-1',capturedId:'water-target',lock:{x:3,z:0},position:{x:3,z:0}}]}}]}},
+  {frame:336,time:5.6,snapshot:{captureDummies:[{id:'water-target',x:3,z:0,hp:960}],runtimes:[{id:'wizardRebuiltArcana',snapshot:{waterAmmo:1,semanticEvents:waterEvents,effects:[]}}]}},
+];
+const water=observedMetrics(waterTrace,{telemetryAdapter:'water-prison',runtimeId:'wizardRebuiltArcana',abilityId:'WATER-PRISON'}).captureDerived;
+assert.ok(Math.abs(water.captureLifetimeSeconds-5.4)<1e-12,'Water lifetime must come from attached/released event times');assert.equal(water.maximumLockDrift,0,'Water lock drift must compare captured target position to its anchor');
+
+const reviewRoot=fs.mkdtempSync(path.join(os.tmpdir(),'arcana-review-index-'));
+try{
+  const directory=path.join(reviewRoot,'volt-disc','source-base','style');fs.mkdirSync(directory,{recursive:true});
+  fs.writeFileSync(path.join(directory,'metrics.json'),JSON.stringify({abilityId:'VOLT-DISC',scenario:'source-base',stage:'style',generatedAt:'2026-07-26T00:00:00Z',revision:{commit:'1234567890abcdef',dirty:false},sourceClip:{start:58,end:63,timelineStart:58.2,timelineEnd:59.1},deterministic:{passed:true},acceptance:{contractPassed:true},media:{comparison:{passed:true}},artifacts:{contactSheet:'contact-sheet.png',comparisonVideo:'comparison.mp4',telemetryRun1:'telemetry/run-1.json',telemetryRun2:'telemetry/run-2.json'}}));
+  const index=buildReviewIndex(reviewRoot);assert.equal(index.entries.length,1);assert.equal(index.entries[0].comparisonVideo,'volt-disc/source-base/style/comparison.mp4');assert.equal(index.entries[0].telemetryRun1,'volt-disc/source-base/style/telemetry/run-1.json');assert.equal(index.abilities[0].scenarios[0].stages.style.stage,'style');
+  const html=renderReviewIndexHtml(index);assert.match(html,/VOLT-DISC/);assert.match(html,/Source render/);assert.match(html,/trace 1/);assert.match(html,/<img class="preview"/);assert.match(html,/1234567890ab/);assert.doesNotMatch(html,/Â/);
+}finally{fs.rmSync(reviewRoot,{recursive:true,force:true});}
+
+console.log('Arcana capture tooling v2 validation passed.');

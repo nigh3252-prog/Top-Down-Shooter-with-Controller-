@@ -109,12 +109,24 @@ function normalizeWallFixture(value={},index=0){
   return{id:String(value.id||`capture-wall-${index+1}`),a:normalizeWallPoint(value.a),b:normalizeWallPoint(value.b)};
 }
 
+function normalizeResourceFixture(value={},index=0){
+  const primitive=['number','string','boolean'].includes(typeof value.value)?value.value:null;
+  return{runtimeId:String(value.runtimeId||''),key:String(value.key||`resource${index+1}`),value:primitive};
+}
+
+function normalizeDeckFixture(value){
+  if(!value||typeof value!=='object'||value.enabled===false)return null;
+  return{enabled:true,primaryArcanaId:normalizeCaptureArcanaId(value.primaryArcanaId||'VOLT-DISC'),oppositeArcanaId:normalizeCaptureArcanaId(value.oppositeArcanaId||'BOLT-RAIL')};
+}
+
 export function normalizeCaptureFixtures(value={}){
   const source=value&&typeof value==='object'?value:{};
   return{
     targets:Array.isArray(source.targets)?source.targets.slice(0,24).map(normalizeTargetFixture):[],
     hostileProjectiles:Array.isArray(source.hostileProjectiles)?source.hostileProjectiles.slice(0,24).map(normalizeHostileProjectileFixture):[],
     walls:Array.isArray(source.walls)?source.walls.slice(0,24).map(normalizeWallFixture):[],
+    resources:Array.isArray(source.resources)?source.resources.slice(0,24).map(normalizeResourceFixture).filter(resource=>resource.runtimeId&&/^[A-Za-z_$][\w$]*$/.test(resource.key)):[],
+    deck:normalizeDeckFixture(source.deck),
   };
 }
 
@@ -329,6 +341,11 @@ export function createAbilityCaptureController({
     const op=String(action.op||action.type||'').trim().toLowerCase();
     if(op==='cast'||op==='press'||op==='hold')return cast(action.arcanaId||action.id||state.config.arcanaId,{...action,input:action.input||op});
     if(op==='setaim'||op==='aim')return setAim(action.aim??action.player??action);
+    if(op==='release'){
+      withRandom(()=>performWorldAction({...action,op},{time:state.time,frame:state.frame,config:{...state.config}}));
+      renderWorld({time:state.time,frame:state.frame,config:state.config});
+      return{ok:true,action:op,...snapshot()};
+    }
     const handled=withRandom(()=>performWorldAction({...action,op},{time:state.time,frame:state.frame,config:{...state.config}})!==false);
     renderWorld({time:state.time,frame:state.frame,config:state.config});
     return{ok:handled,action:op,...snapshot()};
@@ -352,7 +369,7 @@ export function createAbilityCaptureController({
 
   return{
     ready:()=>state.enabled&&state.ready,
-    reset,cast,step,snapshot,setPaused,checkpoint,setAim,perform,
+    reset,cast,step,snapshot,setPaused,checkpoint,setAim,perform,act:perform,
     pause:()=>setPaused(true),play:()=>setPaused(false),
     catalog:ABILITY_CAPTURE_CARD_SUMMARIES,
     checkpoints:ABILITY_CAPTURE_CHECKPOINTS,

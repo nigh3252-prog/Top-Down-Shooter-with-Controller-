@@ -112,11 +112,12 @@ const flareLayers=[];flares.flares[0].mesh.traverse(object=>flareLayers.push(obj
 for(const role of['homingFlareBody','homingFlareShell','homingFlareCore','homingFlareTail','homingFlareSmoke'])assert.ok(flareLayers.includes(role),`production flare is missing ${role}`);
 runtime.update(.05,0);
 assert.ok(flares.flares.every(flare=>flare.mesh&&Number.isFinite(flare.position.x)),'stored halo must remain visible and positioned around the caster');
-const flareTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[flareTarget];step(2.4);
+const flareTarget={__abilityCaptureDummyId:'flare-fixture',x:0,z:6,hp:1000,radius:.5};system.enemies=[flareTarget];step(2.4);
 assert.equal(hits.filter(hit=>hit.options.homingFlares).length,7,'every stored flare must independently acquire and hit');
 assert.ok(hits.filter(hit=>hit.options.homingFlares).every(hit=>hit.amount===7));
 assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='HOMING-FLARES'&&event.event==='flare-launched').length,7);
 assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='HOMING-FLARES'&&event.event==='flare-hit').length,7);
+assert.ok(runtime.snapshot().semanticEvents.filter(event=>event.event==='flare-hit').every(event=>event.targetId==='flare-fixture'),'capture telemetry must preserve fixture IDs instead of collapsing targets to their enemy kind');
 assert.equal(scene.children.some(child=>/Homing Flares source-locked flare/.test(child.name)),false,'hit flares and their trails must clean completely');
 runtime.reset();hits.length=0;system.enemies=[];
 
@@ -286,4 +287,16 @@ for(const mode of['proxy','source']){
   modeRuntime.dispose();assert.equal(modeScene.children.length,0,`${mode} capture reset must dispose every contract/source mesh`);
 }
 location.search=productionSearch;
+
+let interactiveMode='proxy';window.__abilityCapture={snapshot:()=>({renderMode:interactiveMode})};location.search='?enemyLab=1&capture=1&renderMode=proxy';
+const interactiveScene=new Group(),interactiveRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:interactiveScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
+assert.equal(interactiveRuntime.cast({arcanaId:'HOMING-FLARES'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='homingFlares').renderMode,'proxy');
+interactiveMode='source';interactiveRuntime.reset();assert.equal(interactiveRuntime.snapshot().renderMode,'source','capture reset must adopt the Enemy Lab stage button without reloading the arena');
+assert.equal(interactiveRuntime.cast({arcanaId:'WHIRLING-TORNADO'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='whirlingTornado').renderMode,'source');
+interactiveMode='style';interactiveRuntime.reset();assert.equal(interactiveRuntime.cast({arcanaId:'WATER-PRISON'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='waterPrison').renderMode,'style');
+interactiveRuntime.dispose();assert.equal(interactiveScene.children.length,0);
+
+location.search='?enemyLab=1';interactiveMode='proxy';const hardGatedScene=new Group(),hardGatedRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:hardGatedScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
+assert.equal(hardGatedRuntime.cast({arcanaId:'HOMING-FLARES'}),true);assert.equal(hardGatedRuntime.snapshot().effects.find(effect=>effect.type==='homingFlares').renderMode,'style','capture UI state must never expose proxy rendering in production');
+hardGatedRuntime.dispose();delete window.__abilityCapture;location.search=productionSearch;
 console.log('wizard rebuilt arcana runtime tests passed');
