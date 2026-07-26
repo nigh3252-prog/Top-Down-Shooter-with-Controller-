@@ -74,7 +74,7 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
   const outer=new URLSearchParams(location.search),inner=new URLSearchParams({seed:'enemy-lab-001',layout:'arena',enemyLab:'1'});
   if(outer.get('capture')==='1'){
     inner.set('capture','1');
-    for(const key of['arcana','aim','rngSeed','clean','stage','effects'])if(outer.has(key))inner.set(key,outer.get(key));
+    for(const key of['arcana','aim','rngSeed','clean','stage','effects','renderMode'])if(outer.has(key))inner.set(key,outer.get(key));
     if(outer.has('layout'))inner.set('captureLayout',outer.get('layout'));
   }
   document.getElementById('arenaFrame').src=`combat-arena.html?${inner}`;
@@ -116,7 +116,7 @@ const legacyCategoryMap={player:'controls:panel-loadout',combat:'controls:panel-
 const restoredCategory=legacyCategoryMap[saved.category]||saved.category||'test';
 let state={category:capturePage?'capture':(restoredCategory==='capture'?'test':restoredCategory),family:familyOrder.includes(saved.family)?saved.family:'GOBLINS',enemyId:catalog.some(enemy=>enemy.id===saved.enemyId)?saved.enemyId:'grunt',mode:['solo','pack','wave'].includes(saved.mode)?saved.mode:'solo',packCount:Number(saved.packCount)||3,threat:['low','standard','high'].includes(saved.threat)?saved.threat:'standard',partnerId:saved.partnerId||''};
 const initialCaptureStage=String(pageParams.get('stage')||'motion').toLowerCase();
-const captureState={arcanaId:normalizeCaptureArcanaId(pageParams.get('arcana')||'DRAGON-ARC'),aim:normalizeCaptureAim(pageParams.get('aim')||'right').id,dummy:normalizeCaptureDummy(pageParams.get('layout')||'none').layout,rngSeed:pageParams.get('rngSeed')||4401,stage:initialCaptureStage,effects:pageParams.has('effects')?!['0','false','off'].includes(String(pageParams.get('effects')).toLowerCase()):initialCaptureStage!=='motion'};
+const captureState={arcanaId:normalizeCaptureArcanaId(pageParams.get('arcana')||'DRAGON-ARC'),aim:normalizeCaptureAim(pageParams.get('aim')||'right').id,dummy:normalizeCaptureDummy(pageParams.get('layout')||'none').layout,rngSeed:pageParams.get('rngSeed')||4401,stage:initialCaptureStage,effects:pageParams.has('effects')?!['0','false','off'].includes(String(pageParams.get('effects')).toLowerCase()):!['motion','contract'].includes(initialCaptureStage),renderMode:pageParams.get('renderMode')||(['motion','contract'].includes(initialCaptureStage)?'proxy':'style')};
 let dockOpen=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0,controlsRefreshQueued=false;
 const currentEnemy=()=>catalog.find(enemy=>enemy.id===state.enemyId)||catalog[0],enemyBridge=()=>frame.contentWindow?.__enemyLabEnemySystem||null,controlBridge=()=>frame.contentWindow?.__enemyLabControlBridge||null,captureBridge=()=>frame.contentWindow?.__abilityCapture||null,frameDoc=()=>frame.contentDocument||null;
 const captureFacade=window.__abilityCapture={
@@ -124,6 +124,8 @@ const captureFacade=window.__abilityCapture={
   reset:options=>captureBridge()?.reset?.(options)??{ok:false,error:'Arcana Capture is still loading.'},
   cast:id=>captureBridge()?.cast?.(id)??{ok:false,error:'Arcana Capture is still loading.'},
   step:(frames=1,dt=1/60)=>captureBridge()?.step?.(frames,dt)??{ok:false,error:'Arcana Capture is still loading.'},
+  setAim:aim=>captureBridge()?.setAim?.(aim)??{ok:false,error:'Arcana Capture is still loading.'},
+  perform:action=>captureBridge()?.perform?.(action)??{ok:false,error:'Arcana Capture is still loading.'},
   snapshot:()=>captureBridge()?.snapshot?.()??{enabled:capturePage,ready:false,paused:true,time:0,frame:0,activeEffects:[],projectiles:[]},
   setPaused:paused=>captureBridge()?.setPaused?.(paused)??{ok:false,error:'Arcana Capture is still loading.'},
   checkpoint:seconds=>captureBridge()?.checkpoint?.(seconds)??{ok:false,error:'Arcana Capture is still loading.'},
@@ -136,14 +138,14 @@ categoriesEl.addEventListener('click',event=>{
   const label=button.querySelector('b')?.textContent?.trim()||button.textContent.trim(),openingCapture=label==='ARCANA CAPTURE';
   if(openingCapture&&!capturePage){
     event.preventDefault();event.stopImmediatePropagation();
-    const next=new URL(location.href);next.searchParams.set('capture','1');next.searchParams.set('arcana',captureState.arcanaId);next.searchParams.set('aim',captureState.aim);next.searchParams.set('layout',captureState.dummy);next.searchParams.set('rngSeed',captureState.rngSeed);next.searchParams.set('stage',captureState.stage);next.searchParams.set('effects',captureState.effects?'1':'0');location.assign(next);return;
+    const next=new URL(location.href);next.searchParams.set('capture','1');next.searchParams.set('arcana',captureState.arcanaId);next.searchParams.set('aim',captureState.aim);next.searchParams.set('layout',captureState.dummy);next.searchParams.set('rngSeed',captureState.rngSeed);next.searchParams.set('stage',captureState.stage);next.searchParams.set('effects',captureState.effects?'1':'0');next.searchParams.set('renderMode',captureState.renderMode);location.assign(next);return;
   }
   if(capturePage&&!openingCapture){
     event.preventDefault();event.stopImmediatePropagation();const def=categoryDefs().find(item=>item[1]===label);state.category=def?.[0]||'test';save();
-    const next=new URL(location.href);for(const key of['capture','arcana','aim','layout','rngSeed','clean','stage','effects'])next.searchParams.delete(key);location.assign(next);
+    const next=new URL(location.href);for(const key of['capture','arcana','aim','layout','rngSeed','clean','stage','effects','renderMode'])next.searchParams.delete(key);location.assign(next);
   }
 },true);
-function capturePayload(){const aim=normalizeCaptureAim(captureState.aim);return{arcanaId:captureState.arcanaId,player:{x:0,z:0,aimX:aim.x,aimZ:aim.z},camera:{mode:'capture'},rngSeed:captureState.rngSeed,dummy:{layout:captureState.dummy},stage:captureState.stage,effects:captureState.effects};}
+function capturePayload(){const aim=normalizeCaptureAim(captureState.aim);return{arcanaId:captureState.arcanaId,player:{x:0,z:0,aimX:aim.x,aimZ:aim.z},camera:{mode:'capture'},rngSeed:captureState.rngSeed,dummy:{layout:captureState.dummy},fixtures:{targets:[],hostileProjectiles:[],walls:[]},stage:captureState.stage,effects:captureState.effects,renderMode:captureState.renderMode};}
 function updateCaptureBadge(snapshot=captureFacade.snapshot()){const card=ABILITY_CAPTURE_CARD_SUMMARIES.find(item=>item.id===captureState.arcanaId);testBadge.innerHTML=`<strong>${card?.name?.toUpperCase()||captureState.arcanaId}</strong> · ${Number(snapshot.time||0).toFixed(2)}s · ${snapshot.projectiles?.length||0} carriers`;}
 function refreshCaptureReadout(snapshot=captureFacade.snapshot()){
   updateCaptureBadge(snapshot);
@@ -163,7 +165,7 @@ function renderCapture(){
   select.addEventListener('change',()=>{captureState.arcanaId=normalizeCaptureArcanaId(select.value);callCapture('reset',capturePayload());renderValues({preserveScroll:true});});picker.append(pickerLabel,select);nodes.push(picker);
   const stageCard=document.createElement('div');stageCard.className='controlCard';stageCard.dataset.testid='arcana-capture-stage';stageCard.innerHTML='<label style="font-size:8.5px;color:var(--muted);letter-spacing:.07em">CAPTURE STAGE</label>';
   const stageRow=document.createElement('div');stageRow.className='row';
-  for(const [id,labelText,effects] of[['motion','MOTION · FX OFF',false],['reference','REFERENCE · FX ON',true],['style','STYLE · FX ON',true]]){const button=document.createElement('button');button.className=`miniBtn${captureState.stage===id?' on':''}`;button.textContent=labelText;button.dataset.stage=id;button.dataset.testid=`arcana-capture-stage-${id}`;button.addEventListener('click',()=>{captureState.stage=id;captureState.effects=effects;callCapture('reset',capturePayload());renderValues({preserveScroll:true});});stageRow.appendChild(button);}stageCard.appendChild(stageRow);nodes.push(stageCard);
+  for(const [id,labelText,effects,renderMode] of[['contract','CONTRACT · PROXY',false,'proxy'],['source','SOURCE · FX ON',true,'source'],['style','STYLE · FX ON',true,'style'],['motion','DRAGON MOTION',false,'proxy']]){const button=document.createElement('button');button.className=`miniBtn${captureState.stage===id?' on':''}`;button.textContent=labelText;button.dataset.stage=id;button.dataset.testid=`arcana-capture-stage-${id}`;button.addEventListener('click',()=>{captureState.stage=id;captureState.effects=effects;captureState.renderMode=renderMode;callCapture('reset',capturePayload());renderValues({preserveScroll:true});});stageRow.appendChild(button);}stageCard.appendChild(stageRow);nodes.push(stageCard);
   const controls=[
     ['RESET','Return to frame zero','reset',()=>callCapture('reset',capturePayload())],
     ['CAST','Cast directly without changing the saved deck','cast',()=>callCapture('cast',captureState.arcanaId)],

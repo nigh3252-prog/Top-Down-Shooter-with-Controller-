@@ -71,6 +71,58 @@ export function captureDummyPlacements(value='none',playerDiameter=2.1){
   ];
 }
 
+function finiteNumber(value,fallback=0){
+  const number=Number(value);
+  return Number.isFinite(number)?number:fallback;
+}
+
+function normalizeTargetFixture(value={},index=0){
+  return{
+    id:String(value.id||`capture-target-${index+1}`),
+    role:String(value.role||'target'),
+    forward:finiteNumber(value.forward,7),
+    lateral:finiteNumber(value.lateral,0),
+    spawnFrame:Math.max(0,Math.trunc(finiteNumber(value.spawnFrame,0))),
+    spawnKind:String(value.spawnKind||'grunt'),
+    hp:Math.max(1,finiteNumber(value.hp,9999)),
+  };
+}
+
+function normalizeHostileProjectileFixture(value={},index=0){
+  return{
+    id:String(value.id||`capture-hostile-projectile-${index+1}`),
+    forward:finiteNumber(value.forward,5),
+    lateral:finiteNumber(value.lateral,0),
+    forwardVelocity:finiteNumber(value.forwardVelocity,-5),
+    lateralVelocity:finiteNumber(value.lateralVelocity,0),
+    spawnFrame:Math.max(0,Math.trunc(finiteNumber(value.spawnFrame,0))),
+    radius:Math.max(.02,finiteNumber(value.radius,.16)),
+    life:Math.max(ABILITY_CAPTURE_FIXED_DT,finiteNumber(value.life,3)),
+  };
+}
+
+function normalizeWallPoint(value={}){
+  return{forward:finiteNumber(value.forward,0),lateral:finiteNumber(value.lateral,0)};
+}
+
+function normalizeWallFixture(value={},index=0){
+  return{id:String(value.id||`capture-wall-${index+1}`),a:normalizeWallPoint(value.a),b:normalizeWallPoint(value.b)};
+}
+
+export function normalizeCaptureFixtures(value={}){
+  const source=value&&typeof value==='object'?value:{};
+  return{
+    targets:Array.isArray(source.targets)?source.targets.slice(0,24).map(normalizeTargetFixture):[],
+    hostileProjectiles:Array.isArray(source.hostileProjectiles)?source.hostileProjectiles.slice(0,24).map(normalizeHostileProjectileFixture):[],
+    walls:Array.isArray(source.walls)?source.walls.slice(0,24).map(normalizeWallFixture):[],
+  };
+}
+
+export function captureTargetPlacements(fixtures={},dummy='none',playerDiameter=2.1){
+  const normalized=normalizeCaptureFixtures(fixtures);
+  return normalized.targets.length?normalized.targets:captureDummyPlacements(dummy,playerDiameter).map((placement,index)=>normalizeTargetFixture(placement,index));
+}
+
 export function createCaptureRandom(seed=4401){
   let value=2166136261;
   for(const character of String(seed)){
@@ -172,6 +224,7 @@ function captureOptions(options={},previous={}){
     :explicitEffects===false||explicitEffects===0||explicitEffects==='0'||explicitEffects==='off'||explicitEffects==='false'
       ?false
       :options.stage!==undefined?stage!=='motion':(previous.effects??stage!=='motion');
+  const renderMode=String(options.renderMode??previous.renderMode??(stage==='motion'?'proxy':'style')).trim().toLowerCase()||(stage==='motion'?'proxy':'style');
   return{
     arcanaId:normalizeCaptureArcanaId(options.arcanaId||options.arcana||previous.arcanaId||'DRAGON-ARC'),
     aim,
@@ -179,7 +232,8 @@ function captureOptions(options={},previous={}){
     camera:{mode:String(options.camera?.mode||previous.camera?.mode||'capture')},
     rngSeed:options.rngSeed??previous.rngSeed??4401,
     dummy:normalizeCaptureDummy(options.dummy||options.layout||previous.dummy||'none'),
-    stage,effects,
+    fixtures:normalizeCaptureFixtures(options.fixtures??previous.fixtures),
+    stage,effects,renderMode,
   };
 }
 
@@ -189,6 +243,8 @@ export function createAbilityCaptureController({
   resetWorld=()=>{},
   resetRuntimes=()=>{},
   castCard=()=>false,
+  setAimWorld=()=>{},
+  performWorldAction=()=>false,
   advanceWorld=()=>{},
   renderWorld=()=>{},
   snapshotWorld=()=>({}),
@@ -216,7 +272,8 @@ export function createAbilityCaptureController({
     return{
       enabled:state.enabled,ready:state.ready,paused:state.paused,time:state.time,frame:state.frame,
       fixedDt:ABILITY_CAPTURE_FIXED_DT,arcanaId:state.config.arcanaId,aim:{...state.config.aim},
-      stage:state.config.stage,effects:state.config.effects,dummy:{...state.config.dummy},...world,activeEffects,projectiles,runtimes:runtime,
+      stage:state.config.stage,effects:state.config.effects,renderMode:state.config.renderMode,
+      dummy:{...state.config.dummy},fixtures:jsonSafe(state.config.fixtures),...world,activeEffects,projectiles,runtimes:runtime,
     };
   }
   function setPaused(paused=true){
@@ -244,16 +301,37 @@ export function createAbilityCaptureController({
     setPaused(true);
     state.config=captureOptions(options,state.config);
     state.time=0;state.frame=0;random=createCaptureRandom(state.config.rngSeed);
-    withRandom(()=>{resetWorld({...state.config});resetRuntimes();renderWorld({time:0,frame:0,config:state.config});});
+    withRandom(()=>{resetWorld({...state.config});resetRuntimes({...state.config});renderWorld({time:0,frame:0,config:state.config});});
     state.ready=true;return snapshot();
   }
-  function cast(value=state.config.arcanaId){
+  function cast(value=state.config.arcanaId,action={}){
     const card=captureCardById(value);
     if(!card)return{ok:false,error:`Unknown Wizard Arcana: ${value}`,...snapshot()};
     state.config.arcanaId=card.arcanaId;
-    const casted=withRandom(()=>castCard(card)!==false);
+    const casted=withRandom(()=>castCard(card,{...state.config,capture:true,input:action.input||'cast',action:jsonSafe(action)})!==false);
     renderWorld({time:state.time,frame:state.frame,config:state.config});
     return{ok:casted,card:{id:card.arcanaId,name:card.name},...snapshot()};
+  }
+  function setAim(value='right'){
+    const source=typeof value==='string'?{aim:value}:value||{};
+    const named=typeof source.aim==='string'?source.aim:(typeof value==='string'?value:undefined);
+    const vectorSource=source.player||(source.aim&&typeof source.aim==='object'?source.aim:null);
+    const player={...state.config.player,...(vectorSource||{})};
+    if(named){
+      const namedAim=normalizeCaptureAim(named);player.aimX=namedAim.x;player.aimZ=namedAim.z;
+      state.config={...state.config,aim:{...namedAim},player};
+    }else state.config=captureOptions({player},state.config);
+    withRandom(()=>setAimWorld({...state.config.aim},{...state.config}));
+    renderWorld({time:state.time,frame:state.frame,config:state.config});
+    return snapshot();
+  }
+  function perform(action={}){
+    const op=String(action.op||action.type||'').trim().toLowerCase();
+    if(op==='cast'||op==='press'||op==='hold')return cast(action.arcanaId||action.id||state.config.arcanaId,{...action,input:action.input||op});
+    if(op==='setaim'||op==='aim')return setAim(action.aim??action.player??action);
+    const handled=withRandom(()=>performWorldAction({...action,op},{time:state.time,frame:state.frame,config:{...state.config}})!==false);
+    renderWorld({time:state.time,frame:state.frame,config:state.config});
+    return{ok:handled,action:op,...snapshot()};
   }
   function step(frames=1,dt=ABILITY_CAPTURE_FIXED_DT){
     const count=Math.max(0,Math.min(36000,Math.floor(Number(frames)||0)));
@@ -268,13 +346,13 @@ export function createAbilityCaptureController({
     return snapshot();
   }
   function checkpoint(seconds){
-    const target=Math.max(0,Number(seconds)||0),config={...state.config,player:{...state.config.player},dummy:{...state.config.dummy},camera:{...state.config.camera}};
+    const target=Math.max(0,Number(seconds)||0),config={...state.config,player:{...state.config.player},dummy:{...state.config.dummy},camera:{...state.config.camera},fixtures:jsonSafe(state.config.fixtures)};
     reset(config);cast(config.arcanaId);return step(Math.round(target/ABILITY_CAPTURE_FIXED_DT),ABILITY_CAPTURE_FIXED_DT);
   }
 
   return{
     ready:()=>state.enabled&&state.ready,
-    reset,cast,step,snapshot,setPaused,checkpoint,
+    reset,cast,step,snapshot,setPaused,checkpoint,setAim,perform,
     pause:()=>setPaused(true),play:()=>setPaused(false),
     catalog:ABILITY_CAPTURE_CARD_SUMMARIES,
     checkpoints:ABILITY_CAPTURE_CHECKPOINTS,
