@@ -7,12 +7,14 @@ import {
   SPARK_CONTACT_BEATS,
   BOLT_RAIL_BEATS,
   VOLT_DISC_BEATS,
+  VOLT_DISC_COMBO,
   earthKnucklesBeatSpec,
   bladedVineBeatSpec,
   stoneShotProjectileSpec,
   sparkContactBeatSpec,
   boltRailStreamSpec,
   voltDiscProjectileSpec,
+  normalizeWizardVisualMode,
   pointInForwardStrip,
   pointInForwardArc,
   safeAdvanceDistance,
@@ -24,6 +26,8 @@ assert.deepEqual(WIZARD_NEXT_SOURCE_CARDS.map(card=>card.arcanaId),[
   'EARTH-KNUCKLES','BLADED-VINE','STONE-SHOT','SPARK-CONTACT','BOLT-RAIL','VOLT-DISC',
 ]);
 assert.ok(WIZARD_NEXT_SOURCE_CARDS.every(card=>card.sourceGame==='Wizard of Legend'&&card.type==='ability'));
+const voltCard=WIZARD_NEXT_SOURCE_CARDS.find(card=>card.arcanaId==='VOLT-DISC');
+assert.deepEqual(voltCard.manualSequence,{presses:3,timeout:.9,label:'DISC'});
 
 assert.equal(EARTH_KNUCKLES_BEATS.length,2);
 assert.deepEqual(EARTH_KNUCKLES_BEATS.map(beat=>beat.damage),[16,18]);
@@ -82,14 +86,21 @@ assert.equal(boltEnhanced.burst.chains,true);
 
 assert.equal(VOLT_DISC_BEATS.length,3);
 assert.deepEqual(VOLT_DISC_BEATS.map(beat=>beat.damage),[9,9,9]);
+assert.deepEqual(VOLT_DISC_BEATS.map(beat=>beat.press),[1,2,3],'Volt Disc is one projectile per physical press, not an automatic timed string');
+assert.deepEqual(VOLT_DISC_COMBO,{presses:3,rollingTimeout:.9});
 const volt=voltDiscProjectileSpec();
 const voltEnhanced=voltDiscProjectileSpec({enhanced:true});
 assert.equal(volt.damage,9);
 assert.equal(volt.missBurstDamage,9);
 assert.equal(volt.directBurstDamage,0);
+assert.equal(volt.wallFizzleDamage,0);
+assert.equal(volt.rollingTimeout,.9);
 assert.equal(volt.redirects,false);
 assert.equal(voltEnhanced.redirects,true);
 assert.ok(volt.range<10&&volt.radius>0,'Volt Disc must remain a short-range hollow carrier');
+assert.equal(normalizeWizardVisualMode('motion'),'contract');
+assert.equal(normalizeWizardVisualMode('reference'),'source');
+assert.equal(normalizeWizardVisualMode('style'),'style');
 
 assert.equal(pointInForwardStrip({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:0,targetZ:4,range:5,halfWidth:.5}),true);
 assert.equal(pointInForwardStrip({originX:0,originZ:0,forwardX:0,forwardZ:1,targetX:1.2,targetZ:4,range:5,halfWidth:.5}),false);
