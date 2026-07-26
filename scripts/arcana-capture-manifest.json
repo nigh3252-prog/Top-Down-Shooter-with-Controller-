@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "sourceVideo": "media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4",
+  "outputRoot": "artifacts/arcana-capture",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "abilities": {
+    "DRAGON-ARC": {
+      "route": "enemy-lab.html",
+      "query": {
+        "capture": "1",
+        "clean": "1",
+        "arcana": "DRAGON-ARC",
+        "aim": "right",
+        "layout": "source-line",
+        "stage": "motion",
+        "effects": "0"
+      },
+      "stages": {
+        "motion": {
+          "fixedDt": 0.016666666666666666,
+          "checkpoints": [0.25, 0.5, 0.75, 1, 1.25],
+          "sourceClip": {
+            "start": 310,
+            "end": 315,
+            "timelineStart": 311.44
+          },
+          "reset": {
+            "player": {
+              "x": 0,
+              "z": 0,
+              "aimX": 1,
+              "aimZ": 0
+            },
+            "camera": {
+              "mode": "capture"
+            },
+            "rngSeed": 4401,
+            "stage": "motion",
+            "effects": false,
+            "dummy": {
+              "layout": "source-line"
+            }
+          },
+          "acceptance": {
+            "projectileCount": 8,
+            "emissionIntervalSeconds": [0.09, 0.12],
+            "fullReleaseSeconds": [0.63, 0.84],
+            "peakToPeakPlayerFootprints": [1.6, 2.2],
+            "wavelengthPlayerFootprints": [8, 10],
+            "adjacentPhaseDegrees": [150, 210],
+            "everyOtherPhaseToleranceDegrees": 20,
+            "visibleYawDegrees": [15, 40]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { installWizardRebuiltArcanaRuntime } from '../src/wizard-rebuilt-arcana-runtime.js';
+import {
+  DRAGON_ARC_PLAYER_DIAMETER,
+  DRAGON_ARC_SPEC,
+  dragonArcMotionMetrics,
+  installWizardRebuiltArcanaRuntime,
+  sampleDragonArcBody,
+  sampleDragonArcPath,
+} from '../src/wizard-rebuilt-arcana-runtime.js';
 
 class Transform{
   constructor(){this.x=0;this.y=0;this.z=0;}
@@ -19,7 +26,7 @@ class Mesh extends Object3D{constructor(geometry=new Geometry(),material=new Mat
 
 const THREE={
   Group,Mesh,
-  SphereGeometry:Geometry,DodecahedronGeometry:Geometry,ConeGeometry:Geometry,
+  SphereGeometry:Geometry,DodecahedronGeometry:Geometry,ConeGeometry:Geometry,CylinderGeometry:Geometry,
   TorusGeometry:Geometry,RingGeometry:Geometry,
   MeshBasicMaterial:Material,
   AdditiveBlending:'add',NormalBlending:'normal',DoubleSide:'double',
@@ -44,9 +51,40 @@ const system={
   enemies:[],heightScale:1,hostileProjectiles:[],
   damageEnemy(enemy,amount,knock,options){hits.push({enemy,amount,knock,options});enemy.hp-=amount;return true;},
 };
-const runtime=installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
+const mazeSegments=[];
+const runtime=installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>mazeSegments});
 const cast=id=>runtime.cast({id:`WOL-${id}`,arcanaId:id});
 const step=(seconds,dt=.025,mutate=()=>{})=>{for(let elapsed=0;elapsed<seconds;elapsed+=dt){mutate();runtime.update(dt,elapsed);}};
+const near=(actual,expected,tolerance=1e-9,message='')=>assert.ok(Math.abs(actual-expected)<=tolerance,message||`expected ${actual} to be within ${tolerance} of ${expected}`);
+
+const dragonMetrics=dragonArcMotionMetrics();
+near(dragonMetrics.playerDiameter,DRAGON_ARC_PLAYER_DIAMETER);
+near(DRAGON_ARC_SPEC.emissionInterval,.1);
+near(dragonMetrics.baseReleaseSpan,.7);
+assert.ok(DRAGON_ARC_SPEC.emissionInterval>=.09&&DRAGON_ARC_SPEC.emissionInterval<=.12);
+assert.ok(dragonMetrics.baseReleaseSpan>=.63&&dragonMetrics.baseReleaseSpan<=.84);
+assert.ok(dragonMetrics.peakToPeakPlayerDiameters>=1.6&&dragonMetrics.peakToPeakPlayerDiameters<=2.2);
+assert.ok(dragonMetrics.wavelengthPlayerDiameters>=8&&dragonMetrics.wavelengthPlayerDiameters<=10);
+near(dragonMetrics.amplitudePlayerDiameters,.95);
+near(dragonMetrics.proxyLengthPlayerDiameters,2.5);
+near(dragonMetrics.speed,39.4);
+near(dragonMetrics.adjacentPhaseDegrees,180);
+near(dragonMetrics.everyOtherPhaseDifferenceDegrees,0);
+
+const quarterWave=sampleDragonArcPath({distance:DRAGON_ARC_SPEC.pathWavelength/4,emissionIndex:0});
+const threeQuarterWave=sampleDragonArcPath({distance:DRAGON_ARC_SPEC.pathWavelength*3/4,emissionIndex:0});
+const adjacentWave=sampleDragonArcPath({distance:DRAGON_ARC_SPEC.pathWavelength/4,emissionIndex:1});
+near(quarterWave.lateral,DRAGON_ARC_SPEC.pathAmplitude);
+near(threeQuarterWave.lateral,-DRAGON_ARC_SPEC.pathAmplitude);
+near(adjacentWave.lateral,-quarterWave.lateral);
+near(adjacentWave.phaseOffset-quarterWave.phaseOffset,Math.PI);
+near(sampleDragonArcPath({distance:2,emissionIndex:2}).phaseOffset,quarterWave.phaseOffset);
+const maximumYaw=Math.atan(DRAGON_ARC_SPEC.pathAmplitude*Math.PI*2/DRAGON_ARC_SPEC.pathWavelength);
+assert.ok(maximumYaw>=15*Math.PI/180&&maximumYaw<=40*Math.PI/180,'proxy yaw must visibly follow the S curve without snapping sideways');
+const sampledBody=sampleDragonArcBody({headDistance:DRAGON_ARC_SPEC.proxyLength+1,emissionIndex:0});
+assert.equal(sampledBody.length,DRAGON_ARC_SPEC.proxySegments);
+assert.ok(sampledBody.every((sample,index)=>index===0||sample.distance<sampledBody[index-1].distance),'body samples must trail the head along earlier distances');
+assert.ok(sampledBody.every(sample=>sample.visible&&Number.isFinite(sample.tangent.x)&&Number.isFinite(sample.tangent.z)));
 
 assert.equal(cast('HOMING-FLARES'),true);
 let flares=runtime.state.effects.find(effect=>effect.type==='homingFlares');
@@ -60,11 +98,58 @@ runtime.reset();hits.length=0;system.enemies=[];
 
 assert.equal(cast('DRAGON-ARC'),true);
 assert.equal(runtime.state.dragonStock,0,'Dragon Arc must snapshot and spend all available stock');
-const dragonTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[dragonTarget];step(2.2);
-assert.equal(hits.filter(hit=>hit.options.dragonArc).length,8,'full base stock must emit eight piercing dragons');
-assert.ok(hits.filter(hit=>hit.options.dragonArc).every(hit=>hit.amount===8));
+const dragonOrigin={x:0,z:DRAGON_ARC_SPEC.originOffset};
+system.enemies=[6,14].flatMap(distance=>[0,1].map(emissionIndex=>{const sample=sampleDragonArcPath({origin:dragonOrigin,distance,emissionIndex});return{x:sample.x,z:sample.z,hp:1000,radius:.35,pathDistance:distance,parity:emissionIndex};}));
+step(2.2);
+const dragonHits=hits.filter(hit=>hit.options.dragonArc);
+assert.equal(dragonHits.length,16,'each of eight dragons must pierce through both matching-path targets');
+assert.ok(dragonHits.every(hit=>hit.amount===8));
+for(let emissionIndex=0;emissionIndex<8;emissionIndex++)assert.equal(dragonHits.filter(hit=>hit.options.dragonArcEmission===emissionIndex).length,2,`dragon ${emissionIndex+1} must own its piercing hits`);
 assert.ok(runtime.state.dragonStock>=3,'Dragon Arc must recover one stock every 0.6 seconds');
+assert.equal(runtime.snapshot().effects.some(effect=>effect.type==='dragonProjectile'),false,'every proxy must expire when its curved head reaches range');
+assert.equal(runtime.snapshot().effects.some(effect=>effect.type==='pulse'),false,'Gate 1 must not add muzzle, wall, or impact polish');
 runtime.reset();hits.length=0;
+
+assert.equal(cast('DRAGON-ARC'),true);
+const emissionTimes=new Map();
+for(let frame=0;frame<50;frame++){
+  runtime.update(1/60,frame/60);
+  for(const effect of runtime.snapshot().effects.filter(effect=>effect.type==='dragonProjectile'))emissionTimes.set(effect.emissionIndex,effect.emittedAt);
+}
+assert.deepEqual([...emissionTimes.keys()],[0,1,2,3,4,5,6,7]);
+const orderedEmissionTimes=[...emissionTimes.values()];
+for(let index=1;index<orderedEmissionTimes.length;index++)near(orderedEmissionTimes[index]-orderedEmissionTimes[index-1],.1,1e-9,'adjacent dragons must be emitted exactly six 60 FPS frames apart');
+near(orderedEmissionTimes.at(-1)-orderedEmissionTimes[0],.7,1e-9);
+const captureSnapshot=runtime.snapshot();
+near(captureSnapshot.simulationTime,50/60,1e-9);
+assert.deepEqual(captureSnapshot.dragonArc,dragonMetrics,'capture snapshot must expose semantic motion calibration rather than requiring pixel inference');
+runtime.reset();
+
+assert.equal(cast('DRAGON-ARC'),true);
+runtime.update(1/60,0);runtime.update(1/60,1/60);
+let liveAimSnapshot=runtime.snapshot();
+const firstDragon=liveAimSnapshot.effects.find(effect=>effect.type==='dragonProjectile'&&effect.emissionIndex===0);
+assert.deepEqual(firstDragon.forward,{x:0,z:1});
+assert.equal(firstDragon.body.length,DRAGON_ARC_SPEC.proxySegments);
+assert.ok(firstDragon.body.some(sample=>sample.visible)&&firstDragon.body.some(sample=>!sample.visible),'segmented body must emerge behind the moving head');
+const visibleProxy=scene.children.find(child=>/Dragon Arc neutral motion proxy/.test(child.name));
+assert.equal(visibleProxy.children.length,DRAGON_ARC_SPEC.proxySegments);
+firstDragon.body.forEach((sample,index)=>{assert.equal(visibleProxy.children[index].visible,sample.visible);near(visibleProxy.children[index].rotation.y,sample.yaw);});
+const proxyTags=[];visibleProxy.traverse(object=>proxyTags.push(...Object.keys(object.userData||{})));
+assert.ok(proxyTags.includes('dragonProxyMarker')&&proxyTags.includes('dragonProxyTangent'),'Gate 1 visuals must expose neutral path markers and tangent indicators');
+assert.ok(!proxyTags.includes('dragonHead')&&!proxyTags.includes('dragonSegment'),'rejected dragon art must not survive in the motion proxy');
+player.forwardX=1;player.forwardZ=0;
+for(let frame=0;frame<6;frame++)runtime.update(1/60,(frame+2)/60);
+liveAimSnapshot=runtime.snapshot();
+assert.deepEqual(liveAimSnapshot.effects.find(effect=>effect.type==='dragonProjectile'&&effect.emissionIndex===0).forward,{x:0,z:1},'an emitted dragon keeps its sampled path basis');
+assert.deepEqual(liveAimSnapshot.effects.find(effect=>effect.type==='dragonProjectile'&&effect.emissionIndex===1).forward,{x:1,z:0},'later emissions must sample live aim independently');
+runtime.reset();player.forwardX=0;player.forwardZ=1;
+
+mazeSegments.push({a:{x:-10,z:3},b:{x:10,z:3}});
+assert.equal(cast('DRAGON-ARC'),true);step(.3,1/60);
+assert.equal(runtime.snapshot().effects.filter(effect=>effect.type==='dragonProjectile').length,0,'curved swept carriers must stop at walls');
+assert.equal(scene.children.filter(child=>/Dragon Arc neutral motion proxy/.test(child.name)).length,0,'wall cleanup must remove every proxy mesh');
+mazeSegments.length=0;runtime.reset();
 
 const tornadoTarget={x:1,z:0,hp:1000,radius:.5};const hostileRock={x:.8,z:0,r:.1,life:2,dead:false,mesh:{visible:true}};system.enemies=[tornadoTarget];system.hostileProjectiles=[hostileRock];
 assert.equal(cast('WHIRLING-TORNADO'),true);const vortex=runtime.state.effects.find(effect=>effect.type==='whirlingTornado'),vortexOrigin={...vortex.position};step(1.1);

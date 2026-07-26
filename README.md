@@ -96,3 +96,24 @@ Current implemented references:
 ## Running
 
 Open `index.html` in a browser, or host the repository with GitHub Pages/Vercel as a static site.
+
+## Deterministic arcana capture
+
+Enemy Lab has a capture-only fixed-step mode for comparing an arcana with its
+bounded source clip. The committed manifest owns the viewport, aim, dummy
+layout, RNG seed, source timeline, checkpoints, and measurable acceptance
+ranges. Run a registered capture with:
+
+```text
+npm run capture:arcana -- --id DRAGON-ARC --stage motion
+```
+
+The dependency-free runner requires Node.js 22 or newer, Chrome or Edge, and
+FFmpeg with its FFprobe companion. If they are not discoverable, set
+`ARCANA_CAPTURE_BROWSER`, `FFMPEG_PATH`, and `FFPROBE_PATH`, or pass `--browser`,
+`--ffmpeg`, and `--ffprobe`. It serves the repository only
+on loopback, repeats the fixed-step capture twice, verifies serialized snapshots,
+validates the comparison as exactly 60 FPS with its declared frame count and
+duration, and writes ignored review files under `artifacts/arcana-capture/`: game and
+source screenshots, a contact sheet, a synchronized comparison MP4, and
+`metrics.json`.

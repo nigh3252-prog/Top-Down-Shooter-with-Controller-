@@ -181,7 +181,7 @@ const sourceMeta=[
 const implementedNames=new Set([
   'Flame Strike','Flame Cross','Bouncing Blaze','Wind Slash','Air Spinner',
   'Perforating Jet','Earth Knuckles','Bladed Vine','Stone Shot','Spark Contact',
-  'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
+  'Bolt Rail','Volt Disc','Homing Flares','Whirling Tornado','Water Prison',
 ]);
 const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']);
 const supplements=new Map([
@@ -193,7 +193,7 @@ const revisionHistory=new Map([
   ['Flame Cross','The first version spawned two stationary crossing bars immediately. Source-first review showed a three-beat 1 → 1 → 2 string of moving, piercing diagonal waves, with the final pair able to overlap-hit a centered target; the implementation was rebuilt around that cadence and geometry.'],
   ['Bouncing Blaze','The first version was one fireball ricocheting from room walls. Source-first review showed a three-shot Basic combo whose projectiles make two authored forward ground hops, stop on base enemy contact, and gain piercing only when enhanced; the implementation was rebuilt as that projectile family.'],
   ['Homing Flares','The first version created five pre-timed seeking shots. Source-first review established seven independently owned stored flares, a four-second caster-following halo, 7 damage with documented knockback, and hostile-projectile interception; the prototype was replaced with that base behavior.'],
-  ['Dragon Arc','The first version was one projectile following a sinusoidal world path. Source-first review established passive eight-charge stock, 0.6-second recovery, one piercing 8-damage dragon per spent charge, and live aim sampled throughout release; the prototype was replaced with that stock-fed stream.'],
+  ['Dragon Arc','The first version was one projectile following a broad sinusoidal world path: its motion idea was useful, but its ownership and stock rules were wrong. Source-first gameplay review correctly established passive eight-charge stock, 0.6-second recovery, one piercing 8-damage dragon per spent charge, and live aim sampled throughout release. Three later visual passes corrected those rules but incorrectly replaced the large intertwined S motion with a narrow straight stream and are rejected. Gameplay rules remain; trajectory and carrier FX are now being rebuilt behind a reference-lock motion gate.'],
   ['Whirling Tornado','The first version was a traveling three-second pull zone with frame-timed damage. Source-first review established one stationary 0.8-second protective vortex, exactly four 8-damage ticks, projectile erasure, and one 10-damage outward finisher; the prototype was replaced around that authored schedule.'],
   ['Water Prison','The first version was one short 2.15-second stun bubble with rapid ticks and an invented final hit. Frame review and documentation established two-charge ammo, 15 impact plus exactly five 5-damage ticks, a five-to-six-second position lock, and independently timed stacking; the prototype was replaced with those ownership rules.'],
 ]);
@@ -242,6 +242,16 @@ for(const name of ['Homing Flares','Dragon Arc','Whirling Tornado','Water Prison
   if(!entry)throw new Error(`Missing reanalyzed replacement entry for ${name}`);
   entry.lineage='rebuilt';
 }
+
+const dragonArc=entries.find(entry=>entry.name==='Dragon Arc');
+if(!dragonArc)throw new Error('Missing Dragon Arc source-first entry');
+Object.assign(dragonArc,{
+  lineage:'replacement-analyzed',
+  status:'replacement-in-progress',
+  defaults:{analysis:true,implementation:false,comparison:false},
+  currentImplementation:'The correct source-first stock, recharge, damage, piercing, and per-emission live-aim rules remain in the game. The currently rejected visual passes used a narrow, mostly straight carrier and do not reproduce the observed broad intertwined S motion. Gate 1 intentionally replaces those visuals with a neutral luminous motion proxy; it is not a finished Dragon Arc implementation.',
+  replacementChecklist:'1. Preserve the verified eight-charge gameplay contract.\n2. Replace the rejected carrier with the measured parity-alternated S-path motion proxy; do not polish the rejected visuals.\n3. Capture deterministic checkpoints at 0.25, 0.50, 0.75, 1.00, and 1.25 seconds.\n4. Compare the proxy side by side with the bounded source clip and obtain explicit motion approval.\n5. Only then add the source-sized dragon carrier and, after another approval gate, original Top Down Game styling.',
+});
 
 for(const [name,element,category,start,end,section] of legacyMeta){
   if(entries.some(entry=>entry.name===name))continue;

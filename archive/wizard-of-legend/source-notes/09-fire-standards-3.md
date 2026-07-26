@@ -6,16 +6,18 @@
 
 **[VIDEO — approximately 310.0–315.0 seconds]**
 
-Dragon Arc is stored ammunition released as a steerable stream of piercing dragon projectiles, not one sinusoidal missile.
+Dragon Arc is stored ammunition released as a steerable stream of piercing dragon projectiles. Each dragon also follows a large, readable S-shaped route; adjacent dragons occupy opposing lobes so the full stream reads like a moving double helix rather than a narrow straight line.
 
 The source sequence shows:
 
 1. Several small dragon charges are visibly stored before activation.
 2. Casting releases the available dragons one after another in a rapid stream.
-3. Each dragon travels forward with an animated serpentine body while its overall route follows the current aim.
+3. Each dragon travels forward on a broad side-to-side S route while its segmented body bends along that route.
 4. Dragons pass through the first target and continue through aligned enemies.
 5. Aim can change during the release, bending later dragons toward a different lane.
-6. The caster can interrupt the long full-stock release with movement rather than being committed until every possible dragon has fired.
+6. Consecutive dragons alternate above and below the centerline, producing two intertwined lanes across a band approximately twice the caster footprint in width.
+
+These are direct visual observations from the supplied clip. The exact sine formula, amplitude, wavelength, cadence, and phase values below are implementation measurements for the Gate 1 proxy; they are not documented Wizard of Legend values. Movement/dash cancellation was asserted in an earlier pass but has not yet been verified strongly enough to be part of the preserved base contract.
 
 **[DOCUMENTED]**
 
@@ -41,14 +43,15 @@ Snapshot stock-to-spend when cast begins
 Base release:
 Continuously read aim during release window
 For each snapshotted charge:
-  create 1 dragon along current aim
+  create 1 dragon in the current aim basis
   spend 1 charge
   wait authored emission interval
-Dragon travels forward while its body animates serpentine motion
+Dragon head advances along a broad S-shaped world path
+Adjacent dragons use opposing S phases to form two intertwined lanes
+Dragon body segments follow earlier samples of the same path
 Dragon pierces valid enemies
 Deal 8 damage at most once per target per dragon
 Apply 8 knockback
-Allow declared movement/dash cancellation to end remaining emissions
 
 Enhanced release:
 Maximum stock becomes 10
@@ -62,9 +65,29 @@ Preserve piercing and per-dragon hit ownership
 
 ## Important distinction
 
-The dragon's visual undulation is not a single projectile's authored side-to-side path. The source identity comes from stock, sequential emission, piercing, and live aim.
+The large S route is source-critical motion, not decorative mesh wobble. The logical damaging carrier, visible head, and segmented body must follow the same curved sampler so the animation and collision cannot disagree. Stock, sequential emission, piercing, and live aim remain equally important gameplay rules.
 
-This source-first analysis supersedes the current one-projectile sinusoidal prototype. Do not polish that prototype; replace it with the charge-fed stream and its enhancement/charged rewrites.
+The first one-projectile prototype had the right broad sinusoidal idea but the wrong ownership and stock rules. Later stock-fed rework passes corrected those rules but replaced the observed double-helix motion with a narrow, mostly straight stream. Preserve the corrected rules; discard those rejected trajectory and carrier visuals instead of polishing them.
+
+## Working motion calibration [INFERENCE - Gate 1]
+
+This calibration is an actor-relative starting model measured from the supplied showcase and the earlier broad-path prototype. It exists to make the next comparison falsifiable:
+
+```text
+lateral = amplitude * sin((2 * PI * distance / wavelength) + emissionParity * PI)
+
+fixed simulation step = 1/60 second
+8 emissions, 6 frames apart = 0.10 second cadence
+first-to-eighth release = 0.70 second
+amplitude = 0.95 player diameters per side
+target peak-to-peak band = 1.9 player diameters
+wavelength = 9 player diameters
+adjacent phase offset = 180 degrees
+proxy body length = 2.5 player diameters
+initial forward speed = approximately 39.4 world units/second
+```
+
+Gate 1 deliberately uses a neutral segmented luminous proxy with tangent indicators. Dragon art, flame polish, embers, launch flashes, and impact effects stay out until deterministic captures at 0.25, 0.50, 0.75, 1.00, and 1.25 seconds demonstrate the correct motion.
 
 ## Source-faithful acceptance test
 
@@ -76,11 +99,14 @@ This source-first analysis supersedes the current one-projectile sinusoidal prot
 6. Every dragon can pierce and hit several aligned enemies.
 7. One dragon hits each target at most once.
 8. Each hit uses the documented 8 damage and 8 knockback.
-9. A declared dash/movement cancel ends future emissions cleanly without duplicating or refunding spent charges.
+9. Each dragon visibly crosses both sides of its emission centerline on a large S route.
 10. Enhancement stores ten charges and emits two dragons per release beat.
 11. Enhancement shortens the stream without reducing one-dragon-per-charge output.
 12. Charged Signature launches exactly twenty dragons in a wide area.
-13. The current sinusoidal single-projectile prototype does not count as source-first implementation completion.
+13. Adjacent dragons occupy opposing S lobes, while every-other dragon returns to the same lane.
+14. The visible and damaging carriers use the same sampled head path and local tangent.
+15. At the motion gate, the stream spans approximately 1.6 to 2.2 player footprints peak to peak and releases all eight dragons in approximately 0.63 to 0.84 seconds.
+16. Neither the superseded one-projectile prototype nor the rejected narrow straight-stream rework counts as source-first implementation completion.
 
 ## Units extracted from Dragon Arc
 
@@ -92,9 +118,13 @@ One activation snapshots and spends every currently available unit rather than c
 
 Each emission reads current aim, allowing the player to sweep later projectiles independently of earlier ones.
 
-### **Visual Serpentine / Logical Forward Separation**
+### **Shared Curved Carrier Sampler**
 
-Animation may undulate while the gameplay path remains readable and directed.
+The visible head, trailing body samples, local tangent, and swept damaging carrier derive from one actor-relative S-path function.
+
+### **Parity-Alternated Double Helix**
+
+Adjacent emissions use opposing phases so the volley fills two intertwined lanes while every-other dragon repeats its side.
 
 ### **Paired-Emission Enhancement**
 
