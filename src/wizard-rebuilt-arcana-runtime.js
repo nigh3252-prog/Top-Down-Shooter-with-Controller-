@@ -1,5 +1,8 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
 import { pointSegmentDistance2D, segmentIntersection2D } from './wizard-arcana-runtime.js';
+import { animateHomingFlareImpact, animateHomingFlareVisual, HOMING_FLARES_VISUAL_CONTRACT, makeHomingFlareImpactVisual, makeHomingFlareVisual } from './wizard-homing-flares-visuals.js';
+import { animateWhirlingTornadoTransient, animateWhirlingTornadoVisual, makeWhirlingTornadoTransientVisual, makeWhirlingTornadoVisual, WHIRLING_TORNADO_VISUAL_CONTRACT } from './wizard-whirling-tornado-visuals.js';
+import { animateWaterPrisonTransient, animateWaterPrisonVisual, makeWaterPrisonAttachedVisual, makeWaterPrisonProjectileVisual, makeWaterPrisonTransientVisual, WATER_PRISON_VISUAL_CONTRACT } from './wizard-water-prison-visuals.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -20,7 +23,7 @@ const WATER_HOT=0xd9f8ff;
 
 export const HOMING_FLARES_SPEC=Object.freeze({
   count:7,storageDuration:4,damage:7,sourceKnockback:15,orbitClockwise:true,
-  acquisitionRange:16,projectileSpeed:13.2,projectileLifetime:2.4,
+  orbitRadius:1.65,orbitAngularSpeed:3.25,acquisitionRange:16,projectileSpeed:13.2,projectileLifetime:2.4,
   enhancedCount:10,enhancedStorageDuration:5,chargedInitialCount:10,
   chargedGenerationDuration:4,chargedTotalCap:32,chargedDamageMultiplier:2,
 });
@@ -41,6 +44,7 @@ export const WHIRLING_TORNADO_SPEC=Object.freeze({
 export const WATER_PRISON_SPEC=Object.freeze({
   ammoMax:2,rechargeInterval:6,projectileSpeed:10.2,range:14,radius:.54,
   impactDamage:15,tickDamage:5,tickTimes:Object.freeze([1,2,3,4,5]),captureDuration:5.4,
+  projectileVisualRadius:.34,attachedVisualRadius:1.35,
   enhancedAmmoMax:3,enhancedSpeedMultiplier:1.3,
 });
 
@@ -80,8 +84,14 @@ export function whirlingTornadoSpec({enhanced=false,charged=false}={}){
 export function waterPrisonSpec({enhanced=false}={}){
   return Object.freeze({...WATER_PRISON_SPEC,ammoMax:enhanced?3:2,projectileSpeed:WATER_PRISON_SPEC.projectileSpeed*(enhanced?1.3:1),enhanced:!!enhanced});
 }
+export function sourceLockedAbilityRenderMode(search=typeof location==='undefined'?'':location.search){
+  try{const params=new URLSearchParams(String(search||''));if(params.get('capture')!=='1')return'style';const value=String(params.get('renderMode')||'style').toLowerCase();return value==='proxy'||value==='source'?value:'style';}catch{return'style';}
+}
+export function homingFlaresContractMetrics(){return Object.freeze({arcanaId:'HOMING-FLARES',count:HOMING_FLARES_SPEC.count,storageDuration:HOMING_FLARES_SPEC.storageDuration,orbitDirection:HOMING_FLARES_SPEC.orbitClockwise?'clockwise':'counterclockwise',orbitRadius:HOMING_FLARES_SPEC.orbitRadius,damage:HOMING_FLARES_SPEC.damage,sourceKnockback:HOMING_FLARES_SPEC.sourceKnockback,visual:{...HOMING_FLARES_VISUAL_CONTRACT}});}
+export function whirlingTornadoContractMetrics(){return Object.freeze({arcanaId:'WHIRLING-TORNADO',duration:WHIRLING_TORNADO_SPEC.duration,tickTimes:[...WHIRLING_TORNADO_TICKS],tickDamage:WHIRLING_TORNADO_SPEC.tickDamage,finisherDamage:WHIRLING_TORNADO_SPEC.finisherDamage,gameplayRadius:WHIRLING_TORNADO_SPEC.radius,visibleRadius:WHIRLING_TORNADO_SPEC.radius,visual:{...WHIRLING_TORNADO_VISUAL_CONTRACT}});}
+export function waterPrisonContractMetrics(){return Object.freeze({arcanaId:'WATER-PRISON',ammoMax:WATER_PRISON_SPEC.ammoMax,impactDamage:WATER_PRISON_SPEC.impactDamage,tickDamage:WATER_PRISON_SPEC.tickDamage,tickTimes:[...WATER_PRISON_SPEC.tickTimes],captureDuration:WATER_PRISON_SPEC.captureDuration,projectileVisualRadius:WATER_PRISON_SPEC.projectileVisualRadius,attachedVisualRadius:WATER_PRISON_SPEC.attachedVisualRadius,visual:{...WATER_PRISON_VISUAL_CONTRACT}});}
 export function clockwiseOrbitPosition({ownerX=0,ownerZ=0,slot=0,count=7,age=0,radius=1}={}){
-  const angle=slot*TAU/count-age*3.25;
+  const angle=slot*TAU/count-age*HOMING_FLARES_SPEC.orbitAngularSpeed;
   return{x:ownerX+Math.cos(angle)*radius,z:ownerZ+Math.sin(angle)*radius,angle};
 }
 
@@ -103,14 +113,6 @@ function makeMaterial(THREE,color,opacity=.86,{additive=true,wireframe=false}={}
 function damageEnemy(system,enemy,amount,knock={x:0,z:0},options={}){if(!system||!enemy||enemy.hp<=0)return false;return system.damageEnemy?.(enemy,amount,knock,{source:'wizardArcana',power:.34,pop:.06,...options})??false;}
 function knockFrom(origin,target,power=1){const direction=normalize2(target.x-origin.x,target.z-origin.z);return{x:direction.x*power,z:direction.z*power};}
 
-function makeFlareVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard Arcana Homing Flare';
-  const halo=new THREE.Mesh(new THREE.TorusGeometry(.28*size,.045*size,7,24),makeMaterial(THREE,FIRE_GOLD,.64));halo.rotation.x=Math.PI/2;group.add(halo);
-  const shell=new THREE.Mesh(new THREE.SphereGeometry(.23*size,14,9),makeMaterial(THREE,FIRE,.82));shell.scale.set(1,.76,1);group.add(shell);
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.12*size,12,8),makeMaterial(THREE,FIRE_HOT,.98));core.userData.hotCore=true;group.add(core);
-  for(let index=0;index<3;index++){const tail=new THREE.Mesh(new THREE.SphereGeometry((.13-index*.024)*size,10,7),makeMaterial(THREE,index===2?FIRE:FIRE_GOLD,.68-index*.12));tail.position.z=-(.25+index*.18)*size;tail.scale.set(.76,.65,1.25);tail.userData.flareTail=index;group.add(tail);}
-  group.renderOrder=7;scene.add(group);return group;
-}
 function tagged(mesh,key,value=true){mesh.userData[key]=value;return mesh;}
 function makeDragonSerpentVisual(THREE,scene,size){
   const group=new THREE.Group();group.name='Wizard Arcana Dragon Arc source-locked flame serpent';const nodes=[];
@@ -170,23 +172,6 @@ function makeDragonImpactVisual(THREE,scene,position,size){
   for(let index=0;index<6;index++){const angle=index*TAU/6,spark=tagged(new THREE.Mesh(new THREE.SphereGeometry(.065*size,8,5),makeMaterial(THREE,index%2?FIRE_WHITE:FIRE_GOLD,.90)),'dragonImpactSpark',index);spark.userData.baseX=Math.cos(angle)*.37*size;spark.userData.baseZ=Math.sin(angle)*.37*size;spark.position.set(spark.userData.baseX,(index%2?-.07:.07)*size,spark.userData.baseZ);spark.scale.set(.55,.55,1.42);spark.rotation.y=angle;spark.userData.baseOpacity=.90;group.add(spark);}
   group.renderOrder=10;scene.add(group);return group;
 }
-function makeTornadoVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard Arcana Whirling Tornado source-first vortex';
-  const shell=new THREE.Mesh(new THREE.ConeGeometry(1.5*size,2.9*size,30,1,true),makeMaterial(THREE,AIR,.16));shell.position.y=1.38*size;group.add(shell);
-  for(let index=0;index<5;index++){const radius=(.62+index*.22)*size,ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.075*size,8,36),makeMaterial(THREE,index%2?AIR_HOT:AIR,.70-index*.07));ring.rotation.x=Math.PI/2;ring.position.y=(.28+index*.48)*size;ring.userData.tornadoRing=index;group.add(ring);}
-  for(let index=0;index<12;index++){const wisp=new THREE.Mesh(new THREE.SphereGeometry((.10+(index%3)*.025)*size,9,6),makeMaterial(THREE,index%3?AIR:AIR_HOT,.64));const angle=index*TAU/12,radius=(.72+(index%4)*.16)*size;wisp.position.set(Math.cos(angle)*radius,(.24+(index%5)*.47)*size,Math.sin(angle)*radius);wisp.scale.set(1.8,.5,.7);wisp.userData.tornadoWisp=index;group.add(wisp);}
-  const floor=new THREE.Mesh(new THREE.RingGeometry(.55*size,1.52*size,48),makeMaterial(THREE,AIR,.25));floor.rotation.x=-Math.PI/2;floor.position.y=.035;floor.userData.tornadoFloor=true;group.add(floor);
-  group.renderOrder=6;scene.add(group);return group;
-}
-function makeWaterPrisonVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard Arcana Water Prison source-first bubble';
-  const outer=new THREE.Mesh(new THREE.SphereGeometry(.72*size,22,14),makeMaterial(THREE,WATER,.24,{additive:false}));outer.userData.prisonOuter=true;group.add(outer);
-  const rim=new THREE.Mesh(new THREE.SphereGeometry(.76*size,16,10),makeMaterial(THREE,WATER_HOT,.28,{wireframe:true}));rim.rotation.y=.4;rim.userData.prisonRim=true;group.add(rim);
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.36*size,14,9),makeMaterial(THREE,WATER,.18));core.userData.prisonCore=true;group.add(core);
-  for(let index=0;index<8;index++){const droplet=new THREE.Mesh(new THREE.SphereGeometry((.07+(index%2)*.025)*size,9,6),makeMaterial(THREE,index%3?WATER:WATER_HOT,.78));droplet.userData.prisonDroplet=index;group.add(droplet);}
-  const seal=new THREE.Mesh(new THREE.TorusGeometry(.64*size,.035*size,8,28),makeMaterial(THREE,WATER_HOT,.68));seal.rotation.x=Math.PI/2;seal.userData.prisonSeal=true;group.add(seal);
-  group.renderOrder=7;scene.add(group);return group;
-}
 function makePulse(THREE,scene,{x,y=.12,z,color,size=1,ring=false}={}){
   const mesh=new THREE.Mesh(ring?new THREE.RingGeometry(.35*size,.62*size,32):new THREE.SphereGeometry(.32*size,14,9),makeMaterial(THREE,color,.9));if(ring)mesh.rotation.x=-Math.PI/2;mesh.position.set(x,y,z);mesh.renderOrder=9;scene.add(mesh);return mesh;
 }
@@ -194,11 +179,14 @@ function makePulse(THREE,scene,{x,y=.12,z,color,size=1,ring=false}={}){
 export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[]}={}){
   const initial=readArcanaTweaks();
   const inertState={effects:[],elapsed:0,sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,waterAmmo:WATER_PRISON_SPEC.ammoMax};
-  const inert={state:inertState,update(){},reset(){},snapshot(){return{simulationTime:0,dragonStock:inertState.dragonStock,dragonArc:dragonArcMotionMetrics(),effects:[]};},dispose(){}};
+  const inert={state:inertState,update(){},reset(){},snapshot(){return{simulationTime:0,dragonStock:inertState.dragonStock,waterAmmo:inertState.waterAmmo,dragonArc:dragonArcMotionMetrics(),abilityContracts:{homingFlares:homingFlaresContractMetrics(),whirlingTornado:whirlingTornadoContractMetrics(),waterPrison:waterPrisonContractMetrics()},semanticEvents:[],effects:[]};},dispose(){}};
   if(!THREE||!scene||!isEnemyLabRuntime())return inert;
-  const prisonLocks=new WeakMap();
-  const state={effects:[],elapsed:0,sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,dragonRechargeT:0,waterAmmo:WATER_PRISON_SPEC.ammoMax,waterRechargeT:0,lastCast:null};
+  const prisonLocks=new WeakMap(),instanceCounters=new Map(),renderMode=sourceLockedAbilityRenderMode();
+  const state={effects:[],elapsed:0,sizeMultiplier:initial.sizeMultiplier,dragonStock:DRAGON_ARC_SPEC.stockMax,dragonRechargeT:0,waterAmmo:WATER_PRISON_SPEC.ammoMax,waterRechargeT:0,lastCast:null,semanticEvents:[],eventSerial:0,renderMode};
   const add=effect=>(state.effects.push(effect),effect);
+  function nextStableId(arcanaId){const next=(instanceCounters.get(arcanaId)||0)+1;instanceCounters.set(arcanaId,next);return`${arcanaId}:cast:${String(next).padStart(2,'0')}`;}
+  function targetStableId(target){return String(target?.id||target?.captureId||target?.kind||'enemy');}
+  function recordEvent(arcanaId,event,stableId,details={}){const value={seq:++state.eventSerial,time:Math.round(state.elapsed*1e6)/1e6,arcanaId,event,stableId,...details};state.semanticEvents.push(value);if(state.semanticEvents.length>256)state.semanticEvents.splice(0,state.semanticEvents.length-256);return value;}
   function releasePrison(effect){
     const enemy=effect?.captured,lock=enemy&&prisonLocks.get(enemy);if(!lock)return;
     lock.count=Math.max(0,lock.count-1);enemy.__wizardWaterPrisonCount=lock.count;
@@ -209,16 +197,19 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
     if(effect.mesh)disposeObject(effect.mesh);for(const mesh of effect.meshes||[])disposeObject(mesh);for(const flare of effect.flares||[])disposeObject(flare.mesh);
     const index=state.effects.indexOf(effect);if(index>=0)state.effects.splice(index,1);
   }
-  function reset(){for(const effect of[...state.effects])remove(effect);state.elapsed=0;state.dragonStock=DRAGON_ARC_SPEC.stockMax;state.dragonRechargeT=0;state.waterAmmo=WATER_PRISON_SPEC.ammoMax;state.waterRechargeT=0;}
+  function reset(){for(const effect of[...state.effects])remove(effect);state.elapsed=0;state.dragonStock=DRAGON_ARC_SPEC.stockMax;state.dragonRechargeT=0;state.waterAmmo=WATER_PRISON_SPEC.ammoMax;state.waterRechargeT=0;state.lastCast=null;state.semanticEvents.length=0;state.eventSerial=0;instanceCounters.clear();}
   const currentSize=()=>clampArcanaSize(state.sizeMultiplier);
   function addPulse(position,color,size,ring=false,life=.28){add({type:'pulse',age:0,life,mesh:makePulse(THREE,scene,{x:position.x,y:position.y,z:position.z,color,size,ring})});}
   function addDragonTransient(mesh,position,size,visualKind,life){return add({type:'arcanaTransientFx',arcanaId:'DRAGON-ARC',visualStage:'finished',visualKind,age:0,life,position:{x:position.x,y:position.y??0,z:position.z},size,mesh});}
   function emitDragonImpact(position,size,impactKind='enemy'){return addDragonTransient(makeDragonImpactVisual(THREE,scene,position,size),position,size,`impact-${impactKind}`,.15);}
+  function emitHomingTransient(effect,flare,position,kind){const stableId=`${flare.stableId}:${kind}`,mesh=makeHomingFlareImpactVisual({THREE,scene,position,size:effect.size,kind,stableId,renderMode:effect.renderMode});return add({type:'homingFlaresTransient',arcanaId:'HOMING-FLARES',stableId,visualKind:`impact-${kind}`,renderMode:effect.renderMode,age:0,life:kind==='intercept'?.18:.22,position:{x:position.x,y:position.y??.64*effect.size,z:position.z},size:effect.size,mesh});}
+  function emitTornadoTransient(effect,position,kind,radius=effect.size*.72,life=kind==='finisher'?.30:.16){const stableId=`${effect.stableId}:${kind}:${String(effect.transientSerial++).padStart(2,'0')}`,mesh=makeWhirlingTornadoTransientVisual({THREE,scene,position,size:effect.size,radius,kind,stableId,renderMode:effect.renderMode});return add({type:'whirlingTornadoTransient',arcanaId:'WHIRLING-TORNADO',stableId,visualKind:kind,renderMode:effect.renderMode,age:0,life,position:{x:position.x,y:position.y??0,z:position.z},size:effect.size,mesh});}
+  function emitWaterTransient(effect,position,kind,life=kind==='release'?.30:.22){const stableId=`${effect.stableId}:${kind}:${String(effect.transientSerial++).padStart(2,'0')}`,mesh=makeWaterPrisonTransientVisual({THREE,scene,position,size:effect.size,kind,stableId,renderMode:effect.renderMode});return add({type:'waterPrisonTransient',arcanaId:'WATER-PRISON',stableId,visualKind:kind,renderMode:effect.renderMode,age:0,life,position:{x:position.x,y:position.y??.32*effect.size,z:position.z},size:effect.size,mesh});}
 
   function castHomingFlares(){
-    const spec=homingFlaresSpec(),size=currentSize(),flares=[];
-    for(let index=0;index<spec.count;index++)flares.push({slot:index,mesh:makeFlareVisual(THREE,scene,size),position:{x:0,z:0},velocity:{x:0,z:0},launched:false,done:false,target:null,scanT:index*.025,flightAge:0});
-    add({type:'homingFlares',age:0,spec,size,flares});return true;
+    const spec=homingFlaresSpec(),size=currentSize(),stableId=nextStableId('HOMING-FLARES'),flares=[];
+    for(let index=0;index<spec.count;index++){const flareId=`${stableId}:flare:${String(index+1).padStart(2,'0')}`,visual=makeHomingFlareVisual({THREE,scene,size,slot:index,stableId:flareId,renderMode});flares.push({slot:index,stableId:flareId,mesh:visual.mesh,visualMarkers:visual.markers,position:{x:0,z:0},velocity:{x:0,z:0},state:'stored',launched:false,done:false,target:null,scanT:index*.025,flightAge:0});}
+    add({type:'homingFlares',arcanaId:'HOMING-FLARES',stableId,renderMode,age:0,spec,size,flares,completed:false});recordEvent('HOMING-FLARES','cast',stableId,{count:spec.count,storageDuration:spec.storageDuration});return true;
   }
   function castDragonArc(){
     const count=Math.floor(state.dragonStock);if(count<=0)return false;state.dragonStock=0;state.dragonRechargeT=0;
@@ -242,14 +233,14 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
     const effect=add({type:'dragonProjectile',visualStage:'finished',visualMarkers:proxy.markers,age:0,emittedAt,emissionIndex,origin,forward:{...frame.forward},right:{...frame.right},position:{x:sample.x,z:sample.z},previous:{x:sample.x,z:sample.z},tangent:{...sample.tangent},lateral:sample.lateral,distance:0,spec,size,hit:new Set(),mesh:proxy.mesh,proxyNodes:proxy.nodes,bodySamples:[],walls:[...(getMazeSegments?.()||[])]});updateDragonMotionProxy(effect);
   }
   function castWhirlingTornado(){
-    const frame=playerFrame(getPlayer),spec=whirlingTornadoSpec(),size=currentSize(),mesh=makeTornadoVisual(THREE,scene,size),position={x:frame.x,z:frame.z};mesh.position.set(position.x,0,position.z);
-    add({type:'whirlingTornado',age:0,position,spec,size,nextTick:0,finished:false,mesh});return true;
+    const frame=playerFrame(getPlayer),spec=whirlingTornadoSpec(),size=currentSize(),stableId=nextStableId('WHIRLING-TORNADO'),visual=makeWhirlingTornadoVisual({THREE,scene,size,radius:spec.radius,stableId,renderMode}),position={x:frame.x,z:frame.z};visual.mesh.position.set(position.x,0,position.z);
+    add({type:'whirlingTornado',arcanaId:'WHIRLING-TORNADO',stableId,renderMode,visualMarkers:visual.markers,age:0,position,spec,size,nextTick:0,finished:false,completed:false,transientSerial:0,mesh:visual.mesh});recordEvent('WHIRLING-TORNADO','cast',stableId,{position:{...position},duration:spec.duration,radius:spec.radius});return true;
   }
   function castWaterPrison(){
     if(state.waterAmmo<1)return false;state.waterAmmo-=1;if(state.waterAmmo<WATER_PRISON_SPEC.ammoMax&&state.waterRechargeT<=0)state.waterRechargeT=WATER_PRISON_SPEC.rechargeInterval;
-    const frame=playerFrame(getPlayer),spec=waterPrisonSpec(),size=currentSize(),position={x:frame.x+frame.forward.x*1.0,z:frame.z+frame.forward.z*1.0},mesh=makeWaterPrisonVisual(THREE,scene,size*.78);
-    mesh.position.set(position.x,.72*size,position.z);mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);
-    add({type:'waterPrison',age:0,position,previous:{...position},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.projectileSpeed,z:frame.forward.z*spec.projectileSpeed},distance:0,spec,size,captured:null,nextTick:0,mesh,walls:[...(getMazeSegments?.()||[])]});return true;
+    const frame=playerFrame(getPlayer),spec=waterPrisonSpec(),size=currentSize(),stableId=nextStableId('WATER-PRISON'),position={x:frame.x+frame.forward.x*1.0,z:frame.z+frame.forward.z*1.0},visual=makeWaterPrisonProjectileVisual({THREE,scene,size,stableId,renderMode});
+    visual.mesh.position.set(position.x,.72*size,position.z);visual.mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);
+    add({type:'waterPrison',arcanaId:'WATER-PRISON',stableId,renderMode,visualMarkers:visual.markers,phase:'carrier',age:0,position,previous:{...position},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.projectileSpeed,z:frame.forward.z*spec.projectileSpeed},distance:0,spec,size,captured:null,nextTick:0,transientSerial:0,mesh:visual.mesh,walls:[...(getMazeSegments?.()||[])]});recordEvent('WATER-PRISON','cast',stableId,{ammoAfter:state.waterAmmo,position:{...position},direction:{...frame.forward}});return true;
   }
   function cast(card){
     const id=card?.arcanaId;let didCast=false;if(id==='HOMING-FLARES')didCast=castHomingFlares();else if(id==='DRAGON-ARC')didCast=castDragonArc();else if(id==='WHIRLING-TORNADO')didCast=castWhirlingTornado();else if(id==='WATER-PRISON')didCast=castWaterPrison();else return false;
@@ -258,26 +249,28 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
 
   function updateResources(dt){
     if(state.dragonStock<DRAGON_ARC_SPEC.stockMax){state.dragonRechargeT+=dt;while(state.dragonRechargeT>=DRAGON_ARC_SPEC.rechargeInterval&&state.dragonStock<DRAGON_ARC_SPEC.stockMax){state.dragonRechargeT-=DRAGON_ARC_SPEC.rechargeInterval;state.dragonStock++;}}
-    if(state.waterAmmo<WATER_PRISON_SPEC.ammoMax){state.waterRechargeT-=dt;while(state.waterRechargeT<=0&&state.waterAmmo<WATER_PRISON_SPEC.ammoMax){state.waterAmmo++;if(state.waterAmmo<WATER_PRISON_SPEC.ammoMax)state.waterRechargeT+=WATER_PRISON_SPEC.rechargeInterval;else state.waterRechargeT=0;}}
+    if(state.waterAmmo<WATER_PRISON_SPEC.ammoMax){state.waterRechargeT-=dt;while(state.waterRechargeT<=0&&state.waterAmmo<WATER_PRISON_SPEC.ammoMax){state.waterAmmo++;recordEvent('WATER-PRISON','ammo-recharged','WATER-PRISON:resource',{ammo:state.waterAmmo});if(state.waterAmmo<WATER_PRISON_SPEC.ammoMax)state.waterRechargeT+=WATER_PRISON_SPEC.rechargeInterval;else state.waterRechargeT=0;}}
   }
   function interceptAt(position,radius,system){for(const projectile of hostileProjectiles(system)){if(Math.hypot(projectile.x-position.x,projectile.z-position.z)<=radius+(Number(projectile.r)||.16)){destroyHostileProjectile(projectile);return projectile;}}return null;}
   function updateHomingFlares(effect,dt,system,now){
-    effect.age+=dt;const frame=playerFrame(getPlayer);let remaining=0;
+    effect.age+=dt;const frame=playerFrame(getPlayer);let active=0;
     for(const flare of effect.flares){
-      if(flare.done)continue;remaining++;
+      if(flare.done)continue;
       if(!flare.launched){
-        const orbit=clockwiseOrbitPosition({ownerX:frame.x,ownerZ:frame.z,slot:flare.slot,count:effect.spec.count,age:effect.age,radius:1.28*effect.size});flare.position.x=orbit.x;flare.position.z=orbit.z;flare.mesh.position.set(orbit.x,(.72+.12*Math.sin(orbit.angle*2+now*5))*effect.size,orbit.z);flare.mesh.rotation.y=-orbit.angle;
-        flare.scanT-=dt;if(flare.scanT<=0){flare.scanT=.11;const target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*effect.size);if(target){flare.launched=true;flare.target=target;const direction=normalize2(target.x-flare.position.x,target.z-flare.position.z,frame.forward);flare.velocity={x:direction.x*effect.spec.projectileSpeed,z:direction.z*effect.spec.projectileSpeed};}}
+        if(effect.age+1e-9>=effect.spec.storageDuration){flare.done=true;flare.state='expired-storage';disposeObject(flare.mesh);flare.mesh=null;recordEvent('HOMING-FLARES','flare-expired',flare.stableId,{reason:'storage-duration',storageAge:effect.spec.storageDuration});continue;}
+        const orbit=clockwiseOrbitPosition({ownerX:frame.x,ownerZ:frame.z,slot:flare.slot,count:effect.spec.count,age:effect.age,radius:effect.spec.orbitRadius*effect.size});flare.position.x=orbit.x;flare.position.z=orbit.z;flare.mesh.position.set(orbit.x,(.72+.12*Math.sin(orbit.angle*2+now*5))*effect.size,orbit.z);flare.mesh.rotation.y=-orbit.angle;animateHomingFlareVisual({mesh:flare.mesh,age:effect.age,now,flight:false,size:effect.size});
+        flare.scanT-=dt;if(flare.scanT<=0){flare.scanT=.11;const target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*effect.size);if(target){flare.launched=true;flare.state='launched';flare.target=target;const direction=normalize2(target.x-flare.position.x,target.z-flare.position.z,frame.forward);flare.velocity={x:direction.x*effect.spec.projectileSpeed,z:direction.z*effect.spec.projectileSpeed};recordEvent('HOMING-FLARES','flare-launched',flare.stableId,{slot:flare.slot,targetId:targetStableId(target),position:{...flare.position}});}}
       }else{
         flare.flightAge+=dt;if(!flare.target||flare.target.hp<=0||!system?.enemies?.includes(flare.target))flare.target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*1.4*effect.size);
         if(flare.target){const desired=normalize2(flare.target.x-flare.position.x,flare.target.z-flare.position.z),turn=1-Math.exp(-dt*9.5);flare.velocity.x+=(desired.x*effect.spec.projectileSpeed-flare.velocity.x)*turn;flare.velocity.z+=(desired.z*effect.spec.projectileSpeed-flare.velocity.z)*turn;}
-        const start={...flare.position};flare.position.x+=flare.velocity.x*dt;flare.position.z+=flare.velocity.z*dt;flare.mesh.position.set(flare.position.x,.67*effect.size,flare.position.z);flare.mesh.rotation.y=Math.atan2(flare.velocity.x,flare.velocity.z);flare.mesh.children.forEach((child,index)=>{if(child.userData?.hotCore)child.scale.setScalar(1+.18*Math.sin(now*21+index));});
-        if(flare.target&&pointSegmentDistance2D(flare.target,start,flare.position)<=enemyRadius(flare.target,system)+.28*effect.size){damageEnemy(system,flare.target,effect.spec.damage,knockFrom(start,flare.target,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,homingFlares:true});addPulse({x:flare.position.x,y:.62,z:flare.position.z},FIRE_HOT,effect.size,false,.22);flare.done=true;disposeObject(flare.mesh);flare.mesh=null;continue;}
-        if(flare.flightAge>=effect.spec.projectileLifetime){flare.done=true;disposeObject(flare.mesh);flare.mesh=null;continue;}
+        const start={...flare.position};flare.position.x+=flare.velocity.x*dt;flare.position.z+=flare.velocity.z*dt;flare.mesh.position.set(flare.position.x,.67*effect.size,flare.position.z);flare.mesh.rotation.y=Math.atan2(flare.velocity.x,flare.velocity.z);animateHomingFlareVisual({mesh:flare.mesh,age:flare.flightAge,now,flight:true,size:effect.size});
+        if(flare.target&&pointSegmentDistance2D(flare.target,start,flare.position)<=enemyRadius(flare.target,system)+.28*effect.size){damageEnemy(system,flare.target,effect.spec.damage,knockFrom(start,flare.target,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,homingFlares:true,homingFlareId:flare.stableId});emitHomingTransient(effect,flare,{x:flare.position.x,y:.62*effect.size,z:flare.position.z},'enemy');flare.done=true;flare.state='hit';recordEvent('HOMING-FLARES','flare-hit',flare.stableId,{targetId:targetStableId(flare.target),damage:effect.spec.damage,position:{...flare.position}});disposeObject(flare.mesh);flare.mesh=null;continue;}
+        if(flare.flightAge+1e-9>=effect.spec.projectileLifetime){flare.done=true;flare.state='expired-flight';recordEvent('HOMING-FLARES','flare-expired',flare.stableId,{reason:'projectile-lifetime',flightAge:effect.spec.projectileLifetime});disposeObject(flare.mesh);flare.mesh=null;continue;}
       }
-      if(interceptAt(flare.position,.28*effect.size,system)){addPulse({x:flare.position.x,y:.62,z:flare.position.z},FIRE_GOLD,effect.size,true,.24);flare.done=true;disposeObject(flare.mesh);flare.mesh=null;}
+      const intercepted=interceptAt(flare.position,.30*effect.size,system);if(intercepted){emitHomingTransient(effect,flare,{x:flare.position.x,y:.62*effect.size,z:flare.position.z},'intercept');flare.done=true;flare.state='intercepted';recordEvent('HOMING-FLARES','flare-intercepted',flare.stableId,{projectileId:String(intercepted.id||intercepted.kind||'hostile-projectile'),position:{...flare.position}});disposeObject(flare.mesh);flare.mesh=null;continue;}
+      active++;
     }
-    if(!remaining||effect.age>=effect.spec.storageDuration+effect.spec.projectileLifetime)remove(effect);
+    if(!active){if(!effect.completed){effect.completed=true;recordEvent('HOMING-FLARES','complete',effect.stableId,{outcomes:effect.flares.map(flare=>({id:flare.stableId,state:flare.state}))});}remove(effect);}
   }
   function updateDragonRelease(effect,dt){effect.age+=dt;while(effect.remaining>0&&effect.age+1e-9>=effect.nextEmission){emitDragon(effect.emitted,effect.castAt+effect.nextEmission);effect.remaining--;effect.emitted++;effect.nextEmission+=DRAGON_ARC_SPEC.emissionInterval;}if(effect.remaining<=0&&effect.age>=effect.nextEmission+.08)remove(effect);}
   function updateDragonProjectile(effect,dt,system){
@@ -287,26 +280,29 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
     for(const enemy of aliveEnemies(system)){if(effect.hit.has(enemy))continue;if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+effect.spec.collisionRadius*effect.size)continue;effect.hit.add(enemy);damageEnemy(system,enemy,effect.spec.damage,knockFrom(start,enemy,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,dragonArc:true,dragonArcEmission:effect.emissionIndex});emitDragonImpact({x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},effect.size,'enemy');}
     if(effect.distance>=effect.spec.range)remove(effect);
   }
-  function resolveTornadoTick(effect,system){for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*effect.size+enemyRadius(enemy,system))continue;const inward=normalize2(effect.position.x-enemy.x,effect.position.z-enemy.z);damageEnemy(system,enemy,effect.spec.tickDamage,{x:inward.x*.34,z:inward.z*.34},{power:.22,pop:.025,whirlingTornadoTick:true,tick:effect.nextTick+1});}}
-  function resolveTornadoFinisher(effect,system){for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*1.12*effect.size+enemyRadius(enemy,system))continue;damageEnemy(system,enemy,effect.spec.finisherDamage,knockFrom(effect.position,enemy,1.85),{power:.62,pop:.18,whirlingTornadoFinisher:true});}addPulse({x:effect.position.x,y:.06,z:effect.position.z},AIR_HOT,effect.spec.radius*effect.size,true,.38);}
+  function resolveTornadoTick(effect,system){const tick=effect.nextTick+1,targets=[];for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*effect.size+enemyRadius(enemy,system))continue;const inward=normalize2(effect.position.x-enemy.x,effect.position.z-enemy.z);damageEnemy(system,enemy,effect.spec.tickDamage,{x:inward.x*.34,z:inward.z*.34},{power:.22,pop:.025,whirlingTornadoTick:true,tick,whirlingTornadoId:effect.stableId});targets.push(targetStableId(enemy));emitTornadoTransient(effect,{x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},'tick',effect.size*.72,.14);}recordEvent('WHIRLING-TORNADO','tick',effect.stableId,{tick,damage:effect.spec.tickDamage,targetIds:targets});}
+  function resolveTornadoFinisher(effect,system){const targets=[];for(const enemy of aliveEnemies(system)){const distance=Math.hypot(enemy.x-effect.position.x,enemy.z-effect.position.z);if(distance>effect.spec.radius*1.12*effect.size+enemyRadius(enemy,system))continue;damageEnemy(system,enemy,effect.spec.finisherDamage,knockFrom(effect.position,enemy,1.85),{power:.62,pop:.18,whirlingTornadoFinisher:true,whirlingTornadoId:effect.stableId});targets.push(targetStableId(enemy));}emitTornadoTransient(effect,{x:effect.position.x,y:.06*effect.size,z:effect.position.z},'finisher',effect.spec.radius*effect.size,.30);recordEvent('WHIRLING-TORNADO','finisher',effect.stableId,{damage:effect.spec.finisherDamage,targetIds:targets});}
   function updateWhirlingTornado(effect,dt,system,now){
     effect.age+=dt;while(effect.nextTick<effect.spec.tickTimes.length&&effect.age>=effect.spec.tickTimes[effect.nextTick]){resolveTornadoTick(effect,system);effect.nextTick++;}
-    for(const projectile of hostileProjectiles(system)){if(Math.hypot(projectile.x-effect.position.x,projectile.z-effect.position.z)<=effect.spec.radius*effect.size+(Number(projectile.r)||.16)){addPulse({x:projectile.x,y:.32,z:projectile.z},AIR_HOT,effect.size,true,.18);destroyHostileProjectile(projectile);}}
-    effect.mesh.rotation.y+=dt*4.8;effect.mesh.children.forEach(child=>{if(Number.isFinite(child.userData?.tornadoRing)){const index=child.userData.tornadoRing;child.rotation.z+=(index%2?1:-1)*dt*(5.2+index*.65);child.material.opacity=(.70-index*.07)*(.78+.22*Math.sin(now*12+index));}else if(Number.isFinite(child.userData?.tornadoWisp)){const index=child.userData.tornadoWisp,angle=now*(4.8+index%3)+index*TAU/12,radius=(.72+(index%4)*.16)*effect.size;child.position.x=Math.cos(angle)*radius;child.position.z=Math.sin(angle)*radius;}});
-    if(!effect.finished&&effect.age>=effect.spec.duration){effect.finished=true;resolveTornadoFinisher(effect,system);}if(effect.finished&&effect.age>=effect.spec.duration+.18)remove(effect);
+    for(const projectile of hostileProjectiles(system)){if(Math.hypot(projectile.x-effect.position.x,projectile.z-effect.position.z)<=effect.spec.radius*effect.size+(Number(projectile.r)||.16)){emitTornadoTransient(effect,{x:projectile.x,y:.32*effect.size,z:projectile.z},'intercept',effect.size*.64,.15);destroyHostileProjectile(projectile);recordEvent('WHIRLING-TORNADO','projectile-intercepted',effect.stableId,{projectileId:String(projectile.id||projectile.kind||'hostile-projectile'),position:{x:projectile.x,z:projectile.z}});}}
+    animateWhirlingTornadoVisual({mesh:effect.mesh,age:effect.age,dt,now,size:effect.size});
+    if(!effect.finished&&effect.age>=effect.spec.duration){effect.finished=true;resolveTornadoFinisher(effect,system);}if(effect.finished&&effect.age>=effect.spec.duration+.18){if(!effect.completed){effect.completed=true;recordEvent('WHIRLING-TORNADO','complete',effect.stableId,{ticks:effect.nextTick});}remove(effect);}
   }
   function captureWithWaterPrison(effect,enemy,system){
     effect.captured=enemy;effect.age=0;effect.nextTick=0;damageEnemy(system,enemy,effect.spec.impactDamage,{x:0,z:0},{power:.38,pop:.04,waterPrisonImpact:true});
-    let lock=prisonLocks.get(enemy);if(!lock){lock={count:0,x:enemy.x,z:enemy.z};prisonLocks.set(enemy,lock);}lock.count++;effect.lock=lock;enemy.__wizardWaterPrisonCount=lock.count;effect.mesh.scale.setScalar(1.22+Math.min(3,lock.count-1)*.07);addPulse({x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},WATER_HOT,effect.size,true,.28);
+    let lock=prisonLocks.get(enemy);if(!lock){lock={count:0,x:enemy.x,z:enemy.z};prisonLocks.set(enemy,lock);}lock.count++;effect.lock=lock;enemy.__wizardWaterPrisonCount=lock.count;disposeObject(effect.mesh);const attached=makeWaterPrisonAttachedVisual({THREE,scene,size:effect.size,stableId:effect.stableId,renderMode:effect.renderMode,stackIndex:lock.count-1});effect.mesh=attached.mesh;effect.visualMarkers=attached.markers;effect.phase='attached';effect.mesh.position.set(lock.x,enemyCenterY(enemy,system),lock.z);effect.mesh.scale.setScalar(1+Math.min(3,lock.count-1)*.04);emitWaterTransient(effect,{x:lock.x,y:enemyCenterY(enemy,system),z:lock.z},'attach',.24);recordEvent('WATER-PRISON','attached',effect.stableId,{targetId:targetStableId(enemy),impactDamage:effect.spec.impactDamage,stackCount:lock.count,anchor:{x:lock.x,z:lock.z}});
   }
   function lockPrisoner(effect,enemy){const lock=effect.lock;if(!lock)return;enemy.x=lock.x;enemy.z=lock.z;for(const key of['vx','vz','knockX','knockZ'])if(Number.isFinite(enemy[key]))enemy[key]=0;enemy.stunned=Math.max(enemy.stunned||0,.18);enemy.stunState='waterPrison';enemy.stunStateRemaining=Math.max(enemy.stunStateRemaining||0,.18);}
   function updateWaterPrison(effect,dt,system,now){
-    if(!effect.captured){effect.age+=dt;const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};const wall=firstWallHit(start,end,effect.walls);if(wall){addPulse({x:wall.hit.x,y:.18,z:wall.hit.z},WATER,effect.size,true,.22);remove(effect);return;}effect.previous=start;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.72*effect.size,end.z);effect.mesh.rotation.z+=dt*2.8;for(const enemy of aliveEnemies(system)){if(pointSegmentDistance2D(enemy,start,end)<=enemyRadius(enemy,system)+effect.spec.radius*effect.size){captureWithWaterPrison(effect,enemy,system);break;}}if(!effect.captured&&effect.distance>=effect.spec.range)remove(effect);return;}
-    const enemy=effect.captured;if(!enemy||enemy.hp<=0||!system?.enemies?.includes(enemy)){remove(effect);return;}effect.age+=dt;lockPrisoner(effect,enemy);effect.mesh.position.set(effect.lock.x,enemyCenterY(enemy,system),effect.lock.z);effect.mesh.rotation.y+=dt*1.4;effect.mesh.rotation.z+=dt*.9;effect.mesh.children.forEach(child=>{if(Number.isFinite(child.userData?.prisonDroplet)){const index=child.userData.prisonDroplet,angle=now*(1.6+index%3*.28)+index*TAU/8,radius=(.48+.08*(index%2))*effect.size;child.position.set(Math.cos(angle)*radius,Math.sin(angle*1.7)*.44*effect.size,Math.sin(angle)*radius);}else if(child.userData?.prisonCore)child.scale.setScalar(.92+.13*Math.sin(now*7));});
-    while(effect.nextTick<effect.spec.tickTimes.length&&effect.age>=effect.spec.tickTimes[effect.nextTick]){damageEnemy(system,enemy,effect.spec.tickDamage,{x:0,z:0},{power:.16,pop:.015,waterPrisonTick:true,tick:effect.nextTick+1});lockPrisoner(effect,enemy);addPulse({x:effect.lock.x,y:enemyCenterY(enemy,system),z:effect.lock.z},WATER_HOT,effect.size*.72,false,.18);effect.nextTick++;}
-    if(effect.age>=effect.spec.captureDuration){addPulse({x:effect.lock.x,y:.06,z:effect.lock.z},WATER_HOT,effect.size*1.35,true,.34);remove(effect);}
+    if(!effect.captured){effect.age+=dt;const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};const wall=firstWallHit(start,end,effect.walls);if(wall){emitWaterTransient(effect,{x:wall.hit.x,y:.18*effect.size,z:wall.hit.z},'wall',.20);recordEvent('WATER-PRISON','carrier-ended',effect.stableId,{reason:'wall',position:{x:wall.hit.x,z:wall.hit.z}});remove(effect);return;}effect.previous=start;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.72*effect.size,end.z);effect.mesh.rotation.z+=dt*2.8;animateWaterPrisonVisual({mesh:effect.mesh,phase:'carrier',age:effect.age,dt,now,size:effect.size});for(const enemy of aliveEnemies(system)){if(pointSegmentDistance2D(enemy,start,end)<=enemyRadius(enemy,system)+effect.spec.radius*effect.size){captureWithWaterPrison(effect,enemy,system);break;}}if(!effect.captured&&effect.distance>=effect.spec.range){emitWaterTransient(effect,{x:effect.position.x,y:.24*effect.size,z:effect.position.z},'miss',.20);recordEvent('WATER-PRISON','carrier-ended',effect.stableId,{reason:'range',distance:effect.distance});remove(effect);}return;}
+    const enemy=effect.captured;if(!enemy||enemy.hp<=0||!system?.enemies?.includes(enemy)){recordEvent('WATER-PRISON','released',effect.stableId,{reason:'target-invalid',targetId:targetStableId(enemy)});remove(effect);return;}effect.age+=dt;lockPrisoner(effect,enemy);effect.mesh.position.set(effect.lock.x,enemyCenterY(enemy,system),effect.lock.z);animateWaterPrisonVisual({mesh:effect.mesh,phase:'attached',age:effect.age,dt,now,size:effect.size});
+    while(effect.nextTick<effect.spec.tickTimes.length&&effect.age>=effect.spec.tickTimes[effect.nextTick]){const tick=effect.nextTick+1;damageEnemy(system,enemy,effect.spec.tickDamage,{x:0,z:0},{power:.16,pop:.015,waterPrisonTick:true,tick,waterPrisonId:effect.stableId});lockPrisoner(effect,enemy);emitWaterTransient(effect,{x:effect.lock.x,y:enemyCenterY(enemy,system),z:effect.lock.z},'tick',.17);recordEvent('WATER-PRISON','tick',effect.stableId,{tick,damage:effect.spec.tickDamage,targetId:targetStableId(enemy)});effect.nextTick++;}
+    if(effect.age>=effect.spec.captureDuration){emitWaterTransient(effect,{x:effect.lock.x,y:enemyCenterY(enemy,system),z:effect.lock.z},'release',.30);recordEvent('WATER-PRISON','released',effect.stableId,{reason:'duration',targetId:targetStableId(enemy),ticks:effect.nextTick});remove(effect);}
   }
   function updatePulse(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);effect.mesh.material.opacity=.9*Math.pow(1-k,.5);effect.mesh.scale.setScalar(1+k*2.1);if(k>=1)remove(effect);}
+  function updateHomingTransient(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);animateHomingFlareImpact({mesh:effect.mesh,progress:k,size:effect.size});if(k>=1)remove(effect);}
+  function updateTornadoTransient(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);animateWhirlingTornadoTransient({mesh:effect.mesh,progress:k});if(k>=1)remove(effect);}
+  function updateWaterTransient(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);animateWaterPrisonTransient({mesh:effect.mesh,progress:k,size:effect.size});if(k>=1)remove(effect);}
   function updateDragonTransient(effect,dt){
     effect.age+=dt;const k=clamp(effect.age/effect.life,0,1),launch=effect.visualKind==='launch',scale=launch ? .88+k*.22 : .78+k*1.04;effect.mesh.scale.setScalar(scale);
     effect.mesh.children.forEach((child,index)=>{const base=child.userData?.baseOpacity??child.material?.opacity??.8;if(child.material)child.material.opacity=base*Math.pow(1-k,launch ? .62 : .42);if(child.userData?.dragonImpactSpark!==undefined){const outward=1+k*1.25;child.position.x=child.userData.baseX*outward;child.position.z=child.userData.baseZ*outward;child.scale.z=1.48*(1+k*.72);}else if(child.userData?.dragonLaunchStreak!==undefined)child.position.z-=dt*(1.2+index*.18)*effect.size;});
@@ -315,17 +311,21 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
 
   function snapshot(){
     const effects=state.effects.map(effect=>{
-      const base={type:effect.type,age:Number(effect.age)||0};
+      const base={type:effect.type,age:Number(effect.age)||0,...(effect.arcanaId?{arcanaId:effect.arcanaId}:{}),...(effect.stableId?{stableId:effect.stableId}:{}),...(effect.renderMode?{renderMode:effect.renderMode}:{})};
+      if(effect.type==='homingFlares')return{...base,storageDuration:effect.spec.storageDuration,visualContract:{...HOMING_FLARES_VISUAL_CONTRACT},flares:effect.flares.map(flare=>({id:flare.stableId,slot:flare.slot,state:flare.state,launched:flare.launched,done:flare.done,flightAge:flare.flightAge,position:{x:flare.position.x,z:flare.position.z},velocity:{x:flare.velocity.x,z:flare.velocity.z},targetId:flare.target?targetStableId(flare.target):null,visualMarkers:{...flare.visualMarkers}}))};
+      if(effect.type==='whirlingTornado')return{...base,position:{...effect.position},duration:effect.spec.duration,radius:effect.spec.radius,nextTick:effect.nextTick,finished:effect.finished,visualMarkers:{...effect.visualMarkers}};
+      if(effect.type==='waterPrison')return{...base,phase:effect.phase,position:{...effect.position},previous:{...effect.previous},distance:effect.distance,nextTick:effect.nextTick,capturedId:effect.captured?targetStableId(effect.captured):null,lock:effect.lock?{x:effect.lock.x,z:effect.lock.z,count:effect.lock.count}:null,visualMarkers:{...effect.visualMarkers}};
+      if(['homingFlaresTransient','whirlingTornadoTransient','waterPrisonTransient'].includes(effect.type))return{...base,visualKind:effect.visualKind,position:{...effect.position},life:effect.life};
       if(effect.type==='dragonRelease')return{...base,remaining:effect.remaining,emitted:effect.emitted,nextEmission:effect.nextEmission,castAt:effect.castAt};
       if(effect.type==='arcanaTransientFx')return{...base,arcanaId:effect.arcanaId,visualStage:effect.visualStage,visualKind:effect.visualKind,position:{...effect.position}};
       if(effect.type!=='dragonProjectile')return base;
       return{...base,visualStage:effect.visualStage,visualMarkers:{...effect.visualMarkers},emittedAt:effect.emittedAt,emissionIndex:effect.emissionIndex,distance:effect.distance,position:{x:effect.position.x,z:effect.position.z},previous:{x:effect.previous.x,z:effect.previous.z},tangent:{x:effect.tangent.x,z:effect.tangent.z},lateral:effect.lateral,origin:{x:effect.origin.x,z:effect.origin.z},forward:{x:effect.forward.x,z:effect.forward.z},right:{x:effect.right.x,z:effect.right.z},body:(effect.bodySamples||[]).map(sample=>({index:sample.index,visible:sample.visible,distance:sample.distance,x:sample.x,z:sample.z,lateral:sample.lateral,tangent:{x:sample.tangent.x,z:sample.tangent.z},yaw:sample.yaw}))};
     });
-    return{simulationTime:state.elapsed,dragonStock:state.dragonStock,dragonArc:dragonArcMotionMetrics(),effects};
+    return{simulationTime:state.elapsed,dragonStock:state.dragonStock,waterAmmo:state.waterAmmo,renderMode:state.renderMode,dragonArc:dragonArcMotionMetrics(),abilityContracts:{homingFlares:homingFlaresContractMetrics(),whirlingTornado:whirlingTornadoContractMetrics(),waterPrison:waterPrisonContractMetrics()},semanticEvents:state.semanticEvents.map(event=>({...event})),effects};
   }
 
   const onPlay=event=>cast(event?.detail?.card);
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);window.__WIZARD_REBUILT_ARCANA_RUNTIME__=state;
-  return{state,cast,reset,snapshot,update(dt,now=0){const frame=Math.max(0,Number(dt)||0),time=Number(now)||0,system=getEnemySystem?.();state.elapsed+=frame;updateResources(frame);for(const effect of[...state.effects]){if(effect.type==='homingFlares')updateHomingFlares(effect,frame,system,time);else if(effect.type==='dragonRelease')updateDragonRelease(effect,frame);else if(effect.type==='dragonProjectile')updateDragonProjectile(effect,frame,system);else if(effect.type==='arcanaTransientFx')updateDragonTransient(effect,frame);else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,time);else if(effect.type==='waterPrison')updateWaterPrison(effect,frame,system,time);else if(effect.type==='pulse')updatePulse(effect,frame);}},dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_REBUILT_ARCANA_RUNTIME__===state)delete window.__WIZARD_REBUILT_ARCANA_RUNTIME__;}};
+  return{state,cast,reset,snapshot,update(dt,now=0){const frame=Math.max(0,Number(dt)||0),time=Number(now)||0,system=getEnemySystem?.();state.elapsed+=frame;updateResources(frame);for(const effect of[...state.effects]){if(effect.type==='homingFlares')updateHomingFlares(effect,frame,system,time);else if(effect.type==='homingFlaresTransient')updateHomingTransient(effect,frame);else if(effect.type==='dragonRelease')updateDragonRelease(effect,frame);else if(effect.type==='dragonProjectile')updateDragonProjectile(effect,frame,system);else if(effect.type==='arcanaTransientFx')updateDragonTransient(effect,frame);else if(effect.type==='whirlingTornado')updateWhirlingTornado(effect,frame,system,time);else if(effect.type==='whirlingTornadoTransient')updateTornadoTransient(effect,frame);else if(effect.type==='waterPrison')updateWaterPrison(effect,frame,system,time);else if(effect.type==='waterPrisonTransient')updateWaterTransient(effect,frame);else if(effect.type==='pulse')updatePulse(effect,frame);}},dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_REBUILT_ARCANA_RUNTIME__===state)delete window.__WIZARD_REBUILT_ARCANA_RUNTIME__;}};
 }
