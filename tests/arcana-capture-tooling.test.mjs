@@ -15,6 +15,7 @@ assert.equal(manifest.sourceVideo,'media/wizard-of-legend/wizard-of-legend-arcan
 assert.equal(manifest.outputRoot,'artifacts/arcana-capture');
 assert.match(gitignore,/^artifacts\/arcana-capture\/$/m,'generated capture reviews must stay out of git');
 assert.ok(readme.includes('npm run capture:arcana -- --id DRAGON-ARC --stage motion'),'README must document the reproducible Gate 1 command');
+assert.ok(readme.includes('npm run capture:arcana -- --id DRAGON-ARC --stage style'),'README must document the final-design capture command');
 assert.ok(readme.includes('FFPROBE_PATH')&&readme.includes('exactly 60 FPS'),'README must document the media validation dependency and guarantee');
 
 const dragon=manifest.abilities['DRAGON-ARC'];
@@ -22,6 +23,8 @@ assert.ok(dragon,'Dragon Arc must be registered in the capture manifest');
 assert.equal(dragon.route,'enemy-lab.html');
 assert.deepEqual(dragon.query,{capture:'1',clean:'1',arcana:'DRAGON-ARC',aim:'right',layout:'source-line',stage:'motion',effects:'0'});
 const motion=dragon.stages.motion;
+assert.equal(motion.stage,'motion');
+assert.equal(motion.effects,false);
 assert.equal(motion.fixedDt,1/60,'capture clock must use an exact 60 Hz step');
 assert.deepEqual(motion.checkpoints,[0.25,0.5,0.75,1,1.25],'motion review must use the approved checkpoints');
 assert.ok(motion.checkpoints.every((time,index,list)=>time>0&&(index===0||time>list[index-1])),'checkpoints must be positive and increasing');
@@ -35,12 +38,25 @@ assert.deepEqual(Object.keys(motion.acceptance).sort(),[
   'peakToPeakPlayerFootprints','projectileCount','visibleYawDegrees','wavelengthPlayerFootprints',
 ].sort(),'manifest must retain the measurable Gate 1 contract');
 
+const style=dragon.stages.style;
+assert.ok(style,'Dragon Arc must register a separate final visual capture stage');
+assert.equal(style.stage,'style');
+assert.equal(style.effects,true,'final-design capture must enable presentation effects');
+assert.equal(style.reset.stage,'style');
+assert.equal(style.reset.effects,true);
+for(const key of ['fixedDt','checkpoints','sourceClip','acceptance'])assert.deepEqual(style[key],motion[key],`style must retain the approved motion ${key}`);
+assert.deepEqual(style.reset.player,motion.reset.player,'style must preserve canonical player placement and aim');
+assert.deepEqual(style.reset.camera,motion.reset.camera,'style must preserve the capture camera');
+assert.equal(style.reset.rngSeed,motion.reset.rngSeed,'style must preserve the deterministic RNG seed');
+assert.deepEqual(style.reset.dummy,motion.reset.dummy,'style must preserve source-line dummy placement');
+
 for(const marker of [
   'window.__abilityCapture','Page.captureScreenshot','Runtime.evaluate','DevToolsActivePort',
   "['EBUSY','EACCES','EPERM','ENOENT']",
   'deterministic','acceptanceResult','captureDerived','specDerived','emissionTimesSeconds','timeline-60fps',
   'contact-sheet.png','comparison.mp4','metrics.json','FFMPEG_PATH','FFPROBE_PATH','ARCANA_CAPTURE_BROWSER',
   'nb_read_frames','validateComparisonProbe','media:{comparison:comparisonMedia}',
+  'stage:stage.stage??stageName','effects:(stage.effects??stage.reset?.effects)',
 ])assert.ok(script.includes(marker),`capture runner is missing required behavior: ${marker}`);
 assert.doesNotMatch(script,/from ['"](?:playwright|puppeteer)/,'capture runner must remain dependency-free');
 assert.doesNotMatch(script,/stop_duration=\./,'FFmpeg durations must retain their leading zero for FFmpeg 8.x');

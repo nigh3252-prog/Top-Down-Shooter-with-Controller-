@@ -87,7 +87,51 @@ proxy body length = 2.5 player diameters
 initial forward speed = approximately 39.4 world units/second
 ```
 
-Gate 1 deliberately uses a neutral segmented luminous proxy with tangent indicators. Dragon art, flame polish, embers, launch flashes, and impact effects stay out until deterministic captures at 0.25, 0.50, 0.75, 1.00, and 1.25 seconds demonstrate the correct motion.
+Gate 1 used a neutral segmented luminous proxy with tangent indicators. Deterministic captures at 0.25, 0.50, 0.75, 1.00, and 1.25 seconds passed the measurable broad-lane motion contract before dragon art and flame polish were added. Those proxy captures remain the motion baseline; the production carrier does not keep a second gameplay path. Final visual source comparison remains pending user review.
+
+## Finished visual translation [IMPLEMENTATION - evidence separated from style]
+
+### Source-locked visual structure [OBSERVED]
+
+The bounded showcase frames establish these presentation requirements:
+
+- A large open-jaw flaming head carries most of each dragon's identity.
+- A pale hot brow and snout sit inside a saturated orange outer silhouette.
+- Small dark eye and mouth cutouts keep the face readable inside the glow.
+- Swept-back crown flames make the head directional even in a dense stream.
+- The neck is thick near the head, then tapers into jagged flame tongues and discrete burnt-orange smoke puffs.
+- Impacts produce a compact white silhouette flash with short bright rays rather than a persistent explosion volume.
+- The flame body bends along the same S route as the head; it is not a straight mesh attached to a curved collision point.
+
+### Top Down Game translation [PROJECT-AUTHORED]
+
+The finished implementation expresses that structure with an original low-poly 3D flame serpent:
+
+```text
+head:
+  separate upper jaw, lower jaw, mouth recess, hot brow/snout, eyes, teeth, and swept crest
+
+body:
+  locally oriented tapered segments sampled from the approved curve
+  normal-blended orange silhouette + gold mid-layer + pale additive core
+
+launch:
+  one compact throat fan per emitted dragon
+  short scale-in that reveals an already-readable head
+
+trail:
+  broken deterministic soot puffs and small embers
+  no ribbon and no persistent ground glow
+
+impact:
+  compact white-hot core + gold ring/rays + brief orange sparks
+
+animation:
+  scale/opacity flicker only
+  no decorative positional wobble outside the approved path
+```
+
+These layer colors, primitive shapes, flicker phases, and impact geometry are project styling rather than claims about Wizard of Legend's internal assets or exact rendering implementation.
 
 ## Source-faithful acceptance test
 
@@ -107,6 +151,10 @@ Gate 1 deliberately uses a neutral segmented luminous proxy with tangent indicat
 14. The visible and damaging carriers use the same sampled head path and local tangent.
 15. At the motion gate, the stream spans approximately 1.6 to 2.2 player footprints peak to peak and releases all eight dragons in approximately 0.63 to 0.84 seconds.
 16. Neither the superseded one-projectile prototype nor the rejected narrow straight-stream rework counts as source-first implementation completion.
+17. The finished head has a readable open jaw, eye/mouth contrast, and swept crest rather than an equal-sized bead-chain silhouette.
+18. The body tapers behind the head and each segment uses its own local path tangent.
+19. Launch, smoke, ember, and impact effects remain brief enough that the two opposing lanes stay readable.
+20. Decorative FX never become damaging carriers or change the approved trajectory.
 
 ## Units extracted from Dragon Arc
 

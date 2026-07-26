@@ -22,13 +22,13 @@ const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
 const replacement=entries.filter(entry=>entry.status==='replacement-in-progress');
 assert.equal(improved.length,67,'all 67 entries must use the improved source-first analysis');
-assert.equal(implemented.length,15,'Dragon Arc must not inflate the source-faithful implementation count while its motion is rejected');
+assert.equal(implemented.length,16,'the completed Dragon Arc reference-lock rebuild must join the source-first implementation count');
 assert.equal(pending.length,51,'51 source-first analyses must remain implementation-pending');
 assert.deepEqual(legacy,[],'no legacy entry should remain after the Water Prison reanalysis');
-assert.deepEqual(replacement.map(entry=>entry.name),['Dragon Arc'],'Dragon Arc must be the sole reference-lock rebuild');
-assert.deepEqual(entries.filter(entry=>entry.currentImplementation).map(entry=>entry.name),['Dragon Arc'],'only Dragon Arc should remain in the active replacement queue');
+assert.deepEqual(replacement,[],'the completed Dragon Arc design must leave no active replacement queue');
+assert.deepEqual(entries.filter(entry=>entry.currentImplementation),[],'completed replacements must not retain an active prototype notice');
 
-for(const name of ['Homing Flares','Whirling Tornado','Water Prison']){
+for(const name of ['Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']){
   const entry=entries.find(item=>item.name===name);
   assert.equal(entry?.lineage,'rebuilt',`${name} must retain initial-pass to source-first rebuild lineage`);
   assert.equal(entry?.status,'source-first-implemented',`${name} replacement must count as source-first implemented`);
@@ -37,14 +37,18 @@ for(const name of ['Homing Flares','Whirling Tornado','Water Prison']){
 }
 
 const dragonArc=entries.find(entry=>entry.name==='Dragon Arc');
-assert.equal(dragonArc?.lineage,'replacement-analyzed','Dragon Arc must distinguish preserved analysis from its rejected implementation');
-assert.equal(dragonArc?.status,'replacement-in-progress','Dragon Arc must remain replacement-in-progress through the motion gate');
-assert.deepEqual(dragonArc?.defaults,{analysis:true,implementation:false,comparison:false},'Dragon Arc must not count as implemented or source-compared');
-assert.match(dragonArc?.currentImplementation,/correct source-first stock/i,'Dragon Arc must preserve its verified gameplay contract');
-assert.match(dragonArc?.currentImplementation,/narrow, mostly straight carrier/i,'Dragon Arc must record the disproven visual approach');
-assert.match(dragonArc?.replacementChecklist,/do not polish/i,'Dragon Arc must direct a clean motion replacement');
-assert.match(dragonArc?.replacementChecklist,/0\.25, 0\.50, 0\.75, 1\.00, and 1\.25 seconds/,'Dragon Arc must retain its deterministic review checkpoints');
+assert.equal(dragonArc?.lineage,'rebuilt','Dragon Arc must retain its initial-pass to source-first rebuild history');
+assert.equal(dragonArc?.status,'source-first-implemented','the finished Dragon Arc design must count as implemented');
+assert.deepEqual(dragonArc?.defaults,{analysis:true,implementation:true,comparison:false},'final visual comparison must remain a separate user approval');
+assert.match(dragonArc?.revisionHistory,/metric-validated deterministic double-helix motion proxy/i,'Dragon Arc must preserve the durable reference-lock workflow without claiming pending user approval');
+assert.match(dragonArc?.revisionHistory,/final visual source comparison remains pending user review/i,'Dragon Arc must leave final visual approval open');
+assert.match(dragonArc?.revisionHistory,/articulated segmented dragon silhouette/i,'Dragon Arc must record the completed visual carrier');
 assert.match(dragonArc?.analysisMarkdown,/Working motion calibration \[INFERENCE/i,'Dragon Arc must keep measured calibration separate from observed evidence');
+assert.match(html,/const CATALOG_REVISION=2/,'completed implementations must migrate older device-local checklist defaults once');
+assert.match(html,/payload\.catalogRevision\?\?1/,'progress migration must preserve newer user choices');
+assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\}\}/,'revision two must migrate only Dragon Arc completion');
+assert.match(html,/progress=progressFromPayload\(incoming\)/,'imported older progress must receive the same catalog migration as local progress');
+assert.doesNotMatch(html,/for\(const entry of data\.entries\).*?entry\.defaults\.implementation/s,'catalog migration must not overwrite unrelated user checklist choices');
 
 for(const name of ['Bolt Rail','Volt Disc']){
   const entry=entries.find(item=>item.name===name);

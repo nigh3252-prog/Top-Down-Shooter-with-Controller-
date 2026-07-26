@@ -37,6 +37,7 @@ function usage(){
     '',
     'Usage:',
     '  npm run capture:arcana -- --id DRAGON-ARC --stage motion',
+    '  npm run capture:arcana -- --id DRAGON-ARC --stage style',
     '',
     'Optional:',
     '  --output <dir>   Override the ignored artifact directory',
@@ -535,7 +536,12 @@ export async function main(argv=process.argv.slice(2)){
   const outputDirectory=path.resolve(root,options.output??path.join(manifest.outputRoot,abilityId.toLowerCase(),stageName));
   fs.mkdirSync(outputDirectory,{recursive:true});
 
-  const query=new URLSearchParams(ability.query).toString();
+  const queryOptions={
+    ...ability.query,
+    stage:stage.stage??stageName,
+    effects:(stage.effects??stage.reset?.effects)?'1':'0',
+  };
+  const query=new URLSearchParams(queryOptions).toString();
   const server=await serveRepository();
   const captureUrl=`${server.baseUrl}/${ability.route}?${query}`;
   let launched;let cdp;
@@ -562,7 +568,7 @@ export async function main(argv=process.argv.slice(2)){
     const comparisonMedia=await probeComparisonVideo(ffprobe,comparisonVideo,stage,timeline);
     const observed=observedMetrics(run1),acceptanceResult=evaluateAcceptance(stage.acceptance,observed);
     const metrics={
-      schemaVersion:1,abilityId,stage:stageName,generatedAt:new Date().toISOString(),captureUrl,
+      schemaVersion:1,abilityId,stage:stageName,effects:Boolean(stage.effects??stage.reset?.effects),generatedAt:new Date().toISOString(),captureUrl,
       fixedDt:stage.fixedDt,checkpoints:stage.checkpoints,sourceClip:stage.sourceClip,
       deterministic:{passed:deterministicPassed,snapshotsEqual:deterministic,screenshotHashesEqual:screenshotHashes},
       acceptance:{passed:acceptanceResult.passed,checks:acceptanceResult.checks,contract:stage.acceptance},
@@ -582,11 +588,11 @@ export async function main(argv=process.argv.slice(2)){
       const failed=Object.entries(comparisonMedia.checks).filter(([,check])=>!check.passed).map(([key,check])=>`${key}: expected ${check.expected}, received ${check.actual}`).join('; ');
       throw new Error(`Comparison-video validation failed (${failed}). Inspect ${path.join(outputDirectory,'metrics.json')} and regenerate the media.`);
     }
-    if(!acceptanceResult.passed)throw new Error(`Gate-1 motion acceptance failed. Inspect ${path.join(outputDirectory,'metrics.json')}.`);
+    if(!acceptanceResult.passed)throw new Error(`${stageName} motion-contract acceptance failed. Inspect ${path.join(outputDirectory,'metrics.json')}.`);
     console.log(`Capture complete: ${outputDirectory}`);
     console.log(`Deterministic snapshots: ${deterministic.length}/${deterministic.length} matched.`);
     console.log(`Comparison video: ${comparisonMedia.actual.frameCount} frames at ${comparisonMedia.actual.averageFps} FPS for ${comparisonMedia.actual.duration.toFixed(3)}s.`);
-    console.log(`Gate-1 motion checks: ${Object.values(acceptanceResult.checks).filter(check=>check.passed).length}/${Object.keys(acceptanceResult.checks).length} passed.`);
+    console.log(`${stageName} motion-contract checks: ${Object.values(acceptanceResult.checks).filter(check=>check.passed).length}/${Object.keys(acceptanceResult.checks).length} passed.`);
   }finally{
     cdp?.close();
     if(launched)await launched.close();

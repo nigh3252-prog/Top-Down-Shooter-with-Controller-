@@ -27,7 +27,7 @@ class Mesh extends Object3D{constructor(geometry=new Geometry(),material=new Mat
 const THREE={
   Group,Mesh,
   SphereGeometry:Geometry,DodecahedronGeometry:Geometry,ConeGeometry:Geometry,CylinderGeometry:Geometry,
-  TorusGeometry:Geometry,RingGeometry:Geometry,
+  TorusGeometry:Geometry,RingGeometry:Geometry,CircleGeometry:Geometry,
   MeshBasicMaterial:Material,
   AdditiveBlending:'add',NormalBlending:'normal',DoubleSide:'double',
 };
@@ -107,7 +107,8 @@ assert.ok(dragonHits.every(hit=>hit.amount===8));
 for(let emissionIndex=0;emissionIndex<8;emissionIndex++)assert.equal(dragonHits.filter(hit=>hit.options.dragonArcEmission===emissionIndex).length,2,`dragon ${emissionIndex+1} must own its piercing hits`);
 assert.ok(runtime.state.dragonStock>=3,'Dragon Arc must recover one stock every 0.6 seconds');
 assert.equal(runtime.snapshot().effects.some(effect=>effect.type==='dragonProjectile'),false,'every proxy must expire when its curved head reaches range');
-assert.equal(runtime.snapshot().effects.some(effect=>effect.type==='pulse'),false,'Gate 1 must not add muzzle, wall, or impact polish');
+assert.equal(runtime.snapshot().effects.some(effect=>effect.type==='pulse'),false,'finished Dragon Arc must own semantic launch/impact FX rather than generic pulses');
+assert.equal(scene.children.some(child=>/Dragon Arc/.test(child.name)),false,'range expiry must clean finished Dragon Arc carriers and transient FX');
 runtime.reset();hits.length=0;
 
 assert.equal(cast('DRAGON-ARC'),true);
@@ -132,24 +133,59 @@ const firstDragon=liveAimSnapshot.effects.find(effect=>effect.type==='dragonProj
 assert.deepEqual(firstDragon.forward,{x:0,z:1});
 assert.equal(firstDragon.body.length,DRAGON_ARC_SPEC.proxySegments);
 assert.ok(firstDragon.body.some(sample=>sample.visible)&&firstDragon.body.some(sample=>!sample.visible),'segmented body must emerge behind the moving head');
-const visibleProxy=scene.children.find(child=>/Dragon Arc neutral motion proxy/.test(child.name));
+assert.equal(firstDragon.visualStage,'finished');
+assert.deepEqual(firstDragon.visualMarkers,{stage:'finished',head:1,headLength:3.35,headWidth:1.95,headShare:.64,openJaw:true,jawLateralSpread:.36,upperJaw:1,lowerJaw:1,mouth:1,teeth:4,horns:2,eyeSockets:2,eyes:2,throatFan:3,mantleSegments:2,flameTongues:3,luminousMasses:5,bodySegments:8,hotBodyCores:2,tail:1,flameLayers:3,embers:7,sootPuffs:6,groundGlows:0});
+const visibleProxy=scene.children.find(child=>/Dragon Arc source-locked flame serpent/.test(child.name));
 assert.equal(visibleProxy.children.length,DRAGON_ARC_SPEC.proxySegments);
 firstDragon.body.forEach((sample,index)=>{assert.equal(visibleProxy.children[index].visible,sample.visible);near(visibleProxy.children[index].rotation.y,sample.yaw);});
-const proxyTags=[];visibleProxy.traverse(object=>proxyTags.push(...Object.keys(object.userData||{})));
-assert.ok(proxyTags.includes('dragonProxyMarker')&&proxyTags.includes('dragonProxyTangent'),'Gate 1 visuals must expose neutral path markers and tangent indicators');
-assert.ok(!proxyTags.includes('dragonHead')&&!proxyTags.includes('dragonSegment'),'rejected dragon art must not survive in the motion proxy');
+const proxyObjects=[];visibleProxy.traverse(object=>proxyObjects.push(object));const proxyTags=proxyObjects.flatMap(object=>Object.keys(object.userData||{}));
+for(const tag of['dragonHead','dragonUpperJaw','dragonLowerJaw','dragonMouth','dragonTooth','dragonHorn','dragonBrow','dragonEyeSocket','dragonEye','dragonThroatFan','dragonMantle','dragonFlameTongue','dragonBodySegment','dragonTail','dragonFlameShell','dragonFlameCore','dragonFlameWisp','dragonEmber','dragonSootPuff'])assert.ok(proxyTags.includes(tag),`finished serpent is missing semantic layer ${tag}`);
+const upperJawObject=proxyObjects.find(object=>object.userData?.dragonUpperJaw),lowerJawObject=proxyObjects.find(object=>object.userData?.dragonLowerJaw),mouthObject=proxyObjects.find(object=>object.userData?.dragonMouth);
+assert.ok(upperJawObject.position.x<=-.18&&lowerJawObject.position.x>=.18,'jaw halves must separate laterally into a screen-readable V');
+assert.ok(Math.abs(upperJawObject.rotation.y-lowerJawObject.rotation.y)>=.4,'jaw halves must oppose one another in yaw, not collapse into a bright tip');
+assert.equal(mouthObject.material?.blending,THREE.NormalBlending,'the enlarged dark mouth wedge must survive additive bloom');
+assert.ok(!proxyTags.includes('dragonGroundGlow'),'two-lane silhouette must remain unobscured by persistent ground glows');
+assert.equal(proxyObjects.filter(object=>object.userData?.dragonFlameTongue!==undefined).length,3,'samples 3–5 must read as three source-sized tapered flame masses');
+assert.equal(proxyObjects.filter(object=>object.userData?.dragonFlameCore!==undefined).length,3,'only the dominant head and two mantle samples may retain concentrated hot cores');
+assert.equal(proxyObjects.filter(object=>object.userData?.dragonEmber!==undefined).length,7,'the full dragon must stay within the restrained ember budget');
+assert.equal(proxyObjects.filter(object=>object.userData?.dragonSootPuff!==undefined).length,6,'the three tail samples must dissolve into two smoke puffs each');
+for(let index=6;index<DRAGON_ARC_SPEC.proxySegments;index++){const tailObjects=[];visibleProxy.children[index].traverse(object=>tailObjects.push(object));assert.ok(tailObjects.some(object=>object.userData?.dragonSootPuff!==undefined),`tail sample ${index} needs smoke articulation`);assert.ok(!tailObjects.some(object=>object.userData?.dragonBodySegment!==undefined||object.userData?.dragonFlameShell!==undefined||object.userData?.dragonFlameCore!==undefined||object.userData?.dragonFlameTongue!==undefined),`tail sample ${index} must be smoke/embers only`);}
+assert.ok(proxyObjects.find(object=>object.userData?.dragonHead)?.material?.blending===THREE.NormalBlending,'solid head silhouette must remain readable beneath additive fire');
+assert.ok(proxyObjects.find(object=>object.userData?.dragonBodySegment!==undefined)?.material?.blending===THREE.NormalBlending,'body needs a solid non-additive silhouette');
+assert.ok(proxyObjects.find(object=>object.userData?.dragonFlameCore!==undefined)?.material?.blending===THREE.AdditiveBlending,'white-hot core must use the established luminous layer');
+near(visibleProxy.children[0].scale.x,.65,1e-9,'finished carrier must begin the approved 3–5 frame scale-in on its sampled path');
+const launchFx=liveAimSnapshot.effects.find(effect=>effect.type==='arcanaTransientFx'&&effect.visualKind==='launch');
+assert.equal(launchFx?.arcanaId,'DRAGON-ARC');assert.doesNotMatch(launchFx.type,/dragon|projectile/i,'launch polish must not inflate capture projectile metrics');
+const launchMesh=scene.children.find(child=>/Dragon Arc launch flare/.test(child.name)),launchTags=[];launchMesh.traverse(object=>launchTags.push(...Object.keys(object.userData||{})));
+assert.ok(launchTags.includes('dragonLaunchCore')&&launchTags.includes('dragonLaunchStreak'));assert.ok(!launchTags.includes('dragonLaunchRing'),'launch must be a short throat flare, not a ground ring');
+const animatedEmber=proxyObjects.find(object=>object.userData?.dragonEmber!==undefined),emberBefore={x:animatedEmber.position.x,y:animatedEmber.position.y,z:animatedEmber.position.z};
 player.forwardX=1;player.forwardZ=0;
-for(let frame=0;frame<6;frame++)runtime.update(1/60,(frame+2)/60);
+for(let frame=0;frame<3;frame++)runtime.update(1/60,(frame+2)/60);
+near(visibleProxy.children[0].scale.x,1.05,1e-9,'carrier must overshoot authored scale on the third launch frame');
+for(let frame=3;frame<6;frame++)runtime.update(1/60,(frame+2)/60);
 liveAimSnapshot=runtime.snapshot();
 assert.deepEqual(liveAimSnapshot.effects.find(effect=>effect.type==='dragonProjectile'&&effect.emissionIndex===0).forward,{x:0,z:1},'an emitted dragon keeps its sampled path basis');
 assert.deepEqual(liveAimSnapshot.effects.find(effect=>effect.type==='dragonProjectile'&&effect.emissionIndex===1).forward,{x:1,z:0},'later emissions must sample live aim independently');
+assert.notDeepEqual({x:animatedEmber.position.x,y:animatedEmber.position.y,z:animatedEmber.position.z},emberBefore,'seeded embers must articulate along the sampled body');
+near(visibleProxy.children[0].scale.x,1,1e-9,'carrier must settle to authored scale after the fifth frame without changing its path');
 runtime.reset();player.forwardX=0;player.forwardZ=1;
+
+hits.length=0;const impactSample=sampleDragonArcPath({origin:dragonOrigin,distance:3,emissionIndex:0}),impactTarget={x:impactSample.x,z:impactSample.z,hp:1000,radius:.35};system.enemies=[impactTarget];
+assert.equal(cast('DRAGON-ARC'),true);step(.16,1/60);
+const enemyImpact=runtime.snapshot().effects.find(effect=>effect.type==='arcanaTransientFx'&&effect.visualKind==='impact-enemy');
+assert.ok(enemyImpact,'enemy contact must create a semantic white-gold impact');
+assert.ok(runtime.snapshot().effects.some(effect=>effect.type==='dragonProjectile'),'impact polish must not consume the piercing carrier');
+const impactMesh=scene.children.find(child=>/Dragon Arc white-gold impact/.test(child.name)),impactTags=[];impactMesh.traverse(object=>impactTags.push(...Object.keys(object.userData||{})));
+assert.ok(impactTags.includes('dragonImpactCore')&&impactTags.includes('dragonImpactShell')&&impactTags.includes('dragonImpactRing')&&impactTags.includes('dragonImpactSpark'));
+assert.equal(hits.filter(hit=>hit.options.dragonArc).length,1);assert.equal(hits.find(hit=>hit.options.dragonArc).amount,8);
+runtime.reset();system.enemies=[];hits.length=0;
 
 mazeSegments.push({a:{x:-10,z:3},b:{x:10,z:3}});
 assert.equal(cast('DRAGON-ARC'),true);step(.3,1/60);
 assert.equal(runtime.snapshot().effects.filter(effect=>effect.type==='dragonProjectile').length,0,'curved swept carriers must stop at walls');
-assert.equal(scene.children.filter(child=>/Dragon Arc neutral motion proxy/.test(child.name)).length,0,'wall cleanup must remove every proxy mesh');
-mazeSegments.length=0;runtime.reset();
+assert.equal(scene.children.filter(child=>/Dragon Arc source-locked flame serpent/.test(child.name)).length,0,'wall cleanup must remove every articulated carrier mesh');
+assert.ok(runtime.snapshot().effects.some(effect=>effect.type==='arcanaTransientFx'&&effect.visualKind==='impact-wall'),'wall contact must retain a short white-gold impact');
+mazeSegments.length=0;runtime.reset();assert.equal(scene.children.some(child=>/Dragon Arc/.test(child.name)),false,'reset must clean launch, impact, ember, glow, and carrier meshes');
 
 const tornadoTarget={x:1,z:0,hp:1000,radius:.5};const hostileRock={x:.8,z:0,r:.1,life:2,dead:false,mesh:{visible:true}};system.enemies=[tornadoTarget];system.hostileProjectiles=[hostileRock];
 assert.equal(cast('WHIRLING-TORNADO'),true);const vortex=runtime.state.effects.find(effect=>effect.type==='whirlingTornado'),vortexOrigin={...vortex.position};step(1.1);

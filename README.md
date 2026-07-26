@@ -102,11 +102,23 @@ Open `index.html` in a browser, or host the repository with GitHub Pages/Vercel 
 Enemy Lab has a capture-only fixed-step mode for comparing an arcana with its
 bounded source clip. The committed manifest owns the viewport, aim, dummy
 layout, RNG seed, source timeline, checkpoints, and measurable acceptance
-ranges. Run a registered capture with:
+ranges. Re-measure the approved path with presentation FX suppressed by running:
 
 ```text
 npm run capture:arcana -- --id DRAGON-ARC --stage motion
 ```
+
+After the final visual design is ready, capture the same source timeline and
+motion contract with presentation effects enabled:
+
+```text
+npm run capture:arcana -- --id DRAGON-ARC --stage style
+```
+
+The stages write separate ignored review sets under the arcana's `motion/` and
+`style/` artifact directories. The saved Gate 1 motion set preserves the neutral
+proxy review; current `motion` reruns use the one production dragon carrier with
+presentation FX suppressed, so there is no second permanent gameplay variant.
 
 The dependency-free runner requires Node.js 22 or newer, Chrome or Edge, and
 FFmpeg with its FFprobe companion. If they are not discoverable, set
