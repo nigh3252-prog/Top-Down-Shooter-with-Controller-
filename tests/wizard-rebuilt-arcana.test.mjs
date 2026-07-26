@@ -63,10 +63,13 @@ assert.equal(runtime.state.dragonStock,0,'Dragon Arc must snapshot and spend all
 const dragonTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[dragonTarget];runtime.update(.2,.2);
 const dragonVisual=runtime.state.effects.find(effect=>effect.type==='dragonProjectile');
 assert.ok(dragonVisual,'release must create visible independent dragon carriers');
-assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonBodyLayer)).length,3,'dragon must use separate orange, gold, and white-hot body layers');
+const dragonBodyLayers=dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonBodyLayer));
+assert.equal(dragonBodyLayers.length,3,'dragon must use separate dark-edge, orange, and gold body layers');
+assert.ok(dragonBodyLayers.every(child=>child.material.blending===THREE.NormalBlending),'main dragon colors must not use additive blending and blow out to white when the stream overlaps');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonJaw)).length,2,'dragon silhouette must retain an open upper/lower jaw');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonTongue)).length,10,'jagged flame tongues must replace the old bead-chain body');
 assert.equal(dragonVisual.mesh.children.filter(child=>Number.isFinite(child.userData.dragonEmber)).length,5,'each carrier must include detached ember fragments');
+assert.equal(dragonVisual.mesh.children.some(child=>child.userData.dragonGroundGlow),false,'source dragons must not leave pale scalloped ground rings');
 assert.ok(runtime.state.effects.some(effect=>effect.type==='dragonMuzzle'),'each emission must have a dedicated launch flare');
 step(2);
 assert.equal(hits.filter(hit=>hit.options.dragonArc).length,8,'full base stock must emit eight piercing dragons');

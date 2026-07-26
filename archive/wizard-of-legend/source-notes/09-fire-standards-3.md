@@ -26,6 +26,7 @@ Frame-by-frame visual review of the base release around `311.5â€“312.7` sec
 - A long tapered flame body with jagged mane/tongue shapes rather than round body segments.
 - Small detached ember fragments behind and between carriers.
 - A strong white contact flash with gold/orange fragments at every pierced target.
+- No pale floor rings or repeating circular ground decals under the traveling dragons.
 
 Several dragons overlap during the rapid stream, but their bright heads remain individually readable. Their bodies flicker independently; the volley does not move as one synchronized ribbon.
 
@@ -92,10 +93,12 @@ This source-first analysis supersedes the current one-projectile sinusoidal prot
 10. Each visible carrier reads as a tapered, open-jawed flame dragon rather than a sphere, caterpillar, or undifferentiated ribbon.
 11. Yellow-white core, orange body, darker edge fragments, and white-hot impact punctuation remain separable from the top-down camera.
 12. Overlapping dragons retain distinct heads and independently phased flame motion.
-13. Enhancement stores ten charges and emits two dragons per release beat.
-14. Enhancement shortens the stream without reducing one-dragon-per-charge output.
-15. Charged Signature launches exactly twenty dragons in a wide area.
-16. The current sinusoidal single-projectile prototype does not count as source-first implementation completion.
+13. Main body colors remain orange/gold during overlap instead of additively blowing out into one white strip.
+14. The carrier does not create scalloped floor rings along its path or a large ring when it reaches a wall.
+15. Enhancement stores ten charges and emits two dragons per release beat.
+16. Enhancement shortens the stream without reducing one-dragon-per-charge output.
+17. Charged Signature launches exactly twenty dragons in a wide area.
+18. The current sinusoidal single-projectile prototype does not count as source-first implementation completion.
 
 ## Units extracted from Dragon Arc
 
