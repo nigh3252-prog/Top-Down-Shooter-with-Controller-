@@ -96,7 +96,8 @@ assert.equal(delayed.stage.reset.fixtures.targets[0].spawnFrame,60,'delayed targ
 const deck=resolveCaptureJob(manifest,{id:'VOLT-DISC',scenario:'slot-lock',stage:'contract'});
 assert.equal(deck.stage.reset.fixtures.deck.primaryArcanaId,'VOLT-DISC');assert.deepEqual(deck.stage.actions.map(action=>action.op),['deckPlay','deckPlay','deckPlay','deckPlay']);
 assert.ok(resolveCaptureJob(manifest,{id:'BOLT-RAIL',scenario:'fifth-beat-miss',stage:'contract'}).stage.actions.some(action=>action.op==='release'));
-assert.equal(resolveCaptureJob(manifest,{id:'ICE-DAGGER',stage:'contract'}).stage.acceptance.mode,'required');
+const iceContract=resolveCaptureJob(manifest,{id:'ICE-DAGGER',stage:'contract'}).stage.acceptance;
+assert.equal(iceContract.mode,'required');assert.ok(iceContract.checks.some(check=>check.metric==='captureDerived.cleanedUp'),'ability-level profile must override stale/weaker inline checks');
 assert.equal(resolveCaptureJob(manifest,{id:'CHAOTIC-RIFT',stage:'style'}).stage.acceptance.checks[0].metric,'captureDerived.eventCounts.rift-entered');
 assert.throws(()=>resolveCaptureJob(manifest,{id:'VOLT-DISC',stage:'motion'}),/Unknown .* stage motion/,'motion alias must remain Dragon-only');
 

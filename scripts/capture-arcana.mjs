@@ -89,7 +89,10 @@ export function resolveCaptureJob(manifest,{id,scenario:requestedScenario,stage:
   reset.stage=stage.stage||stageName;reset.effects=stage.effects;reset.renderMode=stage.renderMode;
   const query={...(manifest.defaults?.query||{}),...(ability.query||{}),...(scenario.query||{}),...(stage.query||{}),stage:reset.stage,effects:stage.effects?'1':'0',renderMode:stage.renderMode};
   const declaredAcceptance=scenario.acceptance,profileAcceptance=manifest.acceptanceProfiles?.[abilityId];
-  const acceptance=declaredAcceptance?.checks?.length?declaredAcceptance:(profileAcceptance||declaredAcceptance||{mode:'advisory',checks:[]});
+  // Ability profiles are the canonical cross-stage gate. Scenario contracts remain
+  // authoritative only for abilities without a profile (or for future profile-free
+  // diagnostic scenarios), so stale inline checks cannot silently weaken a batch.
+  const acceptance=profileAcceptance?.checks?.length?profileAcceptance:(declaredAcceptance||{mode:'advisory',checks:[]});
   return{
     abilityId,ability,scenarioName,scenario,stageName,
     route:ability.route||manifest.defaults?.route||'enemy-lab.html',query,runtimeId:ability.runtimeId||'',telemetryAdapter:scenario.telemetryAdapter||ability.telemetryAdapter||'generic',
