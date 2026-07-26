@@ -44,10 +44,11 @@ function usage(){
     '  npm run capture:arcana -- --id DRAGON-ARC --stage style',
     '  npm run capture:arcana -- --id WATER-PRISON --scenario stacked --stage contract',
     '  npm run capture:arcana -- --batch session-five --stage all',
+    '  npm run capture:arcana -- --batch next-twenty --stage all',
     '',
     'Optional:',
     '  --scenario <id>  Select a manifest scenario (defaults to the ability default)',
-    '  --batch <id>     Run a manifest batch sequentially; session-five includes every acceptance scenario',
+    '  --batch <id>     Run a manifest batch sequentially; declarative coverage guards complete review sets',
     '  --stage all      Expand to contract, source, and style in that order (motion remains Dragon-only)',
     '  --output <dir>   Override the ignored artifact directory (single capture only)',
     '  --browser <exe>  Chrome or Edge executable (also ARCANA_CAPTURE_BROWSER)',
@@ -87,10 +88,12 @@ export function resolveCaptureJob(manifest,{id,scenario:requestedScenario,stage:
   const reset=mergeObjects(mergeObjects(mergeObjects(manifest.defaults?.reset,ability.reset),scenario.reset),stage.reset);
   reset.stage=stage.stage||stageName;reset.effects=stage.effects;reset.renderMode=stage.renderMode;
   const query={...(manifest.defaults?.query||{}),...(ability.query||{}),...(scenario.query||{}),...(stage.query||{}),stage:reset.stage,effects:stage.effects?'1':'0',renderMode:stage.renderMode};
+  const declaredAcceptance=scenario.acceptance,profileAcceptance=manifest.acceptanceProfiles?.[abilityId];
+  const acceptance=declaredAcceptance?.checks?.length?declaredAcceptance:(profileAcceptance||declaredAcceptance||{mode:'advisory',checks:[]});
   return{
     abilityId,ability,scenarioName,scenario,stageName,
     route:ability.route||manifest.defaults?.route||'enemy-lab.html',query,runtimeId:ability.runtimeId||'',telemetryAdapter:scenario.telemetryAdapter||ability.telemetryAdapter||'generic',
-    stage:{...stage,fixedDt,durationFrames,checkpointFrames,checkpoints:checkpointFrames.map(frame=>frame*fixedDt),sourceClip:{...(scenario.sourceClip||{})},reset,actions:[...(scenario.actions||[])].sort((left,right)=>left.frame-right.frame),acceptance:scenario.acceptance||{mode:'advisory',checks:[]}},
+    stage:{...stage,fixedDt,durationFrames,checkpointFrames,checkpoints:checkpointFrames.map(frame=>frame*fixedDt),sourceClip:{...(scenario.sourceClip||{})},reset,actions:[...(scenario.actions||[])].sort((left,right)=>left.frame-right.frame),acceptance},
   };
 }
 
@@ -98,7 +101,7 @@ export function validateCaptureManifest(manifest){
   if(manifest?.schemaVersion!==2)throw new Error('Arcana capture manifest must use schemaVersion 2.');
   const errors=[],fixedDt=Number(manifest.defaults?.fixedDt);
   if(!(fixedDt>0))errors.push('defaults.fixedDt must be positive');
-  const supportedActions=new Set(['cast','press','hold','release','setaim','settargethp','deckplay','setresource']);
+  const supportedActions=new Set(['cast','press','hold','release','setaim','setmove','settargethp','deckplay','setresource','damageplayer','strikedecoy','applyplayerstatus']);
   for(const [abilityId,ability] of Object.entries(manifest.abilities||{})){
     for(const [scenarioName,scenario] of Object.entries(ability.scenarios||{})){
       const duration=Math.trunc(Number(scenario.durationFrames)),checkpoints=scenario.checkpointFrames||[],actions=scenario.actions||[],clip=scenario.sourceClip||{};
@@ -123,7 +126,15 @@ export function validateCaptureManifest(manifest){
       if(!manifest.abilities?.[job.abilityId]?.scenarios?.[job.scenario])errors.push(`${batchName} references unknown ${key}`);
       if(seen.has(key))errors.push(`${batchName} repeats ${key}`);seen.add(key);
     }
-    if(batchName==='session-five')for(const [abilityId,ability] of Object.entries(manifest.abilities||{}))if(abilityId!=='DRAGON-ARC')for(const scenarioName of Object.keys(ability.scenarios||{}))if(!seen.has(`${abilityId}/${scenarioName}`))errors.push(`${batchName} omits ${abilityId}/${scenarioName}`);
+  }
+  for(const [batchName,coverage] of Object.entries(manifest.batchCoverage||{})){
+    const jobs=manifest.batches?.[batchName],seen=new Set((jobs||[]).map(job=>`${job.abilityId}/${job.scenario}`));
+    if(!Array.isArray(jobs)||!jobs.length){errors.push(`${batchName} coverage references a missing batch`);continue;}
+    for(const abilityId of coverage.abilities||[]){
+      const ability=manifest.abilities?.[abilityId];if(!ability){errors.push(`${batchName} coverage references unknown ${abilityId}`);continue;}
+      const scenarios=coverage.includeAllScenarios?Object.keys(ability.scenarios||{}):[String(coverage.scenario||ability.defaultScenario||'source-base')];
+      for(const scenarioName of scenarios)if(!seen.has(`${abilityId}/${scenarioName}`))errors.push(`${batchName} omits ${abilityId}/${scenarioName}`);
+    }
   }
   if(errors.length)throw new Error(`Invalid capture manifest:\n- ${errors.join('\n- ')}`);
   return true;
@@ -673,7 +684,48 @@ const telemetryAdapters={
     const retained=deckFrames.some(deck=>deck.manualSequence?.press===1&&deck.hand?.[0]==='VOLT-DISC'),oppositeUsed=deckFrames.some(deck=>deck.manualSequence?.press===1&&deck.hand?.[0]==='VOLT-DISC'&&deck.hand?.[1]!=='BOLT-RAIL');
     return{captureDerived:{discCount:ids.size,pressEvents:emissions.length,uniqueAimDirections:uniqueIds(emissions.map(directionKey)).size,directDamageEvents:direct.length,zeroDamageBurstEvents:zero.length,terminalDamageEvents:terminal.length,wallFizzles:telemetry.events.filter(event=>eventKind(event)==='volt-disc-wall-fizzle').length,comboStarts:telemetry.events.filter(event=>eventKind(event)==='volt-disc-combo-start').length,comboExpired:telemetry.events.filter(event=>eventKind(event)==='volt-disc-combo-expired').length,deckRetainedAfterFirst:retained,oppositeSlotUsable:oppositeUsed,deckSequenceCompleted:comboCompletions.length>0,exactlyOnePayload:payloadCounts.size?([...payloadCounts.values()].every(count=>count===1)&&[...payloadCounts.keys()].every(id=>!ids.size||ids.has(id))):null},telemetry:{eventCount:telemetry.events.length}};
   },
-  generic:(run,context)=>{const telemetry=collectAbilityTelemetry(run,context);return{captureDerived:{eventCount:telemetry.events.length},telemetry:{eventCount:telemetry.events.length}};},
+  generic:(run,context)=>{
+    const telemetry=collectAbilityTelemetry(run,context),eventCounts={},eventDamage={},eventDeclaredCounts={};
+    for(const event of telemetry.events){
+      const kind=eventKind(event)||'unknown';eventCounts[kind]=(eventCounts[kind]||0)+1;
+      if(Number.isFinite(Number(event.damage)))eventDamage[kind]=(eventDamage[kind]||0)+Number(event.damage);
+      if(Number.isFinite(Number(event.count)))eventDeclaredCounts[kind]=(eventDeclaredCounts[kind]||0)+Number(event.count);
+    }
+    const activeCounts=telemetry.frames.map(frame=>frame.instances.length),finalActive=telemetry.final?.instances?.length||0;
+    const initialTargetFixtures=telemetry.frames[0]?.snapshot?.fixtures?.targets||[];
+    const firstTargets=new Map((telemetry.frames[0]?.snapshot?.captureDummies||[]).map(target=>{
+      const fixture=initialTargetFixtures.find(candidate=>String(candidate.id)===String(target.id));
+      return[String(target.id),Number(fixture?.hp??target.hp)];
+    }));
+    const targetDamage={};
+    for(const [id,initialHp] of firstTargets){
+      const minimumHp=Math.min(...telemetry.frames.flatMap(frame=>(frame.snapshot?.captureDummies||[]).filter(target=>String(target.id)===id).map(target=>Number(target.hp))).filter(Number.isFinite));
+      if(Number.isFinite(initialHp)&&Number.isFinite(minimumHp))targetDamage[id]=initialHp-minimumHp;
+    }
+    const dashStarted=telemetry.events.find(event=>eventKind(event)==='dash-started'),dashComplete=telemetry.events.find(event=>eventKind(event)==='dash-complete'),payloadFinalized=telemetry.events.find(event=>eventKind(event)==='payload-finalized');
+    const dashDistance=Number(dashComplete?.distance),playerFootprint=Number(telemetry.frames[0]?.snapshot?.playerFootprint),payloadEndpointError=distance(dashComplete?.endpoint,payloadFinalized?.endpoint);
+    const resolvedProjectiles=(eventCounts['projectile-hit']||0)+(eventCounts['projectile-expired']||0)+(eventCounts['projectile-intercepted']||0)+(eventCounts['projectile-fizzle']||0);
+    const firstPlayerHp=Number(telemetry.frames[0]?.snapshot?.player?.hp),minimumPlayerHp=Math.min(...telemetry.frames.map(frame=>Number(frame.snapshot?.player?.hp)).filter(Number.isFinite));
+    return{captureDerived:{
+      eventCount:telemetry.events.length,
+      eventCounts,
+      eventDamage,
+      eventDeclaredCounts,
+      targetDamage,
+      targetDamageTotal:Object.values(targetDamage).reduce((sum,value)=>sum+Number(value||0),0),
+      resolvedProjectiles,
+      dashDistance:Number.isFinite(dashDistance)?dashDistance:null,
+      dashDistancePlayerFootprints:Number.isFinite(dashDistance)&&playerFootprint>0?dashDistance/playerFootprint:null,
+      dashDurationSeconds:dashStarted&&dashComplete?Number(dashComplete.time)-Number(dashStarted.time):null,
+      dashBlocked:typeof dashComplete?.blocked==='boolean'?dashComplete.blocked:null,
+      payloadEndpointError,
+      playerHpLoss:Number.isFinite(firstPlayerHp)&&Number.isFinite(minimumPlayerHp)?firstPlayerHp-minimumPlayerHp:null,
+      untargetableFrames:telemetry.frames.filter(frame=>frame.snapshot?.player?.targetable===false).length,
+      maximumActiveInstances:maximum(activeCounts,0),
+      finalActiveInstances:finalActive,
+      cleanedUp:telemetry.frames.length?finalActive===0:null,
+    },telemetry:{eventCount:telemetry.events.length,eventCounts}};
+  },
 };
 
 export function observedMetrics(run,context={}){
@@ -776,10 +828,31 @@ function writeReviewIndex(outputRoot){
   return index;
 }
 
+export function resolveCaptureOutputDirectory({manifestOutputRoot,requestedOutput,defaultParts=[]}={}){
+  const artifactRoot=path.resolve(root,String(manifestOutputRoot||''));
+  const artifactRootRelative=path.relative(root,artifactRoot);
+  if(!artifactRootRelative||artifactRootRelative.startsWith(`..${path.sep}`)||path.isAbsolute(artifactRootRelative)){
+    throw new Error(`Capture artifact root must be a concrete workspace subdirectory: ${artifactRoot}`);
+  }
+  const outputDirectory=requestedOutput
+    ?path.resolve(root,String(requestedOutput))
+    :path.resolve(artifactRoot,...defaultParts.map(part=>String(part)));
+  const artifactRelative=path.relative(artifactRoot,outputDirectory);
+  if(!artifactRelative||artifactRelative.startsWith(`..${path.sep}`)||path.isAbsolute(artifactRelative)){
+    throw new Error(`Refusing to replace files outside a concrete capture-artifact subdirectory: ${outputDirectory}`);
+  }
+  return outputDirectory;
+}
+
 async function runCaptureJob({manifest,job,options,server,browser,ffmpeg,ffprobe,sourceVideo,outputRoot}){
   const {abilityId,scenarioName,stageName,stage}=job;
   const legacyDragon=abilityId==='DRAGON-ARC'&&scenarioName==='source-base'&&!options.scenario;
-  const outputDirectory=path.resolve(root,options.output??path.join(manifest.outputRoot,abilityId.toLowerCase(),...(legacyDragon?[stageName]:[scenarioName,stageName])));
+  const outputDirectory=resolveCaptureOutputDirectory({
+    manifestOutputRoot:manifest.outputRoot,
+    requestedOutput:options.output,
+    defaultParts:[abilityId.toLowerCase(),...(legacyDragon?[stageName]:[scenarioName,stageName])],
+  });
+  fs.rmSync(outputDirectory,{recursive:true,force:true});
   fs.mkdirSync(outputDirectory,{recursive:true});
   const captureUrl=`${server.baseUrl}/${job.route}?${new URLSearchParams(job.query)}`;
   let launched;let cdp;

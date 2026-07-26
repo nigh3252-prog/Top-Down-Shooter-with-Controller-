@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WIZARD_NEXT_TWENTY_CARDS } from '../src/wizard-next-twenty-cards.js';
 
 const scriptDir=path.dirname(fileURLToPath(import.meta.url));
 const root=path.resolve(scriptDir,'..');
@@ -182,6 +183,7 @@ const implementedNames=new Set([
   'Flame Strike','Flame Cross','Bouncing Blaze','Wind Slash','Air Spinner',
   'Perforating Jet','Earth Knuckles','Bladed Vine','Stone Shot','Spark Contact',
   'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
+  ...WIZARD_NEXT_TWENTY_CARDS.map(card=>card.name),
 ]);
 const referenceLockWindows=new Map([
   ['Whirling Tornado',{start:420.80,end:421.70}],
@@ -190,6 +192,7 @@ const referenceLockWindows=new Map([
   ['Bolt Rail',{start:53.30,end:53.95}],
   ['Volt Disc',{start:58.20,end:59.10}],
 ]);
+for(const card of WIZARD_NEXT_TWENTY_CARDS)referenceLockWindows.set(card.name,{...card.sourceClip});
 const referenceLockAddenda=new Map([
   ['Whirling Tornado',`## Reference-lock frame audit
 
@@ -227,6 +230,21 @@ const referenceLockAddenda=new Map([
 
 **[INFERENCE — temporary Top Down Game input rule]** The three-press same-slot lock and 0.9-second rolling timeout are an explicit temporary integration choice. The supplied base window does not establish a damaging wall burst, so wall contact remains a harmless cleanup/fizzle unless later frame evidence disproves it.`],
 ]);
+for(const card of WIZARD_NEXT_TWENTY_CARDS){
+  const documented=card.details.rows.map(([label,value])=>`${label}: ${value}`).join(' ');
+  const dashNote=card.dashMotion
+    ? card.dashMotion.kind==='continuous'
+      ? 'The accepted Top Down Game basic-dash movement profile is intentionally reused; source comparison is anchored to the payload position, scale, timing, and behavior along the actual collision-clipped route.'
+      : 'Direction selection and four-diameter targeting reuse the accepted dash language, while visible travel is deliberately replaced by the source-required fixed-delay teleport.'
+    : 'Combo input is adapted to one Enemy Lab card activation while preserving the source beat ownership, aim policy, carrier form, damage, and cleanup.';
+  referenceLockAddenda.set(card.name,`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, ${card.sourceClip.start.toFixed(2)}–${card.sourceClip.end.toFixed(2)}s]** The base-form clip was reviewed frame-by-frame and retained as the visual contract for silhouette, emission order, elemental layering, contact readability, and cleanup. Enhanced, charged, and signature mutations remain disabled.
+
+**[EVIDENCE — documented base contract]** ${card.details.summary} ${documented}
+
+**[INFERENCE — Top Down Game construction]** ${dashNote} Procedural geometry, particles, glow falloff, and harmless wall fizzles are authored approximations; they must not change the documented payload or invent damage through scenery.`);
+}
 const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']);
 const supplements=new Map([
   ['Flame Strike',read('wizard_of_legend_flame_strike_spec.md')],
@@ -243,6 +261,7 @@ const revisionHistory=new Map([
   ['Bolt Rail','The source-first gameplay pass established five instantaneous 5-damage streams, world-collision bypass, and a contact-gated 10-damage fifth-beat finisher. The reference-lock pass replaced the thin parallel-line placeholder with one irregular caster-to-contact yellow-white bolt, branching filaments, endpoint blooms, and a distinctly stronger successful finisher. Final visual source comparison remains pending user review.'],
   ['Volt Disc','The source-first gameplay pass established three short-range hollow carriers, 9 carrier damage, a 9-damage maximum-range burst, and a separate zero-damage direct-contact event. The reference-lock pass restored one disc per press through a temporary three-step card-slot lock, removed the unsupported damaging wall burst, isolated zero-damage contact semantics from ordinary damage reactions, and rebuilt the carrier and terminal FX. Final visual source comparison remains pending user review.'],
 ]);
+for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The source-first analysis was converted into a deterministic base-form Enemy Lab implementation through contract, source-render, and final-style gates. ${card.dashMotion?'The payload is layered onto the already approved Top Down Game dash locomotion, with Chaotic Rift retaining its required teleport exception.':'The full authored Basic sequence is scheduled by one card activation.'} Source comparison remains pending user review; enhanced variants remain documented but disabled.`);
 
 const improvedSections=extractNumberedH1(improvedText);
 const entries=sourceMeta.map((meta,index)=>{

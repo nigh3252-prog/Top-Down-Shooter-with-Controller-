@@ -22,8 +22,8 @@ const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
 const replacement=entries.filter(entry=>entry.status==='replacement-in-progress');
 assert.equal(improved.length,67,'all 67 entries must use the improved source-first analysis');
-assert.equal(implemented.length,16,'the completed Dragon Arc reference-lock rebuild must join the source-first implementation count');
-assert.equal(pending.length,51,'51 source-first analyses must remain implementation-pending');
+assert.equal(implemented.length,36,'the next-twenty pass must join the source-first implementation count');
+assert.equal(pending.length,31,'31 source-first analyses must remain implementation-pending');
 assert.deepEqual(legacy,[],'no legacy entry should remain after the Water Prison reanalysis');
 assert.deepEqual(replacement,[],'the completed Dragon Arc design must leave no active replacement queue');
 assert.deepEqual(entries.filter(entry=>entry.currentImplementation),[],'completed replacements must not retain an active prototype notice');
@@ -44,9 +44,10 @@ assert.match(dragonArc?.revisionHistory,/metric-validated deterministic double-h
 assert.match(dragonArc?.revisionHistory,/final visual source comparison remains pending user review/i,'Dragon Arc must leave final visual approval open');
 assert.match(dragonArc?.revisionHistory,/articulated segmented dragon silhouette/i,'Dragon Arc must record the completed visual carrier');
 assert.match(dragonArc?.analysisMarkdown,/Working motion calibration \[INFERENCE/i,'Dragon Arc must keep measured calibration separate from observed evidence');
-assert.match(html,/const CATALOG_REVISION=2/,'completed implementations must migrate older device-local checklist defaults once');
+assert.match(html,/const CATALOG_REVISION=3/,'completed implementations must migrate older device-local checklist defaults once');
 assert.match(html,/payload\.catalogRevision\?\?1/,'progress migration must preserve newer user choices');
-assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\}\}/,'revision two must migrate only Dragon Arc completion');
+assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\},3:/,'revision two must preserve the Dragon Arc completion migration');
+assert.match(html,/3:Object\.fromEntries\(NEXT_TWENTY_IMPLEMENTED\.map/,'revision three must migrate the next-twenty implementation defaults');
 assert.match(html,/progress=progressFromPayload\(incoming\)/,'imported older progress must receive the same catalog migration as local progress');
 assert.doesNotMatch(html,/for\(const entry of data\.entries\).*?entry\.defaults\.implementation/s,'catalog migration must not overwrite unrelated user checklist choices');
 
@@ -73,7 +74,21 @@ for(const [name,window] of referenceLockWindows){
   assert.match(entry?.analysisMarkdown,/\[INFERENCE[^\]]*\]/i,`${name} must keep authored inference separate from source claims`);
 }
 assert.match(html,/Five-card reference-lock:/,'the checklist must explain the pending five-card review batch');
+assert.match(html,/Next-twenty reference-lock:/,'the checklist must explain the pending twenty-card review batch');
 assert.match(html,/entry\.referenceWindow\?\?entry/,'clip playback must prefer the audited base-form window');
+
+const nextTwentyNames=['Ice Dagger','Rip Tide','Aqua Arc','Chaos Crusher','Searing Rush','Flare Rush','Ignition Rush','Air Burst','Gust Burst','Razor Burst','Spike Track','Toxic Trap','Snare Track','Thunder Line','Circuit Line','Shock Line','Wave Front','Frost Feint','Frost Wing','Chaotic Rift'];
+for(const name of nextTwentyNames){
+  const entry=entries.find(item=>item.name===name);
+  assert.equal(entry?.status,'source-first-implemented',`${name} must count as source-first implemented`);
+  assert.deepEqual(entry?.defaults,{analysis:true,implementation:true,comparison:false},`${name} must remain pending only visual comparison`);
+  assert.equal(entry?.lineage,'source-first',`${name} must retain source-first-from-outset lineage`);
+  assert.ok(entry?.referenceWindow?.end>entry?.referenceWindow?.start,`${name} must expose its audited base clip`);
+  assert.match(entry?.analysisMarkdown,/Reference-lock frame audit/i,`${name} must retain its audit addendum`);
+  assert.match(entry?.analysisMarkdown,/\[EVIDENCE[^\]]*\]/i,`${name} must separate evidence`);
+  assert.match(entry?.analysisMarkdown,/\[INFERENCE[^\]]*\]/i,`${name} must separate Top Down integration inference`);
+  assert.match(entry?.revisionHistory,/contract, source-render, and final-style gates/i,`${name} must record the durable workflow`);
+}
 
 for(const name of ['Flame Cross','Bouncing Blaze']){
   const entry=entries.find(item=>item.name===name);

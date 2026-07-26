@@ -10,6 +10,7 @@ import {
   expandCaptureStages,
   observedMetrics,
   renderReviewIndexHtml,
+  resolveCaptureOutputDirectory,
   resolveCaptureJob,
   validateCaptureManifest,
   validateComparisonProbe,
@@ -46,6 +47,15 @@ assert.deepEqual(manifest.batches['session-five'],[
   {abilityId:'VOLT-DISC',scenario:'range-expiration'},
   {abilityId:'VOLT-DISC',scenario:'slot-lock'},
 ],'session-five must be risk ordered and include every declared acceptance scenario');
+const nextTwentyIds=['ICE-DAGGER','RIP-TIDE','AQUA-ARC','CHAOS-CRUSHER','SEARING-RUSH','FLARE-RUSH','IGNITION-RUSH','AIR-BURST','GUST-BURST','RAZOR-BURST','SPIKE-TRACK','TOXIC-TRAP','SNARE-TRACK','THUNDER-LINE','CIRCUIT-LINE','SHOCK-LINE','WAVE-FRONT','FROST-FEINT','FROST-WING','CHAOTIC-RIFT'];
+assert.deepEqual(manifest.batches['next-twenty'].map(job=>job.abilityId),nextTwentyIds,'aggregate next-twenty capture must retain source order');
+assert.deepEqual(manifest.batchCoverage['next-twenty'].abilities,nextTwentyIds,'declarative coverage must guard the complete review batch');
+assert.deepEqual(Object.keys(manifest.acceptanceProfiles).filter(id=>nextTwentyIds.includes(id)),nextTwentyIds,'all next-twenty abilities must declare required semantic acceptance profiles');
+for(const abilityId of nextTwentyIds){const profile=manifest.acceptanceProfiles[abilityId];assert.equal(profile.mode,'required');assert.ok(profile.checks.length>=2);assert.ok(profile.checks.every(check=>check.metric.startsWith('captureDerived.')));assert.ok(profile.checks.some(check=>check.metric==='captureDerived.cleanedUp'),`${abilityId} capture must gate final cleanup`);}
+for(const abilityId of nextTwentyIds.slice(4,19).filter(id=>id!=='CIRCUIT-LINE'))assert.ok(manifest.acceptanceProfiles[abilityId].checks.some(check=>check.metric==='captureDerived.dashDistancePlayerFootprints'),`${abilityId} must capture actor-relative shared-dash travel`);
+assert.ok(manifest.acceptanceProfiles['FLARE-RUSH'].checks.some(check=>check.metric==='captureDerived.eventDeclaredCounts.payload-emitted'&&check.value===3));
+assert.ok(manifest.acceptanceProfiles['FROST-WING'].checks.some(check=>check.metric==='captureDerived.resolvedProjectiles'&&check.value===4));
+assert.ok(manifest.acceptanceProfiles['TOXIC-TRAP'].checks.some(check=>check.metric==='captureDerived.eventCounts.status-tick'&&check.value===5));
 assert.deepEqual(expandCaptureStages('all'),['contract','source','style']);
 assert.deepEqual(expandCaptureStages('motion,style,motion'),['motion','style']);
 
@@ -55,6 +65,11 @@ const auditedStarts={
   'WATER-PRISON':[1051.83,1060],
   'BOLT-RAIL':[53.3,53.95],
   'VOLT-DISC':[58.2,59.1],
+  'ICE-DAGGER':[64,65.2],'RIP-TIDE':[70.2,71.7],'AQUA-ARC':[75,76.2],'CHAOS-CRUSHER':[80,81.5],
+  'SEARING-RUSH':[91,92.5],'FLARE-RUSH':[99.5,101.5],'IGNITION-RUSH':[104,107.3333333333],'AIR-BURST':[110,111.5],
+  'GUST-BURST':[114.7,116.7],'RAZOR-BURST':[124.8,126.3],'SPIKE-TRACK':[132.3,133.8],'TOXIC-TRAP':[139.4,143.7333333333],
+  'SNARE-TRACK':[147.4,149.9],'THUNDER-LINE':[151.4,153.4],'CIRCUIT-LINE':[157.9,163.5666666667],'SHOCK-LINE':[165.9,167.4],
+  'WAVE-FRONT':[168.4,170.4],'FROST-FEINT':[180,182.25],'FROST-WING':[183,185],'CHAOTIC-RIFT':[195.2,196.2],
 };
 for(const [abilityId,ability] of Object.entries(manifest.abilities)){
   for(const [scenarioName,scenario] of Object.entries(ability.scenarios)){
@@ -81,10 +96,12 @@ assert.equal(delayed.stage.reset.fixtures.targets[0].spawnFrame,60,'delayed targ
 const deck=resolveCaptureJob(manifest,{id:'VOLT-DISC',scenario:'slot-lock',stage:'contract'});
 assert.equal(deck.stage.reset.fixtures.deck.primaryArcanaId,'VOLT-DISC');assert.deepEqual(deck.stage.actions.map(action=>action.op),['deckPlay','deckPlay','deckPlay','deckPlay']);
 assert.ok(resolveCaptureJob(manifest,{id:'BOLT-RAIL',scenario:'fifth-beat-miss',stage:'contract'}).stage.actions.some(action=>action.op==='release'));
+assert.equal(resolveCaptureJob(manifest,{id:'ICE-DAGGER',stage:'contract'}).stage.acceptance.mode,'required');
+assert.equal(resolveCaptureJob(manifest,{id:'CHAOTIC-RIFT',stage:'style'}).stage.acceptance.checks[0].metric,'captureDerived.eventCounts.rift-entered');
 assert.throws(()=>resolveCaptureJob(manifest,{id:'VOLT-DISC',stage:'motion'}),/Unknown .* stage motion/,'motion alias must remain Dragon-only');
 
 for(const marker of [
-  '--batch session-five','--scenario <id>','--stage all','traceSnapshotsEqual','review-index.json','review-index.html',
+  '--batch session-five','--batch next-twenty','--scenario <id>','--stage all','traceSnapshotsEqual','review-index.json','review-index.html','batchCoverage',
   'screenshotExactPassed','Exact checkpoint pixels:',
   'api.act||api.perform','durationFrames','checkpointFrames','telemetryAdapter','semanticEvents','abilityContracts',
   'telemetryRun1','telemetryRun2','captureRevision','manifestSha256','runnerSha256',
@@ -92,6 +109,27 @@ for(const marker of [
 ])assert.ok(script.includes(marker),`capture runner is missing v2 behavior: ${marker}`);
 assert.doesNotMatch(script,/from ['"](?:playwright|puppeteer)/,'capture runner must remain dependency-free');
 assert.match(script,/const deterministicPassed=run1\.traceHashes\.length===run2\.traceHashes\.length&&traceSnapshotsEqual\.every\(Boolean\);/,'identical semantic traces, not fragile cross-machine pixel equality, must gate determinism');
+
+const captureArtifactRoot=path.resolve(root,manifest.outputRoot);
+assert.equal(
+  resolveCaptureOutputDirectory({manifestOutputRoot:manifest.outputRoot,requestedOutput:'artifacts/arcana-capture/manual/ice-dagger'}),
+  path.join(captureArtifactRoot,'manual','ice-dagger'),
+  'custom single-capture output may target only a concrete descendant of the capture artifact root',
+);
+for(const unsafeOutput of ['src','media','artifacts/arcana-capture','../outside']){
+  assert.throws(
+    ()=>resolveCaptureOutputDirectory({manifestOutputRoot:manifest.outputRoot,requestedOutput:unsafeOutput}),
+    /Refusing to replace files outside a concrete capture-artifact subdirectory/,
+    `capture cleanup must refuse unsafe --output ${unsafeOutput}`,
+  );
+}
+
+const genericDash=observedMetrics([
+  {frame:0,time:0,snapshot:{playerFootprint:2.1,player:{hp:100,targetable:true},captureDummies:[{id:'dash-target',hp:100}],runtimes:[{id:'wizardNextTwentyDash',snapshot:{semanticEvents:[{serial:1,time:0,kind:'dash-started',arcanaId:'FLARE-RUSH',stableId:'flare-1',origin:{x:0,z:0}}],effects:[{type:'dashMotion',arcanaId:'FLARE-RUSH',stableId:'flare-1'}]}}]}},
+  {frame:30,time:.5,snapshot:{playerFootprint:2.1,player:{hp:98,targetable:false},captureDummies:[{id:'dash-target',hp:90}],runtimes:[{id:'wizardNextTwentyDash',snapshot:{semanticEvents:[{serial:1,time:0,kind:'dash-started',arcanaId:'FLARE-RUSH',stableId:'flare-1',origin:{x:0,z:0}},{serial:2,time:.25,kind:'payload-emitted',arcanaId:'FLARE-RUSH',stableId:'flare-1',count:3},{serial:3,time:.25,kind:'payload-finalized',arcanaId:'FLARE-RUSH',stableId:'flare-1',endpoint:{x:8.4,z:0}},{serial:4,time:.48,kind:'dash-complete',arcanaId:'FLARE-RUSH',stableId:'flare-1',distance:8.4,blocked:false,endpoint:{x:8.4,z:0}},{serial:5,time:.49,kind:'projectile-hit',arcanaId:'FLARE-RUSH',stableId:'flare-1:01',damage:10}],effects:[]}}]}},
+],{telemetryAdapter:'generic',runtimeId:'wizardNextTwentyDash',abilityId:'FLARE-RUSH'}).captureDerived;
+assert.deepEqual({declared:genericDash.eventDeclaredCounts['payload-emitted'],damage:genericDash.eventDamage['projectile-hit'],target:genericDash.targetDamage['dash-target'],resolved:genericDash.resolvedProjectiles},{declared:3,damage:10,target:10,resolved:1});
+assert.equal(genericDash.dashDistancePlayerFootprints,4);assert.equal(genericDash.payloadEndpointError,0);assert.equal(genericDash.playerHpLoss,2);assert.equal(genericDash.untargetableFrames,1);assert.equal(genericDash.cleanedUp,true);
 
 const validProbe={streams:[{codec_name:'h264',pix_fmt:'yuv420p',width:1280,height:360,r_frame_rate:'60/1',avg_frame_rate:'60/1',duration:'0.900000',nb_frames:'54',nb_read_frames:'54'}],format:{format_name:'mov,mp4,m4a,3gp,3g2,mj2',duration:'0.900000'}};
 assert.equal(validateComparisonProbe(validProbe,{fps:60,frameCount:54,duration:.9,width:1280,height:360}).passed,true);
