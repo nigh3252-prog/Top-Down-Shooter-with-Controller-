@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import {
   DRAGON_ARC_PLAYER_DIAMETER,
   DRAGON_ARC_SPEC,
+  clockwiseOrbitPosition,
   dragonArcMotionMetrics,
+  homingFlaresContractMetrics,
   installWizardRebuiltArcanaRuntime,
   sampleDragonArcBody,
   sampleDragonArcPath,
+  sourceLockedAbilityRenderMode,
+  waterPrisonContractMetrics,
+  whirlingTornadoContractMetrics,
 } from '../src/wizard-rebuilt-arcana-runtime.js';
 
 class Transform{
@@ -57,6 +62,17 @@ const cast=id=>runtime.cast({id:`WOL-${id}`,arcanaId:id});
 const step=(seconds,dt=.025,mutate=()=>{})=>{for(let elapsed=0;elapsed<seconds;elapsed+=dt){mutate();runtime.update(dt,elapsed);}};
 const near=(actual,expected,tolerance=1e-9,message='')=>assert.ok(Math.abs(actual-expected)<=tolerance,message||`expected ${actual} to be within ${tolerance} of ${expected}`);
 
+assert.equal(sourceLockedAbilityRenderMode('?capture=1&renderMode=proxy'),'proxy');
+assert.equal(sourceLockedAbilityRenderMode('?capture=1&renderMode=source'),'source');
+assert.equal(sourceLockedAbilityRenderMode('?capture=1&renderMode=style'),'style');
+assert.equal(sourceLockedAbilityRenderMode('?renderMode=proxy'),'style','non-capture production must always use final style rendering');
+const homingContract=homingFlaresContractMetrics(),tornadoContract=whirlingTornadoContractMetrics(),prisonContract=waterPrisonContractMetrics();
+assert.deepEqual([homingContract.count,homingContract.storageDuration,homingContract.orbitDirection],[7,4,'clockwise']);
+assert.equal(tornadoContract.gameplayRadius,tornadoContract.visibleRadius,'vortex art must cover the complete gameplay/defense footprint');
+assert.deepEqual([tornadoContract.duration,tornadoContract.tickDamage,tornadoContract.finisherDamage],[.8,8,10]);
+assert.ok(prisonContract.attachedVisualRadius>=prisonContract.projectileVisualRadius*3.9,'attached Water Prison must transform into a materially larger source globe');
+assert.deepEqual(prisonContract.tickTimes,[1,2,3,4,5]);
+
 const dragonMetrics=dragonArcMotionMetrics();
 near(dragonMetrics.playerDiameter,DRAGON_ARC_PLAYER_DIAMETER);
 near(DRAGON_ARC_SPEC.emissionInterval,.1);
@@ -89,12 +105,36 @@ assert.ok(sampledBody.every(sample=>sample.visible&&Number.isFinite(sample.tange
 assert.equal(cast('HOMING-FLARES'),true);
 let flares=runtime.state.effects.find(effect=>effect.type==='homingFlares');
 assert.equal(flares.flares.length,7,'base Homing Flares must create exactly seven owned visuals');
+assert.equal(new Set(flares.flares.map(flare=>flare.stableId)).size,7,'capture scenarios need one stable semantic ID per flare');
+assert.equal(flares.renderMode,'style');
+assert.ok(flares.flares.every(flare=>flare.visualMarkers.sourceSilhouette==='large-teardrop-flame'&&flare.visualMarkers.tails===3));
+const flareLayers=[];flares.flares[0].mesh.traverse(object=>flareLayers.push(object.userData?.visualRole));
+for(const role of['homingFlareBody','homingFlareShell','homingFlareCore','homingFlareTail','homingFlareSmoke'])assert.ok(flareLayers.includes(role),`production flare is missing ${role}`);
 runtime.update(.05,0);
 assert.ok(flares.flares.every(flare=>flare.mesh&&Number.isFinite(flare.position.x)),'stored halo must remain visible and positioned around the caster');
 const flareTarget={x:0,z:6,hp:1000,radius:.5};system.enemies=[flareTarget];step(2.4);
 assert.equal(hits.filter(hit=>hit.options.homingFlares).length,7,'every stored flare must independently acquire and hit');
 assert.ok(hits.filter(hit=>hit.options.homingFlares).every(hit=>hit.amount===7));
+assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='HOMING-FLARES'&&event.event==='flare-launched').length,7);
+assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='HOMING-FLARES'&&event.event==='flare-hit').length,7);
+assert.equal(scene.children.some(child=>/Homing Flares source-locked flare/.test(child.name)),false,'hit flares and their trails must clean completely');
 runtime.reset();hits.length=0;system.enemies=[];
+
+assert.equal(cast('HOMING-FLARES'),true);flares=runtime.state.effects.find(effect=>effect.type==='homingFlares');
+for(let frame=0;frame<239;frame++)runtime.update(1/60,frame/60);
+assert.ok(runtime.state.effects.includes(flares),'stored halo must still exist one frame before its four-second deadline');
+runtime.update(1/60,239/60);
+assert.equal(runtime.state.effects.some(effect=>effect.type==='homingFlares'),false,'unused flares must expire at four seconds, not four seconds plus flight life');
+const expiryEvents=runtime.snapshot().semanticEvents.filter(event=>event.event==='flare-expired');
+assert.equal(expiryEvents.length,7);assert.ok(expiryEvents.every(event=>event.reason==='storage-duration'&&event.storageAge===4));
+runtime.reset();
+
+assert.equal(cast('HOMING-FLARES'),true);flares=runtime.state.effects.find(effect=>effect.type==='homingFlares');
+const interceptPosition=clockwiseOrbitPosition({slot:0,count:7,age:1/60,radius:flares.spec.orbitRadius});
+const hostileFlareTarget={id:'capture-projectile',x:interceptPosition.x,z:interceptPosition.z,r:.12,life:2,dead:false,mesh:{visible:true}};system.hostileProjectiles=[hostileFlareTarget];runtime.update(1/60,0);
+assert.equal(hostileFlareTarget.dead,true);assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.event==='flare-intercepted').length,1);
+assert.equal(flares.flares[0].state,'intercepted');
+runtime.reset();system.hostileProjectiles=[];
 
 assert.equal(cast('DRAGON-ARC'),true);
 assert.equal(runtime.state.dragonStock,0,'Dragon Arc must snapshot and spend all available stock');
@@ -189,15 +229,33 @@ mazeSegments.length=0;runtime.reset();assert.equal(scene.children.some(child=>/D
 
 const tornadoTarget={x:1,z:0,hp:1000,radius:.5};const hostileRock={x:.8,z:0,r:.1,life:2,dead:false,mesh:{visible:true}};system.enemies=[tornadoTarget];system.hostileProjectiles=[hostileRock];
 assert.equal(cast('WHIRLING-TORNADO'),true);const vortex=runtime.state.effects.find(effect=>effect.type==='whirlingTornado'),vortexOrigin={...vortex.position};step(1.1);
+assert.equal(vortex.visualMarkers.visibleRadius,vortex.spec.radius,'source silhouette and collision footprint must use one radius contract');
+assert.equal(vortex.visualMarkers.lanes,7);assert.equal(vortex.visualMarkers.cores,6);assert.equal(vortex.visualMarkers.wisps,14);
+const vortexLayers=[];vortex.mesh.traverse(object=>vortexLayers.push(object.userData?.visualRole));
+for(const role of['whirlingTornadoFootprint','whirlingTornadoBody','whirlingTornadoLane','whirlingTornadoCore','whirlingTornadoWisp'])assert.ok(vortexLayers.includes(role),`production vortex is missing ${role}`);
 assert.deepEqual(vortexOrigin,{x:0,z:0},'base vortex must be stationary at the cast position');
 assert.deepEqual(hits.filter(hit=>hit.options.whirlingTornadoTick).map(hit=>hit.amount),[8,8,8,8]);
 assert.deepEqual(hits.filter(hit=>hit.options.whirlingTornadoFinisher).map(hit=>hit.amount),[10]);
+assert.ok(hits.find(hit=>hit.options.whirlingTornadoFinisher).knock.x>0,'finisher must push a target on the positive-x side outward');
 assert.equal(hostileRock.dead,true,'visible vortex must erase eligible hostile projectiles');
+const tornadoEvents=runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='WHIRLING-TORNADO');
+assert.deepEqual(tornadoEvents.filter(event=>event.event==='tick').map(event=>event.tick),[1,2,3,4]);
+assert.equal(tornadoEvents.filter(event=>event.event==='finisher').length,1);assert.equal(tornadoEvents.filter(event=>event.event==='projectile-intercepted').length,1);assert.equal(tornadoEvents.filter(event=>event.event==='complete').length,1);
+assert.equal(scene.children.some(child=>/Whirling Tornado source-locked vortex/.test(child.name)),false,'vortex mesh must clean after its authored finisher window');
 runtime.reset();hits.length=0;system.hostileProjectiles=[];
 
-const prisoner={x:0,z:3,hp:1000,radius:.5,vx:0,vz:0,knockX:0,knockZ:0,stunned:0};system.enemies=[prisoner];
+const prisoner={id:'capture-prisoner',x:0,z:3,hp:1000,radius:.5,vx:0,vz:0,knockX:0,knockZ:0,stunned:0};system.enemies=[prisoner];
 assert.equal(cast('WATER-PRISON'),true);assert.equal(cast('WATER-PRISON'),true);assert.equal(runtime.state.waterAmmo,0,'two base ammo charges must be independently spendable');
+let prisonSnapshots=runtime.snapshot().effects.filter(effect=>effect.type==='waterPrison');
+assert.equal(new Set(prisonSnapshots.map(effect=>effect.stableId)).size,2);assert.ok(prisonSnapshots.every(effect=>effect.phase==='carrier'&&effect.visualMarkers.carrierRadius===.34));
+assert.equal(scene.children.filter(child=>/compact source-locked carrier/.test(child.name)).length,2,'each ammo charge owns a compact incoming carrier visual');
 step(.5);assert.equal(prisoner.__wizardWaterPrisonCount,2,'two projectiles may stack independent prison ownership on one target');
+prisonSnapshots=runtime.snapshot().effects.filter(effect=>effect.type==='waterPrison');
+assert.ok(prisonSnapshots.every(effect=>effect.phase==='attached'&&effect.visualMarkers.attachedRadius===1.35));
+assert.ok(prisonSnapshots.every(effect=>effect.visualMarkers.attachedRadius>=effect.visualMarkers.carrierRadius*3.9));
+assert.equal(scene.children.filter(child=>/large source-locked attached globe/.test(child.name)).length,2,'carrier contact must replace, not merely enlarge, the incoming mesh');
+const prisonLayers=[];runtime.state.effects.find(effect=>effect.type==='waterPrison')?.mesh.traverse(object=>prisonLayers.push(object.userData?.visualRole));
+for(const role of['waterPrisonAttachedShell','waterPrisonAttachedRim','waterPrisonShellPatch','waterPrisonInternalFragment','waterPrisonAttachedDroplet'])assert.ok(prisonLayers.includes(role),`production prison is missing ${role}`);
 const prisonAnchor={x:prisoner.x,z:prisoner.z};step(4.8,.025,()=>{prisoner.x=7;prisoner.z=7;prisoner.knockX=5;prisoner.knockZ=5;});
 assert.deepEqual({x:prisoner.x,z:prisoner.z},prisonAnchor,'active prison ownership must defeat external movement and displacement');
 step(.8);
@@ -205,6 +263,27 @@ assert.equal(hits.filter(hit=>hit.options.waterPrisonImpact).length,2);
 assert.equal(hits.filter(hit=>hit.options.waterPrisonTick).length,10,'each stacked prison must own exactly five ticks');
 assert.ok(hits.filter(hit=>hit.options.waterPrisonTick).every(hit=>hit.amount===5));
 assert.equal(prisoner.__wizardWaterPrisonCount,undefined,'final instance cleanup must release shared lock ownership');
+const waterEvents=runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='WATER-PRISON');
+assert.equal(waterEvents.filter(event=>event.event==='attached').length,2);assert.equal(waterEvents.filter(event=>event.event==='tick').length,10);assert.equal(waterEvents.filter(event=>event.event==='released'&&event.reason==='duration').length,2);
+assert.equal(scene.children.some(child=>/Water Prison large source-locked attached globe/.test(child.name)),false,'every independently owned attached globe must clean after release');
+
+runtime.reset();hits.length=0;const doomedPrisoner={id:'doomed-prisoner',x:0,z:2.6,hp:100,radius:.5,vx:0,vz:0,knockX:0,knockZ:0,stunned:0};system.enemies=[doomedPrisoner];assert.equal(cast('WATER-PRISON'),true);step(.3);assert.equal(doomedPrisoner.__wizardWaterPrisonCount,1);doomedPrisoner.hp=0;system.enemies=[];runtime.update(1/60,0);
+assert.equal(doomedPrisoner.__wizardWaterPrisonCount,undefined,'target death must release the final position-lock owner');
+assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.event==='released'&&event.reason==='target-invalid').length,1);
+
+runtime.reset();mazeSegments.push({a:{x:-4,z:2},b:{x:4,z:2}});system.enemies=[];assert.equal(cast('WATER-PRISON'),true);step(.2,1/60);assert.equal(runtime.state.effects.some(effect=>effect.type==='waterPrison'),false,'carrier must terminate at the first wall');assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.event==='carrier-ended'&&event.reason==='wall').length,1);mazeSegments.length=0;
 
 runtime.dispose();
+
+const productionSearch=location.search;
+for(const mode of['proxy','source']){
+  location.search=`?enemyLab=1&capture=1&renderMode=${mode}`;const modeScene=new Group(),modeRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:modeScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
+  assert.equal(modeRuntime.cast({arcanaId:'HOMING-FLARES'}),true);assert.equal(modeRuntime.cast({arcanaId:'WHIRLING-TORNADO'}),true);assert.equal(modeRuntime.cast({arcanaId:'WATER-PRISON'}),true);
+  const modeSnapshot=modeRuntime.snapshot(),modeEffects=modeSnapshot.effects.filter(effect=>['homingFlares','whirlingTornado','waterPrison'].includes(effect.type));assert.equal(modeSnapshot.renderMode,mode);assert.equal(modeEffects.length,3);assert.ok(modeEffects.every(effect=>effect.renderMode===mode));
+  const modeHoming=modeEffects.find(effect=>effect.type==='homingFlares'),modeTornado=modeEffects.find(effect=>effect.type==='whirlingTornado'),modeWater=modeEffects.find(effect=>effect.type==='waterPrison');
+  if(mode==='proxy'){assert.ok(modeHoming.flares.every(flare=>flare.visualMarkers.tails===0&&flare.visualMarkers.solidBodies===0));assert.equal(modeTornado.visualMarkers.lanes,0);assert.equal(modeWater.visualMarkers.droplets,0);}
+  else{assert.ok(modeHoming.flares.every(flare=>flare.visualMarkers.tails===3&&flare.visualMarkers.smoke===0));assert.equal(modeTornado.visualMarkers.lanes,7);assert.equal(modeTornado.visualMarkers.wisps,0);assert.equal(modeWater.visualMarkers.droplets,3);}
+  modeRuntime.dispose();assert.equal(modeScene.children.length,0,`${mode} capture reset must dispose every contract/source mesh`);
+}
+location.search=productionSearch;
 console.log('wizard rebuilt arcana runtime tests passed');
