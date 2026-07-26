@@ -80,6 +80,23 @@ export function voltDiscProjectileSpec({enhanced=false}={}){
   return Object.freeze({damage:9,speed:11.2,range:7.4,radius:.52,burstRadius:1.38,missBurstDamage:9,directBurstDamage:0,wallFizzleDamage:0,comboPresses:VOLT_DISC_COMBO.presses,rollingTimeout:VOLT_DISC_COMBO.rollingTimeout,redirects:!!enhanced,enhanced:!!enhanced});
 }
 
+export function sampleBoltRailStream({beat=1,length=3.85,segments=10}={}){
+  const safeBeat=clamp(Math.round(Number(beat)||1),1,5),safeLength=Math.max(.2,Number(length)||3.85),count=Math.max(4,Math.trunc(Number(segments)||10));
+  const main=Array.from({length:count},(_,index)=>{
+    const p=index/(count-1),envelope=Math.sin(p*Math.PI),phase=index*2.31+safeBeat*1.73;
+    return{x:Math.sin(phase)*(.095+.095*envelope)*envelope,y:1.12+Math.cos(phase*.83)*.105*envelope,z:p*safeLength,p};
+  });
+  const roots=[2,4,6,8].filter(index=>index<count-1),branches=roots.map((root,branchIndex)=>{
+    const anchor=main[root],side=(branchIndex+safeBeat)%2?1:-1,span=(.42+.11*((safeBeat+branchIndex)%3))*Math.min(1,safeLength/3.85),forward=.25+.08*(branchIndex%2);
+    return[
+      {...anchor},
+      {x:anchor.x+side*span*.58,y:anchor.y+.08*((branchIndex%2)*2-1),z:Math.min(safeLength,anchor.z+forward*.45)},
+      {x:anchor.x+side*span,y:anchor.y+.03*((safeBeat+branchIndex)%3-1),z:Math.min(safeLength,anchor.z+forward)},
+    ];
+  });
+  return Object.freeze({beat:safeBeat,length:safeLength,main:Object.freeze(main.map(point=>Object.freeze(point))),branches:Object.freeze(branches.map(branch=>Object.freeze(branch.map(point=>Object.freeze(point)))))});
+}
+
 export function pointSegmentDistance2D(point,a,b){
   const abx=b.x-a.x,abz=b.z-a.z,apx=point.x-a.x,apz=point.z-a.z;
   const denom=abx*abx+abz*abz;
@@ -182,31 +199,65 @@ function makeSparkArc(THREE,scene,spec,size){
   const edge=new THREE.Mesh(new THREE.RingGeometry((spec.overlay.radius-.12)*size,(spec.overlay.radius+.04)*size,48,1,start,length),makeMaterial(THREE,SPARK_HOT,.96,true));edge.rotation.x=Math.PI/2;edge.position.y=.39;edge.userData.baseOpacity=.96;group.add(edge);group.renderOrder=7;scene.add(group);return group;
 }
 
-function makeBoltRailStream(THREE,scene,spec,size,visualMode='style'){
-  const group=new THREE.Group();group.name=`Wizard Arcana Bolt Rail beat ${spec.beat}`;
-  group.userData.visualMode=visualMode;
-  for(let line=0;line<5;line++){const points=[];for(let index=0;index<9;index++){const p=index/8;points.push(new THREE.Vector3(Math.sin(index*2.6+line*1.7)*(.09+.025*line)+(line-2)*.045,.42+Math.cos(index*1.9+line)*.08,p*spec.range));}const geometry=new THREE.BufferGeometry().setFromPoints(points),material=new THREE.LineBasicMaterial({color:line===2?VOLT_HOT:VOLT,transparent:true,opacity:line===2?1:.72,blending:THREE.AdditiveBlending,depthWrite:false}),bolt=new THREE.Line(geometry,material);bolt.userData.baseOpacity=material.opacity;group.add(bolt);}
-  for(let index=0;index<3;index++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.24+index*.11,.035,7,22),makeMaterial(THREE,index===1?VOLT_HOT:VOLT,.72,true));ring.position.set(0,.42,.55+index*1.25);ring.userData.baseOpacity=.72;group.add(ring);}
-  group.scale.setScalar(size);group.renderOrder=8;scene.add(group);return group;
+function addLightningSegment(THREE,group,a,b,{color=VOLT_HOT,radius=.05,opacity=.9,additive=true,marker=''}={}){
+  const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,length=Math.hypot(dx,dy,dz);if(length<1e-5)return null;
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(1,8,6),makeMaterial(THREE,color,opacity,additive));mesh.position.set((a.x+b.x)/2,(a.y+b.y)/2,(a.z+b.z)/2);mesh.scale.set(radius,radius,length*.52);mesh.rotation.set(-Math.atan2(dy,Math.hypot(dx,dz)),Math.atan2(dx,dz),0);mesh.userData.baseOpacity=opacity;if(marker)mesh.userData[marker]=true;group.add(mesh);return mesh;
 }
+function addLightningPath(THREE,group,points,style){for(let index=1;index<points.length;index++)addLightningSegment(THREE,group,points[index-1],points[index],style);}
+function addBoltPathLayers(THREE,group,sample,{shellRadius,coreRadius,glowRadius=0,branches=true,style=false}={}){
+  if(glowRadius)addLightningPath(THREE,group,sample.main,{color:VOLT,radius:glowRadius,opacity:.24,marker:'boltGlow'});
+  addLightningPath(THREE,group,sample.main,{color:VOLT,radius:shellRadius,opacity:.93,marker:'boltShell'});addLightningPath(THREE,group,sample.main,{color:VOLT_HOT,radius:coreRadius,opacity:1,marker:'boltCore'});
+  if(branches)for(const branch of sample.branches){if(style)addLightningPath(THREE,group,branch,{color:VOLT,radius:shellRadius*.72,opacity:.72,marker:'boltBranchGlow'});addLightningPath(THREE,group,branch,{color:VOLT_HOT,radius:coreRadius*.72,opacity:.94,marker:'boltBranch'});}
+}
+function finishBoltVisual(THREE,scene,group,spec,size,visualMode){group.name=`Wizard Arcana Bolt Rail ${visualMode} beat ${spec.beat}`;group.userData.visualMode=visualMode;group.scale.setScalar(size);group.renderOrder=8;scene.add(group);return group;}
+function makeBoltRailContractVisual(THREE,scene,spec,size){const group=new THREE.Group(),sample=sampleBoltRailStream({beat:spec.beat,length:spec.range});addLightningPath(THREE,group,sample.main,{color:VOLT_HOT,radius:.035,opacity:.92,marker:'boltContract'});return finishBoltVisual(THREE,scene,group,spec,size,'contract');}
+function makeBoltRailSourceVisual(THREE,scene,spec,size){const group=new THREE.Group(),sample=sampleBoltRailStream({beat:spec.beat,length:spec.range});addBoltPathLayers(THREE,group,sample,{shellRadius:.155,coreRadius:.066,branches:true});return finishBoltVisual(THREE,scene,group,spec,size,'source');}
+function makeBoltRailStyleVisual(THREE,scene,spec,size){
+  const group=new THREE.Group(),sample=sampleBoltRailStream({beat:spec.beat,length:spec.range});addBoltPathLayers(THREE,group,sample,{shellRadius:.19,coreRadius:.078,glowRadius:.30,branches:true,style:true});
+  for(let index=1;index<sample.main.length-1;index+=2){const point=sample.main[index],spark=new THREE.Mesh(new THREE.SphereGeometry(.10,8,6),makeMaterial(THREE,index%4===1?VOLT_HOT:VOLT,.88,true));spark.position.set(point.x,point.y,point.z);spark.userData.baseOpacity=.88;spark.userData.boltSpark=index;group.add(spark);}
+  return finishBoltVisual(THREE,scene,group,spec,size,'style');
+}
+function makeBoltRailVisual(THREE,scene,spec,size,visualMode='style'){return visualMode==='contract'?makeBoltRailContractVisual(THREE,scene,spec,size):visualMode==='source'?makeBoltRailSourceVisual(THREE,scene,spec,size):makeBoltRailStyleVisual(THREE,scene,spec,size);}
 
-function makeVoltDisc(THREE,scene,spec,size,visualMode='style'){
-  const group=new THREE.Group();group.name='Wizard Arcana Volt Disc hollow ring';
-  group.userData.visualMode=visualMode;
-  const outer=new THREE.Mesh(new THREE.TorusGeometry(.52*size,.105*size,10,34),makeMaterial(THREE,VOLT,.88,true));outer.userData.baseOpacity=.88;group.add(outer);
-  const inner=new THREE.Mesh(new THREE.TorusGeometry(.34*size,.045*size,8,30),makeMaterial(THREE,VOLT_HOT,.96,true));inner.userData.baseOpacity=.96;group.add(inner);
-  for(let index=0;index<6;index++){const angle=index*Math.PI/3,point=new THREE.Mesh(new THREE.SphereGeometry(.075*size,8,6),makeMaterial(THREE,index%2?VOLT:VOLT_HOT,.9,true));point.position.set(Math.cos(angle)*.5*size,Math.sin(angle)*.5*size,0);point.userData.discSpark=index;group.add(point);}
-  group.renderOrder=8;scene.add(group);return group;
+function finishVoltDiscVisual(scene,group,size,visualMode){group.name=`Wizard Arcana Volt Disc ${visualMode} hollow ring`;group.userData.visualMode=visualMode;group.scale.setScalar(size);group.renderOrder=8;scene.add(group);return group;}
+function makeVoltDiscContractVisual(THREE,scene,size){const group=new THREE.Group(),ring=new THREE.Mesh(new THREE.TorusGeometry(.50,.055,8,30),makeMaterial(THREE,VOLT_HOT,.94,true));ring.userData.baseOpacity=.94;group.add(ring);return finishVoltDiscVisual(scene,group,size,'contract');}
+function makeVoltDiscSourceVisual(THREE,scene,size){
+  const group=new THREE.Group(),outer=new THREE.Mesh(new THREE.TorusGeometry(.50,.105,10,36),makeMaterial(THREE,VOLT,.92,true)),hotFace=new THREE.Mesh(new THREE.TorusGeometry(.43,.058,8,34),makeMaterial(THREE,VOLT_HOT,1,true)),lead=new THREE.Mesh(new THREE.SphereGeometry(.13,9,7),makeMaterial(THREE,VOLT_HOT,1,true));outer.userData.baseOpacity=.92;hotFace.position.z=.055;hotFace.userData.baseOpacity=1;lead.userData.baseOpacity=1;lead.userData.discLead=true;group.add(outer,hotFace,lead);
+  for(let index=0;index<6;index++){const angle=index*TAU/6,fragment=new THREE.Mesh(new THREE.SphereGeometry(.055,7,5),makeMaterial(THREE,index%2?VOLT:VOLT_HOT,.88,true));fragment.position.set(Math.cos(angle)*.56,Math.sin(angle)*.56,(index%3-1)*.025);fragment.userData.baseOpacity=.88;fragment.userData.discSpark=index;group.add(fragment);}
+  return finishVoltDiscVisual(scene,group,size,'source');
 }
+function makeVoltDiscStyleVisual(THREE,scene,size){
+  const group=new THREE.Group(),corona=new THREE.Mesh(new THREE.TorusGeometry(.51,.18,10,38),makeMaterial(THREE,VOLT,.27,true)),outer=new THREE.Mesh(new THREE.TorusGeometry(.49,.115,10,38),makeMaterial(THREE,VOLT,.94,true)),hotFace=new THREE.Mesh(new THREE.TorusGeometry(.42,.065,9,36),makeMaterial(THREE,VOLT_HOT,1,true)),lead=new THREE.Mesh(new THREE.SphereGeometry(.16,10,8),makeMaterial(THREE,VOLT_HOT,1,true));corona.position.z=-.02;outer.userData.baseOpacity=.94;corona.userData.baseOpacity=.27;hotFace.position.z=.08;hotFace.userData.baseOpacity=1;lead.userData.baseOpacity=1;lead.userData.discLead=true;group.add(corona,outer,hotFace,lead);
+  for(let index=0;index<10;index++){const angle=index*TAU/10,fragment=new THREE.Mesh(new THREE.SphereGeometry(index%3===0?.075:.045,8,6),makeMaterial(THREE,index%2?VOLT:VOLT_HOT,.92,true));fragment.position.set(Math.cos(angle)*(.55+(index%2)*.06),Math.sin(angle)*(.55+(index%2)*.06),-.02-(index%3)*.025);fragment.userData.baseOpacity=.92;fragment.userData.discSpark=index;group.add(fragment);}
+  for(let trail=1;trail<=2;trail++){const echo=new THREE.Mesh(new THREE.TorusGeometry(.40-trail*.05,.035,7,26),makeMaterial(THREE,VOLT,.24/trail,true));echo.userData.baseOpacity=.24/trail;echo.userData.discEcho=trail;group.add(echo);}
+  return finishVoltDiscVisual(scene,group,size,'style');
+}
+function makeVoltDiscVisual(THREE,scene,size,visualMode='style'){return visualMode==='contract'?makeVoltDiscContractVisual(THREE,scene,size):visualMode==='source'?makeVoltDiscSourceVisual(THREE,scene,size):makeVoltDiscStyleVisual(THREE,scene,size);}
 
-function makeLightningBurst(THREE,scene,position,size,direct=false,visualMode='style',semanticKind=direct?'contact':'terminal'){
-  const group=new THREE.Group();group.name=direct?'Wizard Arcana Volt Disc zero-damage contact burst':'Wizard Arcana lightning damage burst';
-  group.userData.visualMode=visualMode;group.userData.semanticKind=semanticKind;
-  const ring=new THREE.Mesh(new THREE.RingGeometry(.28*size,.72*size,34),makeMaterial(THREE,VOLT,.82,true));ring.rotation.x=-Math.PI/2;ring.userData.baseOpacity=.82;group.add(ring);
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.26*size,12,8),makeMaterial(THREE,VOLT_HOT,direct?.64:.94,true));core.position.y=.32*size;core.userData.baseOpacity=direct?.64:.94;group.add(core);
-  for(let ray=0;ray<8;ray++){const angle=ray*Math.PI/4,points=[new THREE.Vector3(0,.32*size,0),new THREE.Vector3(Math.cos(angle)*.45*size,.34*size,Math.sin(angle)*.45*size),new THREE.Vector3(Math.cos(angle+.12)*.92*size,.18*size,Math.sin(angle+.12)*.92*size)],geometry=new THREE.BufferGeometry().setFromPoints(points),material=new THREE.LineBasicMaterial({color:ray%2?VOLT:VOLT_HOT,transparent:true,opacity:.84,blending:THREE.AdditiveBlending,depthWrite:false}),line=new THREE.Line(geometry,material);line.userData.baseOpacity=.84;group.add(line);}
-  group.position.set(position.x,0,position.z);group.renderOrder=9;scene.add(group);return group;
+function addRadialLightning(THREE,group,{count=8,radius=.9,height=.3,colorA=VOLT_HOT,colorB=VOLT,opacity=.86,marker='burstRay'}={}){
+  for(let ray=0;ray<count;ray++){const angle=ray*TAU/count,twist=(ray%3-1)*.16,start={x:0,y:height,z:0},middle={x:Math.cos(angle)*radius*.48,y:height+(ray%2?.08:-.03),z:Math.sin(angle)*radius*.48},end={x:Math.cos(angle+twist)*radius,y:.12+(ray%3)*.045,z:Math.sin(angle+twist)*radius};addLightningPath(THREE,group,[start,middle,end],{color:ray%2?colorA:colorB,radius:ray%3===0?.055:.035,opacity,marker});}
 }
+function makeBurstBase(THREE,scene,position,size,visualMode,semanticKind){const group=new THREE.Group();group.name=`Wizard Arcana ${semanticKind} ${visualMode}`;group.userData.visualMode=visualMode;group.userData.semanticKind=semanticKind;group.userData.baseScale=size;group.position.set(position.x,Number(position.y)||0,position.z);group.scale.setScalar(size);group.renderOrder=9;scene.add(group);return group;}
+function makeVoltBurstContractVisual(THREE,scene,position,size,semanticKind){const group=makeBurstBase(THREE,scene,position,size,'contract',semanticKind),ring=new THREE.Mesh(new THREE.RingGeometry(.22,.58,28),makeMaterial(THREE,VOLT_HOT,.82,true));ring.rotation.x=-Math.PI/2;ring.position.y=.08;ring.userData.baseOpacity=.82;group.add(ring);return group;}
+function addScreenBurstStar(THREE,group,{reach=.72,radius=.055,opacity=.96,marker='screenBurstRay'}={}){const directions=[[-1,0,0],[1,0,0],[0,-.82,0],[0,1,0],[-.65,-.58,.05],[.65,.58,.05],[-.65,.58,-.05],[.65,-.58,-.05]];for(const [x,y,z] of directions)addLightningSegment(THREE,group,{x:0,y:0,z:0},{x:x*reach,y:y*reach,z:z*reach},{color:VOLT_HOT,radius,opacity,marker});}
+function makeVoltBurstSourceVisual(THREE,scene,position,size,semanticKind){const group=makeBurstBase(THREE,scene,position,size,'source',semanticKind),ring=new THREE.Mesh(new THREE.RingGeometry(.20,.68,34),makeMaterial(THREE,VOLT,.88,true)),core=new THREE.Mesh(new THREE.SphereGeometry(.25,12,8),makeMaterial(THREE,VOLT_HOT,.96,true));ring.position.z=.04;ring.userData.baseOpacity=.88;core.userData.baseOpacity=.96;group.add(ring,core);addScreenBurstStar(THREE,group,{reach:.78,radius:.060,marker:'sourceBurstRay'});addRadialLightning(THREE,group,{count:9,radius:.88,height:0,marker:'sourceBurstDepthRay'});return group;}
+function makeVoltBurstStyleVisual(THREE,scene,position,size,semanticKind){
+  const wall=semanticKind==='wall-fizzle',contact=semanticKind==='contact',group=makeBurstBase(THREE,scene,position,size,'style',semanticKind),rings=wall?1:3;
+  for(let index=0;index<rings;index++){const opacity=wall ? .52 : .82-index*.12,ring=new THREE.Mesh(new THREE.RingGeometry(.14+index*.16,.42+index*.17,36),makeMaterial(THREE,index===0?VOLT_HOT:VOLT,opacity,true));ring.position.z=index*.025;ring.userData.baseOpacity=opacity;group.add(ring);}
+  if(!wall){for(let index=0;index<(contact?2:3);index++){const core=new THREE.Mesh(new THREE.SphereGeometry(.22+index*.10,12,8),makeMaterial(THREE,index===0?VOLT_HOT:VOLT,.88-index*.20,true));core.position.z=-index*.04;core.userData.baseOpacity=.88-index*.20;group.add(core);}addScreenBurstStar(THREE,group,{reach:contact?.92:1.12,radius:.075,marker:'styleBurstScreenRay'});addRadialLightning(THREE,group,{count:contact?12:16,radius:contact ? .92 : 1.18,height:0,opacity:.82,marker:'styleBurstDepthRay'});}
+  else addRadialLightning(THREE,group,{count:5,radius:.48,opacity:.48,marker:'wallFizzleRay'});
+  return group;
+}
+function makeVoltBurstVisual(THREE,scene,position,size,visualMode,semanticKind){return visualMode==='contract'?makeVoltBurstContractVisual(THREE,scene,position,size,semanticKind):visualMode==='source'?makeVoltBurstSourceVisual(THREE,scene,position,size,semanticKind):makeVoltBurstStyleVisual(THREE,scene,position,size,semanticKind);}
+function addBoltImpactStar(THREE,group,{style=false,finisher=false}={}){
+  const reach=finisher?.92:.64,directions=[[-1,0,0],[1,0,0],[0,-.8,0],[0,1,0],[-.65,-.58,.06],[.65,.58,.06],[-.65,.58,-.06],[.65,-.58,-.06]];
+  for(let index=0;index<directions.length;index++){const [x,y,z]=directions[index],end={x:x*reach,y:y*reach,z:z*reach};addLightningSegment(THREE,group,{x:0,y:0,z:0},end,{color:index%3===0?VOLT:VOLT_HOT,radius:style?.075:.060,opacity:.98,marker:style?'boltImpactStyleRay':'boltImpactSourceRay'});}
+  if(style)addRadialLightning(THREE,group,{count:finisher?14:10,radius:reach*.92,height:0,colorA:VOLT_HOT,colorB:VOLT,opacity:.74,marker:'boltImpactGroundRay'});
+}
+function makeBoltImpactContractVisual(THREE,scene,position,size,finisher){const group=makeBurstBase(THREE,scene,position,size, 'contract',finisher?'bolt-finisher':'bolt-impact'),core=new THREE.Mesh(new THREE.SphereGeometry(finisher?.22:.15,10,7),makeMaterial(THREE,VOLT_HOT,.96,true));core.userData.baseOpacity=.96;group.add(core);return group;}
+function makeBoltImpactSourceVisual(THREE,scene,position,size,finisher){const group=makeBurstBase(THREE,scene,position,size,'source',finisher?'bolt-finisher':'bolt-impact'),core=new THREE.Mesh(new THREE.SphereGeometry(finisher?.34:.24,12,8),makeMaterial(THREE,VOLT_HOT,1,true));core.userData.baseOpacity=1;group.add(core);addBoltImpactStar(THREE,group,{finisher});return group;}
+function makeBoltImpactStyleVisual(THREE,scene,position,size,finisher){const group=makeBurstBase(THREE,scene,position,size,'style',finisher?'bolt-finisher':'bolt-impact'),glow=new THREE.Mesh(new THREE.SphereGeometry(finisher?.54:.38,12,8),makeMaterial(THREE,VOLT,.30,true)),core=new THREE.Mesh(new THREE.SphereGeometry(finisher?.32:.22,12,8),makeMaterial(THREE,VOLT_HOT,1,true));glow.userData.baseOpacity=.30;core.userData.baseOpacity=1;group.add(glow,core);addBoltImpactStar(THREE,group,{style:true,finisher});return group;}
+function makeBoltImpactVisual(THREE,scene,position,size,visualMode,finisher=false){const scaled=size*(finisher?1.12:.72);return visualMode==='contract'?makeBoltImpactContractVisual(THREE,scene,position,scaled,finisher):visualMode==='source'?makeBoltImpactSourceVisual(THREE,scene,position,scaled,finisher):makeBoltImpactStyleVisual(THREE,scene,position,scaled,finisher);}
 
 export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],advancePlayer=()=>false}={}){
   const initial=readArcanaTweaks();
@@ -231,28 +282,31 @@ export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySy
   function emitStone(beat){const frame=playerFrame(getPlayer),spec=stoneShotProjectileSpec({beat}),size=currentSize(),visual=makeStoneProjectile(THREE,scene,spec,size);const position={x:frame.x+frame.forward.x*.9,z:frame.z+frame.forward.z*.9};visual.mesh.position.set(position.x,.62+(spec.boulder?.16:0),position.z);visual.shadow.position.set(position.x,.025,position.z);add({type:'stoneProjectile',age:0,position,previous:{...position},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.speed,z:frame.forward.z*spec.speed},distance:0,spec,size,mesh:visual.mesh,meshes:[visual.shadow],shadow:visual.shadow,walls:[...(getMazeSegments?.()||[])],hit:new Set()});}
   function emitSpark(beat){let frame=playerFrame(getPlayer);const spec=sparkContactBeatSpec({beat}),size=currentSize();advance(frame,spec.advance);frame=playerFrame(getPlayer);const mesh=makeSparkStrike(THREE,scene,spec,size);mesh.position.set(frame.x,0,frame.z);mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);const flashes=damageStrip(frame,{range:spec.range,halfWidth:spec.halfWidth,damage:spec.damage,push:spec.push,sourceTag:'sparkContact'},size),meshes=[];if(spec.overlay){const arc=makeSparkArc(THREE,scene,spec,size);arc.position.set(frame.x,0,frame.z);arc.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);meshes.push(arc);flashes.push(...damageArc(frame,spec.overlay,size));}add({type:'sparkStrike',age:0,life:spec.life,mesh,meshes,flashes,spec,size});}
   function emitBoltRail(beat){
-    const frame=playerFrame(getPlayer),spec=boltRailStreamSpec({beat}),size=currentSize(),visualMode=currentWizardVisualMode(),mesh=makeBoltRailStream(THREE,scene,spec,size,visualMode),system=getEnemySystem?.(),hits=[];
+    const frame=playerFrame(getPlayer),spec=boltRailStreamSpec({beat}),size=currentSize(),visualMode=currentWizardVisualMode(),system=getEnemySystem?.(),hits=[];
     state.visualMode=visualMode;
-    mesh.position.set(frame.x,0,frame.z);mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);
-    for(const enemy of aliveEnemies(system)){if(!pointInForwardStrip({originX:frame.x,originZ:frame.z,forwardX:frame.forward.x,forwardZ:frame.forward.z,targetX:enemy.x,targetZ:enemy.z,range:spec.range*size,halfWidth:spec.halfWidth*size,targetRadius:enemyRadius(enemy,system)}))continue;hits.push(enemy);const direction=normalize2(enemy.x-frame.x,enemy.z-frame.z);system.damageEnemy?.(enemy,spec.damage,{x:direction.x*.22,z:direction.z*.22},{source:'wizardArcana',power:.20,pop:.025,boltRail:true,beat});}
+    for(const enemy of aliveEnemies(system)){if(pointInForwardStrip({originX:frame.x,originZ:frame.z,forwardX:frame.forward.x,forwardZ:frame.forward.z,targetX:enemy.x,targetZ:enemy.z,range:spec.range*size,halfWidth:spec.halfWidth*size,targetRadius:enemyRadius(enemy,system)}))hits.push(enemy);}
+    const endpointTarget=hits.length?hits.reduce((farthest,enemy)=>Math.hypot(enemy.x-frame.x,enemy.z-frame.z)>Math.hypot(farthest.x-frame.x,farthest.z-frame.z)?enemy:farthest):null;
+    const endpoint=endpointTarget?{x:endpointTarget.x,z:endpointTarget.z}:{x:frame.x+frame.forward.x*spec.range*size,z:frame.z+frame.forward.z*spec.range*size},visualDirection=normalize2(endpoint.x-frame.x,endpoint.z-frame.z),visualRange=Math.max(.35,Math.hypot(endpoint.x-frame.x,endpoint.z-frame.z)/size),visualSpec={...spec,range:visualRange},mesh=makeBoltRailVisual(THREE,scene,visualSpec,size,visualMode);
+    mesh.position.set(frame.x,0,frame.z);mesh.rotation.y=Math.atan2(visualDirection.x,visualDirection.z);
     const hitTargetIds=hits.map(enemy=>targetId(enemy,system)),meshes=[];let finisherTriggered=false;
-    semantic('bolt-rail-stream',{arcanaId:'BOLT-RAIL',beat:spec.beat,damage:spec.damage,instantaneous:true,ignoresWorldCollision:true,origin:{x:frame.x,z:frame.z},direction:{...frame.forward},hitTargetIds,visualMode});
+    for(const enemy of hits){const direction=normalize2(enemy.x-frame.x,enemy.z-frame.z);system.damageEnemy?.(enemy,spec.damage,{x:direction.x*.22,z:direction.z*.22},{source:'wizardArcana',power:.20,pop:.025,boltRail:true,beat});meshes.push(makeBoltImpactVisual(THREE,scene,{x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},size,visualMode,false));}
+    semantic('bolt-rail-stream',{arcanaId:'BOLT-RAIL',beat:spec.beat,damage:spec.damage,instantaneous:true,ignoresWorldCollision:true,origin:{x:frame.x,z:frame.z},direction:{...frame.forward},endpoint,endpointTargetId:endpointTarget?targetId(endpointTarget,system):null,endpointPolicy:hits.length?'farthest-hit':'maximum-range',visualDirection,visualRange,branchCount:sampleBoltRailStream({beat:spec.beat,length:visualRange}).branches.length,hitTargetIds,visualMode});
     if(spec.finisher&&hits.length){
       finisherTriggered=true;const primary=hits.reduce((best,enemy)=>Math.hypot(enemy.x-frame.x,enemy.z-frame.z)<Math.hypot(best.x-frame.x,best.z-frame.z)?enemy:best),position={x:primary.x,z:primary.z},burstTargets=[];
-      meshes.push(makeLightningBurst(THREE,scene,position,spec.burst.radius*size,false,visualMode,'bolt-finisher'));
+      meshes.push(makeBoltImpactVisual(THREE,scene,{...position,y:enemyCenterY(primary,system)},spec.burst.radius*size,visualMode,true));
       for(const enemy of aliveEnemies(system)){if(Math.hypot(enemy.x-position.x,enemy.z-position.z)>spec.burst.radius*size+enemyRadius(enemy,system))continue;burstTargets.push(targetId(enemy,system));const direction=normalize2(enemy.x-position.x,enemy.z-position.z);system.damageEnemy?.(enemy,spec.burst.damage,{x:direction.x*.72,z:direction.z*.72},{source:'wizardArcana',power:.44,pop:.10,boltRailFinisher:true});}
-      semantic('bolt-rail-finisher',{arcanaId:'BOLT-RAIL',beat:5,triggered:true,primaryTargetId:targetId(primary,system),damage:spec.burst.damage,targetIds:burstTargets,position,visualMode});
+      semantic('bolt-rail-finisher',{arcanaId:'BOLT-RAIL',beat:5,triggered:true,primaryTargetId:targetId(primary,system),primaryPolicy:'nearest-hit',damage:spec.burst.damage,targetIds:burstTargets,position,visualMode});
     }else if(spec.finisher)semantic('bolt-rail-finisher',{arcanaId:'BOLT-RAIL',beat:5,triggered:false,reason:'fifth-stream-missed',damage:0,targetIds:[],visualMode});
-    add({type:'boltRailStrike',semanticKind:'instant-stream',visualMode,age:0,life:spec.finisher?.22:spec.life,mesh,meshes,spec,size,beat:spec.beat,origin:{x:frame.x,z:frame.z},direction:{...frame.forward},hitTargetIds,finisherTriggered});
+    add({type:'boltRailStrike',semanticKind:'instant-stream',visualMode,age:0,life:spec.finisher?.24:spec.life,mesh,meshes,spec,size,beat:spec.beat,origin:{x:frame.x,z:frame.z},direction:{...frame.forward},visualDirection,endpoint,endpointTargetId:endpointTarget?targetId(endpointTarget,system):null,endpointPolicy:hits.length?'farthest-hit':'maximum-range',visualRange,hitTargetIds,finisherTriggered});
   }
   function emitVoltDisc(press,comboSerial){
-    const frame=playerFrame(getPlayer),spec=voltDiscProjectileSpec(),size=currentSize(),visualMode=currentWizardVisualMode(),mesh=makeVoltDisc(THREE,scene,spec,size,visualMode),position={x:frame.x+frame.forward.x*.88,z:frame.z+frame.forward.z*.88};
-    state.visualMode=visualMode;mesh.position.set(position.x,.68*size,position.z);mesh.rotation.y=Math.atan2(frame.forward.x,frame.forward.z);
+    const frame=playerFrame(getPlayer),spec=voltDiscProjectileSpec(),size=currentSize(),visualMode=currentWizardVisualMode(),mesh=makeVoltDiscVisual(THREE,scene,size,visualMode),position={x:frame.x+frame.forward.x*.88,z:frame.z+frame.forward.z*.88};
+    state.visualMode=visualMode;mesh.position.set(position.x,.84*size,position.z);mesh.children.forEach(child=>{if(child.userData?.discLead)child.position.set(frame.forward.x*.50,0,frame.forward.z*.50);if(Number.isFinite(child.userData?.discEcho)){const distance=.20*child.userData.discEcho;child.position.set(-frame.forward.x*distance,0,-frame.forward.z*distance);}});
     semantic('volt-disc-press',{arcanaId:'VOLT-DISC',press,total:spec.comboPresses,comboSerial,rollingTimeout:spec.rollingTimeout,origin:{x:frame.x,z:frame.z},direction:{...frame.forward},liveAim:true,visualMode});
     add({type:'voltDiscProjectile',semanticKind:'carrier',visualMode,age:0,press,comboSerial,position,previous:{...position},origin:{x:frame.x,z:frame.z},direction:{...frame.forward},velocity:{x:frame.forward.x*spec.speed,z:frame.forward.z*spec.speed},distance:0,spec,size,mesh,walls:[...(getMazeSegments?.()||[])]});
   }
   function emitVoltBurst(position,size,{kind,primary=null,press=0,comboSerial=0,visualMode='style'}={}){
-    const spec=voltDiscProjectileSpec(),system=getEnemySystem?.(),contact=kind==='contact',wall=kind==='wall-fizzle',mesh=makeLightningBurst(THREE,scene,position,(wall ? .52 : 1)*spec.burstRadius*size,contact||wall,visualMode,kind),targetIds=[];
+    const spec=voltDiscProjectileSpec(),system=getEnemySystem?.(),contact=kind==='contact',wall=kind==='wall-fizzle',mesh=makeVoltBurstVisual(THREE,scene,position,(wall ? .52 : 1)*spec.burstRadius*size,visualMode,kind),targetIds=[];
     if(kind==='terminal')for(const enemy of aliveEnemies(system)){if(Math.hypot(enemy.x-position.x,enemy.z-position.z)>spec.burstRadius*size+enemyRadius(enemy,system))continue;targetIds.push(targetId(enemy,system));const direction=normalize2(enemy.x-position.x,enemy.z-position.z);system.damageEnemy?.(enemy,spec.missBurstDamage,{x:direction.x*.62,z:direction.z*.62},{source:'wizardArcana',power:.38,pop:.08,voltDiscBurst:true,terminal:true});}
     if(contact&&primary)targetIds.push(targetId(primary,system));
     semantic(kind==='terminal'?'volt-disc-terminal-burst':contact?'volt-disc-contact-event':'volt-disc-wall-fizzle',{arcanaId:'VOLT-DISC',press,comboSerial,position:{x:position.x,z:position.z},damage:kind==='terminal'?spec.missBurstDamage:0,targetIds,countsAsContact:contact,ordinaryDamageSideEffects:false,harmless:wall,visualMode});
@@ -271,21 +325,21 @@ export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySy
   function updateVine(effect,dt,now){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1),ease=1-Math.pow(1-k,3),frame=playerFrame(getPlayer);effect.mesh.position.set(frame.x,0,frame.z);effect.mesh.rotation.y=effect.baseYaw+effect.spec.sweepSign*(ease-.5)*.82;effect.mesh.scale.z=Math.max(.08,Math.sin(k*Math.PI))*effect.size;effect.mesh.children.forEach((child,index)=>{child.material.opacity=.94*Math.pow(1-k,.48);child.rotation.y+=dt*(index%2?2.1:-1.7);});for(const flash of effect.flashes){flash.material.opacity=.96*Math.pow(1-k,.35);flash.scale.setScalar(1+k*1.8);}if(k>=1)remove(effect);}
   function updateStone(effect,dt,now){effect.age+=dt;const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt};const wall=firstWallHit(start,end,effect.walls);if(wall){remove(effect);return;}effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.62+(effect.spec.boulder?.16:0)+Math.sin(now*12)*.04,end.z);effect.mesh.rotation.x+=dt*5.5;effect.mesh.rotation.y+=dt*4.2;effect.shadow.position.set(end.x,.025,end.z);const system=getEnemySystem?.();for(const enemy of aliveEnemies(system)){if(effect.hit.has(enemy))continue;if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+effect.spec.radius*effect.size)continue;effect.hit.add(enemy);const direction=normalize2(enemy.x-start.x,enemy.z-start.z);system.damageEnemy?.(enemy,effect.spec.damage,{x:direction.x*effect.spec.push,z:direction.z*effect.spec.push},{source:'wizardArcana',power:effect.spec.boulder?.62:.46,pop:effect.spec.boulder?.16:.10,stoneShot:true,boulder:effect.spec.boulder});const flash=makeImpactFlash(THREE,scene,enemy.x,enemyCenterY(enemy,system),enemy.z,effect.size*(effect.spec.boulder?1.5:1));add({type:'impactOnly',age:0,life:.24,mesh:flash});remove(effect);return;}if(effect.distance>=effect.spec.range)remove(effect);}
   function updateSpark(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);for(const object of[effect.mesh,...effect.meshes])object?.traverse?.(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??.78)*Math.pow(1-k,.42);});for(const flash of effect.flashes){flash.material.opacity=.96*Math.pow(1-k,.35);flash.scale.setScalar(1+k*1.7);}if(k>=1)remove(effect);}
-  function updateBoltRail(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);for(const object of[effect.mesh,...effect.meshes])object?.traverse?.(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??.78)*Math.pow(1-k,.4);});effect.mesh.scale.y=.82+.24*Math.sin(k*Math.PI);if(k>=1)remove(effect);}
+  function updateBoltRail(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);for(const object of[effect.mesh,...effect.meshes])object?.traverse?.(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??.78)*Math.pow(1-k,.4);});effect.mesh.scale.set(effect.size,effect.size*(.82+.24*Math.sin(k*Math.PI)),effect.size);if(k>=1)remove(effect);}
   function updateVoltDisc(effect,dt,now){
     const start={...effect.position},end={x:start.x+effect.velocity.x*dt,z:start.z+effect.velocity.z*dt},wall=firstWallHit(start,end,effect.walls);
-    if(wall){emitVoltBurst({x:wall.hit.x,z:wall.hit.z},effect.size,{kind:'wall-fizzle',press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);return;}
-    effect.age+=dt;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.68*effect.size+Math.sin(now*14)*.04,end.z);effect.mesh.rotation.z+=dt*7.5;effect.mesh.children.forEach(child=>{if(Number.isFinite(child.userData?.discSpark)){const pulse=.82+.25*Math.sin(now*19+child.userData.discSpark);child.scale.setScalar(pulse);}});
+    if(wall){emitVoltBurst({x:wall.hit.x,y:.32*effect.size,z:wall.hit.z},effect.size,{kind:'wall-fizzle',press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);return;}
+    effect.age+=dt;effect.position=end;effect.distance+=Math.hypot(end.x-start.x,end.z-start.z);effect.mesh.position.set(end.x,.84*effect.size+Math.sin(now*14)*.04,end.z);effect.mesh.children.forEach(child=>{if(Number.isFinite(child.userData?.discSpark)){const pulse=.82+.25*Math.sin(now*19+child.userData.discSpark);child.scale.setScalar(pulse);}});
     const system=getEnemySystem?.();
     for(const enemy of aliveEnemies(system)){
       if(pointSegmentDistance2D(enemy,start,end)>enemyRadius(enemy,system)+effect.spec.radius*effect.size)continue;
       system.damageEnemy?.(enemy,effect.spec.damage,{x:effect.direction.x*.72,z:effect.direction.z*.72},{source:'wizardArcana',power:.36,pop:.08,voltDisc:true,press:effect.press,comboSerial:effect.comboSerial});
       semantic('volt-disc-carrier-hit',{arcanaId:'VOLT-DISC',press:effect.press,comboSerial:effect.comboSerial,targetId:targetId(enemy,system),damage:effect.spec.damage,position:{x:enemy.x,z:enemy.z},visualMode:effect.visualMode});
-      emitVoltBurst({x:enemy.x,z:enemy.z},effect.size,{kind:'contact',primary:enemy,press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);return;
+      emitVoltBurst({x:enemy.x,y:enemyCenterY(enemy,system),z:enemy.z},effect.size,{kind:'contact',primary:enemy,press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);return;
     }
-    if(effect.distance>=effect.spec.range){emitVoltBurst(effect.position,effect.size,{kind:'terminal',press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);}
+    if(effect.distance>=effect.spec.range){emitVoltBurst({...effect.position,y:.48*effect.size},effect.size,{kind:'terminal',press:effect.press,comboSerial:effect.comboSerial,visualMode:effect.visualMode});remove(effect);}
   }
-  function updateLightningBurst(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);effect.mesh.traverse(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??.82)*Math.pow(1-k,.42);});effect.mesh.scale.setScalar(1+k*(effect.direct?.9:1.35));effect.mesh.rotation.y+=dt*2.7;if(k>=1)remove(effect);}
+  function updateLightningBurst(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1),base=Number(effect.mesh.userData?.baseScale)||1,growth=effect.harmless ? .42 : effect.direct ? .9 : 1.35;effect.mesh.traverse(child=>{if(child.material)child.material.opacity=(child.userData?.baseOpacity??.82)*Math.pow(1-k,.42);});effect.mesh.scale.setScalar(base*(1+k*growth));effect.mesh.rotation.y+=dt*2.7;if(k>=1)remove(effect);}
   function updateImpact(effect,dt){effect.age+=dt;const k=clamp(effect.age/effect.life,0,1);effect.mesh.material.opacity=.96*Math.pow(1-k,.35);effect.mesh.scale.setScalar(1+k*2);if(k>=1)remove(effect);}
 
   function cast(card,detail={}){
@@ -295,8 +349,9 @@ export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySy
   }
   function effectSnapshot(effect){
     const value={type:effect.type,semanticKind:effect.semanticKind||'',visualMode:effect.visualMode||'',age:Number(effect.age)||0};
-    for(const key of['life','distance','beat','press','comboSerial','damage'])if(Number.isFinite(Number(effect[key])))value[key]=Number(effect[key]);
-    for(const key of['position','previous','origin','direction','velocity'])if(effect[key])value[key]={x:Number(effect[key].x)||0,z:Number(effect[key].z)||0};
+    for(const key of['life','distance','beat','press','comboSerial','damage','visualRange'])if(Number.isFinite(Number(effect[key])))value[key]=Number(effect[key]);
+    for(const key of['position','previous','origin','direction','velocity','endpoint','visualDirection'])if(effect[key])value[key]={x:Number(effect[key].x)||0,z:Number(effect[key].z)||0};
+    for(const key of['endpointTargetId','endpointPolicy'])if(effect[key]!==undefined)value[key]=effect[key];
     if(Array.isArray(effect.hitTargetIds))value.hitTargetIds=effect.hitTargetIds.slice();if(Array.isArray(effect.targetIds))value.targetIds=effect.targetIds.slice();
     if(typeof effect.finisherTriggered==='boolean')value.finisherTriggered=effect.finisherTriggered;if(typeof effect.harmless==='boolean')value.harmless=effect.harmless;return value;
   }

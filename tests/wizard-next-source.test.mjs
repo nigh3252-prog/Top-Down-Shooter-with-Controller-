@@ -14,6 +14,7 @@ import {
   sparkContactBeatSpec,
   boltRailStreamSpec,
   voltDiscProjectileSpec,
+  sampleBoltRailStream,
   normalizeWizardVisualMode,
   pointInForwardStrip,
   pointInForwardArc,
@@ -83,6 +84,10 @@ assert.equal(boltFive.finisher,true);
 assert.equal(boltFive.burst.damage,10);
 assert.equal(boltFive.ignoresWorldCollision,true);
 assert.equal(boltEnhanced.burst.chains,true);
+const sampledBolt=sampleBoltRailStream({beat:3,length:2.5});
+assert.equal(sampledBolt.main.length,10);assert.equal(sampledBolt.branches.length,4);
+assert.equal(sampledBolt.main[0].z,0);assert.equal(sampledBolt.main.at(-1).z,2.5);
+assert.ok(sampledBolt.branches.every(branch=>branch.length===3&&branch[0].z<branch.at(-1).z),'Bolt Rail branches must fork forward from one deterministic main carrier');
 
 assert.equal(VOLT_DISC_BEATS.length,3);
 assert.deepEqual(VOLT_DISC_BEATS.map(beat=>beat.damage),[9,9,9]);

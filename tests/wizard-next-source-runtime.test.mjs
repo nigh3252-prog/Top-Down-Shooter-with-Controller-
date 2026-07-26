@@ -11,7 +11,7 @@ class Transform{
 }
 class Object3D{
   constructor(){this.children=[];this.position=new Transform();this.rotation=new Transform();this.scale=new Transform().set(1,1,1);this.userData={};this.parent=null;this.visible=true;this.name='';}
-  add(child){child.parent=this;this.children.push(child);return this;}
+  add(...children){for(const child of children){child.parent=this;this.children.push(child);}return this;}
   remove(child){const index=this.children.indexOf(child);if(index>=0)this.children.splice(index,1);child.parent=null;}
   traverse(visitor){visitor(this);for(const child of this.children)child.traverse?.(visitor);}
 }
@@ -63,6 +63,14 @@ const successfulFinisher=runtime.snapshot().semanticEvents.find(event=>event.kin
 assert.equal(successfulFinisher.triggered,true);assert.equal(successfulFinisher.primaryTargetId,'bolt-target');
 assert.ok(runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream').every(event=>event.instantaneous&&event.ignoresWorldCollision&&event.visualMode==='contract'));
 
+runtime.reset();hits.length=0;walls.length=0;
+const boltNear={id:'bolt-near',x:0,z:1.8,hp:1000,radius:.3},boltFar={id:'bolt-far',x:0,z:3.4,hp:1000,radius:.3};system.enemies=[boltNear,boltFar];
+assert.equal(cast('BOLT-RAIL'),true);step(.8);
+const multiStreams=runtime.snapshot().semanticEvents.filter(event=>event.kind==='bolt-rail-stream');
+assert.equal(multiStreams.length,5);assert.ok(multiStreams.every(event=>event.endpointTargetId==='bolt-far'&&event.endpointPolicy==='farthest-hit'),'the visible carrier must reach the farthest damaged target so every per-hit bloom remains connected');
+const multiFinisher=runtime.snapshot().semanticEvents.find(event=>event.kind==='bolt-rail-finisher');
+assert.equal(multiFinisher.primaryTargetId,'bolt-near');assert.equal(multiFinisher.primaryPolicy,'nearest-hit','the documented primary contact owns the fifth-beat burst');
+
 runtime.reset();hits.length=0;system.enemies=[];walls.length=0;
 assert.equal(cast('BOLT-RAIL'),true);step(.8);
 const missedFinisher=runtime.snapshot().semanticEvents.find(event=>event.kind==='bolt-rail-finisher');
@@ -101,6 +109,22 @@ cast('VOLT-DISC');step(.7);
 assert.deepEqual(hits.map(hit=>hit.amount),[9]);assert.equal(hits[0].options.terminal,true);
 const terminalEvent=runtime.snapshot().semanticEvents.find(event=>event.kind==='volt-disc-terminal-burst');
 assert.equal(terminalEvent.damage,9);assert.deepEqual(terminalEvent.targetIds,['terminal-target']);
+
+runtime.reset();hits.length=0;runtime.state.sizeMultiplier=1.4;system.enemies=[boltTarget];globalThis.location.search='?enemyLab=1&capture=1&stage=reference';window.__abilityCapture.snapshot=()=>({stage:'reference'});
+cast('BOLT-RAIL');runtime.update(.05,0);let boltVisual=runtime.state.effects.find(effect=>effect.type==='boltRailStrike');
+assert.equal(boltVisual.visualMode,'source');assert.ok(boltVisual.visualRange<boltVisual.spec.range,'a contacted Bolt Rail visual must stop at its actual target instead of drawing to maximum range');
+assert.deepEqual(boltVisual.endpoint,{x:boltTarget.x,z:boltTarget.z});const sourceBoltParts=boltVisual.mesh.children.length;assert.ok(sourceBoltParts>20,'source silhouette must be one layered main carrier with visible forks');
+assert.notEqual(boltVisual.size,1);assert.equal(boltVisual.mesh.scale.x,boltVisual.size);assert.equal(boltVisual.mesh.scale.z,boltVisual.size,'Bolt Rail updates must preserve the configured global size instead of collapsing the stream to unit scale');
+runtime.reset();window.__abilityCapture.snapshot=()=>({stage:'style'});globalThis.location.search='?enemyLab=1&capture=1&stage=style';system.enemies=[boltTarget];cast('BOLT-RAIL');runtime.update(.05,0);boltVisual=runtime.state.effects.find(effect=>effect.type==='boltRailStrike');
+assert.equal(boltVisual.visualMode,'style');assert.ok(boltVisual.mesh.children.length>sourceBoltParts,'style rendering must add glow and hot spark density beyond the source silhouette');
+
+runtime.reset();runtime.state.sizeMultiplier=1.35;system.enemies=[];window.__abilityCapture.snapshot=()=>({stage:'reference'});globalThis.location.search='?enemyLab=1&capture=1&stage=reference';cast('VOLT-DISC');runtime.update(.01,0);let voltVisual=runtime.state.effects.find(effect=>effect.type==='voltDiscProjectile');const sourceDiscParts=voltVisual.mesh.children.length;
+assert.equal(voltVisual.visualMode,'source');assert.ok(sourceDiscParts>=8,'source disc needs a layered hot hollow rim plus surrounding fragments');
+assert.notEqual(voltVisual.size,1);assert.deepEqual({x:voltVisual.mesh.scale.x,y:voltVisual.mesh.scale.y,z:voltVisual.mesh.scale.z},{x:voltVisual.size,y:voltVisual.size,z:voltVisual.size},'Volt Disc updates must animate internal fragments without overwriting the configured projectile scale');
+runtime.reset();window.__abilityCapture.snapshot=()=>({stage:'style'});globalThis.location.search='?enemyLab=1&capture=1&stage=style';cast('VOLT-DISC');voltVisual=runtime.state.effects.find(effect=>effect.type==='voltDiscProjectile');
+assert.equal(voltVisual.visualMode,'style');assert.ok(voltVisual.mesh.children.length>sourceDiscParts,'style disc must preserve the source ring while adding corona, fragments, and echoes');
+runtime.reset();globalThis.location.search='?enemyLab=1';window.__abilityCapture.snapshot=()=>({stage:'motion'});cast('VOLT-DISC');voltVisual=runtime.state.effects.find(effect=>effect.type==='voltDiscProjectile');
+assert.equal(voltVisual.visualMode,'style','production Enemy Lab rendering must always use the polished style path even if a stale capture controller reports motion');
 
 runtime.dispose();
 console.log('wizard next source runtime tests passed');
