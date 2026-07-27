@@ -54,6 +54,7 @@ const player={x:0,z:0,forwardX:0,forwardZ:1};
 const hits=[];
 const system={
   enemies:[],heightScale:1,hostileProjectiles:[],
+  get hostileEnemies(){return this.enemies.filter(enemy=>enemy?.wizardFaction!=='allied');},
   damageEnemy(enemy,amount,knock,options){hits.push({enemy,amount,knock,options});enemy.hp-=amount;return true;},
 };
 const mazeSegments=[];
@@ -119,6 +120,13 @@ assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='H
 assert.equal(runtime.snapshot().semanticEvents.filter(event=>event.arcanaId==='HOMING-FLARES'&&event.event==='flare-hit').length,7);
 assert.ok(runtime.snapshot().semanticEvents.filter(event=>event.event==='flare-hit').every(event=>event.targetId==='flare-fixture'),'capture telemetry must preserve fixture IDs instead of collapsing targets to their enemy kind');
 assert.equal(scene.children.some(child=>/Homing Flares source-locked flare/.test(child.name)),false,'hit flares and their trails must clean completely');
+runtime.reset();hits.length=0;system.enemies=[];
+
+const charmedFlareTarget={id:'charmed-flare-target',wizardFaction:'allied',x:0,z:1.8,hp:1000,radius:.5};
+const hostileFlareEnemy={id:'hostile-flare-target',wizardFaction:'hostile',x:0,z:3.2,hp:1000,radius:.5};
+system.enemies=[charmedFlareTarget,hostileFlareEnemy];assert.equal(cast('HOMING-FLARES'),true);step(1.8);
+assert.equal(hits.filter(hit=>hit.options.homingFlares&&hit.enemy===charmedFlareTarget).length,0,'autonomous flares must never acquire the closer Mentis ally');
+assert.equal(hits.filter(hit=>hit.options.homingFlares&&hit.enemy===hostileFlareEnemy).length,7,'autonomous flares must continue acquiring hostiles beyond a Mentis ally');
 runtime.reset();hits.length=0;system.enemies=[];
 
 assert.equal(cast('HOMING-FLARES'),true);flares=runtime.state.effects.find(effect=>effect.type==='homingFlares');

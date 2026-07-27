@@ -2,6 +2,7 @@ import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from './wizard-arcana-cards.j
 import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
 import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { WIZARD_NEXT_TWENTY_CARDS } from './wizard-next-twenty-cards.js';
+import { WIZARD_ARCHETYPE_SAMPLER_CARDS } from './wizard-archetype-sampler-cards.js';
 
 const SOURCE_ORDER=Object.freeze({
   'FLAME-STRIKE':1,
@@ -38,15 +39,45 @@ const SOURCE_ORDER=Object.freeze({
   'CHAOTIC-RIFT':32,
   'HOMING-FLARES':42,
   'DRAGON-ARC':44,
-  'WHIRLING-TORNADO':59,
-  'WATER-PRISON':68,
+  'FLAME-FUSION':47,
+  'RAPID-FIRE-AGENT':53,
+  'WARD-OF-FLAMES':54,
+  'WHIRLING-TORNADO':58,
+  'MENTIS-IMPERIUM':60,
+  'HEROIC-LEAP':62,
+  'WATER-PRISON':67,
+  'CYCLONE-BOOMERANG':68,
+  'EARTHEN-AEGIS':69,
+  'BALL-LIGHTNING':70,
+  'AQUA-BEAM':71,
+  'ARCANE-INTERVENTION':72,
+});
+
+const SHOWCASE_START=Object.freeze({
+  'FLAME-STRIKE':0,'FLAME-CROSS':5.15,'BOUNCING-BLAZE':12,'WIND-SLASH':18.7,
+  'AIR-SPINNER':23.7,'PERFORATING-JET':28.7,'EARTH-KNUCKLES':31.4,'BLADED-VINE':38.6,
+  'STONE-SHOT':43,'SPARK-CONTACT':46,'BOLT-RAIL':52,'VOLT-DISC':58,
+  'HOMING-FLARES':279,'DRAGON-ARC':310,'FLAME-FUSION':338.55,'RAPID-FIRE-AGENT':378.35,
+  'WARD-OF-FLAMES':392.45,'WHIRLING-TORNADO':420,'MENTIS-IMPERIUM':434.15,'HEROIC-LEAP':442.85,
+  'CYCLONE-BOOMERANG':496.4,'EARTHEN-AEGIS':600.95,'BALL-LIGHTNING':896.4,'WATER-PRISON':1048.5,
+  'AQUA-BEAM':1120.7,'ARCANE-INTERVENTION':1206.6,
 });
 
 export const WIZARD_ARCANA_SOURCE_ORDER=SOURCE_ORDER;
 
 export function wizardArcanaSourceOrder(cardOrId){
+  if(typeof cardOrId==='object'&&Number.isFinite(Number(cardOrId?.analysisOrder)))return Number(cardOrId.analysisOrder);
   const id=typeof cardOrId==='object'?cardOrId?.arcanaId:String(cardOrId||'').trim().toUpperCase().replace(/^WOL-/,'');
   return SOURCE_ORDER[id]??Number.POSITIVE_INFINITY;
+}
+
+export function wizardArcanaShowcaseStart(cardOrId){
+  if(typeof cardOrId==='object'){
+    const direct=Number(cardOrId?.showcaseStart??cardOrId?.sourceClip?.start);
+    if(Number.isFinite(direct))return direct;
+  }
+  const id=typeof cardOrId==='object'?cardOrId?.arcanaId:String(cardOrId||'').trim().toUpperCase().replace(/^WOL-/,'');
+  return SHOWCASE_START[id]??Number.POSITIVE_INFINITY;
 }
 
 const combined=[
@@ -54,11 +85,14 @@ const combined=[
   ...WIZARD_AIR_BASIC_CARDS,
   ...WIZARD_NEXT_SOURCE_CARDS,
   ...WIZARD_NEXT_TWENTY_CARDS,
+  ...WIZARD_ARCHETYPE_SAMPLER_CARDS,
 ];
 
 export const WIZARD_ARCANA_CATALOG=Object.freeze(combined.slice().sort((left,right)=>{
-  const order=wizardArcanaSourceOrder(left)-wizardArcanaSourceOrder(right);
-  return Number.isFinite(order)&&order!==0?order:left.id.localeCompare(right.id);
+  const showcase=wizardArcanaShowcaseStart(left)-wizardArcanaShowcaseStart(right);
+  if(Number.isFinite(showcase)&&showcase!==0)return showcase;
+  const analysis=wizardArcanaSourceOrder(left)-wizardArcanaSourceOrder(right);
+  return Number.isFinite(analysis)&&analysis!==0?analysis:left.id.localeCompare(right.id);
 }));
 
 export const WIZARD_ARCANA_CATALOG_BY_ID=new Map(WIZARD_ARCANA_CATALOG.map(card=>[card.id,card]));

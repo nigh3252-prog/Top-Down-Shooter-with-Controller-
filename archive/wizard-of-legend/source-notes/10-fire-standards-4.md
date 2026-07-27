@@ -481,15 +481,14 @@ The source sequence shows:
 
 1. The caster places a rune-bearing ward slightly in front of them.
 2. A large orange ring establishes the ward's fixed area.
-3. Placement deals one strong immediate hit to overlapping enemies.
+3. Placement displays 25 on each overlapping training dummy at approximately 392.82 seconds.
 4. The ward then emits one expanding fire ring each second for repeated smaller hits.
-5. Enemies inside the marked area display the effect while other Fire attacks deal amplified damage.
-6. The ward remains after the caster moves away but can be attacked and destroyed.
-7. Enhanced form uses a substantially larger ring and extends its vulnerability bonus to Water damage.
+5. Later pulses display 6 at approximately one-second intervals, consistent with raw 5 Fire damage being amplified by the ward's own 20% Fire field.
+6. The visible ring persists for roughly the documented eight-second lifetime.
 
 **[DOCUMENTED]**
 
-Ward of Flames is a Fire Standard Arcana with summon and buff classifications, an 8-second cooldown, and an 8-second duration. It has 50 health. Summoning deals 30 damage, then the ward emits a 5-damage ring every second. Enemies inside take 20% more Fire damage, including increased burn damage and the ward's own Fire attacks.
+Ward of Flames is a Fire Standard Arcana with summon and buff classifications, an 8-second cooldown, and an 8-second duration. It has 50 health. Documentation reports 30 summon damage and a raw 5-damage ring every second, while the supplied base footage visibly reports 25 for placement and 6 for the self-amplified pulses. Enemies inside take 20% more Fire damage, including increased burn damage and the ward's own Fire attacks.
 
 Enhancement makes the area much larger and also causes enemies inside to take 20% more Water damage. Overlapping wards do not stack the 20% vulnerability. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Ward_of_Flames))
 
@@ -508,11 +507,12 @@ Maximum duration: 8 seconds
 Create visible circular influence boundary
 
 Placement payload:
-Deal 30 Fire damage once to valid enemies in area
+Deal the observed 25 Fire damage once to valid enemies in area
 
 Pulse loop:
 Every 1 second emit one visible expanding fire ring
-Deal 5 Fire damage under one-hit-per-pulse ownership
+Deal 5 raw Fire damage under one-hit-per-pulse ownership
+Allow this Fire payload to pass through the ward's own 20% field, producing 6 displayed damage
 
 Vulnerability field:
 While enemy is inside boundary, apply +20% incoming Fire damage
@@ -539,8 +539,8 @@ The ward debuffs enemies inside its world-space area; it is not a global player 
 
 1. The ward appears at a valid stationary point in front of the caster.
 2. Its circular influence area is always visibly readable.
-3. Placement deals exactly one 30-damage event.
-4. One 5-damage ring is emitted approximately every second.
+3. Placement deals exactly one observed 25-damage event; the conflicting documented 30 remains recorded as a discrepancy.
+4. One raw 5-damage ring is emitted approximately every second and resolves as 6 inside the ward's own field.
 5. A target receives at most one hit from each pulse.
 6. Enemies inside take 20% more Fire-tagged damage.
 7. Burn damage and the ward's own attacks follow the Fire vulnerability rule.
@@ -569,4 +569,3 @@ Damage amplification is attached to targets currently inside the area, not grant
 ### **Non-Stacking Overlap Resolver**
 
 Several fields may overlap geometrically while one canonical elemental modifier remains active.
-

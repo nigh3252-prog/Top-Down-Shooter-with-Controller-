@@ -398,6 +398,7 @@ const arena = {
   stanceIndex:0, stance:null,
   invulnT:0, deadT:-1, prevHp:100, prevWave:1,
   arcanaMovementLocked:false, arcanaFacingLock:null, arcanaUntargetable:false, arcanaPlayerHidden:false,
+  arcanaInvulnerable:false, arcanaAirborne:false, arcanaPlayerHeight:0,
   paused:false, started:false, cycleMode:false,
   combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
   stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
@@ -553,6 +554,7 @@ function rebuildDeck(){
 }
 function playCard(slot){
   if(arena.deadT >= 0 || roomTransition?.active) return;
+  if(arena.arcanaAirborne){exhaustFlash();announce('AIRBORNE COMMITMENT',.55);return;}
   if(arena.arcanaMovementLocked){exhaustFlash();announce('ARCANA COMMITMENT',.55);return;}
   const queuedCard=deck.hand[slot];
   if(queuedCard?.dashMotion&&combatState.attack){
@@ -747,9 +749,13 @@ function updateRoomTransition(rawDt){
 }
 
 /* ---------- facing ---------- */
+function combatHostileEnemies(){
+  const values=Array.isArray(enemySystem.hostileEnemies)?enemySystem.hostileEnemies:(enemySystem.enemies||[]);
+  return values.filter(enemy=>enemy&&enemy.hp>0);
+}
 function nearestEnemy(maxDist=Infinity){
   let best=null, bd=maxDist;
-  for(const e of enemySystem.enemies){
+  for(const e of combatHostileEnemies()){
     const d = Math.hypot(e.x-actorPos.x, e.z-actorPos.y);
     if(d<bd && !mazeNavigation.raycastWalls({ x:actorPos.x, z:actorPos.y }, { x:e.x, z:e.z })){
       bd=d; best=e;
@@ -835,7 +841,8 @@ function chainMove(slot){
   return att ? { key, slot, att } : null;
 }
 function arcanaDashBusy(){return !!(PC.basicDashRuntime?.busy||PC.wizardNextTwentyDashRuntime?.busy);}
-function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && !arcanaDashBusy() && !arena.arcanaMovementLocked && arena.chain.inputLockT <= 0 && !!arena.stance; }
+function heroicLeapCommitted(){return !!(arena.arcanaAirborne||PC.wizardFusionLeapRuntime?.busy);}
+function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && !arcanaDashBusy() && !heroicLeapCommitted() && !arena.arcanaMovementLocked && arena.chain.inputLockT <= 0 && !!arena.stance; }
 function chargeCap(att){ return att.phases[0].t1 * .98; }
 function startChainMove(move, stage){
   arena.chain.stage = stage;
@@ -908,7 +915,7 @@ function lightDown(){
   startChainMove(move, slot === 0 ? 'hit1' : 'hit2');
 }
 function heavyDown(){
-  if(roomTransition?.active) return;
+  if(roomTransition?.active||heroicLeapCommitted()) return;
   arena.charge.buttonHeld = true;
   if(!canUseCombatInput()) return;
   const mode = combatInputMode();
@@ -974,7 +981,7 @@ function updateCharge(dt){
 /* ---------- dodge ---------- */
 function triggerDodge(){
   const d = arena.dodge;
-  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || arena.arcanaMovementLocked) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return;
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
@@ -1176,6 +1183,10 @@ function respawn(){
   arena.arcanaFacingLock = null;
   arena.arcanaUntargetable = false;
   arena.arcanaPlayerHidden = false;
+  arena.arcanaInvulnerable = false;
+  arena.arcanaAirborne = false;
+  arena.arcanaPlayerHeight = 0;
+  actorVisual.position.y = .02;
   actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
@@ -1193,6 +1204,7 @@ function respawn(){
 function watchPlayerState(dt){
   const hp = enemySystem.playerHp;
   if(hp < arena.prevHp && arena.deadT < 0){
+    PC.interruptArcanaInput?.('player-hit');
     wipeRecoverableStamina();
     arena.invulnT = Math.max(arena.invulnT, .8);
     flashVignette();
@@ -1234,6 +1246,8 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>{
   keys[e.key.toLowerCase()] = false;
   if(e.key==='l') heavyUp();
+  if(e.key.toLowerCase()==='q') PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
+  if(e.key.toLowerCase()==='e') PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
 });
 function keyMove(){
   let x=0,z=0;
@@ -1307,6 +1321,8 @@ function pollPad(){
   if(shuffle && !padPrev.shuffle) startDeckShuffle();
   if(lb && !padPrev.lb) playCard(0);
   if(rb && !padPrev.rb) playCard(1);
+  if(!lb && padPrev.lb) PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
+  if(!rb && padPrev.rb) PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
   if(weaponPrev && !padPrev.weaponPrev) cycleWeapon(-1);
   if(weaponNext && !padPrev.weaponNext) cycleWeapon(1);
   if(strt && !padPrev.strt) toggleMenu();
@@ -1553,7 +1569,10 @@ function renderCards(){
   cardAnim.played = -1;
 }
 window.addEventListener('stance-deck:changed',()=>renderCards());
-cardEls.forEach((el,i)=>el.addEventListener('pointerdown', e=>{ e.preventDefault(); playCard(i); }));
+cardEls.forEach((el,i)=>{
+  el.addEventListener('pointerdown', e=>{ e.preventDefault();el.setPointerCapture?.(e.pointerId);playCard(i); });
+  for(const eventName of ['pointerup','pointercancel','pointerleave'])el.addEventListener(eventName,()=>PC.releaseArcanaInput?.({slot:i,source:'pointer'}));
+});
 document.getElementById('shuffleBtn').addEventListener('pointerdown', e=>{ e.preventDefault(); startDeckShuffle(); });
 const msgEl=document.getElementById('msg');
 let msgT=0;
@@ -1634,7 +1653,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
   if(arena.charge.active) spd *= CHARGE_MOVE_MULT;
   else if(combatState.attack) spd *= PC.combatMovePenalty();
 
-  const isMoving = !arena.arcanaMovementLocked && !arena.arcanaUntargetable && Math.hypot(input.mx, input.mz) > .01;
+  const isMoving = !arena.arcanaMovementLocked && !arena.arcanaUntargetable && !arena.arcanaAirborne && Math.hypot(input.mx, input.mz) > .01;
   if(d.t >= 0){
     d.t += dt;
     const u = clamp(d.t/DODGE_TIME, 0, 1);
@@ -1683,7 +1702,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
   actorVisual.quaternion.copy(yawQ);
   const bob = isMoving && d.t < 0 ? Math.sin(walkPhase)*.035 : 0;
   const sway = isMoving && d.t < 0 ? Math.sin(walkPhase*.5)*.03 : 0;
-  actorVisual.position.y = 0.02 + bob;
+  actorVisual.position.y = 0.02 + bob + Math.max(0,Number(arena.arcanaPlayerHeight)||0);
   // hurt blink
   actorVisual.visible = !arena.arcanaPlayerHidden && !(arena.invulnT > .45 && Math.floor(simulationNow*1000/90)%2===0);
 
@@ -1715,11 +1734,12 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
           enemySystem.update(dt, {
             x: actorPos.x, z: actorPos.y,
             targetable:!arena.arcanaUntargetable,
-            invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0
+            invulnerable: arena.invulnT > 0 || arena.dodge.t >= 0 || arena.deadT >= 0 || arena.arcanaInvulnerable
           });
           watchPlayerState(rawDt);
         }
         PC.wizardNextTwentyDashRuntime?.postEnemyUpdate?.();
+        PC.wizardFusionLeapRuntime?.postEnemyUpdate?.();
       }
     }
   }
@@ -1749,6 +1769,30 @@ function setArcanaFacingLock(direction=null){
 }
 function setArcanaTargetable(targetable=true){arena.arcanaUntargetable=!targetable;return!arena.arcanaUntargetable;}
 function setArcanaPlayerVisible(visible=true){arena.arcanaPlayerHidden=!visible;actorVisual.visible=!!visible;return!arena.arcanaPlayerHidden;}
+function setArcanaPlayerInvulnerable(invulnerable=true){arena.arcanaInvulnerable=!!invulnerable;return arena.arcanaInvulnerable;}
+function setArcanaPlayerAirborne(airborne=true){arena.arcanaAirborne=!!airborne;return arena.arcanaAirborne;}
+function setArcanaPlayerHeight(height=0){arena.arcanaPlayerHeight=Math.max(0,Number(height)||0);actorVisual.position.y=.02+arena.arcanaPlayerHeight;return arena.arcanaPlayerHeight;}
+function setArcanaPlayerPosition(position={}){
+  const x=Number(position.x),z=Number(position.z);if(!Number.isFinite(x)||!Number.isFinite(z))return false;
+  actorPos.set(x,z);actorRoot.position.set(x,0,z);return{x,z};
+}
+function setArcanaEnemyCarried(enemy,detail={}){
+  if(!enemy)return false;
+  if(detail.active){
+    const x=Number(detail.x)||0,z=Number(detail.z)||0,height=Math.max(0,Number(detail.height)||0);
+    enemy.__heroicLeapCarried=true;enemy.wizardAirborneOffset=height;
+    const hasMover=typeof enemySystem.moveEnemyResolved==='function';
+    const resolution=hasMover?enemySystem.moveEnemyResolved(enemy,{x,z},{resetVelocity:true}):null;
+    const settled=resolution?.current||(hasMover?{x:enemy.x,z:enemy.z}:{x,z});
+    const resolvedX=Number.isFinite(Number(settled?.x))?Number(settled.x):x,resolvedZ=Number.isFinite(Number(settled?.z))?Number(settled.z):z;
+    enemy.x=resolvedX;enemy.z=resolvedZ;
+    const root=enemy.root||enemy.mesh;if(root?.position){root.position.x=resolvedX;root.position.z=resolvedZ;root.position.y=(Number(enemy.yOff)||0)+(Number(enemy.rootLift)||0)+height;}
+  }else{
+    delete enemy.__heroicLeapCarried;delete enemy.wizardAirborneOffset;
+    const root=enemy.root||enemy.mesh;if(root?.position)root.position.y=(Number(enemy.yOff)||0)+(Number(enemy.rootLift)||0);
+  }
+  return true;
+}
 function translateArcanaPlayer(dx=0,dz=0){
   const start={x:actorPos.x,z:actorPos.y},delta={x:Number(dx)||0,z:Number(dz)||0};
   const result=resolveCircleMovement(start,delta,PLAYER_RADIUS,captureMazeWorld().getCollisionSegments());
@@ -1799,6 +1843,9 @@ function captureRuntimes(){
     wizardNextSource:PC.wizardNextSourceRuntime,
     wizardNextTwentyBasics:PC.wizardNextTwentyBasicsRuntime,
     wizardNextTwentyDash:PC.wizardNextTwentyDashRuntime,
+    wizardFusionLeap:PC.wizardFusionLeapRuntime,
+    wizardArcaneTypes:PC.wizardArcaneTypesRuntime,
+    wizardAlliedArcana:PC.wizardAlliedArcanaRuntime,
   };
 }
 function resetCaptureRuntimes(config={}){
@@ -1851,14 +1898,37 @@ function advanceCaptureFixtures(dt,frame=0){
     if(projectile.life<=0){projectile.dead=true;if(projectile.mesh)projectile.mesh.visible=false;}
   }
 }
+function setCaptureTargetPositionResolved(system,target,requested={}){
+  if(!target)return false;
+  const x=Number(requested.x),z=Number(requested.z);if(!Number.isFinite(x)||!Number.isFinite(z))return false;
+  const hasMover=typeof system?.moveEnemyResolved==='function';
+  const resolution=hasMover?system.moveEnemyResolved(target,{x,z},{resetVelocity:true}):null;
+  if(resolution===false)return false;
+  const settled=resolution?.current||(hasMover?{x:target.x,z:target.z}:{x,z});
+  const resolvedX=Number.isFinite(Number(settled?.x))?Number(settled.x):x,resolvedZ=Number.isFinite(Number(settled?.z))?Number(settled.z):z;
+  target.x=resolvedX;target.z=resolvedZ;
+  return{requested:{x,z},current:{x:resolvedX,z:resolvedZ},resolution};
+}
 function performCaptureWorldAction(action={}){
   const op=String(action.op||action.type||'').toLowerCase();
-  if(op==='release'){arena.charge.buttonHeld=false;return true;}
+  if(op==='release'){arena.charge.buttonHeld=false;PC.releaseArcanaInput?.({...action,source:'capture'});return true;}
+  if(op==='interrupt'){return !!PC.interruptArcanaInput?.(String(action.reason||'capture-interrupt'));}
+  if(op==='damageally'){
+    const runtime=captureRuntimes().wizardAlliedArcana,ally=runtime?.effects?.find?.(effect=>(effect.type==='agent'||effect.type==='ward')&&(!action.allyId||effect.stableId===action.allyId));
+    return !!ally?.onDamage?.(Math.max(0,Number(action.damage)||0),{x:0,z:0},{sourceEnemyId:String(action.sourceEnemyId||'capture-hostile')});
+  }
+  if(op==='activateintervention')return !!captureRuntimes().wizardArcaneTypes?.activateIntervention?.(String(action.reason||'capture-reactivation'));
+  if(op==='setplayerposition')return !!setArcanaPlayerPosition(action.position||action);
   if(op==='damageplayer')return Number(enemySystem.damagePlayer?.(Math.max(0,Number(action.damage)||0),{kind:'capture',name:String(action.name||'fixture'),dir:action.dir||null,ignoreInvulnerability:true}))>=0;
   if(op==='strikedecoy')return !!captureRuntimes().wizardNextTwentyDash?.strikeDecoy?.(action.decoyId||action.id,{damage:Number(action.damage)||1});
   if(op==='applyplayerstatus')return !!captureRuntimes().wizardNextTwentyDash?.applyPlayerStatus?.(String(action.status||'capture-dot'),{damage:Number(action.damage)||1,ticks:Math.max(1,Math.trunc(Number(action.ticks)||1)),interval:Math.max(1/60,Number(action.interval)||.25)});
   if(op==='settargethp'){
     const target=captureDummies.find(enemy=>enemy.__abilityCaptureDummyId===action.targetId);if(!target)return false;target.hp=Math.max(0,Number(action.hp)||0);if(target.root)target.root.visible=target.hp>0;return true;
+  }
+  if(op==='settargetposition'){
+    const target=captureDummies.find(enemy=>enemy.__abilityCaptureDummyId===action.targetId);if(!target)return false;
+    const x=Number(action.x??action.position?.x),z=Number(action.z??action.position?.z);if(!Number.isFinite(x)||!Number.isFinite(z))return false;
+    return !!setCaptureTargetPositionResolved(enemySystem,target,{x,z});
   }
   if(op==='deckplay')return !!captureFixtureDeck?.play?.(Math.max(0,Math.min(1,Math.trunc(Number(action.slot)||0))));
   if(op==='setresource'){
@@ -1890,6 +1960,10 @@ function placeCaptureFixtures(config){
     enemy.z=actorPos.y+forward.z*placement.forward+right.z*placement.lateral;
     enemy.hp=placement.hp;enemy.maxHp=placement.hp;enemy.speed=0;enemy.knockX=0;enemy.knockZ=0;
     enemy.state='idle';enemy.stateTime=0;enemy.stunned=0;enemy.__abilityCaptureDummy=true;
+    // Capture fixtures need an identity that survives world resets. Enemy-family
+    // allocation counters intentionally keep advancing during normal play, so
+    // using their runtime IDs here would make otherwise identical traces differ.
+    enemy.wizardStableId=placement.id;delete enemy.wizardTargetId;
     enemy.__abilityCaptureDummyId=placement.id;enemy.__abilityCaptureRole=placement.role;enemy.__abilityCaptureLayout=fixtures.targets.length?'fixtures':dummyConfig.layout;
     enemy.__abilityCaptureSpawnFrame=placement.spawnFrame;enemy.__abilityCaptureHp=placement.hp;enemy.__abilityCapturePending=placement.spawnFrame>0;
     if(enemy.facing){enemy.facing.x=-forward.x;enemy.facing.z=-forward.z;}
@@ -1940,13 +2014,13 @@ function castCaptureCard(card,captureConfig={}){
 function captureWorldSnapshot(){
   const forward=captureForward();
   const enemies=(enemySystem.enemies||[]).filter(enemy=>enemy?.hp>0).map(enemy=>({
-    id:enemy.__abilityCaptureDummyId||(enemy.id??null),kind:enemy.kind||enemy.spawnKind||'',x:Number(enemy.x)||0,z:Number(enemy.z)||0,
+    id:enemy.__abilityCaptureDummyId||(enemy.id??null),kind:enemy.kind||enemy.spawnKind||'',faction:enemy.wizardFaction||'hostile',targetId:enemy.wizardTargetId||null,x:Number(enemy.x)||0,z:Number(enemy.z)||0,
     hp:Number(enemy.hp)||0,maxHp:Number(enemy.maxHp)||0,radius:Number(enemy.radius)||0,
     knockX:Number(enemy.knockX)||0,knockZ:Number(enemy.knockZ)||0,stunned:Number(enemy.stunned)||0,
     stationary:!!enemy.__abilityCaptureDummy,role:enemy.__abilityCaptureRole||'',layout:enemy.__abilityCaptureLayout||'',
   }));
   return{
-    player:{x:actorPos.x,z:actorPos.y,facing:actorFacing,forwardX:forward.x,forwardZ:forward.z,hp:Number(enemySystem.playerHp)||0,targetable:!arena.arcanaUntargetable,movementLocked:arena.arcanaMovementLocked,facingLocked:!!arena.arcanaFacingLock,move:arenaMoveInput(),dashMotion:PC.basicDashRuntime?.snapshot?.()||null},
+    player:{x:actorPos.x,z:actorPos.y,facing:actorFacing,forwardX:forward.x,forwardZ:forward.z,hp:Number(enemySystem.playerHp)||0,targetable:!arena.arcanaUntargetable,invulnerable:!!arena.arcanaInvulnerable,airborne:!!arena.arcanaAirborne,height:Number(arena.arcanaPlayerHeight)||0,movementLocked:arena.arcanaMovementLocked,facingLocked:!!arena.arcanaFacingLock,move:arenaMoveInput(),dashMotion:PC.basicDashRuntime?.snapshot?.()||null},
     playerFootprint:PLAYER_RADIUS*2,
     camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},
     enemies,
@@ -1954,6 +2028,8 @@ function captureWorldSnapshot(){
       id:'capture-dummy',x:captureDummy.x,z:captureDummy.z,hp:captureDummy.hp,stationary:true,
     }:null,
     captureDummies:enemies.filter(enemy=>enemy.stationary),
+    alliedTargets:(enemySystem.alliedTargets||[]).map(target=>({id:target.stableId||target.id||null,type:target.type||'ally',x:Number(target.x)||0,z:Number(target.z)||0,hp:Number(target.hp)||0,maxHp:Number(target.maxHp)||0,active:target.active!==false})),
+    charmedTargetId:enemySystem.charmedEnemy?.wizardStableId||enemySystem.charmedEnemy?.id||null,
     captureHostileProjectiles:captureHostileProjectiles.map(projectile=>({id:projectile.id,x:projectile.x,z:projectile.z,r:projectile.r,life:projectile.life,dead:projectile.dead})),
     captureWalls:captureWallSegments.map(wall=>({id:wall.id,a:{...wall.a},b:{...wall.b}})),
     captureDeck:captureFixtureDeck?{hand:captureFixtureDeck.hand.map(card=>card?.arcanaId||card?.id||null),manualSequence:captureFixtureDeck.manualSequence,drawCount:captureFixtureDeck.drawCount,discardCount:captureFixtureDeck.discardCount}:null,
@@ -1977,7 +2053,7 @@ function captureInitialOptions(){
 /* ---------- boot ---------- */
 // console/testing handle
 window.__arena = { arena, enemySystem, combatState, actorPos, beginTestSwing, HitFeel, dungeon, encounterState,
-  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
+  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; } };
 spawnCharacter();
 const savedArenaWeapon=normalizeStoneWeaponId(StoneSettings.get('arena.weapon','longsword'));
@@ -1991,7 +2067,7 @@ updateModePanel();
 
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
-  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
+  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
   playCard, startDeckShuffle };
 

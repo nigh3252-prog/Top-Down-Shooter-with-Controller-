@@ -80,6 +80,8 @@ Enhancement adds two moving carry events after the base finisher.
 
 Heroic Leap rushes forward, rises vertically at the endpoint, leaves a projectile-blocking vortex below, and optionally carries the first contacted enemy into a special high-damage landing.
 
+Frame audit: the dense pale-cyan/white vortex spans roughly five to six caster footprints at its broadest visible moment. This observed silhouette is substantially wider than a simple ring around the caster.
+
 **[DOCUMENTED]**
 
 Heroic Leap is an Air Standard melee/jump/movement Arcana with a 6-second cooldown. Its ground vortex deals five 5-damage hits and blocks projectiles; ordinary landing deals 25 damage in a large radius. If the rush catches a knockback-susceptible enemy, that enemy is pulled airborne, excluded from vortex hits, and takes an additional 50 damage at landing. Enhancement raises landing damage to 40 and adds slow. The caster is invulnerable while airborne. ([wizardoflegend.fandom.com](https://wizardoflegend.fandom.com/wiki/Heroic_Leap))
@@ -418,4 +420,3 @@ Several local control fields share one aim axis but retain independent centers a
 ### **Position-Indexed Lifetime Schedule**
 
 Near and far instances use explicit different hit ceilings to shape the overall alignment behavior.
-

@@ -30,7 +30,9 @@ const opposite=deck.play(1);assert.equal(opposite.__abilityProxy,true,'the oppos
 assert.equal(deck.manualSequence.press,1,'using the opposite slot must not consume or advance Volt Disc');
 await Promise.resolve();
 assert.deepEqual(events.filter(event=>event.type==='wizard-arcana:play').map(event=>event.detail.sequence.press),[1]);
+assert.deepEqual(events.filter(event=>event.type==='wizard-arcana:play').map(event=>event.detail.slot),[0],'manual-sequence events must preserve their initiating card slot');
 assert.equal(events.some(event=>event.type==='other:play'),true);
+assert.equal(events.find(event=>event.type==='other:play').detail.slot,1,'ordinary ability events must preserve their initiating card slot');
 
 const second=deck.play(0);assert.equal(second.__manualSequence.press,2);assert.equal(deck.hand[0].id,volt.id);
 deck.update(.89);assert.equal(deck.hand[0].id,volt.id);assert.ok(deck.manualSequence.remaining>0&&deck.manualSequence.remaining<.02);
@@ -47,5 +49,6 @@ assert.equal(p3.__manualSequence.complete,true);assert.equal(completeDeck.manual
 await Promise.resolve();
 const completedSequence=events.filter(event=>event.type==='wizard-arcana:play').slice(-3).map(event=>event.detail.sequence);
 assert.deepEqual(completedSequence.map(sequence=>sequence.press),[1,2,3]);assert.equal(completedSequence.at(-1).complete,true);
+assert.deepEqual(events.filter(event=>event.type==='wizard-arcana:play').slice(-3).map(event=>event.detail.slot),[0,0,0]);
 
 console.log('Volt Disc manual sequence deck tests passed');

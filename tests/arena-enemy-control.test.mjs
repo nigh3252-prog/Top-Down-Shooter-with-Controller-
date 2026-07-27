@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import {applyArenaEnemyDamageState,resolveArenaEnemyMove} from '../src/arena-enemies-base.js';
-import {routeArenaEnemyMove} from '../src/arena-enemies-core.js';
+import {applyArenaEnemyDamageState,applyWizardEnemyStatus,resolveArenaEnemyMove} from '../src/arena-enemies-base.js';
+import {routeArenaEnemyMove,routeArenaEnemyStatus} from '../src/arena-enemies-core.js';
 
 function enemy(overrides={}){
   return{
@@ -51,5 +51,26 @@ assert.equal(calls.length,1);assert.deepEqual(calls[0],{target:secondEnemy,posit
 assert.equal(routeArenaEnemyMove([first,second],enemy(),{x:0,z:0}),false);
 const thirdEnemy=enemy(),third={enemies:[thirdEnemy]};
 assert.deepEqual(routeArenaEnemyMove([first,third],thirdEnemy,{x:3,z:4},{},(owner,target,position)=>({owner,target,position})),{owner:third,target:thirdEnemy,position:{x:3,z:4}},'owners without a native mover use the collision-aware core fallback');
+
+// The combined API preserves the original family's native status handler and
+// supplies the same maximum-shock control to FLARE and Hades owners that do not
+// expose one. Family fallbacks must also cancel an already-authored attack.
+const originalShock=enemy({state:'idle'}),flareShock=enemy({state:'windup',attack:{name:'FLARE attack'},vx:3,vz:-2}),hadesShock=enemy({state:'active',attack:{name:'Hades attack'},vx:-4,vz:1});
+let originalStatusCalls=0,flareReleases=0,hadesReleases=0;
+const originalStatusOwner={enemies:[originalShock],applyStatus(target,kind,duration,options){originalStatusCalls++;return applyWizardEnemyStatus(target,kind,duration,options);}};
+const flareStatusOwner={enemies:[flareShock],director:{releaseAllForEnemy(){flareReleases++;},release(){}}};
+const hadesStatusOwner={enemies:[hadesShock],director:{releaseAllForEnemy(){hadesReleases++;},release(){}}};
+const statusSystems=[originalStatusOwner,flareStatusOwner,hadesStatusOwner];
+for(const target of[originalShock,flareShock,hadesShock])assert.equal(routeArenaEnemyStatus(statusSystems,target,'shock',.625,{level:'maximum',contact:'initial'}),true);
+assert.equal(originalStatusCalls,1,'the original family keeps its native status route');
+for(const target of[originalShock,flareShock,hadesShock]){
+  assert.equal(target.stunned,.625);
+  assert.equal(target.stunStateRemaining,.625);
+  assert.equal(target.stunState,'wizardMaximumShock');
+}
+assert.deepEqual({flareReleases,hadesReleases},{flareReleases:1,hadesReleases:1});
+for(const target of[flareShock,hadesShock])assert.deepEqual({state:target.state,attack:target.attack,vx:target.vx,vz:target.vz},{state:'idle',attack:null,vx:0,vz:0},'family fallback must leave no live attack or movement during maximum shock');
+assert.equal(routeArenaEnemyStatus(statusSystems,flareShock,'unsupported-status',1),false,'unknown statuses must fail safely');
+assert.equal(routeArenaEnemyStatus(statusSystems,enemy(),'shock',1,{level:'maximum'}),false,'unowned enemies cannot receive a routed status');
 
 console.log('Arena enemy damage and movement control: ok');

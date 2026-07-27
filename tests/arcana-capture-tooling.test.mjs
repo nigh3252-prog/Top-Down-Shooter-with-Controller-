@@ -57,6 +57,21 @@ assert.ok(manifest.acceptanceProfiles['FLARE-RUSH'].checks.some(check=>check.met
 assert.ok(manifest.acceptanceProfiles['FROST-WING'].checks.some(check=>check.metric==='captureDerived.resolvedProjectiles'&&check.value===4));
 assert.ok(manifest.acceptanceProfiles['TOXIC-TRAP'].checks.some(check=>check.metric==='captureDerived.eventCounts.status-tick'&&check.value===5));
 assert.equal(manifest.abilities['SNARE-TRACK'].scenarios['source-base'].reset.fixtures.targets[0].forward,-6,'Snare capture must measure one center-lane contact after the outer vines have visibly diverged');
+const archetypeSamplerIds=['FLAME-FUSION','RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM','HEROIC-LEAP','CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION'];
+assert.deepEqual(manifest.batches['archetype-sampler'].map(job=>job.abilityId),archetypeSamplerIds,'archetype sampler capture must retain showcase source order');
+assert.deepEqual(manifest.batchCoverage['archetype-sampler'].abilities,archetypeSamplerIds,'declarative coverage must guard the complete archetype sampler');
+assert.deepEqual(Object.keys(manifest.acceptanceProfiles).filter(id=>archetypeSamplerIds.includes(id)),archetypeSamplerIds,'all archetype sampler abilities must declare required semantic acceptance profiles');
+for(const abilityId of archetypeSamplerIds){
+  const profile=manifest.acceptanceProfiles[abilityId];
+  assert.equal(profile.mode,'required');
+  assert.ok(profile.checks.length>=3,`${abilityId} must gate its defining source contract`);
+  assert.ok(profile.checks.every(check=>check.metric.startsWith('captureDerived.')));
+  assert.ok(profile.checks.some(check=>check.metric==='captureDerived.cleanedUp'),`${abilityId} capture must gate final cleanup`);
+}
+assert.ok(manifest.acceptanceProfiles['FLAME-FUSION'].checks.some(check=>check.metric==='captureDerived.eventDeclaredCounts.flame-fusion-transformed'&&check.value===5),'Flame Fusion must gate the five-child transformation');
+assert.ok(manifest.acceptanceProfiles['EARTHEN-AEGIS'].checks.some(check=>check.metric==='captureDerived.eventDeclaredCounts.aegis-created'&&check.value===8),'Earthen Aegis must gate the eight-shield base formation');
+assert.ok(manifest.acceptanceProfiles['BALL-LIGHTNING'].checks.some(check=>check.metric==='captureDerived.eventCounts.ball-hit'&&check.value===10),'Ball Lightning source capture must use a full ten-pulse release');
+assert.ok(manifest.acceptanceProfiles['AQUA-BEAM'].checks.some(check=>check.metric==='captureDerived.eventCounts.aqua-beam-tick'&&check.value===10),'Aqua Beam source capture must consume all ten stored charges');
 assert.deepEqual(expandCaptureStages('all'),['contract','source','style']);
 assert.deepEqual(expandCaptureStages('motion,style,motion'),['motion','style']);
 
@@ -71,6 +86,10 @@ const auditedStarts={
   'GUST-BURST':[114.7,116.7],'RAZOR-BURST':[124.8,126.3],'SPIKE-TRACK':[132.3,133.8],'TOXIC-TRAP':[139.4,143.7333333333],
   'SNARE-TRACK':[147.4,149.9],'THUNDER-LINE':[151.4,153.4],'CIRCUIT-LINE':[157.9,163.5666666667],'SHOCK-LINE':[165.9,167.4],
   'WAVE-FRONT':[168.4,170.4],'FROST-FEINT':[180,182.25],'FROST-WING':[183,185],'CHAOTIC-RIFT':[195.2,196.2],
+  'FLAME-FUSION':[338.55,339.65],'RAPID-FIRE-AGENT':[378.35,389.10],'WARD-OF-FLAMES':[392.45,400.45],
+  'MENTIS-IMPERIUM':[434.15,436.90],'HEROIC-LEAP':[442.85,444.25],'CYCLONE-BOOMERANG':[496.40,497.90],
+  'EARTHEN-AEGIS':[600.95,605.55],'BALL-LIGHTNING':[896.40,901.00],'AQUA-BEAM':[1120.70,1122.70],
+  'ARCANE-INTERVENTION':[1206.60,1211.35],
 };
 for(const [abilityId,ability] of Object.entries(manifest.abilities)){
   for(const [scenarioName,scenario] of Object.entries(ability.scenarios)){
@@ -100,10 +119,18 @@ assert.ok(resolveCaptureJob(manifest,{id:'BOLT-RAIL',scenario:'fifth-beat-miss',
 const iceContract=resolveCaptureJob(manifest,{id:'ICE-DAGGER',stage:'contract'}).stage.acceptance;
 assert.equal(iceContract.mode,'required');assert.ok(iceContract.checks.some(check=>check.metric==='captureDerived.cleanedUp'),'ability-level profile must override stale/weaker inline checks');
 assert.equal(resolveCaptureJob(manifest,{id:'CHAOTIC-RIFT',stage:'style'}).stage.acceptance.checks[0].metric,'captureDerived.eventCounts.rift-entered');
+const ballSampler=resolveCaptureJob(manifest,{id:'BALL-LIGHTNING',stage:'contract'});
+assert.equal(ballSampler.runtimeId,'wizardArcaneTypes');assert.deepEqual(ballSampler.stage.actions.map(action=>action.op),['hold','release']);assert.equal(ballSampler.stage.actions[1].frame,90);
+const aquaSampler=resolveCaptureJob(manifest,{id:'AQUA-BEAM',stage:'source'});
+assert.equal(aquaSampler.stage.reset.fixtures.resources[0].key,'aquaCharges');assert.equal(aquaSampler.stage.reset.fixtures.resources[0].value,10);assert.ok(aquaSampler.stage.actions.some(action=>action.op==='setAim'));
+const interventionSampler=resolveCaptureJob(manifest,{id:'ARCANE-INTERVENTION',stage:'style'});
+assert.equal(interventionSampler.stage.actions.find(action=>action.op==='activateIntervention')?.frame,114,'Arcane Intervention manual trigger must match the demonstrated roughly 1.9-second field hold');
+assert.equal(resolveCaptureJob(manifest,{id:'RAPID-FIRE-AGENT',stage:'style'}).stage.durationFrames,645,'Rapid Fire Agent capture must include its full ten-second lifetime and last projectile cleanup');
+assert.equal(resolveCaptureJob(manifest,{id:'WARD-OF-FLAMES',stage:'style'}).stage.durationFrames,480,'Ward capture must include all eight pulses and expiry cleanup');
 assert.throws(()=>resolveCaptureJob(manifest,{id:'VOLT-DISC',stage:'motion'}),/Unknown .* stage motion/,'motion alias must remain Dragon-only');
 
 for(const marker of [
-  '--batch session-five','--batch next-twenty','--scenario <id>','--stage all','traceSnapshotsEqual','review-index.json','review-index.html','batchCoverage',
+  '--batch session-five','--batch next-twenty','--batch archetype-sampler','--scenario <id>','--stage all','traceSnapshotsEqual','review-index.json','review-index.html','batchCoverage',
   'screenshotExactPassed','Exact checkpoint pixels:',
   'api.act||api.perform','durationFrames','checkpointFrames','telemetryAdapter','semanticEvents','abilityContracts',
   'telemetryRun1','telemetryRun2','captureRevision','manifestSha256','runnerSha256',

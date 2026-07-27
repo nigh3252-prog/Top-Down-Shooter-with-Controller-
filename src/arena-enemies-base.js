@@ -50,7 +50,12 @@ export function applyWizardEnemyStatus(enemy,kind,duration,options={}){
     if(Number.isFinite(Number(options.multiplier)))enemy.wizardSlowMultiplier=Math.max(.05,Math.min(1,Number(options.multiplier)));
   }else if(status==='freeze')enemy.wizardFreezeRemaining=Math.max(Number(enemy.wizardFreezeRemaining)||0,seconds);
   else if(status==='entangle')enemy.wizardEntangleRemaining=Math.max(Number(enemy.wizardEntangleRemaining)||0,seconds);
-  else if(status==='shock'&&seconds>0)enemy.stunStateRemaining=Math.max(Number(enemy.stunStateRemaining)||0,seconds);
+  else if(status==='shock'&&seconds>0){
+    enemy.stunned=Math.max(Number(enemy.stunned)||0,seconds);
+    enemy.stunStateRemaining=Math.max(Number(enemy.stunStateRemaining)||0,seconds);
+    enemy.stunState=options.level==='maximum'?'wizardMaximumShock':'wizardShock';
+    enemy.vx=enemy.vz=0;
+  }else return false;
   return true;
 }
 
@@ -147,6 +152,7 @@ const EATK = { ...BASE_EATK, ...FUSION_ATTACKS };
 export function createArenaEnemySystem({
   THREE, worldRoot, materials = {}, arenaRadius = 18,
   navigation = null, roomEncounterMode = false, onEncounterCleared = null,
+  factionService = null, systemKey = 'original',
 } = {}){
   const rig = installGoblinRig(THREE);
   const fusionRig = installFusionEnemyRig(THREE);
@@ -225,8 +231,12 @@ export function createArenaEnemySystem({
     return best;
   }
   function targetForEnemy(enemy,player){
-    const decoy=nearestWizardDecoy(enemy);
+    const decoy=factionService?.arenaFactionOf?.(enemy)==='allied'?null:nearestWizardDecoy(enemy);
     if(decoy)return{x:decoy.x,z:decoy.z,invulnerable:false,targetable:true,__wizardDecoyId:decoy.id,__wizardDecoyRadius:decoy.radius};
+    if(factionService){
+      const locked=enemy.state!=='idle'&&!!enemy.wizardTargetId;
+      return factionService.targetForActor(enemy,player,{locked});
+    }
     return player?.targetable===false?null:player;
   }
   function strikeWizardDecoy(id,attack={}){
@@ -255,7 +265,8 @@ export function createArenaEnemySystem({
 
   function applyStatus(enemy,kind,duration,options={}){
     if(!applyWizardEnemyStatus(enemy,kind,duration,options))return false;
-    if(String(kind||'').toLowerCase()==='freeze')stunEnemy(enemy,duration,{kind:'wizardFreeze'});
+    const status=String(kind||'').toLowerCase();
+    if(status==='freeze'||status==='shock')stunEnemy(enemy,duration,{kind:status==='freeze'?'wizardFreeze':options.level==='maximum'?'wizardMaximumShock':'wizardShock'});
     return true;
   }
 
@@ -352,6 +363,7 @@ export function createArenaEnemySystem({
     const initialFacingAngle = Math.atan2(initialFacing.x, initialFacing.z);
     const e = {
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
+      wizardFaction:'hostile',wizardStableId:`${systemKey}:${String(nextId-1).padStart(4,'0')}`,
       hp, maxHp:hp, speed:a.speed, stop:useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
       fusion:isFusionEnemy(kind) || !!a.fusion, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
       visualScale:a.visualScale || 1, targetScale:a.targetScale || 1, currentTargetScale:a.targetScale || 1,
@@ -528,7 +540,8 @@ export function createArenaEnemySystem({
       e.combatAtt = atk.combatAtt;
       e.combatAttackIndex = (e.combatAttackIndex + 1) % e.realAttacks.length;
     }
-    director.grant(e, atk);
+    if(factionService?.arenaFactionOf?.(e)!=='allied')director.grant(e, atk);
+    factionService?.lockTarget?.(e,p);
   }
 
   function updateFusionAccessibility(e){
@@ -579,7 +592,10 @@ export function createArenaEnemySystem({
     if(Math.abs(wrapPi(ang - fa)) < e.attack.arc*.5 + .2 || d < closeRadius){
       e.hitDone = true;
       if(p.__wizardDecoyId){strikeWizardDecoy(p.__wizardDecoyId,{enemyId:e.id,kind:e.kind,attack:e.attack.name,projectile:false});return;}
-      hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
+      if(factionService&&p.__arenaTargetKind){
+        factionService.damageTarget(p,e.attack.damage,e.facing,{sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction,attack:e.attack.name},
+          (damage,dir)=>hitPlayer(damage,e.kind,e.attack.name,dir));
+      }else hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
     }
   }
   function hitPlayer(dmg, kind, name, dir = null, {ignoreInvulnerability=false} = {}){
@@ -604,7 +620,7 @@ export function createArenaEnemySystem({
     const f = e.facing;
     let pr = projectiles.find(q => q.dead);
     if(!pr){ pr = { mesh:null, dead:true }; projectiles.push(pr); }
-    Object.assign(pr, { x:e.x + f.x*.35*S, z:e.z + f.z*.35*S, vx:f.x*2.2*S, vz:f.z*2.2*S, life:2.4, r:.09*S, damage:e.attack.damage, dead:false, targetDecoyId:p?.__wizardDecoyId||null });
+    Object.assign(pr, { x:e.x + f.x*.35*S, z:e.z + f.z*.35*S, vx:f.x*2.2*S, vz:f.z*2.2*S, life:2.4, r:.09*S, damage:e.attack.damage, dead:false, targetDecoyId:p?.__wizardDecoyId||null, arenaTarget:factionService?.captureTarget?.(p)||null, sourceEnemyId:e.wizardStableId, sourceFaction:e.wizardFaction });
     if(!pr.mesh){
       pr.mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(.39, 0), mats.matIron);
       group.add(pr.mesh);
@@ -621,7 +637,11 @@ export function createArenaEnemySystem({
         if(Math.hypot(pr.x-decoy.x,pr.z-decoy.z)>=pr.r+decoy.radius)continue;
         strikeWizardDecoy(decoy.id,{kind:'rock',attack:'Rock Throw',projectile:true});pr.life=0;break;
       }
-      if(pr.life>0&&p.targetable!==false&&Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
+      const arenaTarget=pr.life>0&&pr.arenaTarget?factionService?.resolveCapturedTarget?.(pr.arenaTarget,p,{stale:false}):null;
+      if(arenaTarget&&Math.hypot(pr.x-arenaTarget.x,pr.z-arenaTarget.z)<pr.r+(arenaTarget.radius||PLAYER_R)){
+        factionService.damageTarget(arenaTarget,pr.damage,norm(pr.vx,pr.vz),{sourceEnemyId:pr.sourceEnemyId,sourceFaction:pr.sourceFaction,attack:'Rock Throw'},
+          (damage,dir)=>hitPlayer(damage,'rock','Rock Throw',dir));pr.life=0;
+      }else if(!pr.arenaTarget&&pr.life>0&&p.targetable!==false&&Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
         hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz)); pr.life = 0;
       }
       if(pr.life <= 0){ pr.dead = true; if(pr.mesh) pr.mesh.visible = false; }
@@ -686,7 +706,7 @@ export function createArenaEnemySystem({
     }
     else if(e.state === 'recovery'){
       e.vx = e.vz = 0;
-      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown / tuning.aggression; director.release(e); }
+      if(e.stateTime >= e.recovery){ e.state = 'idle'; e.stateTime = 0; e.cooldown = e.attack.cooldown / tuning.aggression; director.release(e); factionService?.releaseTarget?.(e); }
     }
     else {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx,dz);
@@ -694,7 +714,8 @@ export function createArenaEnemySystem({
       const permitted = director.hasApproachPermit(e);
       const alignment = e.role === 'goblin' ? Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle)) : 0;
       const att = (e.cooldown <= 0 && !wizardEnemyAttackLocked(e) && !playerDead()) ? chooseAttack(e, d, p) : null;
-      if(att && permitted && alignment <= e.attackAlign && director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression })){
+      const converted=factionService?.arenaFactionOf?.(e)==='allied';
+      if(att && (converted||permitted) && alignment <= e.attackAlign && (converted||director.canGrant(e, att, { enemies, pressureBudget:director.settings.pressureBudget, aggression:tuning.aggression }))){
         startEnemyAttack(e, att, p);
       } else if(movementScale>0) {
         if(e.fusion){
@@ -723,10 +744,10 @@ export function createArenaEnemySystem({
     for(const e of enemies){ e._sepR = separationRadius(e); e._ox = e.x; e._oz = e.z; }
     for(let pass = 0; pass < 4; pass++){
       for(let i = 0; i < enemies.length; i++){
-        const a = enemies[i]; if(a.hp <= 0) continue;
+        const a = enemies[i]; if(a.hp <= 0||a.__heroicLeapCarried) continue;
         const ra = a._sepR;
         for(let j = i+1; j < enemies.length; j++){
-          const b = enemies[j]; if(b.hp <= 0) continue;
+          const b = enemies[j]; if(b.hp <= 0||b.__heroicLeapCarried) continue;
           let dx = b.x - a.x, dz = b.z - a.z;
           const min = ra + b._sepR + .22;
           // squared-distance reject first; only sqrt the near pairs that overlap
@@ -749,6 +770,7 @@ export function createArenaEnemySystem({
     }
     if(navigation?.resolveMovement){
       for(const e of enemies){
+        if(e.__heroicLeapCarried)continue;
         const ox = e._ox, oz = e._oz;
         const projected = navigation.resolveMovement({ x:ox, z:oz }, { x:e.x - ox, z:e.z - oz }, collisionRadius(e));
         e.x = projected.x; e.z = projected.z;
@@ -833,7 +855,7 @@ export function createArenaEnemySystem({
     } else if(e.useRealCombat) applyRealCombatPose(e);
     else applyPunchPose(e);
     if(!e.fusion) applyRallyPose(e);
-    e.root.position.set(e.x, e.yOff + e.rootLift, e.z);
+    e.root.position.set(e.x, e.yOff + e.rootLift + (Number(e.wizardAirborneOffset)||0), e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
     const sq = e.squash * (e.squashT / e.squashMax);
@@ -877,14 +899,18 @@ export function createArenaEnemySystem({
     if(!e.fusion) disposeEnemyGeometry(e.root);
   }
   function damageEnemy(e, amount, knock = { x:0, z:0 }, opts = {}){
+    const modified=factionService?.modifyDamage?.(e,amount,opts);
+    if(modified){amount=modified.damage;opts={...opts,__arenaDamageModified:true,damageModifiers:modified.applied};}
     const result=applyArenaEnemyDamageState(e,amount,knock,opts,{endRally,releaseAttack:enemy=>director.releaseAllForEnemy(enemy)});
     if(!result.accepted)return false;
+    if(result.cancelAttack)factionService?.releaseTarget?.(e);
     const {power}=result;
     if(result.killed){
       // Even a non-reactive damage tick must relinquish its director ownership if
       // it kills an enemy; hitReaction:false only preserves living attacks.
       if(!result.cancelAttack)director.releaseAllForEnemy(e);
-      kills++; waveKills++;
+      kills++; waveKills++;factionService?.releaseTarget?.(e);
+      if(factionService?.charmedEnemy===e)factionService.releaseCharm(e);
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
       if(e.fusion){
@@ -898,6 +924,14 @@ export function createArenaEnemySystem({
       return true;
     }
     return false;
+  }
+
+  function setEnemyFaction(e,faction){
+    if(!e||!enemies.includes(e)||e.hp<=0)return false;
+    endRally(e);director.releaseAllForEnemy(e);factionService?.releaseTarget?.(e);
+    e.wizardFaction=faction==='allied'?'allied':'hostile';
+    e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.vx=e.vz=0;
+    return true;
   }
 
   function moveEnemyResolved(e,target,options={}){
@@ -921,6 +955,7 @@ export function createArenaEnemySystem({
   function clearEnemies(){
     director.reset();
     enemies.splice(0).forEach(e => {
+      factionService?.releaseTarget?.(e);
       if(e.fusion) fusionRig.dispose(e.fusionVisual);
       else { disposeEnemyGeometry(e.root); disposeEnemyMaterials(e.root); }
       if(e.root.parent) e.root.parent.remove(e.root);
@@ -952,7 +987,7 @@ export function createArenaEnemySystem({
     _updateOrder.length = 0;
     for(let k = 0; k < enemies.length; k++) _updateOrder.push(enemies[k]);
     for(let k = 0; k < _updateOrder.length; k++){
-      const enemy=_updateOrder[k];advanceWizardEnemyControl(enemy,dt);const target=targetForEnemy(enemy,lastPlayer);
+      const enemy=_updateOrder[k];if(enemy.__heroicLeapCarried){enemy.vx=enemy.vz=enemy.knockX=enemy.knockZ=0;enemy.state='idle';enemy.attack=null;continue;}advanceWizardEnemyControl(enemy,dt);const target=targetForEnemy(enemy,lastPlayer);
       if(target)updateEnemy(enemy,dt,target);
       else{enemy.vx*=Math.pow(.02,dt);enemy.vz*=Math.pow(.02,dt);enemy.cooldown=Math.max(0,enemy.cooldown-dt);enemy.stunned=Math.max(0,(Number(enemy.stunned)||0)-dt);}
     }
@@ -966,7 +1001,8 @@ export function createArenaEnemySystem({
     for(const e of enemies) updateEnemyVisual(e, dt);
     rig.updateDeathPieces(dt, deathPieces);
     // wave clear when everything is dead
-    if(!enemies.length && !playerDead()){
+    const hostileRemaining=enemies.some(enemy=>(factionService?.arenaFactionOf?.(enemy)||'hostile')==='hostile');
+    if(!hostileRemaining && !playerDead()){
       waveClearT += dt;
       if(waveClearT > 1.0){
         if(roomEncounterMode && activeEncounterRoomId !== null){
@@ -982,7 +1018,7 @@ export function createArenaEnemySystem({
   if(!roomEncounterMode) startWave();
 
   return {
-    enemies, group, director, update, damageEnemy, moveEnemy, moveEnemyResolved, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
+    enemies, group, director, update, damageEnemy, moveEnemy, moveEnemyResolved, setEnemyFaction, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     damagePlayer:(damage,{kind='capture',name='fixture',dir=null,ignoreInvulnerability=false,targetableIndependent=false}={})=>hitPlayer(damage,kind,name,dir,{ignoreInvulnerability:ignoreInvulnerability||targetableIndependent}),
     setPlayerDamageInterceptor:(interceptor)=>{playerDamageInterceptor=typeof interceptor==='function'?interceptor:null;},
     applyStatus,stunEnemy,

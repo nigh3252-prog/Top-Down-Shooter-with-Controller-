@@ -23,6 +23,7 @@
       <div class="notice"><strong>Dragon Arc reference-lock:</strong> The rejected narrow-stream passes were replaced from a metric-validated deterministic double-helix motion proxy, then finished with a segmented flame-dragon silhouette. Its source-comparison checkbox remains open for final user review.</div>
       <div class="notice"><strong>Five-card reference-lock:</strong> Whirling Tornado, Water Prison, Homing Flares, Bolt Rail, and Volt Disc now carry frame-audited base-form windows and deterministic contract/source/style review artifacts. Their comparison checkboxes remain open until the final user review.</div>
       <div class="notice"><strong>Next-twenty reference-lock:</strong> Ice Dagger through Chaotic Rift now have base-form Enemy Lab implementations. The fifteen continuous Dash Arcana reuse the approved Top Down Game dash movement while their source payloads remain independently auditable. All twenty comparison checkboxes stay open for batch review.</div>
+      <div class="notice"><strong>Archetype sampler:</strong> One Agent plus nine distinct spell grammars now cover allied summons, wards, charm, projectile fusion, carried targets, returning projectiles, orbiting shields, vulnerable hold charge, stored-charge beam channeling, and delayed enemy teleportation. Aqua Beam is base-form only; all ten comparison checkboxes remain open for review.</div>
       <div class="hero-links">
         <a href="index.html">← Game launcher</a>
         <a href="https://youtu.be/cDyS1-SM2zc" target="_blank" rel="noreferrer">Original showcase ↗</a>
@@ -87,9 +88,10 @@
   'use strict';
   const data=JSON.parse(document.getElementById('wol-data').textContent);
   const STORAGE_KEY='wol.arcanaChecklist.v1';
-  const CATALOG_REVISION=3;
+  const CATALOG_REVISION=4;
   const NEXT_TWENTY_IMPLEMENTED=['ice-dagger','rip-tide','aqua-arc','chaos-crusher','searing-rush','flare-rush','ignition-rush','air-burst','gust-burst','razor-burst','spike-track','toxic-trap','snare-track','thunder-line','circuit-line','shock-line','wave-front','frost-feint','frost-wing','chaotic-rift'];
-  const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};
+  const ARCHETYPE_SAMPLER_IMPLEMENTED=['rapid-fire-agent','ward-of-flames','mentis-imperium','flame-fusion','heroic-leap','cyclone-boomerang','earthen-aegis','ball-lightning','aqua-beam','arcane-intervention'];
+  const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};
   const elements={Fire:'var(--fire)',Air:'var(--air)',Earth:'var(--earth)',Lightning:'var(--lightning)',Water:'var(--water)',Ice:'var(--ice)',Chaos:'var(--chaos)'};
   const lineageLabels={
     'source-first':'Source-first from outset',rebuilt:'Initial pass → source-first rebuild',

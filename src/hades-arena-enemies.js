@@ -16,7 +16,7 @@ const norm=(x,z)=>{const d=Math.hypot(x,z)||1;return{x:x/d,z:z/d};};
 const wrapPi=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const pointSegmentDistance=(p,a,b)=>{const dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz||1;const t=clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/l2,0,1);return Math.hypot(p.x-(a.x+dx*t),p.z-(a.z+dz*t));};
 
-export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navigation=null,roomEncounterMode=false,onEncounterCleared=null}={}){
+export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navigation=null,roomEncounterMode=false,onEncounterCleared=null,factionService=null,systemKey='hades'}={}){
   const rig=installHadesEnemyRig(THREE);
   const group=new THREE.Group();
   group.name='Hades Tartarus Enemies';
@@ -97,7 +97,8 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   function moveEnemy(e,p,dt,d){
     if(e.def.role==='spawner'){e.vx=e.vz=0;turnTo(e,p,dt,.35);return;}
     const desired=e.preferredRange*rangeK();
-    if(!tuning.territoryEnabled){
+    const converted=factionService?.arenaFactionOf?.(e)==='allied';
+    if(!tuning.territoryEnabled||converted){
       if(e.thrower||e.def.role==='beam'||e.def.role==='trapper'||e.def.role==='ranged')keepRange(e,p,dt,desired);
       else if(e.def.role==='charger'){if(d>desired*.85)seek(e,p,dt,1);else orbit(e,p,dt,desired*.72,.28);}
       else if(d>desired+.6)seek(e,p,dt,.9);else orbit(e,p,dt,desired,.36);
@@ -142,9 +143,9 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   function updatePursuitAssignments(){
     if(!tuning.territoryEnabled){for(const e of enemies)e.pursuitAllowed=true;return;}
     const candidates=enemies
-      .filter(e=>e.hp>0&&(e.def.pursuitWeight||0)>0)
+      .filter(e=>e.hp>0&&(e.def.pursuitWeight||0)>0&&(factionService?.arenaFactionOf?.(e)||'hostile')==='hostile')
       .sort((a,b)=>Math.hypot(a.x-lastPlayer.x,a.z-lastPlayer.z)-Math.hypot(b.x-lastPlayer.x,b.z-lastPlayer.z));
-    for(const e of enemies)e.pursuitAllowed=false;
+    for(const e of enemies)e.pursuitAllowed=factionService?.arenaFactionOf?.(e)==='allied';
     let used=0;
     for(const e of candidates){
       const weight=e.def.pursuitWeight||1;
@@ -182,6 +183,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     const a=Math.atan2((lastPlayer.x??0)-x,(lastPlayer.z??0)-z);
     const e={
       id:nextId++,kind,label:def.label,def,x,z,vx:0,vz:0,radius:def.radius,height:def.height,
+      wizardFaction:'hostile',wizardStableId:`${systemKey}:${String(nextId-1).padStart(4,'0')}`,
       hp,maxHp:hp,speed:def.speed,score:def.score,role:'hades',preferredRange:def.preferredRange,
       thrower:!!def.thrower,flying:!!def.flying,fusion:false,isElite:false,attackId:def.attackId,
       realAtk:attack,attackRange:attack?.range||0,holdDist:attack?.range||def.preferredRange,
@@ -207,18 +209,18 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     return e;
   }
 
-  function startAttack(e,attack){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;director.grant(e,attack);}
+  function startAttack(e,attack,target){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;if(factionService?.arenaFactionOf?.(e)!=='allied')director.grant(e,attack);factionService?.lockTarget?.(e,target);}
   function hitPlayer(damage,kind,name,dir=null){if(lastPlayer.invulnerable||playerDead())return false;tuning.playerHp=Math.max(0,tuning.playerHp-damage);tuning.lastPlayerHit=`${HADES_ENEMY_ARCHETYPES[kind]?.label||kind} ${name} hit for ${damage}`;tuning.lastPlayerHitDir=dir?{x:dir.x,z:dir.z}:null;return true;}
-  function resolveMelee(e,p){const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attack;if(d>attack.range*rangeK()+PLAYER_R)return;if(navigation?.raycastWalls?.({x:e.x,z:e.z},{x:p.x,z:p.z}))return;const delta=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));if(delta>attack.arc*.5+.2&&d>collisionRadius(e)+PLAYER_R+.2)return;if(hitPlayer(Math.max(1,Math.round(attack.damage)),e.kind,attack.name,e.facing)){e.hitDone=true;if(attack.restrain)startRestraint(e,attack.restrain);}}
-  function spawnOrb(e){const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.28,1),orbMat);group.add(mesh);const f=e.facing;projectiles.push({mesh,x:e.x+f.x*.65,z:e.z+f.z*.65,vx:f.x*6.4,vz:f.z*6.4,life:2.4,r:.34,damage:e.attack.damage,owner:e.id});}
-  function spawnMine(e){const targetA=Math.atan2(lastPlayer.x-e.x,lastPlayer.z-e.z)+rand(-.8,.8),distance=rand(2.2,5.2),tx=e.x+Math.sin(targetA)*distance,tz=e.z+Math.cos(targetA)*distance;const mesh=new THREE.Mesh(new THREE.OctahedronGeometry(.34,0),mineMat);group.add(mesh);mines.push({mesh,x:tx,z:tz,owner:e.id,arm:.65,life:8,triggerRadius:1.45,damage:e.attack.damage});}
-  function detonateMine(m){if(!mines.includes(m))return;const d=Math.hypot(lastPlayer.x-m.x,lastPlayer.z-m.z);if(d<2.35+PLAYER_R)hitPlayer(m.damage,'hadesWretchedPest','Mine Blast',norm(lastPlayer.x-m.x,lastPlayer.z-m.z));const ring=new THREE.Mesh(new THREE.RingGeometry(.35,.48,28),new THREE.MeshBasicMaterial({color:0xff784e,transparent:true,opacity:1,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.set(m.x,.08,m.z);group.add(ring);effects.push({mesh:ring,age:0,life:.38,kind:'ring'});m.mesh.parent?.remove(m.mesh);m.mesh.geometry.dispose();mines.splice(mines.indexOf(m),1);}
+  function resolveMelee(e,p){const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attack,targetRadius=p.__arenaTargetKind?(p.radius||PLAYER_R):PLAYER_R;if(d>attack.range*rangeK()+targetRadius)return;if(navigation?.raycastWalls?.({x:e.x,z:e.z},{x:p.x,z:p.z}))return;const delta=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));if(delta>attack.arc*.5+.2&&d>collisionRadius(e)+targetRadius+.2)return;const amount=Math.max(1,Math.round(attack.damage)),applied=factionService&&p.__arenaTargetKind?factionService.damageTarget(p,amount,e.facing,{sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction,attack:attack.name},(value,dir)=>hitPlayer(value,e.kind,attack.name,dir)):hitPlayer(amount,e.kind,attack.name,e.facing);if(applied){e.hitDone=true;if(attack.restrain&&(!p.__arenaTargetKind||p.__arenaTargetKind==='player'))startRestraint(e,attack.restrain);}}
+  function spawnOrb(e,target){const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.28,1),orbMat);group.add(mesh);const f=e.facing;projectiles.push({mesh,x:e.x+f.x*.65,z:e.z+f.z*.65,vx:f.x*6.4,vz:f.z*6.4,life:2.4,r:.34,damage:e.attack.damage,owner:e.id,arenaTarget:factionService?.captureTarget?.(target)||null,sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction});}
+  function spawnMine(e,target){const targetA=Math.atan2(target.x-e.x,target.z-e.z)+rand(-.8,.8),distance=rand(2.2,5.2),tx=e.x+Math.sin(targetA)*distance,tz=e.z+Math.cos(targetA)*distance;const mesh=new THREE.Mesh(new THREE.OctahedronGeometry(.34,0),mineMat);group.add(mesh);mines.push({mesh,x:tx,z:tz,owner:e.id,arm:.65,life:8,triggerRadius:1.45,damage:e.attack.damage,arenaTarget:factionService?.captureTarget?.(target)||null,sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction});}
+  function detonateMine(m){if(!mines.includes(m))return;const target=m.arenaTarget?factionService?.resolveCapturedTarget?.(m.arenaTarget,lastPlayer,{stale:false}):lastPlayer;if(target){const d=Math.hypot(target.x-m.x,target.z-m.z);if(d<2.35+(target.radius||PLAYER_R)){const dir=norm(target.x-m.x,target.z-m.z);if(factionService&&target.__arenaTargetKind)factionService.damageTarget(target,m.damage,dir,{sourceEnemyId:m.sourceEnemyId,sourceFaction:m.sourceFaction,attack:'Mine Blast'},(value,knock)=>hitPlayer(value,'hadesWretchedPest','Mine Blast',knock));else hitPlayer(m.damage,'hadesWretchedPest','Mine Blast',dir);}}const ring=new THREE.Mesh(new THREE.RingGeometry(.35,.48,28),new THREE.MeshBasicMaterial({color:0xff784e,transparent:true,opacity:1,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.set(m.x,.08,m.z);group.add(ring);effects.push({mesh:ring,age:0,life:.38,kind:'ring'});m.mesh.parent?.remove(m.mesh);m.mesh.geometry.dispose();mines.splice(mines.indexOf(m),1);}
   function detonateOwnerMines(owner){for(const m of [...mines])if(m.owner===owner)detonateMine(m);}
   function startRestraint(e,duration){const existing=restraints.find(r=>r.source===e);if(existing){existing.t=duration;return;}const line=makeLine(chainMat);line.visible=true;restraints.push({source:e,t:duration,tick:.2,line});}
   function updateRestraints(dt){for(let i=restraints.length-1;i>=0;i--){const r=restraints[i];r.t-=dt;r.tick-=dt;if(!live(r.source)||r.t<=0){r.line.parent?.remove(r.line);r.line.geometry.dispose();restraints.splice(i,1);continue;}const a=new THREE.Vector3(r.source.x,r.source.height*tuning.heightScale*.55,r.source.z),b=new THREE.Vector3(lastPlayer.x,1.2,lastPlayer.z);r.line.geometry.setFromPoints([a,b]);if(r.tick<=0){r.tick+=.25;hitPlayer(1,r.source.kind,'Chain Restraint',norm(lastPlayer.x-r.source.x,lastPlayer.z-r.source.z));}}}
-  function updateProjectiles(dt){for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i],prev={x:p.x,z:p.z};p.life-=dt;p.x+=p.vx*dt;p.z+=p.vz*dt;if(navigation?.raycastWalls?.(prev,{x:p.x,z:p.z}))p.life=0;if(Math.hypot(p.x-lastPlayer.x,p.z-lastPlayer.z)<p.r+PLAYER_R){hitPlayer(p.damage,'hadesWretchedWitch','Witch Orb',norm(p.vx,p.vz));p.life=0;}p.mesh.position.set(p.x,1.35,p.z);p.mesh.rotation.x+=dt*5;p.mesh.rotation.y+=dt*4;if(p.life<=0){p.mesh.parent?.remove(p.mesh);p.mesh.geometry.dispose();projectiles.splice(i,1);}}}
-  function updateMines(dt){for(const m of [...mines]){m.arm-=dt;m.life-=dt;m.mesh.position.set(m.x,.28+Math.sin(time*5+m.x)*.05,m.z);m.mesh.rotation.y+=dt*2.5;m.mesh.material.emissiveIntensity=m.arm<=0?.55+.3*Math.sin(time*10):.15;if((m.arm<=0&&Math.hypot(m.x-lastPlayer.x,m.z-lastPlayer.z)<m.triggerRadius+PLAYER_R)||m.life<=0)detonateMine(m);}}
-  function updateBeam(e,dt){if(!e.beamLine)return;e.beamLine.visible=e.state==='windup'||e.state==='active';if(!e.beamLine.visible)return;if(e.state==='windup')turnTo(e,lastPlayer,dt,.48);else turnTo(e,lastPlayer,dt,.12);const start={x:e.x,z:e.z},range=e.attack?.range||13,end={x:e.x+e.facing.x*range,z:e.z+e.facing.z*range};e.beamLine.geometry.setFromPoints([new THREE.Vector3(start.x,e.height*tuning.heightScale*.48,start.z),new THREE.Vector3(end.x,.85,end.z)]);if(e.state==='active'){e.beamTick-=dt;if(e.beamTick<=0){e.beamTick+=Math.max(.055,e.active/Math.max(1,e.attack.beamTicks||17));if(pointSegmentDistance(lastPlayer,start,end)<.48+PLAYER_R&&!navigation?.raycastWalls?.(start,{x:lastPlayer.x,z:lastPlayer.z}))hitPlayer(e.attack.tickDamage??e.attack.damage,e.kind,e.attack.name,e.facing);}}}
+  function updateProjectiles(dt){for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i],prev={x:p.x,z:p.z};p.life-=dt;p.x+=p.vx*dt;p.z+=p.vz*dt;if(navigation?.raycastWalls?.(prev,{x:p.x,z:p.z}))p.life=0;const target=p.arenaTarget?factionService?.resolveCapturedTarget?.(p.arenaTarget,lastPlayer,{stale:false}):lastPlayer;if(target&&Math.hypot(p.x-target.x,p.z-target.z)<p.r+(target.radius||PLAYER_R)){const dir=norm(p.vx,p.vz);if(factionService&&target.__arenaTargetKind)factionService.damageTarget(target,p.damage,dir,{sourceEnemyId:p.sourceEnemyId,sourceFaction:p.sourceFaction,attack:'Witch Orb'},(value,knock)=>hitPlayer(value,'hadesWretchedWitch','Witch Orb',knock));else hitPlayer(p.damage,'hadesWretchedWitch','Witch Orb',dir);p.life=0;}p.mesh.position.set(p.x,1.35,p.z);p.mesh.rotation.x+=dt*5;p.mesh.rotation.y+=dt*4;if(p.life<=0){p.mesh.parent?.remove(p.mesh);p.mesh.geometry.dispose();projectiles.splice(i,1);}}}
+  function updateMines(dt){for(const m of [...mines]){m.arm-=dt;m.life-=dt;m.mesh.position.set(m.x,.28+Math.sin(time*5+m.x)*.05,m.z);m.mesh.rotation.y+=dt*2.5;m.mesh.material.emissiveIntensity=m.arm<=0?.55+.3*Math.sin(time*10):.15;const target=m.arenaTarget?factionService?.resolveCapturedTarget?.(m.arenaTarget,lastPlayer,{stale:false}):lastPlayer;if((m.arm<=0&&target&&Math.hypot(m.x-target.x,m.z-target.z)<m.triggerRadius+(target.radius||PLAYER_R))||m.life<=0)detonateMine(m);}}
+  function updateBeam(e,dt,target){if(!e.beamLine)return;e.beamLine.visible=e.state==='windup'||e.state==='active';if(!e.beamLine.visible)return;if(e.state==='windup')turnTo(e,target,dt,.48);else turnTo(e,target,dt,.12);const start={x:e.x,z:e.z},range=e.attack?.range||13,end={x:e.x+e.facing.x*range,z:e.z+e.facing.z*range};e.beamLine.geometry.setFromPoints([new THREE.Vector3(start.x,e.height*tuning.heightScale*.48,start.z),new THREE.Vector3(end.x,.85,end.z)]);if(e.state==='active'){e.beamTick-=dt;if(e.beamTick<=0){e.beamTick+=Math.max(.055,e.active/Math.max(1,e.attack.beamTicks||17));if(pointSegmentDistance(target,start,end)<.48+(target.radius||PLAYER_R)&&!navigation?.raycastWalls?.(start,{x:target.x,z:target.z})){const amount=e.attack.tickDamage??e.attack.damage;if(factionService&&target.__arenaTargetKind)factionService.damageTarget(target,amount,e.facing,{sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction,attack:e.attack.name},(value,knock)=>hitPlayer(value,e.kind,e.attack.name,knock));else hitPlayer(amount,e.kind,e.attack.name,e.facing);}}}}
 
   function pendingChildCount(sourceId){
     return enemies.filter(x=>x.spawnedBy===sourceId&&x.hp>0).length+
@@ -254,30 +256,33 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     else if(e.state==='windup'){
       e.vx=e.vz=0;
       if(!e.attack?.beam&&e.stateTime<e.windup*.55)turnTo(e,p,dt,.55);
-      if(e.stateTime>=e.windup){e.state='active';e.stateTime=0;if(e.attack.projectile){spawnOrb(e);e.hitDone=true;}if(e.attack.mine){spawnMine(e);e.hitDone=true;}}
+      if(e.stateTime>=e.windup){e.state='active';e.stateTime=0;if(e.attack.projectile){spawnOrb(e,p);e.hitDone=true;}if(e.attack.mine){spawnMine(e,p);e.hitDone=true;}}
     }else if(e.state==='active'){
       if(!e.attack.projectile&&!e.attack.mine&&!e.attack.beam){e.x+=e.facing.x*(e.attack.lungeSpeed||3.5)*dt;e.z+=e.facing.z*(e.attack.lungeSpeed||3.5)*dt;if(!e.hitDone)resolveMelee(e,p);}
       if(e.stateTime>=e.active){e.state='recovery';e.stateTime=0;}
     }else if(e.state==='recovery'){
       e.vx=e.vz=0;
-      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;director.release(e);e.attack=null;}
+      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;director.release(e);factionService?.releaseTarget?.(e);e.attack=null;}
     }else if(e.def.role!=='spawner'){
       const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attackId?HADES_ATTACKS[e.attackId]:null,alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));
-      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression}))startAttack(e,attack);
+      const converted=factionService?.arenaFactionOf?.(e)==='allied';
+      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&(converted||director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression})))startAttack(e,attack,p);
       else{moveEnemy(e,p,dt,d);applySeparation(e,dt);e.x+=e.vx*dt;e.z+=e.vz*dt;}
     }
-    updateBeam(e,dt);
+    updateBeam(e,dt,p);
     if(navigation?.resolveMovement){const moved=navigation.resolveMovement(prev,{x:e.x-prev.x,z:e.z-prev.z},collisionRadius(e));e.x=moved.x;e.z=moved.z;}
     else{const r=Math.hypot(e.x,e.z),limit=arenaRadius-1;if(r>limit){e.x*=limit/r;e.z*=limit/r;}}
   }
 
-  function resolveBodies(p){for(let pass=0;pass<3;pass++)for(let i=0;i<enemies.length;i++){const a=enemies[i];if(a.hp<=0)continue;for(let j=i+1;j<enemies.length;j++){const b=enemies[j];if(b.hp<=0)continue;let dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),min=separationRadius(a)+separationRadius(b)+.16;if(d>=min)continue;if(d<.001){dx=1;dz=0;d=1;}const push=(min-d)*.5/d;a.x-=dx*push;a.z-=dz*push;b.x+=dx*push;b.z+=dz*push;}let dx=a.x-p.x,dz=a.z-p.z,d=Math.hypot(dx,dz),min=collisionRadius(a)+PLAYER_R;if(d<min){if(d<.001){dx=1;dz=0;d=1;}const push=(min-d)/d;a.x+=dx*push;a.z+=dz*push;}}}
-  function updateVisual(e,dt){e.root.position.set(e.x,e.yOff+(e.flying?.35:0),e.z);e.root.rotation.y=e.facingAngle;rig.update(e.visual,e,dt,time,tuning.heightScale);e.telegraph.visible=e.state==='windup';if(e.telegraph.visible){const u=clamp(e.stateTime/Math.max(.001,e.windup),0,1);e.telegraph.scale.setScalar(.65+u*.85);e.telegraph.material.opacity=.3+u*.6;}e.tokenRing.visible=!!e.token;const f=clamp(e.hp/e.maxHp,0,1);e.bar.scale.x=f;e.bar.position.x=-(1-f)*e.radius*.9;e.bar.lookAt(lastPlayer.x??0,2,lastPlayer.z??0);e.visual.group.scale.multiplyScalar(1+e.flash*.3);}
+  function resolveBodies(p){for(let pass=0;pass<3;pass++)for(let i=0;i<enemies.length;i++){const a=enemies[i];if(a.hp<=0||a.__heroicLeapCarried)continue;for(let j=i+1;j<enemies.length;j++){const b=enemies[j];if(b.hp<=0||b.__heroicLeapCarried)continue;let dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),min=separationRadius(a)+separationRadius(b)+.16;if(d>=min)continue;if(d<.001){dx=1;dz=0;d=1;}const push=(min-d)*.5/d;a.x-=dx*push;a.z-=dz*push;b.x+=dx*push;b.z+=dz*push;}let dx=a.x-p.x,dz=a.z-p.z,d=Math.hypot(dx,dz),min=collisionRadius(a)+PLAYER_R;if(d<min){if(d<.001){dx=1;dz=0;d=1;}const push=(min-d)/d;a.x+=dx*push;a.z+=dz*push;}}}
+  function updateVisual(e,dt){e.root.position.set(e.x,e.yOff+(e.flying?.35:0)+(Number(e.wizardAirborneOffset)||0),e.z);e.root.rotation.y=e.facingAngle;rig.update(e.visual,e,dt,time,tuning.heightScale);e.telegraph.visible=e.state==='windup';if(e.telegraph.visible){const u=clamp(e.stateTime/Math.max(.001,e.windup),0,1);e.telegraph.scale.setScalar(.65+u*.85);e.telegraph.material.opacity=.3+u*.6;}e.tokenRing.visible=!!e.token;const f=clamp(e.hp/e.maxHp,0,1);e.bar.scale.x=f;e.bar.position.x=-(1-f)*e.radius*.9;e.bar.lookAt(lastPlayer.x??0,2,lastPlayer.z??0);e.visual.group.scale.multiplyScalar(1+e.flash*.3);}
   function updateEffects(dt){for(let i=effects.length-1;i>=0;i--){const f=effects[i];f.age+=dt;const u=f.age/f.life;f.mesh.scale.setScalar(1+u*3);f.mesh.material.opacity=1-u;if(f.age>=f.life){f.mesh.parent?.remove(f.mesh);f.mesh.geometry.dispose();f.mesh.material.dispose();effects.splice(i,1);}}}
   function spawnDeath(e,knock,power){const colors=[e.def.color,e.def.secondaryColor,e.def.accentColor,0xd1c6a5];for(let i=0;i<6;i++){const s=rand(.18,.42),m=new THREE.Mesh(new THREE.BoxGeometry(s,s,s),new THREE.MeshStandardMaterial({color:colors[i%colors.length],roughness:.85,flatShading:true}));m.position.set(e.x,rand(.5,e.height*tuning.heightScale*.7),e.z);worldRoot.add(m);deathPieces.push({mesh:m,vx:(knock.x||0)*.45+rand(-2.2,2.2)*power,vy:rand(2.8,6.0)*power,vz:(knock.z||0)*.45+rand(-2.2,2.2)*power,life:rand(.65,1.2)});}}
   function updateDeath(dt){for(let i=deathPieces.length-1;i>=0;i--){const p=deathPieces[i];p.life-=dt;p.vy-=14*dt;p.mesh.position.x+=p.vx*dt;p.mesh.position.y=Math.max(.06,p.mesh.position.y+p.vy*dt);p.mesh.position.z+=p.vz*dt;p.mesh.rotation.x+=dt*5;p.mesh.rotation.z+=dt*4;if(p.life<=0){p.mesh.parent?.remove(p.mesh);p.mesh.geometry.dispose();p.mesh.material.dispose();deathPieces.splice(i,1);}}}
   function removeEnemy(e){const i=enemies.indexOf(e);if(i>=0)enemies.splice(i,1);director.releaseAllForEnemy(e);e.beamLine?.parent?.remove(e.beamLine);e.beamLine?.geometry?.dispose?.();e.root.parent?.remove(e.root);rig.dispose(e.visual);}
-  function damageEnemy(e,amount,knock={x:0,z:0},opts={}){if(!e||e.hp<=0)return false;const power=opts.power??clamp(amount/28,.4,2),committed=!!(e.attack?.uninterruptible&&e.state==='active');e.hp-=amount;e.flash=.12+power*.08;if(!committed){e.stunned=Math.max(e.stunned,.17+power*.055);director.releaseAllForEnemy(e);if(e.state!=='idle'){e.state='idle';e.stateTime=0;e.attack=null;}e.knockX+=(knock.x||0)*.72;e.knockZ+=(knock.z||0)*.72;if(power>.95)e.vyOff+=1.1+power*1.4;}if(e.hp<=0){kills++;waveKills++;if(e.kind==='hadesWretchedPest')detonateOwnerMines(e.id);spawnDeath(e,knock,1+power*.25);removeEnemy(e);return true;}return false;}
+  function damageEnemy(e,amount,knock={x:0,z:0},opts={}){if(!e||e.hp<=0)return false;const modified=factionService?.modifyDamage?.(e,amount,opts);if(modified){amount=modified.damage;opts={...opts,__arenaDamageModified:true,damageModifiers:modified.applied};}const power=opts.power??clamp(amount/28,.4,2),committed=!!(e.attack?.uninterruptible&&e.state==='active');e.hp-=amount;e.flash=.12+power*.08;if(!committed){e.stunned=Math.max(e.stunned,.17+power*.055);director.releaseAllForEnemy(e);factionService?.releaseTarget?.(e);if(e.state!=='idle'){e.state='idle';e.stateTime=0;e.attack=null;}e.knockX+=(knock.x||0)*.72;e.knockZ+=(knock.z||0)*.72;if(power>.95)e.vyOff+=1.1+power*1.4;}if(e.hp<=0){kills++;waveKills++;factionService?.releaseTarget?.(e);if(factionService?.charmedEnemy===e)factionService.releaseCharm(e);if(e.kind==='hadesWretchedPest')detonateOwnerMines(e.id);spawnDeath(e,knock,1+power*.25);removeEnemy(e);return true;}return false;}
+
+  function setEnemyFaction(e,faction){if(!e||!enemies.includes(e)||e.hp<=0)return false;director.releaseAllForEnemy(e);factionService?.releaseTarget?.(e);e.wizardFaction=faction==='allied'?'allied':'hostile';e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.vx=e.vz=0;return true;}
 
   function candidateSpawn(kind){
     const def=HADES_ENEMY_ARCHETYPES[kind];
@@ -390,7 +395,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   function clearDeath(){deathPieces.splice(0).forEach(p=>{p.mesh.parent?.remove(p.mesh);p.mesh.geometry?.dispose?.();p.mesh.material?.dispose?.();});}
   function clearRuntime(){
     director.reset();
-    enemies.splice(0).forEach(e=>{e.beamLine?.parent?.remove(e.beamLine);e.beamLine?.geometry?.dispose?.();e.root.parent?.remove(e.root);rig.dispose(e.visual);});
+    enemies.splice(0).forEach(e=>{factionService?.releaseTarget?.(e);e.beamLine?.parent?.remove(e.beamLine);e.beamLine?.geometry?.dispose?.();e.root.parent?.remove(e.root);rig.dispose(e.visual);});
     projectiles.splice(0).forEach(p=>{p.mesh.parent?.remove(p.mesh);p.mesh.geometry?.dispose?.();});
     mines.splice(0).forEach(m=>{m.mesh.parent?.remove(m.mesh);m.mesh.geometry?.dispose?.();});
     restraints.splice(0).forEach(r=>{r.line.parent?.remove(r.line);r.line.geometry?.dispose?.();});
@@ -433,7 +438,12 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     director.markNearEligible(enemies,lastPlayer);
     director.assignBattleCircleSlots(enemies);
     for(const e of enemies){e._sx=e.x;e._sz=e.z;}
-    for(const e of [...enemies])updateEnemy(e,dt,lastPlayer);
+    for(const e of [...enemies]){
+      if(e.__heroicLeapCarried){e.vx=e.vz=e.knockX=e.knockZ=0;e.state='idle';e.attack=null;continue;}
+      const locked=e.state!=='idle'&&!!e.wizardTargetId;
+      const target=factionService?.targetForActor?.(e,lastPlayer,{locked})||(!factionService?lastPlayer:null);
+      if(target)updateEnemy(e,dt,target);else{e.vx*=Math.pow(.02,dt);e.vz*=Math.pow(.02,dt);e.cooldown=Math.max(0,e.cooldown-dt);}
+    }
     resolveBodies(lastPlayer);
     for(const e of enemies){e.maxGroundSpeed=Math.max(.1,e.speed*tuning.speedScale);e.visualGroundSpeed=Math.min(e.maxGroundSpeed,Math.hypot(e.x-e._sx,e.z-e._sz)/Math.max(dt,.001));updateVisual(e,dt);}
     updateProjectiles(dt);
@@ -442,7 +452,8 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     updateEffects(dt);
     updateDeath(dt);
     releaseQueuedSpawns();
-    if(!enemies.length&&!spawnQueue.length&&!spawnTelegraphs.length&&!playerDead()){
+    const hostileRemaining=enemies.some(enemy=>(factionService?.arenaFactionOf?.(enemy)||'hostile')==='hostile');
+    if(!hostileRemaining&&!spawnQueue.length&&!spawnTelegraphs.length&&!playerDead()){
       waveClearT+=dt;
       if(waveClearT>1){
         if(roomEncounterMode&&activeEncounterRoomId!==null){
@@ -459,7 +470,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   if(!roomEncounterMode)startWave();
 
   return{
-    enemies,group,director,update,damageEnemy,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,
+    enemies,group,director,update,damageEnemy,setEnemyFaction,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,
     setDirectorMode:m=>director.setMode(m),
     setPressureBudget:v=>{director.settings.pressureBudget=clamp(Number(v)||2.25,.5,4);},
     setAggression:v=>{tuning.aggression=clamp(Number(v)||1,.25,3);director.settings.aggression=tuning.aggression;},

@@ -24,6 +24,7 @@ const improvedText=[
   read('11-air-standards-1.md'),
   read('12-air-standards-2.md'),
   read('13-water-prison.md'),
+  read('14-archetype-sampler.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 
@@ -177,12 +178,19 @@ const sourceMeta=[
   ['Rushing Typhoon','Air','Standard',472,476,474],
   ['Gale-force Alignment','Air','Standard',476,480,478],
   ['Water Prison','Water','Standard',1048.5,1060,1054.5],
+  ['Cyclone Boomerang','Air','Signature',492,504,497],
+  ['Earthen Aegis','Earth','Standard',597,608,601],
+  ['Ball Lightning','Lightning','Signature',893,909,900],
+  ['Aqua Beam','Water','Signature',1118,1129,1123],
+  ['Arcane Intervention','Chaos','Signature',1203,1219,1211],
 ];
 
 const implementedNames=new Set([
   'Flame Strike','Flame Cross','Bouncing Blaze','Wind Slash','Air Spinner',
   'Perforating Jet','Earth Knuckles','Bladed Vine','Stone Shot','Spark Contact',
   'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
+  'Flame Fusion','Rapid Fire Agent','Ward of Flames','Mentis Imperium','Heroic Leap',
+  'Cyclone Boomerang','Earthen Aegis','Ball Lightning','Aqua Beam','Arcane Intervention',
   ...WIZARD_NEXT_TWENTY_CARDS.map(card=>card.name),
 ]);
 const referenceLockWindows=new Map([
@@ -191,6 +199,16 @@ const referenceLockWindows=new Map([
   ['Homing Flares',{start:280.40,end:282.50}],
   ['Bolt Rail',{start:53.30,end:53.95}],
   ['Volt Disc',{start:58.20,end:59.10}],
+  ['Flame Fusion',{start:338.55,end:339.45}],
+  ['Rapid Fire Agent',{start:378.35,end:389.10}],
+  ['Ward of Flames',{start:392.45,end:400.45}],
+  ['Mentis Imperium',{start:434.15,end:436.90}],
+  ['Heroic Leap',{start:442.85,end:444.25}],
+  ['Cyclone Boomerang',{start:496.40,end:497.90}],
+  ['Earthen Aegis',{start:600.95,end:605.55}],
+  ['Ball Lightning',{start:896.40,end:901.00}],
+  ['Aqua Beam',{start:1120.70,end:1122.75}],
+  ['Arcane Intervention',{start:1206.60,end:1211.35}],
 ]);
 for(const card of WIZARD_NEXT_TWENTY_CARDS)referenceLockWindows.set(card.name,{...card.sourceClip});
 const referenceLockAddenda=new Map([
@@ -230,6 +248,28 @@ const referenceLockAddenda=new Map([
 
 **[INFERENCE — temporary Top Down Game input rule]** The three-press same-slot lock and 0.9-second rolling timeout are an explicit temporary integration choice. The supplied base window does not establish a damaging wall burst, so wall contact remains a harmless cleanup/fizzle unless later frame evidence disproves it.`],
 ]);
+const samplerReferenceNotes=new Map([
+  ['Flame Fusion','The base clip separates a slow fireball from a later live-aim arrow; only their real collision creates the five-arrow fan. Parent speed, collision timing, and fan silhouette are source anchors.'],
+  ['Rapid Fire Agent','The base clip shows one very small flame-bodied agent lasting about ten seconds and firing large smoke-trailed shots about 0.4 seconds apart. Follow, leash teleport, enemy targeting of the agent, and 50 HP are documented or integration behavior rather than actions demonstrated in this stationary-caster clip.'],
+  ['Ward of Flames','The base clip shows a thick irregular flame ring placed ahead of the caster: 25 displayed placement damage, then 6 displayed at one-second pulse intervals because its raw 5 Fire pulse receives the ward\'s own 20% amplification. Destructibility and enhanced behavior are documented but not demonstrated here.'],
+  ['Mentis Imperium','The base clip establishes an enormous white-gray charm cloud with red-pink heart motes and enemies changing allegiance. The 35 projectile damage, range, immunity, and cross-family faction plumbing are documented or integration behavior, not visually proved in this window.'],
+  ['Heroic Leap','The base clip separates a short rush, roughly 0.8 seconds airborne over a dense pale-cyan vortex about five to six actor footprints wide, optional carried target, and landing. A carried target visibly resolves the separate 25 plus 50 payload; collision-safe movement and large-target immunity are explicit integration rules.'],
+  ['Cyclone Boomerang','The base clip shows one broad rotating current completing a fast outbound-return trip in about 0.8 seconds, with separate 15-damage contacts and a visible brushstroke wake. Its collision-clipped turn point and live-owner return are deterministic Top Down integrations.'],
+  ['Earthen Aegis','The base clip shows eight upright, independently yawing stone plates in fixed owner-relative slots after a brief settle; the entire formation does not keep orbiting. Projectile interception is documented but not demonstrated in this window.'],
+  ['Ball Lightning','The base clip shows one roughly 1.6-second full hold, a compact white-gold carrier, and a target-attached pulse strobe. Quick-release tiers and interruption are documented behavior rather than demonstrations in this window.'],
+  ['Aqua Beam','The base clip shows one high-pressure beam with a white core, blue body, ragged spray, droplets, and about a 20-degree demonstrated sweep. Stock, projectile destruction, and wall clipping remain documented mechanics rather than actions proved by this window.'],
+  ['Arcane Intervention','The base clip shows a rod and faint capture sigil followed about 1.8-2.0 seconds later by paired void disks, a defining opaque black arrival disk, and a purple storm. The footage does not reveal whether reactivation or expiry triggered it; safe landing offsets are deterministic integration inference.'],
+]);
+for(const [name,note] of samplerReferenceNotes){
+  const window=referenceLockWindows.get(name);
+  referenceLockAddenda.set(name,`## Reference-lock frame audit
+
+**[EVIDENCE - supplied 60 FPS showcase, ${window.start.toFixed(2)}-${window.end.toFixed(2)}s]** ${note}
+
+**[EVIDENCE - documented base contract]** Damage, cadence, resource, control, and duration values in the exact recipe are the base-form contract. Enhanced and charged mutations remain documented but disabled.
+
+**[INFERENCE - Top Down Game construction]** Procedural geometry, glow, particles, safe wall handling, deterministic stable IDs, and capture telemetry are authored integrations. They may improve readability without changing the source-owned emission count, path, timing, hit ownership, or cleanup.`);
+}
 for(const card of WIZARD_NEXT_TWENTY_CARDS){
   const documented=card.details.rows.map(([label,value])=>`${label}: ${value}`).join(' ');
   const dashNote=card.dashMotion
@@ -261,6 +301,7 @@ const revisionHistory=new Map([
   ['Bolt Rail','The source-first gameplay pass established five instantaneous 5-damage streams, world-collision bypass, and a contact-gated 10-damage fifth-beat finisher. The reference-lock pass replaced the thin parallel-line placeholder with one irregular caster-to-contact yellow-white bolt, branching filaments, endpoint blooms, and a distinctly stronger successful finisher. Final visual source comparison remains pending user review.'],
   ['Volt Disc','The source-first gameplay pass established three short-range hollow carriers, 9 carrier damage, a 9-damage maximum-range burst, and a separate zero-damage direct-contact event. The reference-lock pass restored one disc per press through a temporary three-step card-slot lock, removed the unsupported damaging wall burst, isolated zero-damage contact semantics from ordinary damage reactions, and rebuilt the carrier and terminal FX. Final visual source comparison remains pending user review.'],
 ]);
+for(const name of samplerReferenceNotes.keys())revisionHistory.set(name,'The base-form source analysis was converted into a deterministic Enemy Lab implementation through contract, source-render, and final-style gates. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
 for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The source-first analysis was converted into a deterministic base-form Enemy Lab implementation through contract, source-render, and final-style gates. ${card.dashMotion?'The payload is layered onto the already approved Top Down Game dash locomotion, with Chaotic Rift retaining its required teleport exception.':'The full authored Basic sequence is scheduled by one card activation.'} Source comparison remains pending user review; enhanced variants remain documented but disabled.`);
 
 const improvedSections=extractNumberedH1(improvedText);

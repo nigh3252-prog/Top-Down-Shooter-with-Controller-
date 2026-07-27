@@ -15,6 +15,7 @@ const rand = (a,b)=>a+Math.random()*(b-a);
 export function createFlareArenaEnemySystem({
   THREE, worldRoot, arenaRadius=18, navigation=null,
   roomEncounterMode=false, onEncounterCleared=null,
+  factionService=null, systemKey='flare',
 }={}){
   const rig=installFlareEnemyRig(THREE);
   const group=new THREE.Group(); group.name='FLARE Level 1 Enemies'; worldRoot.add(group);
@@ -90,6 +91,7 @@ export function createFlareArenaEnemySystem({
     const hp=Math.round(def.hp*tuning.hpScale),angle=Math.atan2(-x||0,-z||1);
     const e={
       id:nextId++,kind,label:def.label,def,x,z,vx:0,vz:0,radius:def.radius,height:def.height,
+      wizardFaction:'hostile',wizardStableId:`${systemKey}:${String(nextId-1).padStart(4,'0')}`,
       hp,maxHp:hp,speed:def.speed,score:def.score,poise:def.poise,avoidance:def.avoidance,
       attackIds,attackIndex:0,attackId:attackIds[0],realAtk:first,attackRange:Math.max(...attackIds.map(id=>FLARE_ATTACKS[id].range)),
       holdDist:first.range,preferredRange:first.range,waitRange:Math.min(def.threatRange,first.range+3.2),
@@ -112,12 +114,13 @@ export function createFlareArenaEnemySystem({
     }
     return null;
   }
-  function startAttack(e,choice){
+  function startAttack(e,choice,target){
     const { attack, id, nextIndex }=choice;
     e.attackIndex=nextIndex; e.attackId=id;
     e.attack=attack; e.realAtk=attack; e.state='windup'; e.stateTime=0;
     e.windup=attack.windup; e.active=attack.active; e.recovery=attack.recovery; e.hitDone=false;
-    director.grant(e,attack);
+    if(factionService?.arenaFactionOf?.(e)!=='allied')director.grant(e,attack);
+    factionService?.lockTarget?.(e,target);
   }
   function hitPlayer(damage,kind,name,dir=null){
     if(lastPlayer.invulnerable||playerDead()) return false;
@@ -131,14 +134,19 @@ export function createFlareArenaEnemySystem({
   }
   function resolveMelee(e,p){
     const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz);
-    if(d>e.attack.range*rangeK()+PLAYER_RADIUS) return;
+    const targetRadius=p.__arenaTargetKind?(p.radius||PLAYER_RADIUS):PLAYER_RADIUS;
+    if(d>e.attack.range*rangeK()+targetRadius) return;
     if(navigation?.raycastWalls?.({x:e.x,z:e.z},{x:p.x,z:p.z})) return;
     const delta=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));
-    if(delta>e.attack.arc*.5+.2 && d>collisionRadius(e)+PLAYER_RADIUS+.2) return;
+    if(delta>e.attack.arc*.5+.2 && d>collisionRadius(e)+targetRadius+.2) return;
     const avg=(e.attack.damageMin+e.attack.damageMax)*.5;
     const directorScale=Math.max(.75,(e.attack.damage||avg)/avg);
     const damage=Math.max(1,Math.round(rand(e.attack.damageMin,e.attack.damageMax+1)*directorScale));
-    if(hitPlayer(damage,e.kind,e.attack.name,e.facing)){ e.hitDone=true; applyBleed(e.attack,e.kind); }
+    const applied=factionService&&p.__arenaTargetKind
+      ?factionService.damageTarget(p,damage,e.facing,{sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction,attack:e.attack.name},
+        (value,dir)=>hitPlayer(value,e.kind,e.attack.name,dir))
+      :hitPlayer(damage,e.kind,e.attack.name,e.facing);
+    if(applied){e.hitDone=true;if(!p.__arenaTargetKind||p.__arenaTargetKind==='player')applyBleed(e.attack,e.kind);}
   }
   function updateBleeds(dt){
     for(let i=bleeds.length-1;i>=0;i--){
@@ -175,12 +183,13 @@ export function createFlareArenaEnemySystem({
     } else if(e.state==='recovery'){
       e.vx=e.vz=0;
       if(e.stateTime>=e.recovery){
-        e.state='idle'; e.stateTime=0; e.cooldown=e.attack.cooldown/tuning.aggression; director.release(e); e.attack=null;
+        e.state='idle'; e.stateTime=0; e.cooldown=e.attack.cooldown/tuning.aggression; director.release(e); factionService?.releaseTarget?.(e); e.attack=null;
       }
     } else {
       const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));
       const choice=e.cooldown<=0&&!playerDead()?chooseAttack(e,d):null;
-      if(choice&&director.hasApproachPermit(e)&&alignment<=e.attackAlign&&director.canGrant(e,choice.attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression})) startAttack(e,choice);
+      const converted=factionService?.arenaFactionOf?.(e)==='allied';
+      if(choice&&(converted||director.hasApproachPermit(e))&&alignment<=e.attackAlign&&(converted||director.canGrant(e,choice.attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression}))) startAttack(e,choice,p);
       else { moveEnemy(e,p,dt,d); applySeparation(e,dt); e.x+=e.vx*dt; e.z+=e.vz*dt; }
     }
     if(navigation?.resolveMovement){
@@ -204,9 +213,9 @@ export function createFlareArenaEnemySystem({
   }
   function resolveBodies(p){
     for(let pass=0;pass<3;pass++) for(let i=0;i<enemies.length;i++){
-      const a=enemies[i]; if(a.hp<=0)continue;
+      const a=enemies[i]; if(a.hp<=0||a.__heroicLeapCarried)continue;
       for(let j=i+1;j<enemies.length;j++){
-        const b=enemies[j];if(b.hp<=0)continue;let dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),min=separationRadius(a)+separationRadius(b)+.18;
+        const b=enemies[j];if(b.hp<=0||b.__heroicLeapCarried)continue;let dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),min=separationRadius(a)+separationRadius(b)+.18;
         if(d>=min)continue;if(d<.001){dx=1;dz=0;d=1;}const push=(min-d)*.5/d;a.x-=dx*push;a.z-=dz*push;b.x+=dx*push;b.z+=dz*push;
       }
       let dx=a.x-p.x,dz=a.z-p.z,d=Math.hypot(dx,dz),min=collisionRadius(a)+PLAYER_RADIUS;
@@ -215,7 +224,7 @@ export function createFlareArenaEnemySystem({
   }
 
   function updateVisual(e,dt){
-    e.root.position.set(e.x,e.yOff,e.z); e.root.rotation.y=e.facingAngle;
+    e.root.position.set(e.x,e.yOff+(Number(e.wizardAirborneOffset)||0),e.z); e.root.rotation.y=e.facingAngle;
     rig.update(e.visual,e,dt,time,tuning.heightScale);
     e.telegraph.visible=e.state==='windup';
     if(e.telegraph.visible){ const u=clamp(e.stateTime/Math.max(.001,e.windup),0,1); e.telegraph.scale.setScalar(.7+u*.65); e.telegraph.material.opacity=.35+u*.55; }
@@ -238,14 +247,23 @@ export function createFlareArenaEnemySystem({
   function removeEnemy(e){ const i=enemies.indexOf(e);if(i>=0)enemies.splice(i,1);e.root.parent?.remove(e.root);rig.dispose(e.visual); }
   function damageEnemy(e,amount,knock={x:0,z:0},opts={}){
     if(!e||e.hp<=0)return false;
+    const modified=factionService?.modifyDamage?.(e,amount,opts);
+    if(modified){amount=modified.damage;opts={...opts,__arenaDamageModified:true,damageModifiers:modified.applied};}
     const power=opts.power??clamp(amount/28,.4,2),poiseResist=clamp(e.poise/45,0,.65);
     e.hp-=amount;e.flash=.12+power*.08;e.stunned=Math.max(e.stunned,(.18+power*.06)*(1-poiseResist));
-    director.releaseAllForEnemy(e);
+    director.releaseAllForEnemy(e);factionService?.releaseTarget?.(e);
     if(e.state!=='idle'){e.state='idle';e.stateTime=0;e.attack=null;}
     e.knockX+=(knock.x||0)*(1-poiseResist);e.knockZ+=(knock.z||0)*(1-poiseResist);
     if(power>.95)e.vyOff+=(1.1+power*1.4)*(1-poiseResist);
-    if(e.hp<=0){kills++;waveKills++;spawnDeathPieces(e,knock,1+power*.25);removeEnemy(e);return true;}
+    if(e.hp<=0){kills++;waveKills++;if(factionService?.charmedEnemy===e)factionService.releaseCharm(e);spawnDeathPieces(e,knock,1+power*.25);removeEnemy(e);return true;}
     return false;
+  }
+
+  function setEnemyFaction(e,faction){
+    if(!e||!enemies.includes(e)||e.hp<=0)return false;
+    director.releaseAllForEnemy(e);factionService?.releaseTarget?.(e);
+    e.wizardFaction=faction==='allied'?'allied':'hostile';e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.vx=e.vz=0;
+    return true;
   }
 
   function spawnPos(){
@@ -262,7 +280,7 @@ export function createFlareArenaEnemySystem({
   }
   function finishWave(){wave++;director.onWaveClear();startWave();}
   function clearDeathPieces(){deathPieces.splice(0).forEach(p=>{p.mesh.parent?.remove(p.mesh);p.mesh.geometry?.dispose?.();p.mesh.material?.dispose?.();});}
-  function clearEnemies(){director.reset();enemies.splice(0).forEach(e=>{e.root.parent?.remove(e.root);rig.dispose(e.visual);});bleeds.length=0;clearDeathPieces();}
+  function clearEnemies(){director.reset();enemies.splice(0).forEach(e=>{factionService?.releaseTarget?.(e);e.root.parent?.remove(e.root);rig.dispose(e.visual);});bleeds.length=0;clearDeathPieces();}
   function startRoomEncounter(roomId){clearEnemies();activeEncounterRoomId=roomId;waveKills=0;waveClearT=0;startWave();}
   function reset(){clearEnemies();wave=1;kills=0;tuning.playerHp=100;tuning.lastPlayerHit='';tuning.lastPlayerHitDir=null;activeEncounterRoomId=null;if(!roomEncounterMode)startWave();}
   function update(dt,player){
@@ -270,18 +288,24 @@ export function createFlareArenaEnemySystem({
     director.update(dt,{enemies,player:lastPlayer,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});
     director.markNearEligible(enemies,lastPlayer);director.assignBattleCircleSlots(enemies);
     for(const e of enemies){e._sx=e.x;e._sz=e.z;}
-    for(const e of [...enemies])updateEnemy(e,dt,lastPlayer);
+    for(const e of [...enemies]){
+      if(e.__heroicLeapCarried){e.vx=e.vz=e.knockX=e.knockZ=0;e.state='idle';e.attack=null;continue;}
+      const locked=e.state!=='idle'&&!!e.wizardTargetId;
+      const target=factionService?.targetForActor?.(e,lastPlayer,{locked})||(!factionService?lastPlayer:null);
+      if(target)updateEnemy(e,dt,target);else{e.vx*=Math.pow(.02,dt);e.vz*=Math.pow(.02,dt);e.cooldown=Math.max(0,e.cooldown-dt);}
+    }
     resolveBodies(lastPlayer);
     for(const e of enemies){e.maxGroundSpeed=Math.max(.1,e.speed*tuning.speedScale);e.visualGroundSpeed=Math.min(e.maxGroundSpeed,Math.hypot(e.x-e._sx,e.z-e._sz)/Math.max(dt,.001));updateVisual(e,dt);}
     updateBleeds(dt);updateDeathPieces(dt);
-    if(!enemies.length&&!playerDead()){
+    const hostileRemaining=enemies.some(enemy=>(factionService?.arenaFactionOf?.(enemy)||'hostile')==='hostile');
+    if(!hostileRemaining&&!playerDead()){
       waveClearT+=dt;if(waveClearT>1){if(roomEncounterMode&&activeEncounterRoomId!==null){const id=activeEncounterRoomId;activeEncounterRoomId=null;waveClearT=0;director.onWaveClear();onEncounterCleared?.(id);}else if(!roomEncounterMode)finishWave();}
     }else waveClearT=0;
   }
 
   if(!roomEncounterMode)startWave();
   return {
-    enemies,group,director,update,damageEnemy,reset,startRoomEncounter,clearRoomRuntime:clearEnemies,
+    enemies,group,director,update,damageEnemy,setEnemyFaction,reset,startRoomEncounter,clearRoomRuntime:clearEnemies,
     setDirectorMode:m=>director.setMode(m),
     setPressureBudget:v=>{director.settings.pressureBudget=clamp(Number(v)||2.25,.5,4);},
     setAggression:v=>{tuning.aggression=clamp(Number(v)||1,.25,3);director.settings.aggression=tuning.aggression;},

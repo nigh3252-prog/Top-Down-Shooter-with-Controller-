@@ -22,6 +22,9 @@ import { installWizardNextSourceRuntime } from './wizard-next-source-runtime.js'
 import { installWizardNextTwentyBasicsRuntime } from './wizard-next-twenty-basics-runtime.js';
 import { installWizardNextTwentyDashRuntime } from './wizard-next-twenty-dash-runtime.js';
 import { installWizardRebuiltArcanaRuntime } from './wizard-rebuilt-arcana-runtime.js';
+import { installWizardFusionLeapRuntime } from './wizard-fusion-leap-runtime.js';
+import { installWizardArcaneTypesRuntime } from './wizard-arcane-types-runtime.js';
+import { installWizardAlliedArcanaRuntime } from './wizard-allied-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
 import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
 
@@ -158,21 +161,80 @@ export function installPlayerCombat(api){
     unregisterDecoy:(id)=>getArenaEnemySystem()?.unregisterWizardDecoy?.(id),
     damagePlayer:(amount,options)=>getArenaEnemySystem()?.damagePlayer?.(amount,{kind:'arcana-status',name:options?.status||'Status',targetableIndependent:options?.targetableIndependent===true}),
   });
+  const wizardFusionLeapRuntime=installWizardFusionLeapRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    setPlayerPosition:(position,context)=>window.__arena?.setArcanaPlayerPosition?.(position,context),
+    setPlayerInvulnerable:(value,context)=>window.__arena?.setArcanaPlayerInvulnerable?.(value,context),
+    setPlayerAirborne:(value,context)=>window.__arena?.setArcanaPlayerAirborne?.(value,context),
+    setPlayerHeight:(value,context)=>window.__arena?.setArcanaPlayerHeight?.(value,context),
+    setEnemyCarried:(enemy,detail)=>window.__arena?.setArcanaEnemyCarried?.(enemy,detail),
+  });
+  const wizardArcaneTypesRuntime=installWizardArcaneTypesRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    validatePosition:(position)=>window.__arena?.validateArcanaTeleportEndpoint?.(position)?.ok===true,
+    applyEnemyStatus:(enemy,kind,duration,options)=>getArenaEnemySystem()?.applyStatus?.(enemy,kind,duration,options),
+  });
+  const wizardAlliedArcanaRuntime=installWizardAlliedArcanaRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+  });
+
+  const previousAbilityCanPlay=window.__ABILITY_CARD_CAN_PLAY__;
+  const fusionLeapIds=new Set(['FLAME-FUSION','HEROIC-LEAP']);
+  const alliedArcanaIds=new Set(['RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM']);
+  const arcaneTypeIds=new Set(['CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION']);
+  window.__ABILITY_CARD_CAN_PLAY__=card=>{
+    const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();
+    if(wizardFusionLeapRuntime.busy)return false;
+    if(wizardArcaneTypesRuntime.state?.ballCharge&&id!=='BALL-LIGHTNING')return false;
+    if(fusionLeapIds.has(id))return wizardFusionLeapRuntime.canCast(card);
+    if(alliedArcanaIds.has(id))return wizardAlliedArcanaRuntime.canCast(id);
+    if(arcaneTypeIds.has(id))return wizardArcaneTypesRuntime.canCast(card);
+    return typeof previousAbilityCanPlay==='function'?previousAbilityCanPlay(card):true;
+  };
+
+  function releaseArcanaInput(detail={}){
+    return wizardArcaneTypesRuntime.releaseBallLightning?.({...detail,phase:'release'})||false;
+  }
+  function interruptArcanaInput(reason='interrupted'){
+    return wizardArcaneTypesRuntime.interruptBallLightning?.(reason)||false;
+  }
 
   function resetArcanaRuntimeState({preserveResources=false}={}){
-    const preserved=preserveResources
-      ? Object.fromEntries(Object.entries(wizardNextTwentyDashRuntime.state?.resources||{}).map(([id,value])=>[id,{...value}]))
-      : null;
+    const preserved=preserveResources?{
+      dash:Object.fromEntries(Object.entries(wizardNextTwentyDashRuntime.state?.resources||{}).map(([id,value])=>[id,{...value}])),
+      fusion:Object.fromEntries(Object.entries(wizardFusionLeapRuntime.state?.resources||{}).map(([id,value])=>[id,{...value}])),
+      arcaneTypes:{cooldowns:{...(wizardArcaneTypesRuntime.state?.cooldowns||{})},aquaCharges:Number(wizardArcaneTypesRuntime.state?.aquaCharges)||0,aquaChargeProgress:Number(wizardArcaneTypesRuntime.state?.aquaChargeProgress)||0},
+      alliedCooldowns:Object.fromEntries(wizardAlliedArcanaRuntime.cooldowns||[]),
+    }:null;
     // Cancel shared locomotion before disposing path-bound payloads.
     basicDashRuntime.reset?.();
     dashMagicJet.clear?.();
     wizardNextTwentyBasicsRuntime.reset?.();
     wizardNextTwentyDashRuntime.reset?.();
-    if(preserved&&wizardNextTwentyDashRuntime.state){
+    wizardFusionLeapRuntime.reset?.();
+    wizardArcaneTypesRuntime.reset?.();
+    wizardAlliedArcanaRuntime.reset?.();
+    if(preserved?.dash&&wizardNextTwentyDashRuntime.state){
       wizardNextTwentyDashRuntime.state.resources=Object.fromEntries(
-        Object.entries(preserved).map(([id,value])=>[id,{...value}]),
+        Object.entries(preserved.dash).map(([id,value])=>[id,{...value}]),
       );
     }
+    if(preserved?.fusion&&wizardFusionLeapRuntime.state)wizardFusionLeapRuntime.state.resources=Object.fromEntries(Object.entries(preserved.fusion).map(([id,value])=>[id,{...value}]));
+    if(preserved?.arcaneTypes&&wizardArcaneTypesRuntime.state){
+      wizardArcaneTypesRuntime.state.cooldowns={...preserved.arcaneTypes.cooldowns};
+      wizardArcaneTypesRuntime.state.aquaCharges=preserved.arcaneTypes.aquaCharges;
+      wizardArcaneTypesRuntime.state.aquaChargeProgress=preserved.arcaneTypes.aquaChargeProgress;
+    }
+    if(preserved?.alliedCooldowns){wizardAlliedArcanaRuntime.cooldowns.clear();for(const [id,value] of Object.entries(preserved.alliedCooldowns))wizardAlliedArcanaRuntime.cooldowns.set(id,value);}
     return{preservedResources:!!preserved};
   }
 
@@ -198,6 +260,9 @@ export function installPlayerCombat(api){
     wizardNextSourceRuntime.update(dt,now);
     wizardNextTwentyBasicsRuntime.update(dt,now);
     wizardNextTwentyDashRuntime.update(dt,now);
+    wizardFusionLeapRuntime.update(dt,now);
+    wizardArcaneTypesRuntime.update(dt,now);
+    wizardAlliedArcanaRuntime.update(dt,now);
     return out;
   };
 
@@ -214,6 +279,11 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'wizardNextSourceRuntime',{value:wizardNextSourceRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardNextTwentyBasicsRuntime',{value:wizardNextTwentyBasicsRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardNextTwentyDashRuntime',{value:wizardNextTwentyDashRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardFusionLeapRuntime',{value:wizardFusionLeapRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardArcaneTypesRuntime',{value:wizardArcaneTypesRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardAlliedArcanaRuntime',{value:wizardAlliedArcanaRuntime,enumerable:true});
+  Object.defineProperty(PC,'releaseArcanaInput',{value:releaseArcanaInput,enumerable:true});
+  Object.defineProperty(PC,'interruptArcanaInput',{value:interruptArcanaInput,enumerable:true});
   Object.defineProperty(PC,'resetArcanaRuntimeState',{value:resetArcanaRuntimeState,enumerable:true});
   // Compatibility aliases retained for existing branch debug callers.
   Object.defineProperty(PC,'combatCardEffects',{value:combatEffectRuntime,enumerable:true});

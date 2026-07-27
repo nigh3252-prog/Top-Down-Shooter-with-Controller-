@@ -133,11 +133,11 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
           const active=s.manualSequence&&s.manualSequence.cardId===card.id?s.manualSequence:{slot,cardId:card.id,press:0,total:spec.presses,remaining:spec.timeout,timeout:spec.timeout,label:spec.label};
           active.press++;active.remaining=active.timeout;s.manualSequence=active;
           const sequence={press:active.press,total:active.total,timeout:active.timeout,complete:active.press>=active.total};
-          queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,{sequence});
+          queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,{sequence,slot});
           if(sequence.complete){s.manualSequence=null;consumeSlot(slot,card);}
           scheduleDecoration();return{...proxy,__manualSequence:sequence};
         }
-        consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina);scheduleDecoration();return proxy;
+        consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,{slot});scheduleDecoration();return proxy;
       }
       if(card.type==='modifier'){
         const proxy=proxyActiveStance(card,'__modifierProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'bloodslash:play',card,stamina);scheduleDecoration();return proxy;

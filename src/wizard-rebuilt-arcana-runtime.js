@@ -110,9 +110,16 @@ function isEnemyLabRuntime(){
 function normalize2(x,z,fallback={x:0,z:1}){const length=Math.hypot(x,z);return length>1e-6?{x:x/length,z:z/length}:{...fallback};}
 function playerFrame(getPlayer){const player=getPlayer?.()||{},rawX=Number(player.forwardX),rawZ=Number(player.forwardZ),forward=normalize2(Number.isFinite(rawX)?rawX:0,Number.isFinite(rawZ)?rawZ:1);return{x:Number(player.x)||0,z:Number(player.z)||0,forward,right:{x:forward.z,z:-forward.x}};}
 function aliveEnemies(system){return(system?.enemies||[]).filter(enemy=>enemy&&enemy.hp>0);}
+function hostileEnemies(system){
+  const faction=system?.factionService;
+  const values=Array.isArray(system?.hostileEnemies)
+    ? system.hostileEnemies
+    : (system?.enemies||[]).filter(enemy=>(faction?.arenaFactionOf?.(enemy)||enemy?.wizardFaction||'hostile')==='hostile');
+  return values.filter(enemy=>enemy&&enemy.hp>0);
+}
 function enemyRadius(enemy,system){return Math.max(.44,(Number(enemy?.radius)||1)*(Number(system?.heightScale)||1)*.72);}
 function enemyCenterY(enemy,system){const scale=(system?.heightScale||1)*(enemy?.currentTargetScale||enemy?.targetScale||1);return(enemy?.targetYOffset||enemy?.rootLift||0)+(enemy?.height||2)*scale*.52;}
-function nearestEnemy(system,position,maxRange=Infinity,excluded=null){let best=null,bestDistance=maxRange;for(const enemy of aliveEnemies(system)){if(excluded?.has(enemy))continue;const distance=Math.hypot(enemy.x-position.x,enemy.z-position.z);if(distance<bestDistance){best=enemy;bestDistance=distance;}}return best;}
+function nearestEnemy(system,position,maxRange=Infinity,excluded=null){let best=null,bestDistance=maxRange;for(const enemy of hostileEnemies(system)){if(excluded?.has(enemy))continue;const distance=Math.hypot(enemy.x-position.x,enemy.z-position.z);if(distance<bestDistance){best=enemy;bestDistance=distance;}}return best;}
 function firstWallHit(start,end,walls){let best=null;for(const wall of walls||[]){if(!wall?.a||!wall?.b)continue;const hit=segmentIntersection2D(start,end,wall.a,wall.b);if(hit&&(!best||hit.t<best.hit.t))best={wall,hit};}return best;}
 function hostileProjectiles(system){const values=system?.hostileProjectiles;return Array.isArray(values)?values.filter(projectile=>projectile&&!projectile.dead):[];}
 function destroyHostileProjectile(projectile){if(!projectile||projectile.dead)return false;projectile.dead=true;projectile.life=0;if(projectile.mesh)projectile.mesh.visible=false;return true;}
@@ -272,7 +279,7 @@ export function installWizardRebuiltArcanaRuntime({THREE,scene,getPlayer,getEnem
         const orbit=clockwiseOrbitPosition({ownerX:frame.x,ownerZ:frame.z,slot:flare.slot,count:effect.spec.count,age:effect.age,radius:effect.spec.orbitRadius*effect.size});flare.position.x=orbit.x;flare.position.z=orbit.z;flare.mesh.position.set(orbit.x,(.72+.12*Math.sin(orbit.angle*2+now*5))*effect.size,orbit.z);flare.mesh.rotation.y=-orbit.angle;animateHomingFlareVisual({mesh:flare.mesh,age:effect.age,now,flight:false,size:effect.size});
         flare.scanT-=dt;if(flare.scanT<=0){flare.scanT=.11;const target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*effect.size);if(target){flare.launched=true;flare.state='launched';flare.target=target;const direction=normalize2(target.x-flare.position.x,target.z-flare.position.z,frame.forward);flare.velocity={x:direction.x*effect.spec.projectileSpeed,z:direction.z*effect.spec.projectileSpeed};recordEvent('HOMING-FLARES','flare-launched',flare.stableId,{slot:flare.slot,targetId:targetStableId(target),position:{...flare.position}});}}
       }else{
-        flare.flightAge+=dt;if(!flare.target||flare.target.hp<=0||!system?.enemies?.includes(flare.target))flare.target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*1.4*effect.size);
+        flare.flightAge+=dt;if(!flare.target||flare.target.hp<=0||!hostileEnemies(system).includes(flare.target))flare.target=nearestEnemy(system,flare.position,effect.spec.acquisitionRange*1.4*effect.size);
         if(flare.target){const desired=normalize2(flare.target.x-flare.position.x,flare.target.z-flare.position.z),turn=1-Math.exp(-dt*9.5);flare.velocity.x+=(desired.x*effect.spec.projectileSpeed-flare.velocity.x)*turn;flare.velocity.z+=(desired.z*effect.spec.projectileSpeed-flare.velocity.z)*turn;}
         const start={...flare.position};flare.position.x+=flare.velocity.x*dt;flare.position.z+=flare.velocity.z*dt;flare.mesh.position.set(flare.position.x,.67*effect.size,flare.position.z);flare.mesh.rotation.y=Math.atan2(flare.velocity.x,flare.velocity.z);animateHomingFlareVisual({mesh:flare.mesh,age:flare.flightAge,now,flight:true,size:effect.size});
         if(flare.target&&pointSegmentDistance2D(flare.target,start,flare.position)<=enemyRadius(flare.target,system)+.28*effect.size){damageEnemy(system,flare.target,effect.spec.damage,knockFrom(start,flare.target,effect.spec.sourceKnockback*.1),{power:.28,pop:.05,homingFlares:true,homingFlareId:flare.stableId});emitHomingTransient(effect,flare,{x:flare.position.x,y:.62*effect.size,z:flare.position.z},'enemy');flare.done=true;flare.state='hit';recordEvent('HOMING-FLARES','flare-hit',flare.stableId,{targetId:targetStableId(flare.target),damage:effect.spec.damage,position:{...flare.position}});disposeObject(flare.mesh);flare.mesh=null;continue;}

@@ -159,11 +159,14 @@ export function normalizeCaptureMove(value={}){
   const magnitude=Math.max(0,Math.min(1,requested??Math.min(1,length)));
   return length>1e-6?{x:rawX/length*magnitude,z:rawZ/length*magnitude,magnitude}:{x:0,z:0,magnitude:0};
 }
-function jsonSafe(value,depth=0){
+function jsonSafe(value,depth=0,keyHint=''){
   if(depth>7)return undefined;
   if(value===null||typeof value==='string'||typeof value==='boolean')return value;
   if(typeof value==='number')return Number.isFinite(value)?value:null;
-  if(Array.isArray(value))return value.slice(0,64).map(item=>jsonSafe(item,depth+1)).filter(item=>item!==undefined);
+  if(Array.isArray(value)){
+    const items=keyHint==='semanticEvents'?value.slice(-128):value.slice(0,64);
+    return items.map(item=>jsonSafe(item,depth+1)).filter(item=>item!==undefined);
+  }
   if(value instanceof Set)return{size:value.size};
   if(value instanceof Map)return{size:value.size};
   if(typeof value!=='object')return undefined;
@@ -171,7 +174,7 @@ function jsonSafe(value,depth=0){
   const result={};
   for(const [key,item] of Object.entries(value)){
     if(['mesh','meshes','root','material','geometry','parent','children','hit','target','captured','walls','spec'].includes(key))continue;
-    const safe=jsonSafe(item,depth+1);if(safe!==undefined)result[key]=safe;
+    const safe=jsonSafe(item,depth+1,key);if(safe!==undefined)result[key]=safe;
   }
   return result;
 }

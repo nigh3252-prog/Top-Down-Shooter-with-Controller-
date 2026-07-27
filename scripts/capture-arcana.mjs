@@ -45,6 +45,7 @@ function usage(){
     '  npm run capture:arcana -- --id WATER-PRISON --scenario stacked --stage contract',
     '  npm run capture:arcana -- --batch session-five --stage all',
     '  npm run capture:arcana -- --batch next-twenty --stage all',
+    '  npm run capture:arcana -- --batch archetype-sampler --stage all',
     '',
     'Optional:',
     '  --scenario <id>  Select a manifest scenario (defaults to the ability default)',
@@ -104,7 +105,12 @@ export function validateCaptureManifest(manifest){
   if(manifest?.schemaVersion!==2)throw new Error('Arcana capture manifest must use schemaVersion 2.');
   const errors=[],fixedDt=Number(manifest.defaults?.fixedDt);
   if(!(fixedDt>0))errors.push('defaults.fixedDt must be positive');
-  const supportedActions=new Set(['cast','press','hold','release','setaim','setmove','settargethp','deckplay','setresource','damageplayer','strikedecoy','applyplayerstatus']);
+  const supportedActions=new Set([
+    'cast','press','hold','release','interrupt',
+    'setaim','setmove','setplayerposition','settargetposition','settargethp',
+    'deckplay','setresource','damageplayer','damageally','strikedecoy','applyplayerstatus',
+    'activateintervention',
+  ]);
   for(const [abilityId,ability] of Object.entries(manifest.abilities||{})){
     for(const [scenarioName,scenario] of Object.entries(ability.scenarios||{})){
       const duration=Math.trunc(Number(scenario.durationFrames)),checkpoints=scenario.checkpointFrames||[],actions=scenario.actions||[],clip=scenario.sourceClip||{};
@@ -692,7 +698,8 @@ const telemetryAdapters={
     for(const event of telemetry.events){
       const kind=eventKind(event)||'unknown';eventCounts[kind]=(eventCounts[kind]||0)+1;
       if(Number.isFinite(Number(event.damage)))eventDamage[kind]=(eventDamage[kind]||0)+Number(event.damage);
-      if(Number.isFinite(Number(event.count)))eventDeclaredCounts[kind]=(eventDeclaredCounts[kind]||0)+Number(event.count);
+      const declaredCount=event.count??event.shieldCount;
+      if(Number.isFinite(Number(declaredCount)))eventDeclaredCounts[kind]=(eventDeclaredCounts[kind]||0)+Number(declaredCount);
     }
     const activeCounts=telemetry.frames.map(frame=>frame.instances.length),finalActive=telemetry.final?.instances?.length||0;
     const initialTargetFixtures=telemetry.frames[0]?.snapshot?.fixtures?.targets||[];
