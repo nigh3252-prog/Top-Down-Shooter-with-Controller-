@@ -43,8 +43,8 @@ assert.deepEqual([...mixedSeen].sort(),[...mixedRoster].sort());
 
 const sameSystemRoster=['grunt','mace',LUGARU_DUELIST_ID];
 const sameSystemSeen=new Set();
-for(let seed=1;seed<=180;seed++){
-  const plan=createWorkingRosterEncounterPlan({depth:8,rosterIds:sameSystemRoster,random:seeded(seed)});
+for(const randomValue of [0,.4,.8]){
+  const plan=createWorkingRosterEncounterPlan({depth:8,rosterIds:sameSystemRoster,random:()=>randomValue});
   assert.equal(plan.groups.length,1,'same-system types rotate between encounters until multi-type routing is added');
   assert.equal(plan.groups[0].system,'original');
   sameSystemSeen.add(plan.groups[0].spawnKind);
