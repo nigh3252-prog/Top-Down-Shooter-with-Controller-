@@ -1,0 +1,227 @@
+name: Repair PR 96 Against Main
+
+on:
+  push:
+    branches:
+      - "codex/wizard-of-legend-arcana-checklist"
+    paths:
+      - ".github/workflows/repair-pr-96.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/wizard-of-legend-arcana-checklist
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Merge main and reconcile shared runtime changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge -X ours --no-commit --no-ff origin/main
+
+          python <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_once(text, old, new, label):
+              if new in text:
+                  return text
+              if old not in text:
+                  raise RuntimeError(f"Could not locate {label}")
+              return text.replace(old, new, 1)
+
+          # README: retain the Arcana/archive description and current design-doc index.
+          readme_path = Path("README.md")
+          readme = readme_path.read_text(encoding="utf-8")
+          if "- `docs/design/` —" not in readme:
+              marker = "- `docs/` — active source-move libraries (Hades, Diablo III) used as design references."
+              if marker not in readme:
+                  raise RuntimeError("Could not locate README docs marker")
+              readme = readme.replace(
+                  marker,
+                  "- `docs/design/` — living gameplay rules, game flow, project terminology, and unresolved design questions for human and AI collaborators.\n" + marker,
+                  1,
+              )
+          readme_path.write_text(readme, encoding="utf-8")
+
+          # package.json: run both the merged duel-enemy coverage and PR 96's router coverage.
+          package_path = Path("package.json")
+          package = json.loads(package_path.read_text(encoding="utf-8"))
+          package["scripts"]["test:combat"] = (
+              "node tests/goblin-guard.test.mjs && "
+              "node tests/goblin-attack-range-closing.test.mjs && "
+              "node tests/lugaru-duelist.test.mjs && "
+              "node tests/lugaru-duelist-counter-release.test.mjs && "
+              "node tests/lugaru-duelist-dodge-scale.test.mjs && "
+              "node tests/combat-pass.test.mjs && "
+              "node tests/arena-enemy-control.test.mjs"
+          )
+          package_path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
+
+          # Arena router: combine PR 96 faction/capture routing with current duel enemies
+          # and the native Tartarus mode that intentionally bypasses the combat director.
+          core_path = Path("src/arena-enemies-core.js")
+          core = core_path.read_text(encoding="utf-8")
+          core = replace_once(
+              core,
+              """import {\n  ARENA_ENEMY_ARCHETYPES,\n  createArenaEnemySystem as createOriginalArenaEnemySystem,\n} from './arena-enemies-original.js';""",
+              """import {\n  ARENA_ENEMY_ARCHETYPES,\n  LUGARU_DUELIST_ID,\n  createArenaEnemySystem as createOriginalArenaEnemySystem,\n} from './arena-enemies-guard.js';""",
+              "guarded original-enemy import",
+          )
+          if "setHadesNativeModeActive" not in core:
+              core = replace_once(
+                  core,
+                  "import { createCombinedEncounterPlan } from './combined-encounter-director.js';",
+                  "import { createCombinedEncounterPlan } from './combined-encounter-director.js';\nimport { setHadesNativeModeActive } from './hades-encounter-tuning.js';",
+                  "Hades native-mode import",
+              )
+          core = replace_once(
+              core,
+              "const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES));",
+              "const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES).filter(id=>id!==LUGARU_DUELIST_ID));",
+              "original goblin filter",
+          )
+          if "setCombatDirectorEnabled(hades,true);\n  setHadesNativeModeActive(false);" not in core:
+              core = replace_once(
+                  core,
+                  "  hades.setEncounterPlanningEnabled?.(false);\n  for(const system of [flare,hades])",
+                  "  hades.setEncounterPlanningEnabled?.(false);\n  setCombatDirectorEnabled(hades,true);\n  setHadesNativeModeActive(false);\n  for(const system of [flare,hades])",
+                  "router initialization",
+              )
+          if "function setCombatDirectorEnabled(system,enabled)" not in core:
+              core = replace_once(
+                  core,
+                  "  const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;",
+                  "  const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;\n  function setCombatDirectorEnabled(system,enabled){system?.setCombatDirectorEnabled?.(enabled);}\n  const isCombatDirectorEnabled=system=>system?.combatDirectorEnabled??true;",
+                  "combat-director helpers",
+              )
+          if "setHadesNativeModeActive(false);\n    setCombatDirectorEnabled(hades,true);\n    hades.setEncounterPlanningEnabled?.(false);" not in core:
+              core = replace_once(
+                  core,
+                  "    combinedLastHitDir=null;\n    hades.setEncounterPlanningEnabled?.(false);",
+                  "    combinedLastHitDir=null;\n    setHadesNativeModeActive(false);\n    setCombatDirectorEnabled(hades,true);\n    hades.setEncounterPlanningEnabled?.(false);",
+                  "combined-mode director reset",
+              )
+          old_spawn_kind = """  function setSpawnKind(kind){\n    if(kind===ALL_ENEMIES_BUDGET_ID||kind===HADES_TARTARUS_POOL_ID){\n      activateCombined();\n      return;\n    }\n    const [key,next]=systemForKind(kind);\n    activateSingle(key,next);\n    next.setSpawnKind(kind);\n    selectedSpawnKind=next.spawnKind;\n  }"""
+          new_spawn_kind = """  function setSpawnKind(kind){\n    if(kind===ALL_ENEMIES_BUDGET_ID){\n      activateCombined();\n      return;\n    }\n    if(kind===HADES_TARTARUS_POOL_ID){\n      activateSingle('hades',hades);\n      setCombatDirectorEnabled(hades,false);\n      hades.setEncounterPlanningEnabled?.(true);\n      setHadesNativeModeActive(true);\n      hades.setSpawnKind(kind);\n      selectedSpawnKind=hades.spawnKind;\n      return;\n    }\n    setHadesNativeModeActive(false);\n    setCombatDirectorEnabled(hades,true);\n    hades.setEncounterPlanningEnabled?.(false);\n    const [key,next]=systemForKind(kind);\n    activateSingle(key,next);\n    next.setSpawnKind(kind);\n    selectedSpawnKind=next.spawnKind;\n  }"""
+          core = replace_once(core, old_spawn_kind, new_spawn_kind, "spawn-kind routing")
+          if "function startCombinedEncounter(roomId){\n    labMode=false;\n    setHadesNativeModeActive(false);" not in core:
+              core = replace_once(
+                  core,
+                  "  function startCombinedEncounter(roomId){\n    labMode=false;",
+                  "  function startCombinedEncounter(roomId){\n    labMode=false;\n    setHadesNativeModeActive(false);",
+                  "combined encounter native-mode reset",
+              )
+          core = core.replace(
+              "      system.group.visible=true;\n      system.setEncounterPlanningEnabled?.(false);",
+              "      system.group.visible=true;\n      setCombatDirectorEnabled(system,true);\n      system.setEncounterPlanningEnabled?.(false);",
+          )
+          if "function startLabScenario(roomId=-1,scenario={}){\n    const normalized=normalizeLabGroups(scenario.groups);\n    if(!normalized.ok)return normalized;\n\n    setHadesNativeModeActive(false);" not in core:
+              core = replace_once(
+                  core,
+                  "  function startLabScenario(roomId=-1,scenario={}){\n    const normalized=normalizeLabGroups(scenario.groups);\n    if(!normalized.ok)return normalized;\n\n    clearCombinedRuntime();",
+                  "  function startLabScenario(roomId=-1,scenario={}){\n    const normalized=normalizeLabGroups(scenario.groups);\n    if(!normalized.ok)return normalized;\n\n    setHadesNativeModeActive(false);\n    clearCombinedRuntime();",
+                  "Enemy Lab native-mode reset",
+              )
+          old_lab_spawn = """      const originalGoblin=groupPlan.system==='original'&&ORIGINAL_GOBLIN_IDS.has(groupPlan.spawnKind);\n      system.setSpawnKind(originalGoblin?'goblins':groupPlan.spawnKind);\n      const spawnCount=originalGoblin\n        ? clamp(groupPlan.count*ORIGINAL_GOBLIN_IDS.size,1,20)\n        : groupPlan.count;\n      system.setWaveSize(spawnCount);\n      system.startRoomEncounter(roomId);\n      if(originalGoblin)retainOriginalGoblinKind(system,groupPlan.spawnKind,groupPlan.count);\n      hpSnapshots.set(system,system.playerHp);"""
+          new_lab_spawn = """      const lugaruDuelist=groupPlan.system==='original'&&groupPlan.spawnKind===LUGARU_DUELIST_ID;\n      const originalGoblin=groupPlan.system==='original'&&ORIGINAL_GOBLIN_IDS.has(groupPlan.spawnKind);\n      const isolatedOriginal=originalGoblin||lugaruDuelist;\n      system.setSpawnKind(isolatedOriginal?'goblins':groupPlan.spawnKind);\n      const spawnCount=isolatedOriginal\n        ? clamp(groupPlan.count*ORIGINAL_GOBLIN_IDS.size,1,20)\n        : groupPlan.count;\n      system.setWaveSize(spawnCount);\n      system.startRoomEncounter(roomId);\n      if(originalGoblin)retainOriginalGoblinKind(system,groupPlan.spawnKind,groupPlan.count);\n      if(lugaruDuelist){\n        retainOriginalGoblinKind(system,'grunt',groupPlan.count);\n        system.configureLugaruDuelists?.(system.enemies);\n      }\n      hpSnapshots.set(system,system.playerHp);"""
+          core = replace_once(core, old_lab_spawn, new_lab_spawn, "Enemy Lab duel-enemy spawn")
+          if "get combatDirectorEnabled()" not in core:
+              core = replace_once(
+                  core,
+                  "    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},\n    get labMode(){return labMode;},",
+                  "    get activeSet(){return combinedMode?'combined':active===hades?'hades':active===flare?'flare':'original';},\n    get combatDirectorEnabled(){return combinedMode?true:isCombatDirectorEnabled(active);},\n    get combatDirectorStatus(){return this.combatDirectorEnabled?'Combat Director: On':'Combat Director: Off — Tartarus Native Behavior';},\n    get labMode(){return labMode;},",
+                  "router director status",
+              )
+          core_path.write_text(core, encoding="utf-8")
+
+          # Hades runtime: keep PR 96 target/faction handling while restoring the native
+          # Tartarus no-director path from current main.
+          hades_path = Path("src/hades-arena-enemies.js")
+          hades = hades_path.read_text(encoding="utf-8")
+          if "combatDirectorEnabled:true" not in hades:
+              hades = replace_once(
+                  hades,
+                  "    pursuitBudgetScale:1,\n  };",
+                  "    pursuitBudgetScale:1,\n    combatDirectorEnabled:true,\n  };",
+                  "Hades director tuning",
+              )
+          hades = replace_once(
+              hades,
+              "    const attack=def.attackId?HADES_ATTACKS[def.attackId]:null;",
+              "    const attackTemplate=def.attackId?HADES_ATTACKS[def.attackId]:null;\n    const attack=attackTemplate?{...attackTemplate}:null;",
+              "per-enemy attack clone",
+          )
+          old_start_attack = "  function startAttack(e,attack,target){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;if(factionService?.arenaFactionOf?.(e)!=='allied')director.grant(e,attack);factionService?.lockTarget?.(e,target);}"
+          new_start_attack = """  function setCombatDirectorEnabled(value){\n    const enabled=!!value;\n    if(tuning.combatDirectorEnabled===enabled)return enabled;\n    tuning.combatDirectorEnabled=enabled;\n    director.reset();\n    for(const e of enemies){\n      if(Number.isFinite(e._pressureBaseSpeed))e.speed=e._pressureBaseSpeed;\n      if(Number.isFinite(e._pressureBasePreferredRange))e.preferredRange=e._pressureBasePreferredRange;\n      delete e._pressureBaseSpeed;\n      delete e._pressureBasePreferredRange;\n      e.token=null;e.approachPermit=false;e.directEngaged=false;e.slotIndex=-1;e.nearEligible=true;\n      const template=e.attackId?HADES_ATTACKS[e.attackId]:null;\n      e.realAtk=template?{...template}:null;\n      if(e.state==='idle')e.attack=null;\n    }\n    return enabled;\n  }\n  function startAttack(e,attack,target){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;if(tuning.combatDirectorEnabled&&factionService?.arenaFactionOf?.(e)!=='allied')director.grant(e,attack);factionService?.lockTarget?.(e,target);}"""
+          if "function setCombatDirectorEnabled(value)" not in hades:
+              hades = replace_once(hades, old_start_attack, new_start_attack, "Hades director toggle")
+          hades = replace_once(
+              hades,
+              "if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;director.release(e);factionService?.releaseTarget?.(e);e.attack=null;}",
+              "if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;if(tuning.combatDirectorEnabled)director.release(e);factionService?.releaseTarget?.(e);e.attack=null;}",
+              "Hades recovery release",
+          )
+          old_idle = """      const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attackId?HADES_ATTACKS[e.attackId]:null,alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));\n      const converted=factionService?.arenaFactionOf?.(e)==='allied';\n      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&(converted||director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression})))startAttack(e,attack,p);"""
+          new_idle = """      const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.realAtk,alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));\n      const converted=factionService?.arenaFactionOf?.(e)==='allied';\n      const directorAllows=converted||!tuning.combatDirectorEnabled||director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});\n      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&directorAllows)startAttack(e,attack,p);"""
+          hades = replace_once(hades, old_idle, new_idle, "Hades idle attack grant")
+          hades = replace_once(
+              hades,
+              "  function finishWave(){wave++;director.onWaveClear();startWave();}",
+              "  function finishWave(){wave++;if(tuning.combatDirectorEnabled)director.onWaveClear();startWave();}",
+              "Hades wave-clear director hook",
+          )
+          old_director_update = """    director.update(dt,{enemies,player:lastPlayer,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});\n    director.markNearEligible(enemies,lastPlayer);\n    director.assignBattleCircleSlots(enemies);"""
+          new_director_update = """    if(tuning.combatDirectorEnabled){\n      director.update(dt,{enemies,player:lastPlayer,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});\n      director.markNearEligible(enemies,lastPlayer);\n      director.assignBattleCircleSlots(enemies);\n    }else{\n      for(const e of enemies){e.token=null;e.directEngaged=false;e.nearEligible=true;e.slotIndex=-1;}\n    }"""
+          hades = replace_once(hades, old_director_update, new_director_update, "Hades director update gate")
+          hades = replace_once(
+              hades,
+              "          director.onWaveClear();\n          onEncounterCleared?.(id);",
+              "          if(tuning.combatDirectorEnabled)director.onWaveClear();\n          onEncounterCleared?.(id);",
+              "Hades room-clear director hook",
+          )
+          if "clearRoomRuntime:clearRuntime,setCombatDirectorEnabled," not in hades:
+              hades = replace_once(
+                  hades,
+                  "    enemies,group,director,update,damageEnemy,setEnemyFaction,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,",
+                  "    enemies,group,director,update,damageEnemy,setEnemyFaction,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,setCombatDirectorEnabled,",
+                  "Hades API director setter",
+              )
+          if "get combatDirectorEnabled(){return tuning.combatDirectorEnabled;}" not in hades:
+              hades = replace_once(
+                  hades,
+                  "    get aggression(){return tuning.aggression;},\n    get spawnKind(){return tuning.spawnKind;},",
+                  "    get aggression(){return tuning.aggression;},\n    get combatDirectorEnabled(){return tuning.combatDirectorEnabled;},\n    get spawnKind(){return tuning.spawnKind;},",
+                  "Hades API director getter",
+              )
+          hades_path.write_text(hades, encoding="utf-8")
+          PY
+
+      - name: Validate merged branch
+        run: npm test
+
+      - name: Commit repaired merge and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/repair-pr-96.yml
+          git add -A
+          git commit -m "Merge main into PR 96 and preserve Arcana runtime"
+          git push origin HEAD:codex/wizard-of-legend-arcana-checklist
