@@ -17,3 +17,4 @@ Retired pages kept for reference only. Nothing in the live repo links to them.
 - `sound-foundry-retro-beasts.html` — donor/reference for procedural audio
   recipes behind `src/combat-audio.js`.
 - `stone-lab-audio-test.html` — old audio hook test page.
+- `wizard-of-legend/` — the initial and improved Arcana research Markdown preserved behind the canonical root-level checklist.

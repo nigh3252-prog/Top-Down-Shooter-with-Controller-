@@ -1,4 +1,4 @@
-const makeCard=({id,name,icon,element,styleTags,description,summary,rows,chain,uiColor,uiBorder,uiBackground})=>Object.freeze({
+const makeCard=({id,name,icon,element,styleTags,description,summary,rows,chain,manualSequence=null,uiColor,uiBorder,uiBackground})=>Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
   sourceGame:'Wizard of Legend',
@@ -10,6 +10,7 @@ const makeCard=({id,name,icon,element,styleTags,description,summary,rows,chain,u
   description,
   details:Object.freeze({summary,rows:Object.freeze(rows.map(row=>Object.freeze(row.slice())))}),
   chain:Object.freeze(chain),
+  ...(manualSequence?{manualSequence:Object.freeze({...manualSequence})}:{}),
   preferredWeapons:Object.freeze(['any']),
   styleTags:Object.freeze(['Wizard Arcana',element,...styleTags]),
   uiColor,uiBorder,uiBackground,
@@ -75,6 +76,39 @@ export const WIZARD_NEXT_SOURCE_CARDS=Object.freeze([
     ],
     chain:['stab4','stab4','horizontal5'],
     uiColor:'#ffe063',uiBorder:'rgba(244,201,60,.90)',uiBackground:'radial-gradient(circle,rgba(255,225,89,.30),rgba(53,43,5,.70))',
+  }),
+  makeCard({
+    id:'BOLT-RAIL',name:'Bolt Rail',icon:'BR',element:'Lightning',
+    styleTags:['five-beat string','instant branched stream','contact-gated finisher'],
+    description:'Pulse five thick, branching lightning streams directly from the caster; a fifth-pulse contact detonates a separate 10-damage burst.',
+    summary:'A source-driven five-beat lightning basic. Every jagged hand-to-target stream exists only for an instant, deals 5 damage, and ignores world collision; only a successful fifth stream creates the compact 10-damage electrical finisher.',
+    rows:[
+      ['RHYTHM','Five separate lightning pulses in a rapid held combo.'],
+      ['CARRIER','One thick irregular stream with visible side branches; no parallel rails and no traveling projectile.'],
+      ['DAMAGE','Each stream deals 5. A successful fifth stream triggers a separate 10-damage burst.'],
+      ['FAILURE RULE','If Beat 5 misses, no finisher appears elsewhere.'],
+      ['ENHANCED SOURCE','The finisher chains from the struck target to nearby enemies and applies shock; structured but not enabled yet.'],
+    ],
+    chain:['stab4','stab4','horizontal5'],
+    uiColor:'#ffe56d',uiBorder:'rgba(250,211,68,.92)',uiBackground:'radial-gradient(circle,rgba(255,230,94,.32),rgba(48,38,4,.72))',
+  }),
+  makeCard({
+    id:'VOLT-DISC',name:'Volt Disc',icon:'VD',element:'Lightning',
+    styleTags:['three-press combo','live aim','hollow ring carrier','payload handoff'],
+    description:'Press up to three times to live-aim short-range hollow electric discs before the rolling combo window closes.',
+    summary:'A source-driven three-press combo held visibly in one card slot. Each press samples live aim and launches one 9-damage ring; range expiry hands the payload to a 9-damage burst, direct contact keeps the payload on the disc and emits a separate harmless semantic contact, and walls only fizzle.',
+    rows:[
+      ['RHYTHM','One disc per press; the visible card stays locked for up to three presses with a 0.9-second rolling timeout.'],
+      ['AIM','Every press samples current aim independently.'],
+      ['CARRIER','Glowing hollow circular ring traveling straight over short range.'],
+      ['MISS END','Maximum range creates a 9-damage electrical burst.'],
+      ['DIRECT HIT','Disc deals 9, then records a separate 0-damage semantic contact without ordinary damage side effects.'],
+      ['WALL','World contact creates a harmless electrical fizzle; it never inherits the terminal burst payload.'],
+      ['ENHANCED SOURCE','After the first direct hit, redirects toward one additional target; structured but not enabled yet.'],
+    ],
+    manualSequence:{presses:3,timeout:.9,label:'DISC'},
+    chain:['stab5','stab5','horizontal5'],
+    uiColor:'#f4e95d',uiBorder:'rgba(237,219,62,.92)',uiBackground:'radial-gradient(circle,rgba(229,238,77,.30),rgba(39,42,5,.72))',
   }),
 ]);
 

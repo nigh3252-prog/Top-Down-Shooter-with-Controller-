@@ -1,0 +1,1070 @@
+{
+  "schemaVersion": 2,
+  "sourceVideo": "media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4",
+  "outputRoot": "artifacts/arcana-capture",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "defaults": {
+    "route": "enemy-lab.html",
+    "fixedDt": 0.016666666666666666,
+    "query": {
+      "capture": "1",
+      "clean": "1",
+      "aim": "right"
+    },
+    "reset": {
+      "player": {
+        "x": 0,
+        "z": 0,
+        "aimX": 1,
+        "aimZ": 0
+      },
+      "camera": {
+        "mode": "capture"
+      },
+      "rngSeed": 4401,
+      "dummy": {
+        "layout": "none"
+      },
+      "fixtures": {
+        "targets": [],
+        "hostileProjectiles": [],
+        "walls": [],
+        "resources": [],
+        "deck": null
+      }
+    },
+    "stages": {
+      "contract": {
+        "stage": "contract",
+        "effects": false,
+        "renderMode": "proxy"
+      },
+      "source": {
+        "stage": "source",
+        "effects": true,
+        "renderMode": "source"
+      },
+      "style": {
+        "stage": "style",
+        "effects": true,
+        "renderMode": "style"
+      }
+    }
+  },
+  "acceptanceProfiles": {
+    "ICE-DAGGER": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "thrusts", "metric": "captureDerived.eventCounts.ice-dagger-thrust", "op": "exact", "value": 4 }, { "id": "complete", "metric": "captureDerived.eventCounts.arcana-sequence-complete", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "RIP-TIDE": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "crescents", "metric": "captureDerived.eventCounts.rip-tide-ripple-emitted", "op": "exact", "value": 3 }, { "id": "hits", "metric": "captureDerived.eventCounts.rip-tide-ripple-hit", "op": "exact", "value": 3 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "AQUA-ARC": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "streams", "metric": "captureDerived.eventCounts.aqua-arc-stream-emitted", "op": "exact", "value": 4 }, { "id": "hits", "metric": "captureDerived.eventCounts.aqua-arc-stream-hit", "op": "exact", "value": 4 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "CHAOS-CRUSHER": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "rifts", "metric": "captureDerived.eventCounts.chaos-crusher-rift-struck", "op": "exact", "value": 3 }, { "id": "cores", "metric": "captureDerived.eventCounts.chaos-crusher-core-fired", "op": "exact", "value": 3 }, { "id": "coreHits", "metric": "captureDerived.eventCounts.chaos-crusher-core-hit", "op": "exact", "value": 3 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "SEARING-RUSH": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "ticks", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 4 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 28 }, { "id": "intercept", "metric": "captureDerived.eventCounts.projectile-intercepted", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "FLARE-RUSH": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "fireballs", "metric": "captureDerived.eventDeclaredCounts.payload-emitted", "op": "exact", "value": 3 }, { "id": "resolved", "metric": "captureDerived.resolvedProjectiles", "op": "exact", "value": 3 }, { "id": "burnTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 6 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 78 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "IGNITION-RUSH": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "burnApplied", "metric": "captureDerived.eventCounts.status-applied", "op": "exact", "value": 1 }, { "id": "burnTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 2 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 16 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "AIR-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "rearHit", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 15 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "GUST-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "damageBeats", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 2 }, { "id": "transport", "metric": "captureDerived.eventCounts.transport", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 15 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "RAZOR-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "ticks", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 4 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "SPIKE-TRACK": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "spikes", "metric": "captureDerived.eventCounts.spike-erupted", "op": "minimum", "min": 4 }, { "id": "singleLedger", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 30 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "TOXIC-TRAP": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "puddle", "metric": "captureDerived.eventCounts.puddle-opened", "op": "exact", "value": 1 }, { "id": "poisonTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 5 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 25 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "SNARE-TRACK": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "vines", "metric": "captureDerived.eventDeclaredCounts.payload-emitted", "op": "exact", "value": 3 }, { "id": "resolved", "metric": "captureDerived.resolvedProjectiles", "op": "exact", "value": 3 }, { "id": "entangle", "metric": "captureDerived.eventCounts.status-applied", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "THUNDER-LINE": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "strike", "metric": "captureDerived.eventCounts.thunder-strike", "op": "exact", "value": 1 }, { "id": "shockTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 2 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 32 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "CIRCUIT-LINE": { "mode": "required", "checks": [{ "id": "dashes", "metric": "captureDerived.eventCounts.dash-started", "op": "exact", "value": 3 }, { "id": "nodes", "metric": "captureDerived.eventCounts.circuit-nodes-deposited", "op": "exact", "value": 3 }, { "id": "activated", "metric": "captureDerived.eventCounts.circuit-activated", "op": "exact", "value": 1 }, { "id": "ticks", "metric": "captureDerived.eventCounts.circuit-tick", "op": "minimum", "min": 6 }, { "id": "tickDamage", "metric": "captureDerived.eventDamage.circuit-tick", "op": "minimum", "min": 12 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "SHOCK-LINE": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "shockApplied", "metric": "captureDerived.eventCounts.status-applied", "op": "exact", "value": 1 }, { "id": "shockTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 2 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 16 }, { "id": "intercept", "metric": "captureDerived.eventCounts.projectile-intercepted", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "WAVE-FRONT": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "ticks", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 3 }, { "id": "shieldHits", "metric": "captureDerived.eventCounts.wave-shield-absorbed", "op": "exact", "value": 2 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 27 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "FROST-FEINT": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "shatter", "metric": "captureDerived.eventCounts.decoy-shattered", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 12 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "FROST-WING": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "feathers", "metric": "captureDerived.eventDeclaredCounts.payload-emitted", "op": "exact", "value": 4 }, { "id": "resolved", "metric": "captureDerived.resolvedProjectiles", "op": "exact", "value": 4 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "CHAOTIC-RIFT": { "mode": "required", "checks": [{ "id": "entered", "metric": "captureDerived.eventCounts.rift-entered", "op": "exact", "value": 1 }, { "id": "exited", "metric": "captureDerived.eventCounts.rift-exited", "op": "exact", "value": 1 }, { "id": "statusTicks", "metric": "captureDerived.eventCounts.player-status-tick", "op": "exact", "value": 2 }, { "id": "statusDamage", "metric": "captureDerived.playerHpLoss", "op": "exact", "value": 2 }, { "id": "untargetable", "metric": "captureDerived.untargetableFrames", "op": "minimum", "min": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "FLAME-FUSION": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.flame-fusion-cast", "op": "exact", "value": 1 }, { "id": "liveAim", "metric": "captureDerived.eventCounts.flame-fusion-second-aim", "op": "exact", "value": 1 }, { "id": "transform", "metric": "captureDerived.eventCounts.flame-fusion-transformed", "op": "exact", "value": 1 }, { "id": "fan", "metric": "captureDerived.eventDeclaredCounts.flame-fusion-transformed", "op": "exact", "value": 5 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "RAPID-FIRE-AGENT": { "mode": "required", "checks": [{ "id": "summoned", "metric": "captureDerived.eventCounts.agent-summoned", "op": "exact", "value": 1 }, { "id": "shots", "metric": "captureDerived.eventCounts.agent-shot-fired", "op": "minimum", "min": 20 }, { "id": "hits", "metric": "captureDerived.eventCounts.agent-shot-hit", "op": "minimum", "min": 20 }, { "id": "expired", "metric": "captureDerived.eventCounts.agent-removed", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "WARD-OF-FLAMES": { "mode": "required", "checks": [{ "id": "placed", "metric": "captureDerived.eventCounts.ward-placed", "op": "exact", "value": 1 }, { "id": "pulses", "metric": "captureDerived.eventCounts.ward-pulse", "op": "exact", "value": 8 }, { "id": "expired", "metric": "captureDerived.eventCounts.ward-removed", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "MENTIS-IMPERIUM": { "mode": "required", "checks": [{ "id": "fired", "metric": "captureDerived.eventCounts.mentis-arrow-fired", "op": "exact", "value": 1 }, { "id": "charmHit", "metric": "captureDerived.eventCounts.mentis-arrow-hit", "op": "exact", "value": 1 }, { "id": "projectileResolved", "metric": "captureDerived.eventCounts.mentisarrow-removed", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "HEROIC-LEAP": { "mode": "required", "checks": [{ "id": "rush", "metric": "captureDerived.eventCounts.heroic-leap-rush-started", "op": "exact", "value": 1 }, { "id": "takeoff", "metric": "captureDerived.eventCounts.heroic-leap-takeoff", "op": "exact", "value": 1 }, { "id": "vortexTicks", "metric": "captureDerived.eventCounts.heroic-leap-vortex-tick", "op": "exact", "value": 5 }, { "id": "landed", "metric": "captureDerived.eventCounts.heroic-leap-landed", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "CYCLONE-BOOMERANG": { "mode": "required", "checks": [{ "id": "launched", "metric": "captureDerived.eventCounts.cyclone-launched", "op": "exact", "value": 1 }, { "id": "twoLegHits", "metric": "captureDerived.eventCounts.cyclone-hit", "op": "exact", "value": 2 }, { "id": "caught", "metric": "captureDerived.eventCounts.cyclone-caught", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "EARTHEN-AEGIS": { "mode": "required", "checks": [{ "id": "created", "metric": "captureDerived.eventCounts.aegis-created", "op": "exact", "value": 1 }, { "id": "shields", "metric": "captureDerived.eventDeclaredCounts.aegis-created", "op": "exact", "value": 8 }, { "id": "contact", "metric": "captureDerived.eventCounts.aegis-hit", "op": "minimum", "min": 1 }, { "id": "intercept", "metric": "captureDerived.eventCounts.aegis-projectile-intercepted", "op": "minimum", "min": 1 }, { "id": "expired", "metric": "captureDerived.eventCounts.aegis-expired", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "BALL-LIGHTNING": { "mode": "required", "checks": [{ "id": "began", "metric": "captureDerived.eventCounts.ball-charge-began", "op": "exact", "value": 1 }, { "id": "released", "metric": "captureDerived.eventCounts.ball-released", "op": "exact", "value": 1 }, { "id": "pulses", "metric": "captureDerived.eventCounts.ball-hit", "op": "exact", "value": 10 }, { "id": "maximumShock", "metric": "captureDerived.eventCounts.ball-maximum-shock", "op": "exact", "value": 2 }, { "id": "complete", "metric": "captureDerived.eventCounts.ball-complete", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "AQUA-BEAM": { "mode": "required", "checks": [{ "id": "started", "metric": "captureDerived.eventCounts.aqua-beam-started", "op": "exact", "value": 1 }, { "id": "ticks", "metric": "captureDerived.eventCounts.aqua-beam-tick", "op": "exact", "value": 10 }, { "id": "intercept", "metric": "captureDerived.eventCounts.aqua-projectile-intercepted", "op": "minimum", "min": 1 }, { "id": "complete", "metric": "captureDerived.eventCounts.aqua-beam-complete", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "ARCANE-INTERVENTION": { "mode": "required", "checks": [{ "id": "rod", "metric": "captureDerived.eventCounts.intervention-rod-thrown", "op": "exact", "value": 1 }, { "id": "activated", "metric": "captureDerived.eventCounts.intervention-activated", "op": "exact", "value": 1 }, { "id": "stormTicks", "metric": "captureDerived.eventCounts.intervention-storm-tick", "op": "exact", "value": 5 }, { "id": "complete", "metric": "captureDerived.eventCounts.intervention-storm-complete", "op": "exact", "value": 1 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] }
+  },
+  "batches": {
+    "session-five": [
+      { "abilityId": "WHIRLING-TORNADO", "scenario": "source-base" },
+      { "abilityId": "WATER-PRISON", "scenario": "source-base" },
+      { "abilityId": "WATER-PRISON", "scenario": "stacked" },
+      { "abilityId": "WATER-PRISON", "scenario": "miss-wall-recharge" },
+      { "abilityId": "WATER-PRISON", "scenario": "target-death" },
+      { "abilityId": "HOMING-FLARES", "scenario": "source-base" },
+      { "abilityId": "HOMING-FLARES", "scenario": "projectile-intercept" },
+      { "abilityId": "HOMING-FLARES", "scenario": "empty-expiry" },
+      { "abilityId": "HOMING-FLARES", "scenario": "multi-target" },
+      { "abilityId": "BOLT-RAIL", "scenario": "source-base" },
+      { "abilityId": "BOLT-RAIL", "scenario": "through-wall" },
+      { "abilityId": "BOLT-RAIL", "scenario": "fifth-beat-miss" },
+      { "abilityId": "BOLT-RAIL", "scenario": "multi-target" },
+      { "abilityId": "VOLT-DISC", "scenario": "source-base" },
+      { "abilityId": "VOLT-DISC", "scenario": "live-aim" },
+      { "abilityId": "VOLT-DISC", "scenario": "combo-timeout" },
+      { "abilityId": "VOLT-DISC", "scenario": "wall-contact" },
+      { "abilityId": "VOLT-DISC", "scenario": "range-expiration" },
+      { "abilityId": "VOLT-DISC", "scenario": "slot-lock" }
+    ],
+    "next20-basics": [
+      { "abilityId": "ICE-DAGGER", "scenario": "source-base" },
+      { "abilityId": "RIP-TIDE", "scenario": "source-base" },
+      { "abilityId": "CHAOS-CRUSHER", "scenario": "source-base" },
+      { "abilityId": "AQUA-ARC", "scenario": "source-base" }
+    ],
+    "next20-dash-risk": [
+      { "abilityId": "CHAOTIC-RIFT", "scenario": "source-base" },
+      { "abilityId": "FROST-FEINT", "scenario": "source-base" },
+      { "abilityId": "WAVE-FRONT", "scenario": "source-base" },
+      { "abilityId": "CIRCUIT-LINE", "scenario": "source-base" }
+    ],
+    "next20-dash-control": [
+      { "abilityId": "GUST-BURST", "scenario": "source-base" },
+      { "abilityId": "AIR-BURST", "scenario": "source-base" },
+      { "abilityId": "RAZOR-BURST", "scenario": "source-base" },
+      { "abilityId": "THUNDER-LINE", "scenario": "source-base" }
+    ],
+    "next20-dash-path": [
+      { "abilityId": "SEARING-RUSH", "scenario": "source-base" },
+      { "abilityId": "IGNITION-RUSH", "scenario": "source-base" },
+      { "abilityId": "SPIKE-TRACK", "scenario": "source-base" },
+      { "abilityId": "TOXIC-TRAP", "scenario": "source-base" }
+    ],
+    "next20-dash-emission": [
+      { "abilityId": "FLARE-RUSH", "scenario": "source-base" },
+      { "abilityId": "SNARE-TRACK", "scenario": "source-base" },
+      { "abilityId": "SHOCK-LINE", "scenario": "source-base" },
+      { "abilityId": "FROST-WING", "scenario": "source-base" }
+    ],
+    "next-twenty": [
+      { "abilityId": "ICE-DAGGER", "scenario": "source-base" },
+      { "abilityId": "RIP-TIDE", "scenario": "source-base" },
+      { "abilityId": "AQUA-ARC", "scenario": "source-base" },
+      { "abilityId": "CHAOS-CRUSHER", "scenario": "source-base" },
+      { "abilityId": "SEARING-RUSH", "scenario": "source-base" },
+      { "abilityId": "FLARE-RUSH", "scenario": "source-base" },
+      { "abilityId": "IGNITION-RUSH", "scenario": "source-base" },
+      { "abilityId": "AIR-BURST", "scenario": "source-base" },
+      { "abilityId": "GUST-BURST", "scenario": "source-base" },
+      { "abilityId": "RAZOR-BURST", "scenario": "source-base" },
+      { "abilityId": "SPIKE-TRACK", "scenario": "source-base" },
+      { "abilityId": "TOXIC-TRAP", "scenario": "source-base" },
+      { "abilityId": "SNARE-TRACK", "scenario": "source-base" },
+      { "abilityId": "THUNDER-LINE", "scenario": "source-base" },
+      { "abilityId": "CIRCUIT-LINE", "scenario": "source-base" },
+      { "abilityId": "SHOCK-LINE", "scenario": "source-base" },
+      { "abilityId": "WAVE-FRONT", "scenario": "source-base" },
+      { "abilityId": "FROST-FEINT", "scenario": "source-base" },
+      { "abilityId": "FROST-WING", "scenario": "source-base" },
+      { "abilityId": "CHAOTIC-RIFT", "scenario": "source-base" }
+    ],
+    "archetype-sampler": [
+      { "abilityId": "FLAME-FUSION", "scenario": "source-base" },
+      { "abilityId": "RAPID-FIRE-AGENT", "scenario": "source-base" },
+      { "abilityId": "WARD-OF-FLAMES", "scenario": "source-base" },
+      { "abilityId": "MENTIS-IMPERIUM", "scenario": "source-base" },
+      { "abilityId": "HEROIC-LEAP", "scenario": "source-base" },
+      { "abilityId": "CYCLONE-BOOMERANG", "scenario": "source-base" },
+      { "abilityId": "EARTHEN-AEGIS", "scenario": "source-base" },
+      { "abilityId": "BALL-LIGHTNING", "scenario": "source-base" },
+      { "abilityId": "AQUA-BEAM", "scenario": "source-base" },
+      { "abilityId": "ARCANE-INTERVENTION", "scenario": "source-base" }
+    ]
+  },
+  "batchCoverage": {
+    "session-five": {
+      "abilities": ["WHIRLING-TORNADO", "WATER-PRISON", "HOMING-FLARES", "BOLT-RAIL", "VOLT-DISC"],
+      "includeAllScenarios": true
+    },
+    "next-twenty": {
+      "abilities": ["ICE-DAGGER", "RIP-TIDE", "AQUA-ARC", "CHAOS-CRUSHER", "SEARING-RUSH", "FLARE-RUSH", "IGNITION-RUSH", "AIR-BURST", "GUST-BURST", "RAZOR-BURST", "SPIKE-TRACK", "TOXIC-TRAP", "SNARE-TRACK", "THUNDER-LINE", "CIRCUIT-LINE", "SHOCK-LINE", "WAVE-FRONT", "FROST-FEINT", "FROST-WING", "CHAOTIC-RIFT"],
+      "includeAllScenarios": true
+    },
+    "archetype-sampler": {
+      "abilities": ["FLAME-FUSION", "RAPID-FIRE-AGENT", "WARD-OF-FLAMES", "MENTIS-IMPERIUM", "HEROIC-LEAP", "CYCLONE-BOOMERANG", "EARTHEN-AEGIS", "BALL-LIGHTNING", "AQUA-BEAM", "ARCANE-INTERVENTION"],
+      "includeAllScenarios": true
+    }
+  },
+  "abilities": {
+    "DRAGON-ARC": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardRebuiltArcana",
+      "telemetryAdapter": "dragon-arc",
+      "query": {
+        "arcana": "DRAGON-ARC",
+        "layout": "source-line"
+      },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 75,
+          "checkpointFrames": [15, 30, 45, 60, 75],
+          "sourceClip": {
+            "start": 310,
+            "end": 315,
+            "timelineStart": 311.44,
+            "timelineEnd": 312.69
+          },
+          "reset": {
+            "dummy": {
+              "layout": "source-line"
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "DRAGON-ARC" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "projectileCount", "metric": "captureDerived.emittedProjectiles", "op": "exact", "value": 8 },
+              { "id": "emissionIntervalSeconds", "metric": "captureDerived.emissionIntervalSeconds", "op": "range", "min": 0.09, "max": 0.12 },
+              { "id": "fullReleaseSeconds", "metric": "captureDerived.fullReleaseSeconds", "op": "range", "min": 0.63, "max": 0.84 },
+              { "id": "peakToPeakPlayerFootprints", "metric": "captureDerived.peakToPeakPlayerFootprints", "op": "range", "min": 1.6, "max": 2.2 },
+              { "id": "wavelengthPlayerFootprints", "metric": "specDerived.wavelengthPlayerFootprints", "op": "range", "min": 8, "max": 10 },
+              { "id": "adjacentPhaseDegrees", "metric": "specDerived.adjacentPhaseDegrees", "op": "range", "min": 150, "max": 210 },
+              { "id": "everyOtherPhaseToleranceDegrees", "metric": "specDerived.everyOtherPhaseDifferenceDegrees", "op": "maximum", "max": 20 },
+              { "id": "visibleYawDegrees", "metric": "captureDerived.maximumAbsoluteYawDegrees", "op": "range", "min": 15, "max": 40 }
+            ]
+          },
+          "stages": {
+            "contract": {},
+            "motion": {},
+            "source": {},
+            "style": {}
+          }
+        }
+      }
+    },
+    "HOMING-FLARES": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardRebuiltArcana",
+      "telemetryAdapter": "homing-flares",
+      "query": { "arcana": "HOMING-FLARES", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 126,
+          "checkpointFrames": [15, 45, 75, 105, 126],
+          "sourceClip": { "start": 279, "end": 299, "timelineStart": 280.4, "timelineEnd": 282.5 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "flare-target", "role": "primary", "forward": 8, "lateral": 0, "spawnFrame": 60, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "HOMING-FLARES" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "createdFlares", "metric": "captureDerived.createdFlares", "op": "exact", "value": 7 },
+              { "id": "maximumStoredFlares", "metric": "captureDerived.maximumStoredFlares", "op": "exact", "value": 7 },
+              { "id": "clockwiseOrbit", "metric": "captureDerived.clockwiseOrbit", "op": "truthy" },
+              { "id": "allCreatedHaveOutcome", "metric": "captureDerived.allCreatedHaveOutcome", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "projectile-intercept": {
+          "durationFrames": 150,
+          "checkpointFrames": [15, 45, 75, 105, 150],
+          "sourceClip": { "start": 279, "end": 299, "timelineStart": 280.4, "timelineEnd": 282.5, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [],
+              "hostileProjectiles": [
+                { "id": "flare-intercept", "forward": 5, "lateral": 0, "forwardVelocity": -5, "lateralVelocity": 0, "spawnFrame": 30, "radius": 0.18, "life": 3 }
+              ],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "HOMING-FLARES" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "interceptions", "metric": "captureDerived.interceptions", "op": "minimum", "min": 1 },
+              { "id": "uniqueOutcomeOwnership", "metric": "captureDerived.uniqueOutcomeOwnership", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "empty-expiry": {
+          "durationFrames": 270,
+          "checkpointFrames": [30, 120, 210, 240, 258, 270],
+          "sourceClip": { "start": 279, "end": 299, "timelineStart": 280.4, "timelineEnd": 282.5, "compare": false },
+          "reset": {
+            "fixtures": { "targets": [], "hostileProjectiles": [], "walls": [] }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "HOMING-FLARES" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "createdFlares", "metric": "captureDerived.createdFlares", "op": "exact", "value": 7 },
+              { "id": "expiredFlares", "metric": "captureDerived.expiredFlares", "op": "exact", "value": 7 },
+              { "id": "storageLifetimeSeconds", "metric": "captureDerived.storageLifetimeSeconds", "op": "range", "min": 3.9, "max": 4.1 },
+              { "id": "allCreatedHaveOutcome", "metric": "captureDerived.allCreatedHaveOutcome", "op": "truthy" },
+              { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "multi-target": {
+          "durationFrames": 150,
+          "checkpointFrames": [15, 45, 75, 105, 135, 150],
+          "sourceClip": { "start": 279, "end": 299, "timelineStart": 280.4, "timelineEnd": 282.5, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "flare-target-left", "role": "split-left", "forward": 6.5, "lateral": -2.1, "spawnKind": "grunt" },
+                { "id": "flare-target-center", "role": "split-center", "forward": 7.2, "lateral": 0, "spawnKind": "grunt" },
+                { "id": "flare-target-right", "role": "split-right", "forward": 6.5, "lateral": 2.1, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "HOMING-FLARES" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "createdFlares", "metric": "captureDerived.createdFlares", "op": "exact", "value": 7 },
+              { "id": "uniqueHitTargets", "metric": "captureDerived.uniqueHitTargets", "op": "minimum", "min": 2 },
+              { "id": "uniqueOutcomeOwnership", "metric": "captureDerived.uniqueOutcomeOwnership", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "WHIRLING-TORNADO": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardRebuiltArcana",
+      "telemetryAdapter": "whirling-tornado",
+      "query": { "arcana": "WHIRLING-TORNADO", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 54,
+          "checkpointFrames": [7, 18, 29, 40, 48, 54],
+          "sourceClip": { "start": 420, "end": 430, "timelineStart": 420.8, "timelineEnd": 421.7 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "tornado-inside", "role": "inside", "forward": 1.2, "lateral": 0, "spawnKind": "grunt" },
+                { "id": "tornado-outside", "role": "outside", "forward": 4.2, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [
+                { "id": "tornado-intercept", "forward": 5, "lateral": 0.5, "forwardVelocity": -6, "lateralVelocity": 0, "spawnFrame": 8, "radius": 0.18, "life": 2 }
+              ],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "WHIRLING-TORNADO" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "tickCount", "metric": "captureDerived.tickCount", "op": "exact", "value": 4 },
+              { "id": "tickTiming", "metric": "captureDerived.maximumTickTimingErrorSeconds", "op": "maximum", "max": 0.017 },
+              { "id": "tickDamage", "metric": "captureDerived.tickDamageExact", "op": "truthy" },
+              { "id": "finisherCount", "metric": "captureDerived.finisherCount", "op": "exact", "value": 1 },
+              { "id": "finisherDamage", "metric": "captureDerived.finisherDamageExact", "op": "truthy" },
+              { "id": "insideAllTicks", "metric": "captureDerived.insideTargetAllTicks", "op": "truthy" },
+              { "id": "insideFinisher", "metric": "captureDerived.insideTargetFinished", "op": "truthy" },
+              { "id": "outsideUntouched", "metric": "captureDerived.outsideTargetUntouched", "op": "truthy" },
+              { "id": "insideDamage", "metric": "captureDerived.insideTargetDamage", "op": "exact", "value": 42 },
+              { "id": "outsideDamage", "metric": "captureDerived.outsideTargetDamage", "op": "exact", "value": 0 },
+              { "id": "insideKnock", "metric": "captureDerived.insideMaximumKnock", "op": "minimum", "min": 0.1 },
+              { "id": "outsideKnock", "metric": "captureDerived.outsideMaximumKnock", "op": "maximum", "max": 0 },
+              { "id": "interceptions", "metric": "captureDerived.interceptions", "op": "minimum", "min": 1 },
+              { "id": "originDrift", "metric": "captureDerived.originDrift", "op": "maximum", "max": 0.01 },
+              { "id": "cleanup", "metric": "captureDerived.primaryCleanedUp", "op": "truthy" },
+              { "id": "finisherTransientBudget", "metric": "captureDerived.permittedFinisherTransients", "op": "maximum", "max": 1 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "WATER-PRISON": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardRebuiltArcana",
+      "telemetryAdapter": "water-prison",
+      "query": { "arcana": "WATER-PRISON", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 390,
+          "checkpointFrames": [12, 42, 102, 222, 342, 384],
+          "sourceClip": { "start": 1048.5, "end": 1060, "timelineStart": 1051.83, "timelineEnd": 1060 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "prison-target", "role": "primary", "forward": 3, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "WATER-PRISON" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "impactCount", "metric": "captureDerived.impactCount", "op": "exact", "value": 1 },
+              { "id": "tickCount", "metric": "captureDerived.tickCount", "op": "exact", "value": 5 },
+              { "id": "lockDrift", "metric": "captureDerived.maximumLockDrift", "op": "maximum", "max": 0.01 },
+              { "id": "captureLifetimeSeconds", "metric": "captureDerived.captureLifetimeSeconds", "op": "range", "min": 5, "max": 6 },
+              { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "stacked": {
+          "durationFrames": 390,
+          "checkpointFrames": [12, 42, 102, 222, 342, 384],
+          "sourceClip": { "start": 1048.5, "end": 1060, "timelineStart": 1051.83, "timelineEnd": 1060 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "prison-stack-target", "role": "primary", "forward": 3, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "WATER-PRISON" },
+            { "frame": 6, "op": "cast", "arcanaId": "WATER-PRISON" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "instanceCount", "metric": "captureDerived.instanceCount", "op": "exact", "value": 2 },
+              { "id": "impactCount", "metric": "captureDerived.impactCount", "op": "exact", "value": 2 },
+              { "id": "tickCount", "metric": "captureDerived.tickCount", "op": "exact", "value": 10 },
+              { "id": "maximumStack", "metric": "captureDerived.maximumStack", "op": "minimum", "min": 2 },
+              { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "miss-wall-recharge": {
+          "durationFrames": 420,
+          "checkpointFrames": [12, 42, 102, 222, 360, 420],
+          "sourceClip": { "start": 1048.5, "end": 1060, "timelineStart": 1051.83, "timelineEnd": 1060, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [],
+              "hostileProjectiles": [],
+              "walls": [
+                { "id": "prison-wall", "a": { "forward": 2, "lateral": -2 }, "b": { "forward": 2, "lateral": 2 } }
+              ],
+              "resources": [
+                { "runtimeId": "wizardRebuiltArcana", "key": "waterAmmo", "value": 2 }
+              ]
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "WATER-PRISON" },
+            { "frame": 18, "op": "setAim", "aim": "down" },
+            { "frame": 24, "op": "cast", "arcanaId": "WATER-PRISON" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "wallEnds", "metric": "captureDerived.carrierWallEnds", "op": "exact", "value": 1 },
+              { "id": "rangeEnds", "metric": "captureDerived.carrierRangeEnds", "op": "exact", "value": 1 },
+              { "id": "ammoRecharge", "metric": "captureDerived.ammoRechargeEvents", "op": "minimum", "min": 1 },
+              { "id": "finalAmmo", "metric": "captureDerived.finalAmmo", "op": "exact", "value": 1 },
+              { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "target-death": {
+          "durationFrames": 90,
+          "checkpointFrames": [8, 18, 30, 45, 60, 90],
+          "sourceClip": { "start": 1048.5, "end": 1060, "timelineStart": 1051.83, "timelineEnd": 1060, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "prison-doomed", "role": "primary", "forward": 3, "lateral": 0, "spawnKind": "grunt", "hp": 100 }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "WATER-PRISON" },
+            { "frame": 24, "op": "setTargetHp", "targetId": "prison-doomed", "hp": 0 }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "attached", "metric": "captureDerived.impactCount", "op": "exact", "value": 1 },
+              { "id": "targetInvalidRelease", "metric": "captureDerived.targetInvalidReleases", "op": "exact", "value": 1 },
+              { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "BOLT-RAIL": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardNextSource",
+      "telemetryAdapter": "bolt-rail",
+      "query": { "arcana": "BOLT-RAIL", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 39,
+          "checkpointFrames": [3, 10, 17, 24, 31, 39],
+          "sourceClip": { "start": 52, "end": 57, "timelineStart": 53.3, "timelineEnd": 53.95 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "bolt-target", "role": "primary", "forward": 3.2, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "BOLT-RAIL", "input": "hold" },
+            { "frame": 34, "op": "release", "arcanaId": "BOLT-RAIL" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "streamCount", "metric": "captureDerived.streamCount", "op": "exact", "value": 5 },
+              { "id": "streamHitCount", "metric": "captureDerived.streamHitCount", "op": "exact", "value": 5 },
+              { "id": "finisherCount", "metric": "captureDerived.finisherCount", "op": "exact", "value": 1 },
+              { "id": "travellingProjectiles", "metric": "captureDerived.travellingProjectiles", "op": "exact", "value": 0 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "through-wall": {
+          "durationFrames": 60,
+          "checkpointFrames": [3, 10, 17, 24, 31, 45],
+          "sourceClip": { "start": 52, "end": 57, "timelineStart": 53.3, "timelineEnd": 53.95, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "bolt-wall-target", "role": "primary", "forward": 3.2, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": [
+                { "id": "bolt-wall", "a": { "forward": 1.6, "lateral": -1.4 }, "b": { "forward": 1.6, "lateral": 1.4 } }
+              ]
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "BOLT-RAIL", "input": "hold" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "streamHitCount", "metric": "captureDerived.streamHitCount", "op": "exact", "value": 5 },
+              { "id": "finisherCount", "metric": "captureDerived.finisherCount", "op": "exact", "value": 1 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "fifth-beat-miss": {
+          "durationFrames": 45,
+          "checkpointFrames": [3, 10, 17, 24, 31, 45],
+          "sourceClip": { "start": 52, "end": 57, "timelineStart": 53.3, "timelineEnd": 53.95, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "bolt-fifth-miss-target", "role": "primary", "forward": 3.2, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "hold", "arcanaId": "BOLT-RAIL" },
+            { "frame": 28, "op": "setTargetHp", "targetId": "bolt-fifth-miss-target", "hp": 0 },
+            { "frame": 34, "op": "release", "arcanaId": "BOLT-RAIL" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "streamCount", "metric": "captureDerived.streamCount", "op": "exact", "value": 5 },
+              { "id": "streamHitCount", "metric": "captureDerived.streamHitCount", "op": "exact", "value": 4 },
+              { "id": "finisherCount", "metric": "captureDerived.finisherCount", "op": "exact", "value": 0 },
+              { "id": "missedFinisherCount", "metric": "captureDerived.missedFinisherCount", "op": "exact", "value": 1 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "multi-target": {
+          "durationFrames": 45,
+          "checkpointFrames": [3, 10, 17, 24, 31, 45],
+          "sourceClip": { "start": 52, "end": 57, "timelineStart": 53.3, "timelineEnd": 53.95, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "bolt-lane-left", "role": "lane-left", "forward": 3, "lateral": -0.35, "spawnKind": "grunt" },
+                { "id": "bolt-lane-center", "role": "lane-center", "forward": 3.2, "lateral": 0, "spawnKind": "grunt" },
+                { "id": "bolt-lane-right", "role": "lane-right", "forward": 3, "lateral": 0.35, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "hold", "arcanaId": "BOLT-RAIL" },
+            { "frame": 34, "op": "release", "arcanaId": "BOLT-RAIL" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "streamCount", "metric": "captureDerived.streamCount", "op": "exact", "value": 5 },
+              { "id": "streamHitCount", "metric": "captureDerived.streamHitCount", "op": "exact", "value": 15 },
+              { "id": "finisherCount", "metric": "captureDerived.finisherCount", "op": "exact", "value": 1 },
+              { "id": "finisherTargetCount", "metric": "captureDerived.finisherTargetCount", "op": "minimum", "min": 3 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "VOLT-DISC": {
+      "defaultScenario": "source-base",
+      "runtimeId": "wizardNextSource",
+      "telemetryAdapter": "volt-disc",
+      "query": { "arcana": "VOLT-DISC", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 54,
+          "checkpointFrames": [4, 15, 28, 42, 50, 54],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1 },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "disc-target", "role": "primary", "forward": 4.6, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "VOLT-DISC", "input": "press" },
+            { "frame": 16, "op": "cast", "arcanaId": "VOLT-DISC", "input": "press" },
+            { "frame": 32, "op": "cast", "arcanaId": "VOLT-DISC", "input": "press" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "discCount", "metric": "captureDerived.discCount", "op": "exact", "value": 3 },
+              { "id": "directDamageEvents", "metric": "captureDerived.directDamageEvents", "op": "exact", "value": 3 },
+              { "id": "zeroDamageBurstEvents", "metric": "captureDerived.zeroDamageBurstEvents", "op": "exact", "value": 3 },
+              { "id": "exactlyOnePayload", "metric": "captureDerived.exactlyOnePayload", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "live-aim": {
+          "durationFrames": 90,
+          "checkpointFrames": [4, 16, 32, 48, 66, 90],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [
+                { "id": "disc-right", "role": "aim-right", "forward": 4.6, "lateral": 0, "spawnKind": "grunt" },
+                { "id": "disc-down", "role": "aim-down", "forward": 0, "lateral": -4.6, "spawnKind": "grunt" },
+                { "id": "disc-left", "role": "aim-left", "forward": -4.6, "lateral": 0, "spawnKind": "grunt" }
+              ],
+              "hostileProjectiles": [],
+              "walls": []
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "press", "arcanaId": "VOLT-DISC" },
+            { "frame": 16, "op": "setAim", "aim": "down" },
+            { "frame": 16, "op": "press", "arcanaId": "VOLT-DISC" },
+            { "frame": 32, "op": "setAim", "aim": "left" },
+            { "frame": 32, "op": "press", "arcanaId": "VOLT-DISC" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "discCount", "metric": "captureDerived.discCount", "op": "exact", "value": 3 },
+              { "id": "uniqueAimDirections", "metric": "captureDerived.uniqueAimDirections", "op": "exact", "value": 3 },
+              { "id": "directDamageEvents", "metric": "captureDerived.directDamageEvents", "op": "exact", "value": 3 },
+              { "id": "exactlyOnePayload", "metric": "captureDerived.exactlyOnePayload", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "combo-timeout": {
+          "durationFrames": 110,
+          "checkpointFrames": [4, 30, 54, 66, 90, 110],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1, "compare": false },
+          "reset": {
+            "fixtures": { "targets": [], "hostileProjectiles": [], "walls": [] }
+          },
+          "actions": [
+            { "frame": 0, "op": "press", "arcanaId": "VOLT-DISC" },
+            { "frame": 1, "op": "release", "arcanaId": "VOLT-DISC" },
+            { "frame": 66, "op": "press", "arcanaId": "VOLT-DISC" },
+            { "frame": 67, "op": "release", "arcanaId": "VOLT-DISC" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "pressEvents", "metric": "captureDerived.pressEvents", "op": "exact", "value": 2 },
+              { "id": "comboStarts", "metric": "captureDerived.comboStarts", "op": "exact", "value": 2 },
+              { "id": "comboExpired", "metric": "captureDerived.comboExpired", "op": "exact", "value": 1 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "wall-contact": {
+          "durationFrames": 60,
+          "checkpointFrames": [4, 10, 18, 30, 45, 60],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [],
+              "hostileProjectiles": [],
+              "walls": [
+                { "id": "disc-wall", "a": { "forward": 2, "lateral": -2 }, "b": { "forward": 2, "lateral": 2 } }
+              ]
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "press", "arcanaId": "VOLT-DISC" },
+            { "frame": 1, "op": "release", "arcanaId": "VOLT-DISC" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "wallFizzles", "metric": "captureDerived.wallFizzles", "op": "exact", "value": 1 },
+              { "id": "directDamageEvents", "metric": "captureDerived.directDamageEvents", "op": "exact", "value": 0 },
+              { "id": "terminalDamageEvents", "metric": "captureDerived.terminalDamageEvents", "op": "exact", "value": 0 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "range-expiration": {
+          "durationFrames": 90,
+          "checkpointFrames": [4, 20, 40, 60, 75, 84],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1, "compare": false },
+          "reset": {
+            "fixtures": { "targets": [], "hostileProjectiles": [], "walls": [] }
+          },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "VOLT-DISC", "input": "press" }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "discCount", "metric": "captureDerived.discCount", "op": "exact", "value": 1 },
+              { "id": "terminalDamageEvents", "metric": "captureDerived.terminalDamageEvents", "op": "exact", "value": 1 },
+              { "id": "directDamageEvents", "metric": "captureDerived.directDamageEvents", "op": "exact", "value": 0 }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        },
+        "slot-lock": {
+          "durationFrames": 75,
+          "checkpointFrames": [1, 8, 16, 24, 45, 75],
+          "sourceClip": { "start": 58, "end": 63, "timelineStart": 58.2, "timelineEnd": 59.1, "compare": false },
+          "reset": {
+            "fixtures": {
+              "targets": [],
+              "hostileProjectiles": [],
+              "walls": [],
+              "deck": {
+                "enabled": true,
+                "primaryArcanaId": "VOLT-DISC",
+                "oppositeArcanaId": "BOLT-RAIL"
+              }
+            }
+          },
+          "actions": [
+            { "frame": 0, "op": "deckPlay", "slot": 0 },
+            { "frame": 8, "op": "deckPlay", "slot": 1 },
+            { "frame": 16, "op": "deckPlay", "slot": 0 },
+            { "frame": 24, "op": "deckPlay", "slot": 0 }
+          ],
+          "acceptance": {
+            "mode": "required",
+            "checks": [
+              { "id": "pressEvents", "metric": "captureDerived.pressEvents", "op": "exact", "value": 3 },
+              { "id": "deckRetainedAfterFirst", "metric": "captureDerived.deckRetainedAfterFirst", "op": "truthy" },
+              { "id": "oppositeSlotUsable", "metric": "captureDerived.oppositeSlotUsable", "op": "truthy" },
+              { "id": "deckSequenceCompleted", "metric": "captureDerived.deckSequenceCompleted", "op": "truthy" }
+            ]
+          },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "ICE-DAGGER": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyBasics", "telemetryAdapter": "generic", "query": { "arcana": "ICE-DAGGER", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 72, "checkpointFrames": [1, 8, 17, 26, 36, 48], "sourceClip": { "start": 64, "end": 69, "timelineStart": 64, "timelineEnd": 65.2 }, "reset": { "fixtures": { "targets": [{ "id": "ice-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "ICE-DAGGER" }], "acceptance": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "thrusts", "metric": "captureDerived.eventCounts.ice-dagger-thrust", "op": "exact", "value": 4 }, { "id": "complete", "metric": "captureDerived.eventCounts.arcana-sequence-complete", "op": "exact", "value": 1 }] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "RIP-TIDE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyBasics", "telemetryAdapter": "generic", "query": { "arcana": "RIP-TIDE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 72, "checkpointFrames": [1, 10, 20, 30, 42, 58], "sourceClip": { "start": 69, "end": 75, "timelineStart": 70.2, "timelineEnd": 71.7 }, "reset": { "fixtures": { "targets": [{ "id": "rip-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "RIP-TIDE" }], "acceptance": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "crescents", "metric": "captureDerived.eventCounts.rip-tide-ripple-emitted", "op": "exact", "value": 3 }, { "id": "complete", "metric": "captureDerived.eventCounts.arcana-sequence-complete", "op": "exact", "value": 1 }] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "AQUA-ARC": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyBasics", "telemetryAdapter": "generic", "query": { "arcana": "AQUA-ARC", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 72, "checkpointFrames": [1, 8, 17, 26, 38, 52], "sourceClip": { "start": 75, "end": 80, "timelineStart": 75, "timelineEnd": 76.2 }, "reset": { "fixtures": { "targets": [{ "id": "aqua-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "AQUA-ARC" }], "acceptance": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "streams", "metric": "captureDerived.eventCounts.aqua-arc-stream-emitted", "op": "exact", "value": 4 }, { "id": "complete", "metric": "captureDerived.eventCounts.arcana-sequence-complete", "op": "exact", "value": 1 }] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "CHAOS-CRUSHER": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyBasics", "telemetryAdapter": "generic", "query": { "arcana": "CHAOS-CRUSHER", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 5, 10, 18, 28, 42], "sourceClip": { "start": 80, "end": 91, "timelineStart": 80, "timelineEnd": 81.5 }, "reset": { "fixtures": { "targets": [{ "id": "chaos-target", "forward": 3, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "CHAOS-CRUSHER" }], "acceptance": { "mode": "required", "checks": [{ "id": "cast", "metric": "captureDerived.eventCounts.arcana-cast", "op": "exact", "value": 1 }, { "id": "rifts", "metric": "captureDerived.eventCounts.chaos-crusher-rift-struck", "op": "exact", "value": 3 }, { "id": "cores", "metric": "captureDerived.eventCounts.chaos-crusher-core-fired", "op": "exact", "value": 3 }, { "id": "complete", "metric": "captureDerived.eventCounts.arcana-sequence-complete", "op": "exact", "value": 1 }] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "SEARING-RUSH": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "SEARING-RUSH", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 91, "end": 99.5, "timelineStart": 91, "timelineEnd": 92.5 }, "reset": { "fixtures": { "targets": [{ "id": "searing-target", "forward": 4, "lateral": 0, "hp": 9999 }], "hostileProjectiles": [{ "id": "searing-intercept", "forward": 4, "lateral": 2, "forwardVelocity": 0, "lateralVelocity": -4, "spawnFrame": 0, "radius": 0.18, "life": 2 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SEARING-RUSH" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "FLARE-RUSH": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "FLARE-RUSH", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 99.5, "end": 104, "timelineStart": 99.5, "timelineEnd": 101.5 }, "reset": { "fixtures": { "targets": [{ "id": "flare-rush-target", "forward": 7, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "FLARE-RUSH" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "IGNITION-RUSH": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "IGNITION-RUSH", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 200, "checkpointFrames": [1, 30, 60, 120, 180], "sourceClip": { "start": 104, "end": 110, "timelineStart": 104, "timelineEnd": 107.3333333333 }, "reset": { "fixtures": { "targets": [{ "id": "ignition-target", "forward": 8, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "IGNITION-RUSH" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "AIR-BURST": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "AIR-BURST", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 110, "end": 114.7, "timelineStart": 110, "timelineEnd": 111.5 }, "reset": { "fixtures": { "targets": [{ "id": "air-target", "forward": -1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "AIR-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "GUST-BURST": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "GUST-BURST", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 20, 45, 75, 120], "sourceClip": { "start": 114.7, "end": 124.7, "timelineStart": 114.7, "timelineEnd": 116.7 }, "reset": { "fixtures": { "targets": [{ "id": "gust-target", "forward": 1, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "GUST-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "RAZOR-BURST": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "RAZOR-BURST", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 124.8, "end": 132.3, "timelineStart": 124.8, "timelineEnd": 126.3 }, "reset": { "fixtures": { "targets": [{ "id": "razor-target", "forward": 1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "RAZOR-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "SPIKE-TRACK": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "SPIKE-TRACK", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 132.3, "end": 139.3, "timelineStart": 132.3, "timelineEnd": 133.8 }, "reset": { "fixtures": { "targets": [{ "id": "spike-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SPIKE-TRACK" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "TOXIC-TRAP": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "TOXIC-TRAP", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 260, "checkpointFrames": [1, 30, 60, 120, 180], "sourceClip": { "start": 139.4, "end": 147.3, "timelineStart": 139.4, "timelineEnd": 143.7333333333 }, "reset": { "fixtures": { "targets": [{ "id": "toxic-target", "forward": 1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "TOXIC-TRAP" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "SNARE-TRACK": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "SNARE-TRACK", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 20, 40, 70, 100], "sourceClip": { "start": 147.4, "end": 151.3, "timelineStart": 147.4, "timelineEnd": 149.9 }, "reset": { "fixtures": { "targets": [{ "id": "snare-target", "forward": -6, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SNARE-TRACK" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "THUNDER-LINE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "THUNDER-LINE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 20, 45, 75, 120], "sourceClip": { "start": 151.4, "end": 157.8, "timelineStart": 151.4, "timelineEnd": 153.4 }, "reset": { "fixtures": { "targets": [{ "id": "thunder-target", "forward": 0, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "THUNDER-LINE" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "CIRCUIT-LINE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "CIRCUIT-LINE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 340, "checkpointFrames": [1, 15, 30, 50, 85, 180], "sourceClip": { "start": 157.9, "end": 165.8, "timelineStart": 157.9, "timelineEnd": 163.5666666667 }, "reset": { "fixtures": { "targets": [{ "id": "circuit-target", "forward": 4, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 35, "op": "setMove", "move": { "x": 0, "z": 1 } }, { "frame": 35, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 36, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 70, "op": "setMove", "move": { "x": -1, "z": 0 } }, { "frame": 70, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 71, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "SHOCK-LINE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "SHOCK-LINE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 165.9, "end": 168.3, "timelineStart": 165.9, "timelineEnd": 167.4 }, "reset": { "fixtures": { "targets": [{ "id": "shock-target", "forward": 1, "lateral": 0, "hp": 9999 }], "hostileProjectiles": [{ "id": "shock-intercept", "forward": 0, "lateral": 3, "forwardVelocity": 0, "lateralVelocity": -4, "spawnFrame": 0, "radius": 0.18, "life": 2 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SHOCK-LINE" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "WAVE-FRONT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "WAVE-FRONT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 3, 10, 18, 28, 38], "sourceClip": { "start": 168.4, "end": 180, "timelineStart": 168.4, "timelineEnd": 170.4 }, "reset": { "fixtures": { "targets": [{ "id": "wave-target", "forward": 4, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "WAVE-FRONT" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 6, "op": "damagePlayer", "damage": 10, "name": "wave-shield-hit-1" }, { "frame": 15, "op": "damagePlayer", "damage": 20, "name": "wave-shield-hit-2" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "FROST-FEINT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "FROST-FEINT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 130, "checkpointFrames": [1, 10, 20, 29, 31, 45], "sourceClip": { "start": 180, "end": 183, "timelineStart": 180, "timelineEnd": 182.25 }, "reset": { "fixtures": { "targets": [{ "id": "feint-target", "forward": 1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "FROST-FEINT" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 30, "op": "strikeDecoy", "damage": 1 }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "FROST-WING": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "FROST-WING", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 20, 45, 75, 120], "sourceClip": { "start": 183, "end": 194, "timelineStart": 183, "timelineEnd": 185 }, "reset": { "fixtures": { "targets": [{ "id": "wing-target", "forward": 1, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "FROST-WING" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "CHAOTIC-RIFT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "CHAOTIC-RIFT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 60, "checkpointFrames": [1, 6, 20, 30, 33, 42], "sourceClip": { "start": 194, "end": 205, "timelineStart": 195.2, "timelineEnd": 196.2 }, "reset": { "fixtures": { "targets": [] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "CHAOTIC-RIFT" }, { "frame": 0, "op": "applyPlayerStatus", "status": "capture-dot", "damage": 1, "ticks": 2, "interval": 0.2 }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "FLAME-FUSION": {
+      "defaultScenario": "source-base", "runtimeId": "wizardFusionLeap", "telemetryAdapter": "generic", "query": { "arcana": "FLAME-FUSION", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 66,
+          "checkpointFrames": [1, 19, 27, 42, 54, 66],
+          "sourceClip": { "start": 338.55, "end": 339.65, "timelineStart": 338.55, "timelineEnd": 339.65 },
+          "reset": { "fixtures": { "targets": [] } },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "FLAME-FUSION" },
+            { "frame": 18, "op": "setAim", "aim": "right" }
+          ],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "RAPID-FIRE-AGENT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardAlliedArcana", "telemetryAdapter": "generic", "query": { "arcana": "RAPID-FIRE-AGENT", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 645,
+          "checkpointFrames": [1, 24, 60, 300, 600, 645],
+          "sourceClip": { "start": 378.35, "end": 389.10, "timelineStart": 378.35, "timelineEnd": 389.10 },
+          "reset": { "fixtures": { "targets": [{ "id": "rapid-agent-target", "forward": 5, "lateral": 0, "hp": 9999 }] } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "RAPID-FIRE-AGENT" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "WARD-OF-FLAMES": {
+      "defaultScenario": "source-base", "runtimeId": "wizardAlliedArcana", "telemetryAdapter": "generic", "query": { "arcana": "WARD-OF-FLAMES", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 480,
+          "checkpointFrames": [1, 30, 60, 240, 420, 480],
+          "sourceClip": { "start": 392.45, "end": 400.45, "timelineStart": 392.45, "timelineEnd": 400.45 },
+          "reset": { "fixtures": { "targets": [{ "id": "ward-field-target", "forward": 1.6, "lateral": 0, "hp": 9999 }] } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "WARD-OF-FLAMES" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "MENTIS-IMPERIUM": {
+      "defaultScenario": "source-base", "runtimeId": "wizardAlliedArcana", "telemetryAdapter": "generic", "query": { "arcana": "MENTIS-IMPERIUM", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 165,
+          "checkpointFrames": [1, 6, 12, 24, 60, 165],
+          "sourceClip": { "start": 434.15, "end": 436.90, "timelineStart": 434.15, "timelineEnd": 436.90 },
+          "reset": { "fixtures": { "targets": [
+            { "id": "mentis-charm-target", "forward": 3, "lateral": 0, "hp": 9999 },
+            { "id": "mentis-hostile-target", "forward": 6, "lateral": 1.5, "hp": 9999 }
+          ] } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "MENTIS-IMPERIUM" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "HEROIC-LEAP": {
+      "defaultScenario": "source-base", "runtimeId": "wizardFusionLeap", "telemetryAdapter": "generic", "query": { "arcana": "HEROIC-LEAP", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 84,
+          "checkpointFrames": [1, 6, 11, 24, 42, 84],
+          "sourceClip": { "start": 442.85, "end": 444.25, "timelineStart": 442.85, "timelineEnd": 444.25 },
+          "reset": { "fixtures": {
+            "targets": [{ "id": "heroic-carry-target", "forward": 3, "lateral": 0, "hp": 9999 }],
+            "hostileProjectiles": [{ "id": "heroic-vortex-projectile", "forward": 5.6, "lateral": 1, "forwardVelocity": 0, "lateralVelocity": 0, "spawnFrame": 0, "radius": 0.16, "life": 2 }]
+          } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "HEROIC-LEAP" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "CYCLONE-BOOMERANG": {
+      "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "CYCLONE-BOOMERANG", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 90,
+          "checkpointFrames": [1, 18, 39, 57, 78, 90],
+          "sourceClip": { "start": 496.40, "end": 497.90, "timelineStart": 496.40, "timelineEnd": 497.90 },
+          "reset": { "fixtures": { "targets": [{ "id": "cyclone-two-leg-target", "forward": 4, "lateral": 0, "hp": 9999 }] } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "CYCLONE-BOOMERANG" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "EARTHEN-AEGIS": {
+      "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "EARTHEN-AEGIS", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 276,
+          "checkpointFrames": [1, 15, 60, 150, 270, 276],
+          "sourceClip": { "start": 600.95, "end": 605.55, "timelineStart": 600.95, "timelineEnd": 605.55 },
+          "reset": { "fixtures": {
+            "targets": [{ "id": "aegis-orbit-target", "forward": 3.55, "lateral": 0, "hp": 9999 }],
+            "hostileProjectiles": [{ "id": "aegis-intercept-projectile", "forward": 3.55, "lateral": 0, "forwardVelocity": 0, "lateralVelocity": 0, "spawnFrame": 0, "radius": 0.16, "life": 6 }]
+          } },
+          "actions": [{ "frame": 0, "op": "cast", "arcanaId": "EARTHEN-AEGIS" }],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "BALL-LIGHTNING": {
+      "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "BALL-LIGHTNING", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 276,
+          "checkpointFrames": [1, 45, 89, 90, 120, 276],
+          "sourceClip": { "start": 896.40, "end": 901.00, "timelineStart": 896.40, "timelineEnd": 901.00 },
+          "reset": { "fixtures": { "targets": [{ "id": "ball-lightning-target", "forward": 4, "lateral": 0, "hp": 9999 }] } },
+          "actions": [
+            { "frame": 0, "op": "hold", "arcanaId": "BALL-LIGHTNING" },
+            { "frame": 90, "op": "release", "arcanaId": "BALL-LIGHTNING" }
+          ],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "AQUA-BEAM": {
+      "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "AQUA-BEAM", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 120,
+          "checkpointFrames": [1, 12, 30, 60, 90, 120],
+          "sourceClip": { "start": 1120.70, "end": 1122.75, "timelineStart": 1120.70, "timelineEnd": 1122.70 },
+          "reset": { "fixtures": {
+            "targets": [{ "id": "aqua-beam-target", "forward": 5, "lateral": 0, "hp": 9999 }],
+            "hostileProjectiles": [{ "id": "aqua-beam-projectile", "forward": 6, "lateral": 0, "forwardVelocity": 0, "lateralVelocity": 0, "spawnFrame": 0, "radius": 0.16, "life": 3 }],
+            "resources": [{ "runtimeId": "wizardArcaneTypes", "key": "aquaCharges", "value": 10 }]
+          } },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "AQUA-BEAM" },
+            { "frame": 30, "op": "setAim", "aim": { "x": 0.94, "z": 0.342 } },
+            { "frame": 60, "op": "setAim", "aim": "right" }
+          ],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    },
+    "ARCANE-INTERVENTION": {
+      "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "ARCANE-INTERVENTION", "layout": "none" },
+      "scenarios": {
+        "source-base": {
+          "durationFrames": 285,
+          "checkpointFrames": [1, 60, 113, 114, 150, 285],
+          "sourceClip": { "start": 1206.60, "end": 1211.35, "timelineStart": 1206.60, "timelineEnd": 1211.35 },
+          "reset": { "fixtures": { "targets": [
+            { "id": "intervention-transfer-target", "forward": 1, "lateral": 0, "hp": 9999 },
+            { "id": "intervention-storm-target", "forward": 1.5, "lateral": 0.7, "hp": 9999 }
+          ] } },
+          "actions": [
+            { "frame": 0, "op": "cast", "arcanaId": "ARCANE-INTERVENTION" },
+            { "frame": 114, "op": "activateIntervention", "reason": "capture-reactivation" }
+          ],
+          "acceptance": { "mode": "advisory", "checks": [] },
+          "stages": { "contract": {}, "source": {}, "style": {} }
+        }
+      }
+    }
+  }
+}

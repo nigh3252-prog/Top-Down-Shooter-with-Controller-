@@ -16,13 +16,42 @@ import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 import { setHadesNativeModeActive } from './hades-encounter-tuning.js';
+import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-base.js';
+import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES).filter(id=>id!==LUGARU_DUELIST_ID));
 
+export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){
+  const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
+  if(!owner)return false;
+  const mover=owner.moveEnemyResolved||owner.moveEnemy;
+  if(typeof mover==='function')return mover.call(owner,enemy,target,options);
+  return typeof fallback==='function'?fallback(owner,enemy,target,options):false;
+}
+
+export function routeArenaEnemyStatus(systems,enemy,kind,duration,options={},fallback=applyWizardEnemyStatus){
+  const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
+  if(!owner||!enemy||Number(enemy.hp)<=0)return false;
+  if(typeof owner.applyStatus==='function')return owner.applyStatus(enemy,kind,duration,options)!==false;
+  const applied=typeof fallback==='function'&&fallback(enemy,kind,duration,options)!==false;
+  if(!applied)return false;
+  const status=String(kind||'').toLowerCase();
+  if(status==='shock'||status==='freeze'){
+    if(typeof owner.director?.releaseAllForEnemy==='function')owner.director.releaseAllForEnemy(enemy);
+    else owner.director?.release?.(enemy);
+    if(enemy.state==='windup'||enemy.state==='active'||enemy.state==='recovery'){
+      enemy.state='idle';enemy.stateTime=0;enemy.attack=null;enemy.hitDone=false;
+    }
+    enemy.vx=enemy.vz=0;
+  }
+  return true;
+}
+
 export function createArenaEnemySystem(options={}){
+  const factionService=options.factionService||createArenaFactionService();
   const externalEncounterCleared=options.onEncounterCleared;
   let combinedMode=false;
   let labMode=false;
@@ -54,11 +83,12 @@ export function createArenaEnemySystem(options={}){
     }
   };
 
-  const original=createOriginalArenaEnemySystem({...options,onEncounterCleared:childCleared('original')});
-  const flare=createFlareArenaEnemySystem({...options,onEncounterCleared:childCleared('flare')});
-  const hades=createHadesArenaEnemySystem({...options,onEncounterCleared:childCleared('hades')});
+  const original=createOriginalArenaEnemySystem({...options,factionService,systemKey:'original',onEncounterCleared:childCleared('original')});
+  const flare=createFlareArenaEnemySystem({...options,factionService,systemKey:'flare',onEncounterCleared:childCleared('flare')});
+  const hades=createHadesArenaEnemySystem({...options,factionService,systemKey:'hades',onEncounterCleared:childCleared('hades')});
   const systemsByKey={original,flare,hades};
   const systems=Object.values(systemsByKey);
+  for(const [key,system] of Object.entries(systemsByKey))factionService.registerEnemySystem(key,system);
   active=original;
   manualWaveSize=original.waveSize;
   hades.setEncounterPlanningEnabled?.(false);
@@ -312,6 +342,51 @@ export function createArenaEnemySystem(options={}){
     return owner?.damageEnemy(enemy,...args)??false;
   }
 
+  function moveEnemyResolved(enemy,target,moveOptions={}){
+    const fallback=(owner,ownedEnemy,requested,childOptions={})=>{
+      const result=resolveArenaEnemyMove(ownedEnemy,requested,{
+        navigation:options.navigation,
+        radius:Number.isFinite(Number(childOptions.radius))?Number(childOptions.radius):Math.max(.1,(Number(ownedEnemy.radius)||1)*(Number(owner.heightScale)||1)),
+        arenaRadius:Number(options.arenaRadius)||18,
+        clampMargin:1,
+      });
+      ownedEnemy.x=result.current.x;ownedEnemy.z=result.current.z;
+      if(childOptions.resetVelocity===true)ownedEnemy.vx=ownedEnemy.vz=ownedEnemy.knockX=ownedEnemy.knockZ=0;
+      if(ownedEnemy.root?.position?.set)ownedEnemy.root.position.set(ownedEnemy.x,(Number(ownedEnemy.yOff)||0)+(Number(ownedEnemy.rootLift)||0),ownedEnemy.z);
+      else if(ownedEnemy.mesh?.position?.set)ownedEnemy.mesh.position.set(ownedEnemy.x,ownedEnemy.mesh.position.y||0,ownedEnemy.z);
+      return result;
+    };
+    if(!combinedMode){
+      const mover=active.moveEnemyResolved||active.moveEnemy;
+      return typeof mover==='function'?mover.call(active,enemy,target,moveOptions):fallback(active,enemy,target,moveOptions);
+    }
+    return routeArenaEnemyMove(systems,enemy,target,moveOptions,fallback);
+  }
+  const moveEnemy=(enemy,target,options={})=>moveEnemyResolved(enemy,target,options);
+
+  function damagePlayer(damage,options={}){
+    if(!combinedMode)return active.damagePlayer?.(damage,options)??0;
+    const before=Number(active.playerHp)||0,applied=active.damagePlayer?.(damage,options)??0,after=Number(active.playerHp)||before;
+    globalPlayerHp=Math.max(0,globalPlayerHp-Math.max(0,before-after));hpSnapshots.set(active,after);return applied;
+  }
+
+  function setPlayerDamageInterceptor(interceptor){for(const system of systems)system.setPlayerDamageInterceptor?.(interceptor);}
+  function applyStatus(enemy,kind,duration,statusOptions={}){return routeArenaEnemyStatus(systems,enemy,kind,duration,statusOptions);}
+  function stunEnemy(enemy,...args){return owningSystem(enemy)?.stunEnemy?.(enemy,...args)??false;}
+  function registerWizardDecoy(decoy){for(const system of visibleSystems())system.registerWizardDecoy?.(decoy);return decoy?.id||decoy?.stableId||null;}
+  function unregisterWizardDecoy(id){for(const system of systems)system.unregisterWizardDecoy?.(id);}
+  function consumeWizardDecoyAttacks(){return visibleSystems().flatMap(system=>system.consumeWizardDecoyAttacks?.()||[]);}
+  const registerAlliedTarget=target=>factionService.registerAlliedTarget(target);
+  const unregisterAlliedTarget=id=>factionService.unregisterAlliedTarget(id);
+  const registerDamageModifier=modifier=>factionService.registerDamageModifier(modifier);
+  const unregisterDamageModifier=id=>factionService.unregisterDamageModifier(id);
+  const charmEnemy=(enemy,options={})=>factionService.charmEnemy(enemy,options);
+  const releaseCharmedEnemy=enemy=>factionService.releaseCharm(enemy);
+  const getNearestHostile=position=>{
+    const actor={x:Number(position?.x)||0,z:Number(position?.z)||0,wizardFaction:ARENA_FACTIONS.ALLIED};
+    return factionService.chooseTarget(actor,null)?.__arenaEntity||null;
+  };
+
   function launchRigidBody(enemy,launch={}){
     return !!owningSystem(enemy)?.launchRigidBody?.(enemy,launch);
   }
@@ -348,9 +423,15 @@ export function createArenaEnemySystem(options={}){
 
   const api={
     get enemies(){return visibleSystems().flatMap(system=>system.enemies);},
+    get hostileEnemies(){return factionService.enemyDescriptors(ARENA_FACTIONS.HOSTILE).map(target=>target.__arenaEntity);},
+    get alliedTargets(){return factionService.alliedTargets;},
+    get charmedEnemy(){return factionService.charmedEnemy;},
+    get hostileProjectiles(){return visibleSystems().flatMap(system=>system.hostileProjectiles||[]);},
     get group(){return active.group;},
     get director(){return active.director;},
-    update,damageEnemy,launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
+    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,setPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
+    registerAlliedTarget,unregisterAlliedTarget,registerDamageModifier,unregisterDamageModifier,charmEnemy,releaseCharmedEnemy,getNearestHostile,
+    launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
     setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
     setCycleOnWaveClear:all('setCycleOnWaveClear'),setWaveSize,setSpeedScale:all('setSpeedScale'),
     setHeightScale:all('setHeightScale'),setHpScale:all('setHpScale'),setIdleRangeScale:all('setIdleRangeScale'),
@@ -371,7 +452,7 @@ export function createArenaEnemySystem(options={}){
     get combatDirectorEnabled(){return combinedMode?true:isCombatDirectorEnabled(active);},
     get combatDirectorStatus(){return this.combatDirectorEnabled?'Combat Director: On':'Combat Director: Off — Tartarus Native Behavior';},
     get labMode(){return labMode;},
-    originalSystem:original,flareSystem:flare,hadesSystem:hades,
+    factionService,originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);
   globalThis.__enemyLabEnemySystem=api;
