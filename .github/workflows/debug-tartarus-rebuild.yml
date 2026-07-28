@@ -18,23 +18,41 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: agent/tartarus-native-mix-rebase
-      - name: Capture rebuild error
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Capture rebuild and validation output
         shell: bash
         run: |
           set +e
-          python <<'PY' > rebuild-error.txt 2>&1
+          {
+            python <<'PY'
           from pathlib import Path
-          import textwrap
           workflow=Path('.github/workflows/rebuild-tartarus-on-main.yml').read_text()
           block=workflow.split("python <<'PY'\n",1)[1].split("\n          PY",1)[0]
-          exec(compile(textwrap.dedent(block),'<tartarus-rebuild>','exec'))
+          block='\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines())
+          exec(compile(block,'<tartarus-rebuild>','exec'))
           PY
-          echo $? > rebuild-exit.txt
+            echo '--- node --check arena-enemies-core'
+            node --check src/arena-enemies-core.js
+            echo '--- node --check hades-arena-enemies'
+            node --check src/hades-arena-enemies.js
+            echo '--- node --check hades-encounter-director'
+            node --check src/hades-encounter-director.js
+            echo '--- node --check hades-encounter-tuning'
+            node --check src/hades-encounter-tuning.js
+            echo '--- npm run test:hades'
+            npm run test:hades
+            echo '--- npm run test:encounters'
+            npm run test:encounters
+          } > tartarus-validation.txt 2>&1
+          echo $? > tartarus-validation-exit.txt
           exit 0
-      - name: Upload rebuild error
+      - name: Upload validation output
         uses: actions/upload-artifact@v4
         with:
-          name: tartarus-rebuild-error
+          name: tartarus-validation-output
           path: |
-            rebuild-error.txt
-            rebuild-exit.txt
+            tartarus-validation.txt
+            tartarus-validation-exit.txt
