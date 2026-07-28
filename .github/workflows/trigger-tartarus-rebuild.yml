@@ -5,7 +5,7 @@ on:
     branches:
       - main
     types:
-      - opened
+      - synchronize
 
 permissions:
   contents: write
@@ -28,10 +28,10 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
-          import textwrap
           workflow=Path('.github/workflows/rebuild-tartarus-on-main.yml').read_text()
           block=workflow.split("python <<'PY'\n",1)[1].split("\n          PY",1)[0]
-          exec(compile(textwrap.dedent(block),'<tartarus-rebuild>','exec'))
+          block='\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines())
+          exec(compile(block,'<tartarus-rebuild>','exec'))
           PY
       - name: Validate rebased Tartarus changes
         run: |
