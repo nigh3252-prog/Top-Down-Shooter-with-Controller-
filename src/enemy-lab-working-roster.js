@@ -1,3 +1,5 @@
+import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
+
 export const ENEMY_LAB_WORKING_ROSTER_STORAGE_KEY='enemyLab.workingRoster.v1';
 
 export function normalizeWorkingRosterIds(ids,catalog=[]){
@@ -89,12 +91,39 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
     button.dataset.workingRosterCategory='1';categories.appendChild(button);
     if(rosterOpen)button.classList.add('on');
   }
+  function startHadesStyleEncounter(){
+    if(!rosterIds.length)return{ok:false,error:'Select at least one enemy first.'};
+    const frame=document.getElementById('arenaFrame'),frameWindow=frame?.contentWindow,frameDocument=frame?.contentDocument;
+    const select=frameDocument?.getElementById('spawnSelect');
+    if(select?.querySelector(`option[value="${WORKING_ROSTER_HADES_ID}"]`)){
+      select.value=WORKING_ROSTER_HADES_ID;
+      select.dispatchEvent(new frameWindow.Event('change',{bubbles:true}));
+    }else{
+      const system=frameWindow?.__enemyLabEnemySystem;
+      if(!system?.setSpawnKind)return{ok:false,error:'Combat Arena is still loading.'};
+      system.setSpawnKind(WORKING_ROSTER_HADES_ID);
+      frameWindow?.__enemyLabControlBridge?.resetFight?.();
+    }
+    document.getElementById('closeBtn')?.click();
+    return{ok:true,ids:[...rosterIds]};
+  }
   function renderRoster(){
     if(!rosterOpen)return;
     const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
-    if(hint)hint.textContent='Build a saved draft roster. This does not change Combat Arena encounters yet.';
+    if(hint)hint.textContent='Build a saved draft roster, then launch it through the Hades-style encounter composer.';
     const root=document.createElement('div');root.className='valueList';root.dataset.workingRosterRoot='1';
     root.appendChild(makeStatus(document,'WORKING ARENA ROSTER',`${rosterIds.length} of ${catalog.length} enemies selected. This is a local draft workspace, not a finished-content approval list.`));
+
+    const startButton=makeChoice(document,{
+      label:'START HADES-STYLE',
+      sub:rosterIds.length?`Restart Combat Arena using only these ${rosterIds.length} selected enemies`:'Select at least one enemy first',
+      meta:'USES THE REAL COMBAT ARENA',
+      className:'primary',
+      onClick:()=>startHadesStyleEncounter(),
+    });
+    startButton.disabled=!rosterIds.length;
+    startButton.dataset.workingRosterStart='1';
+    root.appendChild(startButton);
 
     const filterCard=document.createElement('div');filterCard.className='controlCard';
     const filterLabel=document.createElement('label');filterLabel.textContent='SHOW FAMILY';filterLabel.style.cssText='font-size:8.5px;color:var(--muted);letter-spacing:.07em';
@@ -141,6 +170,7 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
     setIds:ids=>{persist(ids);if(rosterOpen)renderRoster();return[...rosterIds];},
     clear:()=>{persist([]);if(rosterOpen)renderRoster();return[];},
     open:activateRoster,
+    start:startHadesStyleEncounter,
   };
   globalThis.__enemyLabWorkingRoster=api;
   return api;
