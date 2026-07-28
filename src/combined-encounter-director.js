@@ -1,34 +1,8 @@
+import { COMBINED_ENCOUNTER_GROUPS } from './arena-enemy-catalog.js';
+
+export { COMBINED_ENCOUNTER_GROUPS } from './arena-enemy-catalog.js';
+
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-export const COMBINED_ENCOUNTER_GROUPS = [
-  {id:'goblinWarband',label:'Goblin Warband',system:'original',spawnKind:'goblins',introductionDepth:1,encounterCost:5,activeWeight:1,maxCount:10,tags:['frontline','mobile']},
-
-  {id:'fusionSpider',label:'Spider',system:'original',spawnKind:'spid',introductionDepth:1,encounterCost:5,activeWeight:.8,maxCount:8,tags:['mobile','close']},
-  {id:'fusionSunSerpent',label:'Sun Serpent',system:'original',spawnKind:'sun',introductionDepth:1,encounterCost:6,activeWeight:.8,maxCount:8,tags:['mobile','skirmisher']},
-  {id:'fusionLion',label:'Lion',system:'original',spawnKind:'lion',introductionDepth:2,encounterCost:9,activeWeight:1.3,maxCount:6,tags:['frontline','committed']},
-  {id:'fusionToothy',label:'Toothy',system:'original',spawnKind:'tooth',introductionDepth:2,encounterCost:10,activeWeight:1.4,maxCount:5,tags:['frontline','anchor']},
-  {id:'fusionGrabber',label:'Grabber',system:'original',spawnKind:'grab',introductionDepth:3,encounterCost:9,activeWeight:1.2,maxCount:5,tags:['frontline','hard-control']},
-  {id:'fusionAntelope',label:'Antelope',system:'original',spawnKind:'ant',introductionDepth:3,encounterCost:10,activeWeight:1.4,maxCount:5,tags:['mobile','committed']},
-  {id:'fusionCroc',label:'Croc',system:'original',spawnKind:'croc',introductionDepth:4,encounterCost:10,activeWeight:1.2,maxCount:5,tags:['ambusher','frontline']},
-  {id:'fusionPhoenix',label:'Phoenix',system:'original',spawnKind:'phx',introductionDepth:4,encounterCost:11,activeWeight:1.3,maxCount:5,tags:['aerial','mobile']},
-  {id:'fusionStilt',label:'Stilt',system:'original',spawnKind:'stilt',introductionDepth:5,encounterCost:13,activeWeight:1.7,maxCount:4,tags:['anchor','ranged-pressure']},
-  {id:'fusionMother',label:'Mother Courage',system:'original',spawnKind:'mother',introductionDepth:6,encounterCost:15,activeWeight:1.9,maxCount:3,tags:['anchor','hard-control']},
-
-  {id:'flareScamp',label:'Goblin Scamp',system:'flare',spawnKind:'flareGoblinScamp',introductionDepth:1,encounterCost:6,activeWeight:1,maxCount:8,tags:['frontline']},
-  {id:'flareSkeleton',label:'Cracked Skeleton',system:'flare',spawnKind:'flareCrackedSkeleton',introductionDepth:2,encounterCost:7,activeWeight:1,maxCount:7,tags:['frontline','duelist']},
-  {id:'flareCursedZombie',label:'Cursed Zombie',system:'flare',spawnKind:'flareCursedZombie',introductionDepth:2,encounterCost:6,activeWeight:1,maxCount:8,tags:['frontline','swarm']},
-  {id:'flareRunner',label:'Goblin Runner',system:'flare',spawnKind:'flareGoblinRunner',introductionDepth:3,encounterCost:8,activeWeight:1.2,maxCount:6,tags:['mobile','committed']},
-  {id:'flareRottingZombie',label:'Rotting Zombie',system:'flare',spawnKind:'flareRottingZombie',introductionDepth:4,encounterCost:9,activeWeight:1.2,maxCount:6,tags:['frontline','anchor']},
-
-  {id:'hadesNumbskull',label:'Numbskull',system:'hades',spawnKind:'hadesNumbskull',introductionDepth:1,encounterCost:3,activeWeight:.5,maxCount:14,tags:['swarm','pursuer']},
-  {id:'hadesWitch',label:'Wretched Witch',system:'hades',spawnKind:'hadesWretchedWitch',introductionDepth:1,encounterCost:5,activeWeight:1,maxCount:8,tags:['ranged','support']},
-  {id:'hadesThug',label:'Wretched Thug',system:'hades',spawnKind:'hadesWretchedThug',introductionDepth:2,encounterCost:10,activeWeight:1.3,maxCount:5,tags:['frontline','anchor']},
-  {id:'hadesPest',label:'Wretched Pest',system:'hades',spawnKind:'hadesWretchedPest',introductionDepth:3,encounterCost:8,activeWeight:1,maxCount:5,needsPartner:true,tags:['area-denial','support'],avoidTags:['hard-control']},
-  {id:'hadesLout',label:'Wretched Lout',system:'hades',spawnKind:'hadesWretchedLout',introductionDepth:4,encounterCost:15,activeWeight:1.8,maxCount:3,tags:['frontline','anchor']},
-  {id:'hadesBrimstone',label:'Brimstone',system:'hades',spawnKind:'hadesBrimstone',introductionDepth:4,encounterCost:8,activeWeight:1,maxCount:5,tags:['ranged','area-denial']},
-  {id:'hadesSkullomat',label:'Skullomat',system:'hades',spawnKind:'hadesSkullomat',introductionDepth:5,encounterCost:18,activeWeight:2,maxCount:1,tags:['anchor','summoner']},
-  {id:'hadesWringer',label:'Wringer',system:'hades',spawnKind:'hadesWringer',introductionDepth:6,encounterCost:11,activeWeight:1.2,maxCount:3,tags:['hard-control','frontline'],avoidTags:['area-denial']},
-];
 
 function pick(list,random){
   if(!list.length)return null;
