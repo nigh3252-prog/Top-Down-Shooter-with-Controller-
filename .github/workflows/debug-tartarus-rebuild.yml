@@ -1,0 +1,40 @@
+name: Debug Tartarus rebuild
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out rebase branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/tartarus-native-mix-rebase
+      - name: Capture rebuild error
+        shell: bash
+        run: |
+          set +e
+          python <<'PY' > rebuild-error.txt 2>&1
+          from pathlib import Path
+          import textwrap
+          workflow=Path('.github/workflows/rebuild-tartarus-on-main.yml').read_text()
+          block=workflow.split("python <<'PY'\n",1)[1].split("\n          PY",1)[0]
+          exec(compile(textwrap.dedent(block),'<tartarus-rebuild>','exec'))
+          PY
+          echo $? > rebuild-exit.txt
+          exit 0
+      - name: Upload rebuild error
+        uses: actions/upload-artifact@v4
+        with:
+          name: tartarus-rebuild-error
+          path: |
+            rebuild-error.txt
+            rebuild-exit.txt
