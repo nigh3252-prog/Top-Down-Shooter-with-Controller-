@@ -19,6 +19,10 @@ const FUSION_LABELS = Object.freeze({
   mother:'Mother Courage',stilt:'Stilt',ant:'Antelope',phx:'Phoenix',croc:'Croc',
 });
 
+const FUSION_METADATA = Object.freeze({
+  lion:{arenaStatus:'lab-only'},
+});
+
 const unique = values => [...new Set((values||[]).filter(Boolean))];
 const finite = (value,fallback) => Number.isFinite(Number(value))?Number(value):fallback;
 
@@ -44,7 +48,7 @@ function catalogEntry({id,label,family,system,data={},meta={}}){
 }
 
 const originalEntries=Object.entries(ORIGINAL_ENEMY_METADATA).map(([id,meta])=>catalogEntry({id,label:meta.label,family:'GOBLINS',system:'original',data:id===LUGARU_DUELIST_ID?LUGARU_DUELIST_ARCHETYPE:{},meta}));
-const fusionEntries=Object.entries(FUSION_ARCHETYPES).map(([id,data])=>catalogEntry({id,label:FUSION_LABELS[id]||id,family:'FUSION',system:'original',data}));
+const fusionEntries=Object.entries(FUSION_ARCHETYPES).map(([id,data])=>catalogEntry({id,label:FUSION_LABELS[id]||id,family:'FUSION',system:'original',data,meta:FUSION_METADATA[id]||{}}));
 const flareEntries=Object.entries(FLARE_ENEMY_ARCHETYPES).map(([id,data])=>catalogEntry({id,label:data.label||id,family:'FLARE',system:'flare',data}));
 const hadesEntries=Object.entries(HADES_ENEMY_ARCHETYPES).map(([id,data])=>catalogEntry({id,label:data.label||id,family:'HADES',system:'hades',data}));
 
@@ -106,3 +110,9 @@ export const COMBINED_ENCOUNTER_GROUPS = Object.freeze([
   encounterGroup({id:'hadesSkullomat',spawnKind:'hadesSkullomat',introductionDepth:5,encounterCost:18,activeWeight:2,maxCount:1,tags:['anchor','summoner']}),
   encounterGroup({id:'hadesWringer',spawnKind:'hadesWringer',introductionDepth:6,encounterCost:11,activeWeight:1.2,maxCount:3,tags:['hard-control','frontline'],avoidTags:['area-denial']}),
 ]);
+
+if(typeof window!=='undefined'&&/(?:^|\/)enemy-lab\.html$/.test(window.location?.pathname||'')&&new URLSearchParams(window.location.search).get('capture')!=='1'){
+  import('./enemy-lab-working-roster.js')
+    .then(({installEnemyLabWorkingRoster})=>installEnemyLabWorkingRoster({catalog:ARENA_ENEMY_CATALOG,families:ARENA_ENEMY_FAMILIES}))
+    .catch(error=>console.warn('[enemy-lab-roster] could not install',error));
+}
