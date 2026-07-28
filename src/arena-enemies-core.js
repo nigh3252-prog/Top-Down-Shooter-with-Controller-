@@ -15,6 +15,7 @@ import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
 import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
+import { setHadesNativeModeActive } from './hades-encounter-tuning.js';
 import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-base.js';
 import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
 
