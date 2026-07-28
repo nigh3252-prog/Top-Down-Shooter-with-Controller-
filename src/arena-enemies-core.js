@@ -71,7 +71,7 @@ export function createArenaEnemySystem(options={}){
   const combinedSystems=()=>[...participatingKeys].map(key=>systemsByKey[key]);
   const visibleSystems=()=>combinedMode?combinedSystems():[active];
   const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;
-  const setCombatDirectorEnabled=(system,enabled)=>system?.setCombatDirectorEnabled?.(enabled);
+  function setCombatDirectorEnabled(system,enabled){system?.setCombatDirectorEnabled?.(enabled);}
   const isCombatDirectorEnabled=system=>system?.combatDirectorEnabled??true;
 
   function clearCombinedRuntime(){
