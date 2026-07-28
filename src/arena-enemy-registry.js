@@ -16,7 +16,8 @@ function sourceEnemies() {
 }
 
 export function setArenaEnemySource(source) {
-  const registeredSource=Array.isArray(source)?source:installWorkingRosterEncounterMode(source);
+  const topLevelRouter=!!(source?.originalSystem&&source?.flareSystem&&source?.hadesSystem);
+  const registeredSource=topLevelRouter?installWorkingRosterEncounterMode(source):source;
   const enemies = Array.isArray(registeredSource) ? registeredSource : registeredSource?.enemies;
   if (!Array.isArray(enemies)) {
     registry.enemies = null;
