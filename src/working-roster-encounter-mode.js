@@ -13,23 +13,25 @@ const baseOriginalIds=Object.freeze(
 );
 const baseOriginalIdSet=new Set(baseOriginalIds);
 
-function removeEnemyImmediately(system,enemy){
+function removeEnemyImmediately(system,enemy,releaseTarget){
   system.director?.releaseAllForEnemy?.(enemy);
+  releaseTarget?.(enemy);
   const index=system.enemies.indexOf(enemy);
   if(index>=0)system.enemies.splice(index,1);
+  enemy?.root?.traverse?.(object=>object.geometry?.dispose?.());
   enemy?.root?.parent?.remove?.(enemy.root);
 }
 
-function retainEnemyKind(system,kind,count){
+function retainEnemyKind(system,kind,count,releaseTarget){
   let retained=0;
   for(const enemy of [...system.enemies]){
     if(enemy.kind===kind&&retained<count){retained++;continue;}
-    removeEnemyImmediately(system,enemy);
+    removeEnemyImmediately(system,enemy,releaseTarget);
   }
   return retained;
 }
 
-export function installOriginalIndividualSpawnSupport(system){
+export function installOriginalIndividualSpawnSupport(system,{releaseTarget=null}={}){
   if(!system||system.__workingRosterOriginalSpawnSupport)return system;
   if(typeof system.setSpawnKind!=='function'||typeof system.setWaveSize!=='function'||typeof system.startRoomEncounter!=='function')return system;
 
@@ -55,9 +57,9 @@ export function installOriginalIndividualSpawnSupport(system){
     const result=baseStartRoomEncounter(roomId);
     if(!isolatedKind)return result;
     if(isolatedKind===LUGARU_DUELIST_ID){
-      retainEnemyKind(system,'grunt',requestedCount);
+      retainEnemyKind(system,'grunt',requestedCount,releaseTarget);
       system.configureLugaruDuelists?.(system.enemies);
-    }else retainEnemyKind(system,isolatedKind,requestedCount);
+    }else retainEnemyKind(system,isolatedKind,requestedCount,releaseTarget);
     return result;
   };
   Object.defineProperty(system,'spawnKind',{
@@ -76,7 +78,9 @@ export function installWorkingRosterEncounterMode(source,{
   if(!source||source.__workingRosterEncounterMode)return source;
   if(typeof source.setSpawnKind!=='function')return source;
 
-  installOriginalIndividualSpawnSupport(source.originalSystem);
+  installOriginalIndividualSpawnSupport(source.originalSystem,{
+    releaseTarget:enemy=>source.factionService?.releaseTarget?.(enemy),
+  });
   const baseSetSpawnKind=source.setSpawnKind.bind(source);
   const spawnDescriptor=Object.getOwnPropertyDescriptor(source,'spawnKind');
   const baseSpawnKind=()=>spawnDescriptor?.get?.call(source)??ALL_ENEMIES_BUDGET_ID;
