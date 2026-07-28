@@ -47,6 +47,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     telegraphedSpawns:true,
     encounterPlanningEnabled:true,
     pursuitBudgetScale:1,
+    combatDirectorEnabled:true,
   };
 
   let wave=1;
@@ -177,7 +178,8 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     root.add(barBg,bar,telegraph,tokenRing);
     root.position.set(x,0,z);
     group.add(root);
-    const attack=def.attackId?HADES_ATTACKS[def.attackId]:null;
+    const attackTemplate=def.attackId?HADES_ATTACKS[def.attackId]:null;
+    const attack=attackTemplate?{...attackTemplate}:null;
     const hp=Math.round(def.hp*tuning.hpScale);
     const a=Math.atan2((lastPlayer.x??0)-x,(lastPlayer.z??0)-z);
     const e={
@@ -207,7 +209,24 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     return e;
   }
 
-  function startAttack(e,attack){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;director.grant(e,attack);}
+  function setCombatDirectorEnabled(value){
+    const enabled=!!value;
+    if(tuning.combatDirectorEnabled===enabled)return enabled;
+    tuning.combatDirectorEnabled=enabled;
+    director.reset();
+    for(const e of enemies){
+      if(Number.isFinite(e._pressureBaseSpeed))e.speed=e._pressureBaseSpeed;
+      if(Number.isFinite(e._pressureBasePreferredRange))e.preferredRange=e._pressureBasePreferredRange;
+      delete e._pressureBaseSpeed;
+      delete e._pressureBasePreferredRange;
+      e.token=null;e.approachPermit=false;e.directEngaged=false;e.slotIndex=-1;e.nearEligible=true;
+      const template=e.attackId?HADES_ATTACKS[e.attackId]:null;
+      e.realAtk=template?{...template}:null;
+      if(e.state==='idle')e.attack=null;
+    }
+    return enabled;
+  }
+  function startAttack(e,attack){e.attack=attack;e.realAtk=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;e.hitDone=false;e.beamTick=0;if(tuning.combatDirectorEnabled)director.grant(e,attack);}
   function hitPlayer(damage,kind,name,dir=null){if(lastPlayer.invulnerable||playerDead())return false;tuning.playerHp=Math.max(0,tuning.playerHp-damage);tuning.lastPlayerHit=`${HADES_ENEMY_ARCHETYPES[kind]?.label||kind} ${name} hit for ${damage}`;tuning.lastPlayerHitDir=dir?{x:dir.x,z:dir.z}:null;return true;}
   function resolveMelee(e,p){const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attack;if(d>attack.range*rangeK()+PLAYER_R)return;if(navigation?.raycastWalls?.({x:e.x,z:e.z},{x:p.x,z:p.z}))return;const delta=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));if(delta>attack.arc*.5+.2&&d>collisionRadius(e)+PLAYER_R+.2)return;if(hitPlayer(Math.max(1,Math.round(attack.damage)),e.kind,attack.name,e.facing)){e.hitDone=true;if(attack.restrain)startRestraint(e,attack.restrain);}}
   function spawnOrb(e){const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.28,1),orbMat);group.add(mesh);const f=e.facing;projectiles.push({mesh,x:e.x+f.x*.65,z:e.z+f.z*.65,vx:f.x*6.4,vz:f.z*6.4,life:2.4,r:.34,damage:e.attack.damage,owner:e.id});}
@@ -260,10 +279,11 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
       if(e.stateTime>=e.active){e.state='recovery';e.stateTime=0;}
     }else if(e.state==='recovery'){
       e.vx=e.vz=0;
-      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;director.release(e);e.attack=null;}
+      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.cooldown=e.attack.cooldown/tuning.aggression;if(tuning.combatDirectorEnabled)director.release(e);e.attack=null;}
     }else if(e.def.role!=='spawner'){
-      const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.attackId?HADES_ATTACKS[e.attackId]:null,alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));
-      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression}))startAttack(e,attack);
+      const dx=p.x-e.x,dz=p.z-e.z,d=Math.hypot(dx,dz),attack=e.realAtk,alignment=Math.abs(wrapPi(Math.atan2(dx,dz)-e.facingAngle));
+      const directorAllows=!tuning.combatDirectorEnabled||director.canGrant(e,attack,{enemies,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});
+      if(e.spawnGrace<=0&&attack&&e.cooldown<=0&&!playerDead()&&d<=attack.range*rangeK()+.9&&alignment<=e.attackAlign&&directorAllows)startAttack(e,attack);
       else{moveEnemy(e,p,dt,d);applySeparation(e,dt);e.x+=e.vx*dt;e.z+=e.vz*dt;}
     }
     updateBeam(e,dt);
@@ -386,7 +406,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     releaseQueuedSpawns();
   }
 
-  function finishWave(){wave++;director.onWaveClear();startWave();}
+  function finishWave(){wave++;if(tuning.combatDirectorEnabled)director.onWaveClear();startWave();}
   function clearDeath(){deathPieces.splice(0).forEach(p=>{p.mesh.parent?.remove(p.mesh);p.mesh.geometry?.dispose?.();p.mesh.material?.dispose?.();});}
   function clearRuntime(){
     director.reset();
@@ -429,9 +449,13 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     updateSpawnTelegraphs(dt);
     releaseQueuedSpawns();
     updatePursuitAssignments();
-    director.update(dt,{enemies,player:lastPlayer,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});
-    director.markNearEligible(enemies,lastPlayer);
-    director.assignBattleCircleSlots(enemies);
+    if(tuning.combatDirectorEnabled){
+      director.update(dt,{enemies,player:lastPlayer,pressureBudget:director.settings.pressureBudget,aggression:tuning.aggression});
+      director.markNearEligible(enemies,lastPlayer);
+      director.assignBattleCircleSlots(enemies);
+    }else{
+      for(const e of enemies){e.token=null;e.directEngaged=false;e.nearEligible=true;e.slotIndex=-1;}
+    }
     for(const e of enemies){e._sx=e.x;e._sz=e.z;}
     for(const e of [...enemies])updateEnemy(e,dt,lastPlayer);
     resolveBodies(lastPlayer);
@@ -449,7 +473,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
           const id=activeEncounterRoomId;
           activeEncounterRoomId=null;
           waveClearT=0;
-          director.onWaveClear();
+          if(tuning.combatDirectorEnabled)director.onWaveClear();
           onEncounterCleared?.(id);
         }else if(!roomEncounterMode)finishWave();
       }
@@ -459,7 +483,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   if(!roomEncounterMode)startWave();
 
   return{
-    enemies,group,director,update,damageEnemy,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,
+    enemies,group,director,update,damageEnemy,reset,startRoomEncounter,clearRoomRuntime:clearRuntime,setCombatDirectorEnabled,
     setDirectorMode:m=>director.setMode(m),
     setPressureBudget:v=>{director.settings.pressureBudget=clamp(Number(v)||2.25,.5,4);},
     setAggression:v=>{tuning.aggression=clamp(Number(v)||1,.25,3);director.settings.aggression=tuning.aggression;},
@@ -481,6 +505,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     get waveSize(){return tuning.waveSize;},
     get idleRangeScale(){return tuning.idleRangeScale;},
     get aggression(){return tuning.aggression;},
+    get combatDirectorEnabled(){return tuning.combatDirectorEnabled;},
     get spawnKind(){return tuning.spawnKind;},
     get wave(){return wave;},
     get encounterDepth(){return encounterDepth;},

@@ -4,6 +4,13 @@ import {
   HADES_TARTARUS_POOL_ID,
   isHadesEnemy,
 } from './hades-enemies.js';
+import {
+  getHadesEncounterDifficultyRamp,
+  getHadesEncounterSpawnMultiplier,
+  getHadesProgressionDepth,
+  normalizeHadesDifficultyRamp,
+  normalizeHadesSpawnMultiplier,
+} from './hades-encounter-tuning.js';
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
@@ -104,20 +111,32 @@ export function createHadesEncounterPlan({
   depth=1,
   targetCount=6,
   spawnKind=HADES_TARTARUS_POOL_ID,
+  spawnMultiplier=getHadesEncounterSpawnMultiplier(),
+  difficultyRamp=getHadesEncounterDifficultyRamp(),
   random=Math.random,
 }={}){
   const safeDepth=Math.max(1,Math.round(depth)||1);
-  const totalCount=countForDepth(clamp(Math.round(targetCount)||6,1,20),safeDepth);
-  const typeIds=isHadesEnemy(spawnKind)?[spawnKind]:chooseTypes(safeDepth,random);
+  const safeMultiplier=normalizeHadesSpawnMultiplier(spawnMultiplier);
+  const safeDifficultyRamp=normalizeHadesDifficultyRamp(difficultyRamp);
+  const progressionDepth=getHadesProgressionDepth(safeDepth,safeDifficultyRamp);
+  const baseCount=countForDepth(clamp(Math.round(targetCount)||6,1,20),progressionDepth);
+  const totalCount=clamp(baseCount*safeMultiplier,1,200);
+  const typeIds=isHadesEnemy(spawnKind)?[spawnKind]:chooseTypes(progressionDepth,random);
   const entries=buildEntries(typeIds,totalCount,random);
+  const baseActiveWeightCap=clamp(2.5+progressionDepth*.35,2.75,6.5);
+  const basePursuitWeightCap=clamp(2.6+progressionDepth*.12,2.7,3.8);
+  const baseTelegraphs=progressionDepth<4?2:3;
   return {
     depth:safeDepth,
+    progressionDepth,
+    spawnMultiplier:safeMultiplier,
+    difficultyRamp:safeDifficultyRamp,
     typeIds,
     entries,
     composition:describeComposition(typeIds),
-    activeWeightCap:clamp(2.5+safeDepth*.35,2.75,6.5),
-    pursuitWeightCap:clamp(2.6+safeDepth*.12,2.7,3.8),
-    simultaneousTelegraphs:safeDepth<4?2:3,
-    spawnDelay:safeDepth<3?.78:.64,
+    activeWeightCap:baseActiveWeightCap*safeMultiplier,
+    pursuitWeightCap:basePursuitWeightCap*safeMultiplier,
+    simultaneousTelegraphs:baseTelegraphs*safeMultiplier,
+    spawnDelay:progressionDepth<3?.78:.64,
   };
 }
