@@ -39,5 +39,5 @@ assert.ok(COMBINED_ENCOUNTER_GROUPS.some(group=>group.spawnKind==='mother'));
 assert.ok(COMBINED_ENCOUNTER_GROUPS.some(group=>group.spawnKind==='flareGoblinRunner'));
 assert.ok(COMBINED_ENCOUNTER_GROUPS.some(group=>group.spawnKind==='hadesWretchedWitch'));
 assert.equal(FUSION_ENEMY_OPTIONS[0].id,ALL_ENEMIES_BUDGET_ID);
-assert.ok(!FUSION_ENEMY_OPTIONS.some(option=>option.id===HADES_TARTARUS_POOL_ID));
+assert.ok(FUSION_ENEMY_OPTIONS.some(option=>option.id===HADES_TARTARUS_POOL_ID));
 console.log('Combined encounter budget planner: ok');

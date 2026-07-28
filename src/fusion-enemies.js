@@ -69,7 +69,7 @@ export const FUSION_ENEMY_OPTIONS = [
   { id:'phx', label:'Phoenix' },
   { id:'croc', label:'Croc' },
   ...FLARE_ENEMY_OPTIONS,
-  ...HADES_ENEMY_OPTIONS.filter(option=>option.id!==HADES_TARTARUS_POOL_ID),
+  ...HADES_ENEMY_OPTIONS,
 ];
 
 export function isFusionEnemy(kind){ return !!FUSION_ARCHETYPES[kind]; }

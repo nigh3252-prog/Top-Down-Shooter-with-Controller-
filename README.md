@@ -12,6 +12,7 @@ A phone/controller-friendly HTML5 top-down action prototype.
 - `hex-maze-lab.html` — a phone-friendly deterministic hex-maze diagnostic view with generation steps, original dead ends, braids, room numbers, derived doors, and validation failures.
 - `src/` — real source modules (`stone-wanderer.js`, `player-combat.js`, `weapons.js`, `attacks.js`, `stance-cards.js`, `enemies.js`, `combat-director.js`, `feel.js`, `combat-audio.js`, `lab-modes.js`, `bent-world.js`, …). See `src/README.md` for the module architecture.
 - `archive/` — the retired iframe wrapper, old donor pages, and superseded Wizard of Legend Markdown. The checklist links back to its preserved source-note archive.
+- `docs/design/` — living gameplay rules, game flow, project terminology, and unresolved design questions for human and AI collaborators.
 - `docs/` — active source-move libraries (Hades, Diablo III) used as design references.
 
 ## Recent combat pass
