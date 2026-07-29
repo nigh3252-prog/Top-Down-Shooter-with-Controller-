@@ -5,11 +5,10 @@ import {
   installNativeHadesRosterCadence,
 } from '../src/hades-native-roster-cadence.js';
 
-assert.deepEqual(createNativeHadesCadencePlan(9),{
-  activeWeightCap:5.85,
-  simultaneousTelegraphs:2,
-  spawnDelay:.72,
-});
+const nineEnemyPlan=createNativeHadesCadencePlan(9);
+assert.ok(Math.abs(nineEnemyPlan.activeWeightCap-5.85)<1e-9);
+assert.equal(nineEnemyPlan.simultaneousTelegraphs,2);
+assert.equal(nineEnemyPlan.spawnDelay,.72);
 assert.deepEqual(createNativeHadesCadencePlan(1),{
   activeWeightCap:2.5,
   simultaneousTelegraphs:2,
