@@ -1,4 +1,5 @@
 import { HADES_ENEMY_ARCHETYPES, HADES_TARTARUS_POOL_ID } from './hades-enemies.js';
+import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
 
 export const HADES_SPAWN_MULTIPLIERS = Object.freeze([1,2,5,10]);
 export const HADES_DIFFICULTY_RAMP_PRESETS = Object.freeze({
@@ -37,6 +38,9 @@ export function normalizeHadesDifficultyRamp(value){
 let desiredSpawnMultiplier=normalizeHadesSpawnMultiplier(readStored(STORAGE_KEYS.spawnMultiplier,1));
 let desiredDifficultyRamp=normalizeHadesDifficultyRamp(readStored(STORAGE_KEYS.difficultyRamp,'slow'));
 let nativeModeActive=false;
+let rosterModeActive=false;
+
+const tuningActive=()=>nativeModeActive||rosterModeActive;
 
 export function getHadesProgressionDepth(depth,rampId=desiredDifficultyRamp){
   const safeDepth=Math.max(1,Math.round(Number(depth))||1);
@@ -50,13 +54,14 @@ function applyMaxActiveMultiplier(multiplier){
     HADES_ENEMY_ARCHETYPES[id].maxActive=Math.max(1,Math.round(base*safe));
   }
 }
+function syncMaxActive(){applyMaxActiveMultiplier(tuningActive()?desiredSpawnMultiplier:1);}
 
 export function getHadesEncounterSpawnMultiplier(){return desiredSpawnMultiplier;}
 export function getHadesEncounterDifficultyRamp(){return desiredDifficultyRamp;}
 export function setHadesEncounterSpawnMultiplier(value,{persist=true}={}){
   desiredSpawnMultiplier=normalizeHadesSpawnMultiplier(value);
   if(persist)writeStored(STORAGE_KEYS.spawnMultiplier,desiredSpawnMultiplier);
-  if(nativeModeActive)applyMaxActiveMultiplier(desiredSpawnMultiplier);
+  syncMaxActive();
   syncControlAvailability();
   return desiredSpawnMultiplier;
 }
@@ -68,11 +73,21 @@ export function setHadesEncounterDifficultyRamp(value,{persist=true}={}){
 }
 export function setHadesNativeModeActive(value){
   nativeModeActive=!!value;
-  applyMaxActiveMultiplier(nativeModeActive?desiredSpawnMultiplier:1);
+  if(nativeModeActive)rosterModeActive=false;
+  syncMaxActive();
   syncControlAvailability();
   return nativeModeActive;
 }
+export function setHadesRosterModeActive(value){
+  rosterModeActive=!!value;
+  if(rosterModeActive)nativeModeActive=false;
+  syncMaxActive();
+  syncControlAvailability();
+  return rosterModeActive;
+}
 export function isHadesNativeModeActive(){return nativeModeActive;}
+export function isHadesRosterModeActive(){return rosterModeActive;}
+export function isHadesStyleTuningActive(){return tuningActive();}
 
 let controlsInstalled=false;
 function resetFightAndKeepMenuOpen(){
@@ -116,9 +131,13 @@ function syncDirectorControls(){
       status.style.cssText='margin:0 0 8px;padding:7px 8px;border:1px solid #24403e;border-radius:5px;color:#7fb8b0;font-size:9px;line-height:1.4;letter-spacing:.05em';
       modeGrid.parentElement?.insertBefore(status,modeGrid);
     }
-    status.textContent=enabled?'COMBAT DIRECTOR: ON':'COMBAT DIRECTOR: OFF — TARTARUS NATIVE BEHAVIOR';
-    status.style.color=enabled?'#7fb8b0':'#e8a04c';
-    status.style.borderColor=enabled?'#24403e':'#6e3a24';
+    status.textContent=nativeModeActive
+      ?'COMBAT DIRECTOR: OFF — TARTARUS NATIVE BEHAVIOR'
+      :rosterModeActive
+        ?'COMBAT DIRECTOR: ON — PRESSURE BUDGET IS SEPARATE FROM ENEMY COUNT'
+        :'COMBAT DIRECTOR: ON';
+    status.style.color=nativeModeActive?'#e8a04c':'#7fb8b0';
+    status.style.borderColor=nativeModeActive?'#6e3a24':'#24403e';
     modeGrid.style.opacity=enabled?'1':'.38';
     modeGrid.querySelectorAll('button').forEach(button=>{button.disabled=!enabled;});
   }
@@ -132,12 +151,17 @@ function syncDirectorControls(){
 }
 function syncControlAvailability(){
   if(typeof document==='undefined')return;
+  const active=tuningActive();
   const wrapper=document.getElementById('hadesEncounterTuning');
   if(wrapper){
-    wrapper.style.opacity=nativeModeActive?'1':'.42';
-    wrapper.querySelectorAll('select').forEach(select=>{select.disabled=!nativeModeActive;});
+    wrapper.style.opacity=active?'1':'.42';
+    wrapper.querySelectorAll('select').forEach(select=>{select.disabled=!active;});
     const note=document.getElementById('hadesTuningNote');
-    if(note)note.textContent=nativeModeActive?'TARTARUS MIX · CHANGES RESET THE FIGHT':'TARTARUS MIX ONLY';
+    if(note)note.textContent=nativeModeActive
+      ?'TARTARUS MIX · CHANGES RESET THE FIGHT'
+      :rosterModeActive
+        ?'ROSTER HADES-STYLE · COUNT/RAMP HERE · ATTACK PRESSURE BELOW'
+        :'HADES-STYLE MODES ONLY';
     const countSelect=document.getElementById('hadesSpawnMultiplierSelect');
     const rampSelect=document.getElementById('hadesDifficultyRampSelect');
     if(countSelect)countSelect.value=String(desiredSpawnMultiplier);
@@ -145,9 +169,14 @@ function syncControlAvailability(){
   }
   syncDirectorControls();
 }
-function syncNativeModeFromEnemySelection(){
-  const spawnSelect=document.getElementById('spawnSelect');
-  setHadesNativeModeActive(spawnSelect?.value===HADES_TARTARUS_POOL_ID);
+function syncModeFromEnemySelection(){
+  const selected=document.getElementById('spawnSelect')?.value;
+  if(selected===HADES_TARTARUS_POOL_ID){
+    setHadesNativeModeActive(true);
+    return;
+  }
+  setHadesNativeModeActive(false);
+  setHadesRosterModeActive(selected===WORKING_ROSTER_HADES_ID);
 }
 
 export function installHadesEncounterTuningControls(){
@@ -160,19 +189,19 @@ export function installHadesEncounterTuningControls(){
 
   const wrapper=document.createElement('div');
   wrapper.id='hadesEncounterTuning';
-  wrapper.setAttribute('aria-label','Tartarus encounter tuning');
+  wrapper.setAttribute('aria-label','Hades-style encounter tuning');
   const note=document.createElement('div');
   note.id='hadesTuningNote';
   note.className='ptitle';
   note.style.cssText='margin:2px 0 8px;line-height:1.4';
 
-  const count=makeSelectRow('hadesSpawnMultiplierSelect','TARTARUS ENEMY COUNT',[
+  const count=makeSelectRow('hadesSpawnMultiplierSelect','HADES-STYLE ENEMY COUNT',[
     {value:1,label:'Low · 1× (Default)'},
     {value:2,label:'2× Enemies'},
     {value:5,label:'5× Enemies'},
     {value:10,label:'10× Enemies'},
   ],desiredSpawnMultiplier);
-  const ramp=makeSelectRow('hadesDifficultyRampSelect','TARTARUS DIFFICULTY RAMP',[
+  const ramp=makeSelectRow('hadesDifficultyRampSelect','HADES-STYLE DIFFICULTY RAMP',[
     {value:'slow',label:'Slow · Current'},
     {value:'medium',label:'Medium'},
     {value:'high',label:'High'},
@@ -186,11 +215,11 @@ export function installHadesEncounterTuningControls(){
     setHadesEncounterDifficultyRamp(ramp.select.value);
     resetFightAndKeepMenuOpen();
   });
-  spawnSelect.addEventListener('change',()=>setTimeout(syncNativeModeFromEnemySelection,0));
+  spawnSelect.addEventListener('change',()=>setTimeout(syncModeFromEnemySelection,0));
 
   wrapper.append(note,count.row,ramp.row);
   simBody.insertBefore(wrapper,sliderBox);
-  syncNativeModeFromEnemySelection();
+  syncModeFromEnemySelection();
   return true;
 }
 
