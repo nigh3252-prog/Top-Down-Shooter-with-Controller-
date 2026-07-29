@@ -257,7 +257,7 @@ export function installWorkingRosterEncounterMode(source,{
     source.flareSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.hadesSystem?.setTelegraphedSpawns?.(true);
     setHadesRosterModeActive(workingRosterMode);
-    setTimeout(clarifyHadesStyleControls,0);
+    if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
     return workingRosterMode;
   };
 
@@ -290,6 +290,6 @@ export function installWorkingRosterEncounterMode(source,{
     reinforcementFlow:true,
   });
   source.__workingRosterEncounterMode=true;
-  setTimeout(clarifyHadesStyleControls,0);
+  if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
   return source;
 }
