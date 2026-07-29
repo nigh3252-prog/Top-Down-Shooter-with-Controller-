@@ -11,7 +11,7 @@
     "test:wol-checklist": "node tests/wizard-of-legend-checklist.test.mjs",
     "test:flare": "node tests/flare-enemies.test.mjs",
     "test:hades": "node tests/hades-enemies.test.mjs",
-    "test:encounters": "node tests/combined-encounter.test.mjs && node tests/enemy-lab-working-roster.test.mjs && node tests/working-roster-encounter.test.mjs && node tests/working-roster-hades-style-gaps.test.mjs",
+    "test:encounters": "node tests/combined-encounter.test.mjs && node tests/enemy-lab-working-roster.test.mjs && node tests/working-roster-encounter.test.mjs && node tests/working-roster-hades-style-gaps.test.mjs && node tests/original-same-system-mixing.test.mjs",
     "test:maze:quick": "node tests/hex-maze.test.mjs --iterations=20",
     "test:maze": "node tests/hex-maze.test.mjs --iterations=100",
     "test:maze:stress": "node tests/hex-maze.test.mjs --iterations=500",
