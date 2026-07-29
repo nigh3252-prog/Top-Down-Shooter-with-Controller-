@@ -26,13 +26,13 @@ The mode is also available directly from Combat Arena's enemy selector.
 
 ## Population caps
 
-The roster multiplier scales each selected encounter group, with temporary per-runtime safety caps:
+The roster multiplier scales each selected encounter group, with a temporary safety cap of **20 bodies per participating runtime**:
 
-- Original runtime: 20 bodies for the selected type.
-- FLARE runtime: 20 bodies for the selected type.
-- Hades runtime: up to 200 queued/active bodies under its native active-weight and type limits.
+- Original runtime: up to 20 bodies of the selected type.
+- FLARE runtime: up to 20 bodies of the selected type.
+- Hades runtime: up to 20 bodies of the selected type in roster mode.
 
-These caps keep the current adapters bounded while still allowing substantially larger phone stress tests.
+A two-runtime roster encounter can therefore reach roughly 40 bodies. Native **HADES · Tartarus Mix** remains the separate extreme stress-test path with its larger queued population support.
 
 ## Current limitation
 
