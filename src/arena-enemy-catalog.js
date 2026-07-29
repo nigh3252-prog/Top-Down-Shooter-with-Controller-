@@ -112,7 +112,11 @@ export const COMBINED_ENCOUNTER_GROUPS = Object.freeze([
 ]);
 
 if(typeof window!=='undefined'&&/(?:^|\/)enemy-lab\.html$/.test(window.location?.pathname||'')&&new URLSearchParams(window.location.search).get('capture')!=='1'){
-  import('./enemy-lab-working-roster.js')
-    .then(({installEnemyLabWorkingRoster})=>installEnemyLabWorkingRoster({catalog:ARENA_ENEMY_CATALOG,families:ARENA_ENEMY_FAMILIES}))
-    .catch(error=>console.warn('[enemy-lab-roster] could not install',error));
+  Promise.all([
+    import('./enemy-lab-working-roster.js'),
+    import('./enemy-lab-working-ability-pool.js'),
+  ]).then(([rosterModule,abilityModule])=>{
+    rosterModule.installEnemyLabWorkingRoster({catalog:ARENA_ENEMY_CATALOG,families:ARENA_ENEMY_FAMILIES});
+    abilityModule.installEnemyLabWorkingAbilityPool();
+  }).catch(error=>console.warn('[enemy-lab-development-pools] could not install',error));
 }
