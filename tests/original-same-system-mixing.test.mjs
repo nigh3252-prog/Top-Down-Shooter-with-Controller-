@@ -23,12 +23,12 @@ const roster=['mace','rock',LUGARU_DUELIST_ID];
 const plan=createWorkingRosterSameSystemPlan({
   depth:5,
   rosterIds:roster,
-  random:()=>.9,
+  random:()=>0,
   spawnMultiplier:10,
   difficultyRamp:'slow',
 });
 assert.equal(plan.sameSystemMixing,true);
-assert.equal(plan.groups.length,3);
+assert.equal(plan.groups.length,3,'a focused compatible Original roster mixes without requiring a lucky room roll');
 assert.deepEqual(new Set(plan.groups.map(group=>group.system)),new Set(['original']));
 assert.deepEqual([...plan.typeIds].sort(),[...roster].sort());
 assert.equal(plan.totalCount,20,'scaled Original groups share one 20-body runtime cap');
@@ -100,7 +100,7 @@ const source={
   getWorkingRosterEncounterStatus(){return{active:true};},
 };
 installWorkingRosterSameSystemMode(source,{storage,catalog:ARENA_ENEMY_CATALOG});
-const routed=createCombinedEncounterPlan({depth:5,random:()=>.9});
+const routed=createCombinedEncounterPlan({depth:5,random:()=>0});
 assert.equal(routed.originalGroupsCollapsed,true);
 assert.equal(routed.groups.filter(group=>group.system==='original').length,1);
 assert.equal(routed.selectedGroups.filter(group=>group.system==='original').length,3);
