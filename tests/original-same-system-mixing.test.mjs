@@ -28,7 +28,7 @@ const plan=createWorkingRosterSameSystemPlan({
   difficultyRamp:'slow',
 });
 assert.equal(plan.sameSystemMixing,true);
-assert.equal(plan.groups.length,3,'a focused compatible Original roster mixes without requiring a lucky room roll');
+assert.equal(plan.groups.length,3);
 assert.deepEqual(new Set(plan.groups.map(group=>group.system)),new Set(['original']));
 assert.deepEqual([...plan.typeIds].sort(),[...roster].sort());
 assert.equal(plan.totalCount,20,'scaled Original groups share one 20-body runtime cap');
