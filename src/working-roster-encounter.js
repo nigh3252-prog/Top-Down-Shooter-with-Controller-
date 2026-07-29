@@ -20,7 +20,7 @@ const originalIntroductionDepth=Object.freeze({
   [LUGARU_DUELIST_ID]:5,
   captain:6,
 });
-const SYSTEM_POPULATION_CAP=Object.freeze({original:20,flare:20,hades:200});
+const SYSTEM_POPULATION_CAP=Object.freeze({original:20,flare:20,hades:20});
 
 function unique(values){return [...new Set((values||[]).filter(Boolean))];}
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
