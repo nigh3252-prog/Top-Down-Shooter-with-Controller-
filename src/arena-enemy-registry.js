@@ -3,6 +3,7 @@
 // optional encounter decorators are installed here against that explicit source.
 
 import { installWorkingRosterEncounterMode } from './working-roster-encounter-mode.js';
+import { installWorkingRosterSameSystemMode } from './working-roster-same-system-mode.js';
 
 const registry = {
   enemies: null,
@@ -17,7 +18,8 @@ function sourceEnemies() {
 
 export function setArenaEnemySource(source) {
   const topLevelRouter=!!(source?.originalSystem&&source?.flareSystem&&source?.hadesSystem);
-  const registeredSource=topLevelRouter?installWorkingRosterEncounterMode(source):source;
+  const rosterSource=topLevelRouter?installWorkingRosterEncounterMode(source):source;
+  const registeredSource=topLevelRouter?installWorkingRosterSameSystemMode(rosterSource):rosterSource;
   const enemies = Array.isArray(registeredSource) ? registeredSource : registeredSource?.enemies;
   if (!Array.isArray(enemies)) {
     registry.enemies = null;
