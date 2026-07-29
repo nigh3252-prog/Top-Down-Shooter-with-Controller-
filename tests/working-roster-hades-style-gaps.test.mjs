@@ -21,11 +21,13 @@ assert.ok(scaled.requestedProgressionDepth>scaled.depth);
 assert.ok(scaled.totalCount>5);
 assert.ok(scaled.groups.every(group=>group.count<=scaled.populationCaps[group.system]));
 
-const flow=rosterSpawnFlowSettings({groups:[{system:'original',count:9}],spawnDelay:.72},'original',9);
-assert.equal(flow.plannedCount,9);
-assert.equal(flow.simultaneousTelegraphs,2);
-assert.equal(flow.activeWeightCap,5.85);
-assert.equal(flow.spawnDelay,.72);
+const slowFlow=rosterSpawnFlowSettings({groups:[{system:'original',count:9}],spawnDelay:.72,difficultyRamp:'slow'},'original',9);
+const highFlow=rosterSpawnFlowSettings({groups:[{system:'original',count:9}],spawnDelay:.72,difficultyRamp:'high'},'original',9);
+assert.deepEqual(highFlow,slowFlow,'enemy-introduction speed must not alter reinforcement cadence');
+assert.equal(slowFlow.plannedCount,9);
+assert.equal(slowFlow.simultaneousTelegraphs,2);
+assert.equal(slowFlow.activeWeightCap,5.85);
+assert.equal(slowFlow.spawnDelay,.72);
 
 function geometry(){return{clone:geometry,dispose(){}};}
 function material(){return{opacity:0,color:{setHex(){}},clone:material,dispose(){}};}
