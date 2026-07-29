@@ -112,25 +112,82 @@ export function installRosterSpawnTelegraphSupport(system,{
   let enabled=false;
   let queue=[];
   let pending=[];
+  let lastPlayer={x:0,z:0};
 
   const enemyWeight=enemy=>Math.max(.1,Number(enemy?.def?.activeWeight)||weightsByKind.get(String(enemy?.kind||''))||1);
   const activeWeight=()=>system.enemies.reduce((sum,enemy)=>sum+(Number(enemy?.hp)>0?enemyWeight(enemy):0),0);
   const pendingWeight=()=>pending.reduce((sum,entry)=>sum+enemyWeight(entry.enemy),0);
   const flow=()=>rosterSpawnFlowSettings(planGetter?.(),systemKey,system.enemies.length+queue.length+pending.length||1);
+  const spawnPoint=enemy=>({x:Number(enemy?.x)||0,z:Number(enemy?.z)||0});
 
+  function currentPlayer(player=null){
+    if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
+      return{x:Number(player.x),z:Number(player.z)};
+    }
+    const actor=globalThis.__arena?.actorPos;
+    if(Number.isFinite(Number(actor?.x))){
+      const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
+      if(Number.isFinite(z))return{x:Number(actor.x),z};
+    }
+    return lastPlayer;
+  }
+  function preferredSpawnDistance(enemy){
+    const role=String(enemy?.def?.role||enemy?.role||'').toLowerCase();
+    return enemy?.thrower||/(ranged|beam|trapper|skirmisher)/.test(role)?8.5:6;
+  }
+  function spawnPriority(enemy,player){
+    const point=spawnPoint(enemy);
+    const distance=Math.hypot(point.x-player.x,point.z-player.z);
+    const preferred=preferredSpawnDistance(enemy);
+    const occupied=[
+      ...system.enemies.filter(candidate=>Number(candidate?.hp)>0).map(spawnPoint),
+      ...pending.map(entry=>entry.position),
+    ];
+    const spacing=occupied.length
+      ?Math.min(...occupied.map(other=>Math.hypot(point.x-other.x,point.z-other.z)))
+      :8;
+    return-Math.abs(distance-preferred)+Math.min(6,spacing)*.72;
+  }
+  function takeBestQueuedEnemy(player){
+    let bestIndex=0;
+    let bestScore=-Infinity;
+    for(let index=0;index<queue.length;index++){
+      const score=spawnPriority(queue[index],player);
+      if(score>bestScore){bestScore=score;bestIndex=index;}
+    }
+    return queue.splice(bestIndex,1)[0]||null;
+  }
+  function detachEnemy(enemy){
+    if(!enemy?.root)return;
+    enemy.root.visible=false;
+    enemy.root.parent?.remove?.(enemy.root);
+  }
+  function attachEnemy(enemy,position=spawnPoint(enemy)){
+    if(!enemy)return;
+    enemy.x=Number(position?.x)||0;
+    enemy.z=Number(position?.z)||0;
+    if(enemy.root){
+      enemy.root.position?.set?.(enemy.x,Number(enemy.root.position?.y)||0,enemy.z);
+      if(enemy.root.parent!==system.group)system.group.add(enemy.root);
+      enemy.root.visible=true;
+    }
+    enemy.cooldown=Math.max(.18,Number(enemy.cooldown)||0);
+    if(!system.enemies.includes(enemy))system.enemies.push(enemy);
+  }
   function destroyRing(ring){
     ring?.parent?.remove?.(ring);
     ring?.geometry?.dispose?.();
     ring?.material?.dispose?.();
   }
-  function makeRing(enemy){
+  function makeRing(enemy,position){
     const source=enemy?.telegraph;
     if(!source?.clone)return null;
     const ring=source.clone();
     if(source.geometry?.clone)ring.geometry=source.geometry.clone();
     if(source.material?.clone)ring.material=source.material.clone();
+    ring.name=`${enemy?.kind||'enemy'} Hades-style spawn preview`;
     ring.visible=true;
-    ring.position.set?.(Number(enemy.x)||0,.065,Number(enemy.z)||0);
+    ring.position.set?.(Number(position?.x)||0,.065,Number(position?.z)||0);
     ring.rotation.x=-Math.PI/2;
     ring.scale.setScalar?.(.72);
     ring.material?.color?.setHex?.(0xff684d);
@@ -141,37 +198,45 @@ export function installRosterSpawnTelegraphSupport(system,{
   function restoreDeferred(){
     for(const entry of pending){
       destroyRing(entry.ring);
-      if(entry.enemy?.root)entry.enemy.root.visible=true;
-      if(entry.enemy&&!system.enemies.includes(entry.enemy))system.enemies.push(entry.enemy);
+      attachEnemy(entry.enemy,entry.position);
     }
-    for(const enemy of queue){
-      if(enemy?.root)enemy.root.visible=true;
-      if(enemy&&!system.enemies.includes(enemy))system.enemies.push(enemy);
-    }
+    for(const enemy of queue)attachEnemy(enemy);
     pending=[];
     queue=[];
   }
   function beginTelegraph(enemy,settings){
-    pending.push({enemy,ring:makeRing(enemy),t:settings.spawnDelay,total:settings.spawnDelay});
+    const position=spawnPoint(enemy);
+    pending.push({
+      enemy,
+      position,
+      ring:makeRing(enemy,position),
+      t:settings.spawnDelay,
+      total:settings.spawnDelay,
+    });
   }
-  function fillTelegraphs(){
+  function fillTelegraphs(player=lastPlayer){
     if(!enabled||!queue.length)return;
     const settings=flow();
+    const focus=currentPlayer(player);
     let guard=0;
     while(queue.length&&pending.length<settings.simultaneousTelegraphs&&guard++<40){
-      const enemy=queue[0];
-      const projected=activeWeight()+pendingWeight()+enemyWeight(enemy);
+      const next=takeBestQueuedEnemy(focus);
+      if(!next)break;
+      const projected=activeWeight()+pendingWeight()+enemyWeight(next);
       const canOverflow=!system.enemies.length&&!pending.length;
-      if(!canOverflow&&projected>settings.activeWeightCap)break;
-      queue.shift();
-      beginTelegraph(enemy,settings);
+      if(!canOverflow&&projected>settings.activeWeightCap){
+        queue.push(next);
+        break;
+      }
+      beginTelegraph(next,settings);
     }
   }
   function stageSpawnedEnemies(){
     if(!enabled||!system.enemies.length)return;
     queue=system.enemies.splice(0);
-    for(const enemy of queue)if(enemy?.root)enemy.root.visible=false;
-    fillTelegraphs();
+    for(const enemy of queue)detachEnemy(enemy);
+    lastPlayer=currentPlayer();
+    fillTelegraphs(lastPlayer);
   }
   function updateTelegraphs(dt){
     const elapsed=Math.max(0,Number(dt)||0);
@@ -187,8 +252,7 @@ export function installRosterSpawnTelegraphSupport(system,{
       }
       if(entry.t>0)continue;
       destroyRing(entry.ring);
-      if(entry.enemy?.root)entry.enemy.root.visible=true;
-      if(entry.enemy&&!system.enemies.includes(entry.enemy))system.enemies.push(entry.enemy);
+      attachEnemy(entry.enemy,entry.position);
       pending.splice(index,1);
     }
   }
@@ -200,11 +264,12 @@ export function installRosterSpawnTelegraphSupport(system,{
     return result;
   };
   system.update=(dt,player)=>{
+    lastPlayer=currentPlayer(player);
     updateTelegraphs(dt);
-    fillTelegraphs();
+    fillTelegraphs(lastPlayer);
     const deferred=queue.length>0||pending.length>0;
     const result=system.enemies.length||!deferred?baseUpdate(dt,player):undefined;
-    fillTelegraphs();
+    fillTelegraphs(lastPlayer);
     return result;
   };
   if(baseReset)system.reset=()=>{restoreDeferred();return baseReset();};
@@ -288,6 +353,7 @@ export function installWorkingRosterEncounterMode(source,{
     fallbackMode:ALL_ENEMIES_BUDGET_ID,
     spawnTelegraphs:true,
     reinforcementFlow:true,
+    previewBeforeModel:true,
   });
   source.__workingRosterEncounterMode=true;
   if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
