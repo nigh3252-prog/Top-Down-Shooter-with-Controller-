@@ -11,6 +11,7 @@ import {
 } from './lugaru-duelist.js';
 import { installLugaruDuelistCounterRelease } from './lugaru-duelist-counter-release.js';
 import { installLugaruDuelistDodgeScale } from './lugaru-duelist-dodge-scale.js';
+import { installOriginalEncounterGroupSupport } from './original-encounter-groups.js';
 
 export { LUGARU_DUELIST_ID };
 export const ARENA_ENEMY_ARCHETYPES = Object.freeze({
@@ -26,5 +27,9 @@ export function createArenaEnemySystem(options={}){
   const closing=installGoblinAttackRangeClosing(guarded,{includeDuelists:true});
   const duelist=installLugaruDuelist(closing,options);
   const released=installLugaruDuelistCounterRelease(duelist);
-  return installLugaruDuelistDodgeScale(released,options);
+  const scaled=installLugaruDuelistDodgeScale(released,options);
+  return installOriginalEncounterGroupSupport(scaled,{
+    releaseTarget:enemy=>options.factionService?.releaseTarget?.(enemy),
+    maxTotal:20,
+  });
 }

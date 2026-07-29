@@ -18,24 +18,26 @@ The same mode is also available from Combat Arena's enemy selector.
 - **HADES-STYLE ENEMY INTRODUCTION** changes how quickly later or harder enemy types become eligible. It does not change reinforcement timing.
 - **PRESSURE BUDGET** separately controls simultaneous attack pressure through the Combat Director. It does not change reinforcement timing.
 
-## Reinforcement flow
+## Native Hades reinforcement cadence
 
-Native Hades enemies keep their queued spawn-ring system. Original and FLARE roster enemies use a matching adapter:
+Native Hades enemies keep their existing queue. Original and FLARE roster enemies now use the same native Hades fallback cadence rather than the earlier approximation:
 
-- two spawn rings can telegraph at once
-- the active on-screen weight ceiling is approximately 65% of that runtime's planned population
-- the remaining enemies stay in reserve
-- new reinforcement rings begin as active enemies die and capacity opens
-- active enemies keep fighting while later enemies telegraph
-- Gradual, Faster, and Fast introduction settings all use the same reinforcement cadence
+- exactly two spawn rings can telegraph at once
+- the active-weight ceiling is `max(2.5, planned count × 0.65)`
+- each enemy type obeys its catalog `maxActive` / `maxCount` limit
+- the default preview lasts `.72` seconds
+- the ring uses the native Hades pulse, growth, rotation, and opacity timing
+- the ring appears before the model joins the scene
+- queued reinforcements release as active capacity opens
 
-Higher count settings therefore raise both the population visible during the main fight and the size of the reserve wave without dumping the entire batch into the room simultaneously.
+The earlier Original/FLARE spawn adapter is explicitly disabled while roster mode is active. Hades remains the source behavior; the other runtimes now follow its cadence rules directly.
 
 ## Current behavior
 
 - The saved roster constrains which individual enemy types are eligible.
 - Hades-style budget, introduction, compatibility, and count rules compose the encounters.
-- Original and FLARE enemies receive visible spawn rings; Hades enemies retain their native spawn telegraphs.
+- Compatible Goblin types and Lugaru can share one Original-runtime encounter.
+- Original, FLARE, and Hades enemies follow the Hades reinforcement cadence in roster mode.
 - The shared enemy-count control supports 1×, 2×, 5×, and 10× roster populations.
 - An enemy marked **Lab Only**, such as the current Lion, appears only when deliberately selected.
 - An empty roster falls back to **ALL · Budgeted Encounter** so a room cannot become uncleared.
@@ -45,7 +47,7 @@ Higher count settings therefore raise both the population visible during the mai
 
 The roster multiplier scales each selected encounter group, with a temporary safety cap of **20 bodies per participating runtime**:
 
-- Original runtime: up to 20 bodies of the selected type.
+- Original runtime: up to 20 bodies shared across selected Original types.
 - FLARE runtime: up to 20 bodies of the selected type.
 - Hades runtime: up to 20 bodies of the selected type in roster mode.
 
@@ -53,4 +55,4 @@ A two-runtime roster encounter can therefore reach roughly 40 bodies. Native **H
 
 ## Current limitation
 
-Only one enemy type from each underlying runtime system can be composed into the same room. Selected enemies from the same system rotate between encounters rather than appearing together. Native same-system multi-type routing is the next architecture step.
+Same-runtime multi-type composition is currently enabled for the Original runtime only. Multiple FLARE types and multiple Hades types through the mixed-runtime roster adapter remain later steps.
