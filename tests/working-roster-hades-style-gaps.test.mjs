@@ -31,7 +31,8 @@ assert.equal(slowFlow.spawnDelay,.72);
 
 function geometry(){return{clone:geometry,dispose(){}};}
 function material(){return{opacity:0,color:{setHex(){}},clone:material,dispose(){}};}
-function telegraph(){return{geometry:geometry(),material:material(),position:{set(){}},rotation:{x:0,z:0},scale:{setScalar(){}},clone:telegraph};}
+function position(x=0,y=0,z=0){return{x,y,z,set(nx,ny,nz){this.x=nx;this.y=ny;this.z=nz;}};}
+function telegraph(){return{geometry:geometry(),material:material(),position:position(),rotation:{x:0,z:0},scale:{setScalar(){}},clone:telegraph};}
 function group(){return{children:[],add(item){item.parent=this;this.children.push(item);},remove(item){this.children=this.children.filter(entry=>entry!==item);item.parent=null;}};}
 
 const storageData=new Map([[ENEMY_LAB_WORKING_ROSTER_STORAGE_KEY,JSON.stringify(['grunt'])]]);
@@ -39,15 +40,16 @@ const storage={getItem:key=>storageData.get(key)??null,setItem:(key,value)=>stor
 const rootGroup=group();
 let waveSize=1;
 let childUpdates=0;
+const spawnXs=[20,18,6,7,14,13,12,11,10];
 const originalSystem={
   enemies:[],group:rootGroup,director:{releaseAllForEnemy(){}},
   setSpawnKind(){},setWaveSize(value){waveSize=Math.round(Number(value)||1);},
   startRoomEncounter(){
     this.enemies.splice(0);
     for(let i=0;i<waveSize;i++){
-      const root={visible:true,parent:rootGroup,traverse(){}};
+      const root={visible:true,parent:rootGroup,isEnemyRoot:true,position:position(spawnXs[i]??i,0,0),traverse(){}};
       rootGroup.children.push(root);
-      this.enemies.push({kind:['grunt','dagger','mace','rock','captain'][i%5],hp:10,root,telegraph:telegraph()});
+      this.enemies.push({kind:'grunt',x:spawnXs[i]??i,z:0,hp:10,root,telegraph:telegraph(),cooldown:0});
     }
   },
   update(){childUpdates++;},reset(){this.enemies.splice(0);},clearRoomRuntime(){this.enemies.splice(0);},
@@ -67,27 +69,32 @@ originalSystem.startRoomEncounter(-1);
 assert.equal(originalSystem.enemies.length,0,'the opening cohort remains behind spawn rings');
 assert.equal(originalSystem.telegraphCount,2,'roster mode opens two Hades-style spawn rings at a time');
 assert.equal(originalSystem.queuedSpawnCount,7,'the rest of the batch is held as reinforcements');
+assert.equal(rootGroup.children.some(item=>item.isEnemyRoot),false,'enemy models are detached until the preview ring completes');
+const openingRingXs=rootGroup.children.map(item=>item.position?.x).filter(Number.isFinite).sort((a,b)=>a-b);
+assert.deepEqual(openingRingXs,[6,7],'the opening previews prioritize nearby suitable spawn points');
 
-originalSystem.update(.4,{});
+originalSystem.update(.4,{x:0,z:0});
 assert.equal(childUpdates,0,'AI remains paused while no enemy has finished spawning');
 assert.equal(originalSystem.enemies.length,0);
+assert.equal(rootGroup.children.some(item=>item.isEnemyRoot),false);
 
-originalSystem.update(.4,{});
-assert.equal(originalSystem.enemies.length,2,'only the first cohort enters combat');
-assert.ok(originalSystem.enemies.every(enemy=>enemy.kind==='grunt'&&enemy.root.visible));
+originalSystem.update(.4,{x:0,z:0});
+assert.equal(originalSystem.enemies.length,2,'only the first cohort enters combat after the rings finish');
+assert.ok(originalSystem.enemies.every(enemy=>enemy.kind==='grunt'&&enemy.root.visible&&enemy.root.parent===rootGroup));
 assert.equal(originalSystem.telegraphCount,2,'the next cohort starts telegraphing immediately');
 assert.equal(originalSystem.queuedSpawnCount,5);
 assert.equal(childUpdates,1,'active enemies keep fighting while reinforcements telegraph');
 
-originalSystem.update(.8,{});
+originalSystem.update(.8,{x:0,z:0});
 assert.equal(originalSystem.enemies.length,4);
 assert.equal(originalSystem.telegraphCount,1,'the active-weight ceiling prevents the whole reserve from arriving at once');
 assert.equal(originalSystem.queuedSpawnCount,4);
 
 originalSystem.enemies.splice(0,3);
-originalSystem.update(.01,{});
+originalSystem.update(.01,{x:0,z:0});
 assert.equal(originalSystem.enemies.length,1);
 assert.equal(originalSystem.telegraphCount,2,'deaths open room for another reinforcement cohort');
 assert.equal(originalSystem.queuedSpawnCount,3);
+assert.equal(source.getWorkingRosterEncounterStatus().previewBeforeModel,true);
 
 console.log('Working roster Hades-style gap coverage: ok');
