@@ -30,14 +30,14 @@ Native Hades enemies keep their existing queue. Original and FLARE roster enemie
 - the ring appears before the model joins the scene
 - queued reinforcements release as active capacity opens
 
-The earlier Original/FLARE spawn adapter is explicitly disabled while roster mode is active.
+The earlier Original/FLARE spawn adapter is explicitly disabled while roster mode is active. Hades remains the source behavior; the other runtimes now follow its cadence rules directly.
 
 ## Current behavior
 
 - The saved roster constrains which individual enemy types are eligible.
 - Hades-style budget, introduction, compatibility, and count rules compose the encounters.
 - Compatible Goblin types and Lugaru can share one Original-runtime encounter.
-- Original, FLARE, and Hades enemies use the Hades reinforcement cadence in roster mode.
+- Original, FLARE, and Hades enemies follow the Hades reinforcement cadence in roster mode.
 - The shared enemy-count control supports 1×, 2×, 5×, and 10× roster populations.
 - An enemy marked **Lab Only**, such as the current Lion, appears only when deliberately selected.
 - An empty roster falls back to **ALL · Budgeted Encounter** so a room cannot become uncleared.
