@@ -222,6 +222,17 @@ export function installRosterSpawnTelegraphSupport(system,{
   return system;
 }
 
+function clarifyHadesStyleControls(){
+  if(typeof document==='undefined')return;
+  const label=document.querySelector('label[for="hadesDifficultyRampSelect"]');
+  if(label)label.textContent='HADES-STYLE ENEMY INTRODUCTION';
+  const select=document.getElementById('hadesDifficultyRampSelect');
+  if(select){
+    const labels={slow:'Slow · Gradual',medium:'Medium · Faster',high:'High · Fast'};
+    for(const option of select.options)if(labels[option.value])option.textContent=labels[option.value];
+  }
+}
+
 export function installWorkingRosterEncounterMode(source,{
   storage=globalThis.localStorage,
   catalog=ARENA_ENEMY_CATALOG,
@@ -246,6 +257,7 @@ export function installWorkingRosterEncounterMode(source,{
     source.flareSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.hadesSystem?.setTelegraphedSpawns?.(true);
     setHadesRosterModeActive(workingRosterMode);
+    setTimeout(clarifyHadesStyleControls,0);
     return workingRosterMode;
   };
 
@@ -278,5 +290,6 @@ export function installWorkingRosterEncounterMode(source,{
     reinforcementFlow:true,
   });
   source.__workingRosterEncounterMode=true;
+  setTimeout(clarifyHadesStyleControls,0);
   return source;
 }
