@@ -40,6 +40,7 @@ const jsonGet=(storage,key,fallback)=>{try{const raw=storage?.getItem?.(key);ret
 const jsonSet=(storage,key,value)=>{try{storage?.setItem?.(key,JSON.stringify(value));return true;}catch{return false;}};
 const rawGet=(storage,key,fallback)=>{try{const value=storage?.getItem?.(key);return value==null?fallback:value;}catch{return fallback;}};
 const rawSet=(storage,key,value)=>{try{storage?.setItem?.(key,String(value));return true;}catch{return false;}};
+const sameIds=(left=[],right=[])=>left.length===right.length&&left.every((id,index)=>id===right[index]);
 
 export function normalizeCombatProfile(profile={}, {
   enemyCatalog=ARENA_ENEMY_CATALOG,
@@ -113,8 +114,8 @@ export function deleteCombatProfile(storage=globalThis.localStorage,id='',option
   const key=String(id||'');
   const next=readCombatProfiles(storage,options).filter(profile=>profile.id!==key);
   writeCombatProfiles(storage,next,options);
-  const active=readActiveCombatProfile(storage,options);
-  if(active?.id===key){try{storage?.removeItem?.(ACTIVE_COMBAT_PROFILE_STORAGE_KEY);}catch{}}
+  const active=readActiveCombatProfile(storage,{...options,validateSelection:false});
+  if(active?.id===key)clearActiveCombatProfile(storage);
   return next;
 }
 
@@ -152,13 +153,22 @@ export function setActiveCombatProfile(storage=globalThis.localStorage,profile={
   return normalized;
 }
 
-export function readActiveCombatProfile(storage=globalThis.localStorage,options={}){
-  const raw=jsonGet(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,null);
-  return raw?normalizeCombatProfile(raw,options):null;
-}
-
 export function clearActiveCombatProfile(storage=globalThis.localStorage){
   try{storage?.removeItem?.(ACTIVE_COMBAT_PROFILE_STORAGE_KEY);}catch{}
+}
+
+export function readActiveCombatProfile(storage=globalThis.localStorage,options={}){
+  const raw=jsonGet(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,null);
+  if(!raw)return null;
+  const profile=normalizeCombatProfile(raw,options);
+  if(options.validateSelection===false)return profile;
+  const draft=readCombatProfileDraft(storage,options);
+  const matches=sameIds(profile.enemyIds,draft.enemyIds)&&sameIds(profile.abilityIds,draft.abilityIds)&&
+    profile.spawnMultiplier===draft.spawnMultiplier&&profile.introduction===draft.introduction&&
+    profile.pressureBudget===draft.pressureBudget&&profile.aggression===draft.aggression&&profile.directorMode===draft.directorMode;
+  if(matches)return profile;
+  clearActiveCombatProfile(storage);
+  return null;
 }
 
 function syncSlider(document,label,value){
@@ -171,6 +181,30 @@ function syncSlider(document,label,value){
     if(input)input.value=String(value);
     if(output)output.textContent=String(value);
   }
+}
+
+export function installCombatProfileTuningPersistence({
+  storage=globalThis.localStorage,
+  document=globalThis.document,
+}={}){
+  if(!document||document.documentElement?.dataset?.combatProfileTuningPersistence==='1')return false;
+  if(document.documentElement?.dataset)document.documentElement.dataset.combatProfileTuningPersistence='1';
+  const bindSlider=(label,key)=>{
+    for(const row of document.querySelectorAll?.('#dirSliders .srow')||[]){
+      if(!(row.querySelector?.('.slabel')?.textContent?.trim()||'').startsWith(label))continue;
+      row.querySelector?.('input')?.addEventListener('input',event=>{
+        jsonSet(storage,key,Number(event.currentTarget.value));
+        clearActiveCombatProfile(storage);
+      });
+    }
+  };
+  bindSlider('PRESSURE BUDGET',STORAGE_KEYS.profilePressure);
+  bindSlider('AGGRESSION',STORAGE_KEYS.profileAggression);
+  document.getElementById?.('hadesSpawnMultiplierSelect')?.addEventListener('change',()=>clearActiveCombatProfile(storage));
+  document.getElementById?.('hadesDifficultyRampSelect')?.addEventListener('change',()=>clearActiveCombatProfile(storage));
+  document.getElementById?.('spawnSelect')?.addEventListener('change',()=>clearActiveCombatProfile(storage));
+  document.getElementById?.('modeGrid')?.addEventListener('click',event=>{if(event.target.closest?.('button'))clearActiveCombatProfile(storage);});
+  return true;
 }
 
 export function applyCombatProfileToArena(api,profile,{
