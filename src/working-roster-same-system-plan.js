@@ -45,7 +45,26 @@ function describeComposition(groups){
 function budgetForDepth(depth){return clamp(Math.round(14+depth*4.7),18,82);}
 function maxTotalForDepth(depth){return clamp(3+Math.ceil(depth*.78),4,14);}
 
+function focusedOriginalMix(eligible,depth,budget){
+  if(eligible.length<2||eligible.length>3||!eligible.every(group=>group.system==='original'))return null;
+  const selected=[];
+  let spent=0;
+  for(const group of eligible){
+    if(selected.some(existing=>!areWorkingRosterGroupsCompatible(existing,group,depth)))continue;
+    if(spent+group.encounterCost>budget)continue;
+    selected.push(group);
+    spent+=group.encounterCost;
+  }
+  return selected.length>=2?selected:null;
+}
+
 function chooseGroups(eligible,depth,budget,random){
+  // A focused all-Original roster is an explicit test request. Once its selected
+  // enemies are eligible and fit the room budget, compose them together instead of
+  // making the tester reroll rooms until the random pair/trio branch happens.
+  const focused=focusedOriginalMix(eligible,depth,budget);
+  if(focused)return focused;
+
   let primary=pick(eligible,random)||eligible[0];
   if(depth<3&&primary.needsPartner)primary=eligible.find(group=>!group.needsPartner)||primary;
   if(depth<3)return[primary];
