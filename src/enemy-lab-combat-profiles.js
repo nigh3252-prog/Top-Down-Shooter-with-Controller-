@@ -42,6 +42,13 @@ function optionSelect(document,values,current){
   return select;
 }
 
+function rangeField(document,draft,key,label,{min,max,step}){
+  const input=document.createElement('input');input.type='range';input.min=String(min);input.max=String(max);input.step=String(step);input.value=String(draft[key]);
+  const value=document.createElement('strong');value.className='profileRangeValue';value.textContent=String(draft[key]);
+  input.addEventListener('input',()=>{draft[key]=Number(input.value);value.textContent=input.value;});
+  const wrap=document.createElement('div');wrap.append(input,value);return makeField(document,label,wrap);
+}
+
 export function installEnemyLabCombatProfiles({
   storage=globalThis.localStorage,
   hostWindow=globalThis,
@@ -132,6 +139,10 @@ export function installEnemyLabCombatProfiles({
       introduction:draft.introduction,
       pressureBudget:draft.pressureBudget,
       aggression:draft.aggression,
+      enemySpeed:draft.enemySpeed,
+      enemyHealth:draft.enemyHealth,
+      enemySize:draft.enemySize,
+      idleRange:draft.idleRange,
       directorMode:draft.directorMode,
     });
     profiles=readCombatProfiles(storage);editingId=saved.id;name=saved.name;draft={...saved};syncCategoryLabel();return saved;
@@ -143,9 +154,10 @@ export function installEnemyLabCombatProfiles({
     const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
     profiles=readCombatProfiles(storage);
     const active=readActiveCombatProfile(storage);
-    if(hint)hint.textContent='Save and reopen a complete combat environment: enemies, ability availability, Hades population, introduction, and attack pressure.';
+    const current=readCombatProfileDraft(storage);
+    if(hint)hint.textContent='Save and reopen a complete combat environment: enemies, ability availability, Hades spawning, director behavior, and enemy simulation tuning.';
     const root=document.createElement('div');root.className='valueList';root.dataset.combatProfilesRoot='1';
-    root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${readCombatProfileDraft(storage).enemyIds.length} enemies and ${readCombatProfileDraft(storage).abilityIds.length} abilities.`));
+    root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${current.enemyIds.length} enemies and ${current.abilityIds.length} abilities.`));
 
     const editor=document.createElement('div');editor.className='profileEditor';
     const grid=document.createElement('div');grid.className='profileGrid';
@@ -169,15 +181,12 @@ export function installEnemyLabCombatProfiles({
     directorSelect.addEventListener('change',()=>{draft.directorMode=directorSelect.value;});
     grid.appendChild(makeField(document,'COMBAT DIRECTOR',directorSelect));
 
-    const pressure=document.createElement('input');pressure.type='range';pressure.min='.5';pressure.max='4';pressure.step='.25';pressure.value=String(draft.pressureBudget);
-    const pressureValue=document.createElement('strong');pressureValue.className='profileRangeValue';pressureValue.textContent=String(draft.pressureBudget);
-    pressure.addEventListener('input',()=>{draft.pressureBudget=Number(pressure.value);pressureValue.textContent=pressure.value;});
-    const pressureWrap=document.createElement('div');pressureWrap.append(pressure,pressureValue);grid.appendChild(makeField(document,'PRESSURE BUDGET',pressureWrap));
-
-    const aggression=document.createElement('input');aggression.type='range';aggression.min='.25';aggression.max='3';aggression.step='.05';aggression.value=String(draft.aggression);
-    const aggressionValue=document.createElement('strong');aggressionValue.className='profileRangeValue';aggressionValue.textContent=String(draft.aggression);
-    aggression.addEventListener('input',()=>{draft.aggression=Number(aggression.value);aggressionValue.textContent=aggression.value;});
-    const aggressionWrap=document.createElement('div');aggressionWrap.append(aggression,aggressionValue);grid.appendChild(makeField(document,'AGGRESSION',aggressionWrap));
+    grid.appendChild(rangeField(document,draft,'pressureBudget','PRESSURE BUDGET',{min:.5,max:4,step:.25}));
+    grid.appendChild(rangeField(document,draft,'aggression','AGGRESSION',{min:.25,max:3,step:.05}));
+    grid.appendChild(rangeField(document,draft,'enemySpeed','ENEMY SPEED',{min:.25,max:1.5,step:.05}));
+    grid.appendChild(rangeField(document,draft,'enemyHealth','ENEMY HEALTH',{min:.25,max:5,step:.05}));
+    grid.appendChild(rangeField(document,draft,'enemySize','ENEMY SIZE',{min:1,max:3.5,step:.1}));
+    grid.appendChild(rangeField(document,draft,'idleRange','IDLE RANGE',{min:1,max:6,step:.25}));
     editor.appendChild(grid);
 
     const actions=document.createElement('div');actions.className='profileActions';
@@ -191,7 +200,7 @@ export function installEnemyLabCombatProfiles({
       const card=document.createElement('div');card.className=`profileCard${active?.id===profile.id?' active':''}`;
       const title=document.createElement('h3');title.textContent=profile.name;
       const summary=document.createElement('p');
-      summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · ${profile.spawnMultiplier}× · ${profile.introduction} introduction · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
+      summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · ${profile.spawnMultiplier}× · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
       const row=document.createElement('div');row.className='row';
       const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD';load.addEventListener('click',()=>{applyToLab(profile);renderProfiles();});
       const open=document.createElement('button');open.className='miniBtn';open.textContent='OPEN ARENA';open.addEventListener('click',()=>openArena(profile));
