@@ -85,15 +85,38 @@ export function installOriginalIndividualSpawnSupport(system,{releaseTarget=null
   return system;
 }
 
-function installRosterSpawnTelegraphSupport(system,{duration=.78}={}){
+export function rosterSpawnFlowSettings(plan,systemKey,fallbackCount=1){
+  const groups=Array.isArray(plan?.groups)?plan.groups:[];
+  const group=groups.find(entry=>entry?.system===systemKey);
+  const plannedCount=clamp(Math.round(Number(group?.count)||Number(fallbackCount)||1),1,20);
+  return {
+    plannedCount,
+    activeWeightCap:Math.max(2.5,plannedCount*.65),
+    simultaneousTelegraphs:Math.min(2,plannedCount),
+    spawnDelay:clamp(Number(plan?.spawnDelay)||.72,.35,1.5),
+  };
+}
+
+export function installRosterSpawnTelegraphSupport(system,{
+  systemKey='original',
+  planGetter=()=>null,
+  catalog=ARENA_ENEMY_CATALOG,
+}={}){
   if(!system||system.__workingRosterSpawnTelegraphSupport)return system;
   if(!Array.isArray(system.enemies)||!system.group||typeof system.startRoomEncounter!=='function'||typeof system.update!=='function')return system;
   const baseStart=system.startRoomEncounter.bind(system);
   const baseUpdate=system.update.bind(system);
   const baseReset=system.reset?.bind(system);
   const baseClear=system.clearRoomRuntime?.bind(system);
+  const weightsByKind=new Map((catalog||[]).map(enemy=>[String(enemy.spawnKind||enemy.id),Math.max(.1,Number(enemy.activeWeight)||1)]));
   let enabled=false;
+  let queue=[];
   let pending=[];
+
+  const enemyWeight=enemy=>Math.max(.1,Number(enemy?.def?.activeWeight)||weightsByKind.get(String(enemy?.kind||''))||1);
+  const activeWeight=()=>system.enemies.reduce((sum,enemy)=>sum+(Number(enemy?.hp)>0?enemyWeight(enemy):0),0);
+  const pendingWeight=()=>pending.reduce((sum,entry)=>sum+enemyWeight(entry.enemy),0);
+  const flow=()=>rosterSpawnFlowSettings(planGetter?.(),systemKey,system.enemies.length+queue.length+pending.length||1);
 
   function destroyRing(ring){
     ring?.parent?.remove?.(ring);
@@ -115,55 +138,83 @@ function installRosterSpawnTelegraphSupport(system,{duration=.78}={}){
     system.group.add(ring);
     return ring;
   }
-  function restorePending(){
+  function restoreDeferred(){
     for(const entry of pending){
       destroyRing(entry.ring);
       if(entry.enemy?.root)entry.enemy.root.visible=true;
       if(entry.enemy&&!system.enemies.includes(entry.enemy))system.enemies.push(entry.enemy);
     }
+    for(const enemy of queue){
+      if(enemy?.root)enemy.root.visible=true;
+      if(enemy&&!system.enemies.includes(enemy))system.enemies.push(enemy);
+    }
     pending=[];
+    queue=[];
+  }
+  function beginTelegraph(enemy,settings){
+    pending.push({enemy,ring:makeRing(enemy),t:settings.spawnDelay,total:settings.spawnDelay});
+  }
+  function fillTelegraphs(){
+    if(!enabled||!queue.length)return;
+    const settings=flow();
+    let guard=0;
+    while(queue.length&&pending.length<settings.simultaneousTelegraphs&&guard++<40){
+      const enemy=queue[0];
+      const projected=activeWeight()+pendingWeight()+enemyWeight(enemy);
+      const canOverflow=!system.enemies.length&&!pending.length;
+      if(!canOverflow&&projected>settings.activeWeightCap)break;
+      queue.shift();
+      beginTelegraph(enemy,settings);
+    }
   }
   function stageSpawnedEnemies(){
     if(!enabled||!system.enemies.length)return;
-    const staged=system.enemies.splice(0);
-    pending=staged.map(enemy=>{
-      if(enemy.root)enemy.root.visible=false;
-      return{enemy,ring:makeRing(enemy),t:duration,total:duration};
-    });
+    queue=system.enemies.splice(0);
+    for(const enemy of queue)if(enemy?.root)enemy.root.visible=false;
+    fillTelegraphs();
   }
+  function updateTelegraphs(dt){
+    const elapsed=Math.max(0,Number(dt)||0);
+    for(let index=pending.length-1;index>=0;index--){
+      const entry=pending[index];
+      entry.t-=elapsed;
+      const u=clamp(1-entry.t/Math.max(.001,entry.total),0,1);
+      if(entry.ring){
+        const pulse=.92+Math.sin((performance.now?.()??Date.now())*.012)*(.04+u*.07);
+        entry.ring.scale.setScalar?.((.72+u*.52)*pulse);
+        entry.ring.rotation.z+=elapsed*(1+u*1.5);
+        if(entry.ring.material)entry.ring.material.opacity=.26+u*.68;
+      }
+      if(entry.t>0)continue;
+      destroyRing(entry.ring);
+      if(entry.enemy?.root)entry.enemy.root.visible=true;
+      if(entry.enemy&&!system.enemies.includes(entry.enemy))system.enemies.push(entry.enemy);
+      pending.splice(index,1);
+    }
+  }
+
   system.startRoomEncounter=roomId=>{
-    restorePending();
+    restoreDeferred();
     const result=baseStart(roomId);
     stageSpawnedEnemies();
     return result;
   };
   system.update=(dt,player)=>{
-    if(pending.length){
-      let waiting=false;
-      for(const entry of pending){
-        entry.t-=Math.max(0,Number(dt)||0);
-        const u=clamp(1-entry.t/Math.max(.001,entry.total),0,1);
-        if(entry.ring){
-          const pulse=.92+Math.sin((performance.now?.()??Date.now())*.012)*(.04+u*.07);
-          entry.ring.scale.setScalar?.((.72+u*.52)*pulse);
-          entry.ring.rotation.z+=Math.max(0,Number(dt)||0)*(1+u*1.5);
-          if(entry.ring.material)entry.ring.material.opacity=.26+u*.68;
-        }
-        if(entry.t>0)waiting=true;
-      }
-      if(waiting)return;
-      restorePending();
-    }
-    return baseUpdate(dt,player);
+    updateTelegraphs(dt);
+    fillTelegraphs();
+    const deferred=queue.length>0||pending.length>0;
+    const result=system.enemies.length||!deferred?baseUpdate(dt,player):undefined;
+    fillTelegraphs();
+    return result;
   };
-  if(baseReset)system.reset=()=>{restorePending();return baseReset();};
-  if(baseClear)system.clearRoomRuntime=()=>{restorePending();return baseClear();};
+  if(baseReset)system.reset=()=>{restoreDeferred();return baseReset();};
+  if(baseClear)system.clearRoomRuntime=()=>{restoreDeferred();return baseClear();};
   system.setWorkingRosterSpawnTelegraphs=value=>{
     enabled=!!value;
-    if(!enabled)restorePending();
+    if(!enabled)restoreDeferred();
     return enabled;
   };
-  for(const [name,getter] of [['telegraphCount',()=>pending.length],['queuedSpawnCount',()=>0]]){
+  for(const [name,getter] of [['telegraphCount',()=>pending.length],['queuedSpawnCount',()=>queue.length]]){
     const descriptor=Object.getOwnPropertyDescriptor(system,name);
     if(!descriptor||descriptor.configurable)Object.defineProperty(system,name,{configurable:true,enumerable:true,get:getter});
   }
@@ -181,8 +232,9 @@ export function installWorkingRosterEncounterMode(source,{
   installOriginalIndividualSpawnSupport(source.originalSystem,{
     releaseTarget:enemy=>source.factionService?.releaseTarget?.(enemy),
   });
-  installRosterSpawnTelegraphSupport(source.originalSystem);
-  installRosterSpawnTelegraphSupport(source.flareSystem);
+  const currentPlan=()=>source.currentEncounterPlan;
+  installRosterSpawnTelegraphSupport(source.originalSystem,{systemKey:'original',planGetter:currentPlan,catalog});
+  installRosterSpawnTelegraphSupport(source.flareSystem,{systemKey:'flare',planGetter:currentPlan,catalog});
   const baseSetSpawnKind=source.setSpawnKind.bind(source);
   const spawnDescriptor=Object.getOwnPropertyDescriptor(source,'spawnKind');
   const baseSpawnKind=()=>spawnDescriptor?.get?.call(source)??ALL_ENEMIES_BUDGET_ID;
@@ -223,6 +275,7 @@ export function installWorkingRosterEncounterMode(source,{
     ids:rosterIds(),
     fallbackMode:ALL_ENEMIES_BUDGET_ID,
     spawnTelegraphs:true,
+    reinforcementFlow:true,
   });
   source.__workingRosterEncounterMode=true;
   return source;
