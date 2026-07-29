@@ -1,6 +1,7 @@
 import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
 
 export const ENEMY_LAB_WORKING_ROSTER_STORAGE_KEY='enemyLab.workingRoster.v1';
+const ARENA_SPAWN_SETTING_KEY='stoneWandererSettings.v1.arena.spawnKind';
 
 export function normalizeWorkingRosterIds(ids,catalog=[]){
   const requested=new Set(Array.isArray(ids)?ids.map(id=>String(id)):[]);
@@ -93,31 +94,29 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
   }
   function startHadesStyleEncounter(){
     if(!rosterIds.length)return{ok:false,error:'Select at least one enemy first.'};
+    try{storage?.setItem?.(ARENA_SPAWN_SETTING_KEY,JSON.stringify(WORKING_ROSTER_HADES_ID));}catch{}
     const frame=document.getElementById('arenaFrame'),frameWindow=frame?.contentWindow,frameDocument=frame?.contentDocument;
     const select=frameDocument?.getElementById('spawnSelect');
     if(select?.querySelector(`option[value="${WORKING_ROSTER_HADES_ID}"]`)){
       select.value=WORKING_ROSTER_HADES_ID;
       select.dispatchEvent(new frameWindow.Event('change',{bubbles:true}));
-    }else{
-      const system=frameWindow?.__enemyLabEnemySystem;
-      if(!system?.setSpawnKind)return{ok:false,error:'Combat Arena is still loading.'};
-      system.setSpawnKind(WORKING_ROSTER_HADES_ID);
-      frameWindow?.__enemyLabControlBridge?.resetFight?.();
-    }
-    document.getElementById('closeBtn')?.click();
-    return{ok:true,ids:[...rosterIds]};
+    }else frameWindow?.__enemyLabEnemySystem?.setSpawnKind?.(WORKING_ROSTER_HADES_ID);
+    const destination=new URL('./combat-arena.html',document.location.href);
+    destination.search='';
+    setTimeout(()=>document.location.assign(destination),0);
+    return{ok:true,ids:[...rosterIds],destination:String(destination)};
   }
   function renderRoster(){
     if(!rosterOpen)return;
     const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
-    if(hint)hint.textContent='Build a saved draft roster, then launch it through the Hades-style encounter composer.';
+    if(hint)hint.textContent='Build a saved draft roster, then open it in the full Combat Arena with Hades-style encounters.';
     const root=document.createElement('div');root.className='valueList';root.dataset.workingRosterRoot='1';
     root.appendChild(makeStatus(document,'WORKING ARENA ROSTER',`${rosterIds.length} of ${catalog.length} enemies selected. This is a local draft workspace, not a finished-content approval list.`));
 
     const startButton=makeChoice(document,{
-      label:'START HADES-STYLE',
-      sub:rosterIds.length?`Restart Combat Arena using only these ${rosterIds.length} selected enemies`:'Select at least one enemy first',
-      meta:'USES THE REAL COMBAT ARENA',
+      label:'OPEN COMBAT ARENA',
+      sub:rosterIds.length?`Launch Hades-style encounters using only these ${rosterIds.length} selected enemies`:'Select at least one enemy first',
+      meta:'SAVES ROSTER MODE · OPENS FULL ARENA',
       className:'primary',
       onClick:()=>startHadesStyleEncounter(),
     });
