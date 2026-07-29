@@ -1,18 +1,19 @@
 import { ATTACK_DEFINITIONS } from './attacks.js';
 import { EXTRA_STANCE_CARDS, NON_STANCE_CARDS } from './ability-cards.js';
+import { applyActiveCombatProfileToArena } from './combat-profile.js';
 import { guardPoseFor } from './guard-poses.js';
 import { createRewardTotemGate } from './reward-totem-gate.js';
 import { STANCE_CARDS } from './stance-cards.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
+import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
 
 export const STARTER_STANCE_IDS = Object.freeze(['S24','S09']);
 export const ALL_STANCE_CARDS = Object.freeze([...STANCE_CARDS,...EXTRA_STANCE_CARDS]);
 
 function shuffleCopy(values,rng=Math.random){
   const out=values.slice();
-  for(let i=out.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[out[i],out[j]]=[out[j],out[i]];}
-  return out;
+  for(let i=out.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;
 }
 export function drawCards(pool,count,rng=Math.random){
   if(!Array.isArray(pool)||!pool.length||count<=0)return[];
@@ -21,11 +22,13 @@ export function drawCards(pool,count,rng=Math.random){
   return picked;
 }
 export function buildRunOffers({weaponOrder=STONE_WEAPON_ORDER,nonStancePool=NON_STANCE_CARDS,count=3,rng=Math.random}={}){
-  return drawCards(weaponOrder,count,rng).map(weaponId=>({weaponId,cards:drawCards(nonStancePool,2,rng)}));
+  const starterCount=Math.min(2,Math.max(0,nonStancePool.length));
+  return drawCards(weaponOrder,count,rng).map(weaponId=>({weaponId,cards:drawCards(nonStancePool,starterCount,rng)}));
 }
 export function buildRewardPool(stancePool=ALL_STANCE_CARDS,nonStancePool=NON_STANCE_CARDS){return[...stancePool,...nonStancePool];}
 export function drawRewardChoices({stancePool=ALL_STANCE_CARDS,nonStancePool=NON_STANCE_CARDS,count=3,rng=Math.random}={}){
-  return drawCards(buildRewardPool(stancePool,nonStancePool),count,rng);
+  const pool=buildRewardPool(stancePool,nonStancePool);
+  return drawCards(pool,Math.min(count,pool.length),rng);
 }
 
 function cleanName(card){return String(card?.name||'Unknown Card').replace(/^S\d+\s*/,'');}
@@ -73,24 +76,49 @@ export function installRunDraft(deck){
   window.__STONE_RUN_DRAFT_INSTALLED__=true;addStyles();
   const starters=STARTER_STANCE_IDS.map(id=>ALL_STANCE_CARDS.find(card=>card.id===id)).filter(Boolean);
   if(starters.length!==2){const err=document.getElementById('err');if(err){err.style.display='block';err.textContent='Run setup missing Rat Step or Deep Launch';}return;}
-  const state={api:null,setupOpen:true,rewardOpen:false,seenCleared:0,rewardRoomId:null,totem:null};
+  const state={api:null,setupOpen:true,rewardOpen:false,seenCleared:0,rewardRoomId:null,totem:null,profile:null,pools:null};
   const title=document.createElement('div');title.className='sgTitle';title.textContent='CHOOSE A LOADOUT';
   const hint=document.createElement('div');hint.className='sgHint';hint.textContent='Choose one weapon and two non-stance starter cards.';
   const grid=document.createElement('div');grid.id='runOfferGrid';const actions=document.createElement('div');actions.id='runSetupActions';
   const fullscreen=document.getElementById('sgFsBtn');if(fullscreen)actions.appendChild(fullscreen);startCard.classList.add('runDraftCard');startCard.replaceChildren(title,hint,grid,actions);
   const rewardGate=document.createElement('div');rewardGate.id='cardRewardGate';rewardGate.className='hidden';rewardGate.innerHTML='<div id="cardRewardCard"><div id="cardRewardTitle">ROOM CLEAR</div><div id="cardRewardHint">Choose one card for the run, or skip.</div><div id="cardRewardChoices"></div><button id="cardRewardSkip">SKIP</button></div>';document.body.appendChild(rewardGate);
   const rewardChoices=rewardGate.querySelector('#cardRewardChoices');
+  const currentPools=()=>{state.pools=resolveWorkingAbilityRunPools();return state.pools;};
 
   function closeReward(){const roomId=state.rewardRoomId;state.rewardOpen=false;state.rewardRoomId=null;rewardGate.classList.add('hidden');state.totem?.resolve(roomId);if(state.api&&!state.setupOpen&&document.getElementById('panel')?.classList.contains('hidden'))state.api.arena.paused=false;}
-  function openReward(roomId){if(!state.api||state.rewardOpen||state.setupOpen)return;state.rewardOpen=true;state.rewardRoomId=roomId;state.api.arena.paused=true;const choices=drawRewardChoices();rewardChoices.replaceChildren(...choices.map(card=>{const button=document.createElement('button');button.className='rewardChoice';button.innerHTML=`<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'}</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;}));rewardGate.classList.remove('hidden');}
+  function openReward(roomId){
+    if(!state.api||state.rewardOpen||state.setupOpen)return;
+    state.rewardOpen=true;state.rewardRoomId=roomId;state.api.arena.paused=true;
+    const pools=currentPools();
+    const choices=drawCards(pools.rewardPool,Math.min(3,pools.rewardPool.length));
+    const rewardHint=rewardGate.querySelector('#cardRewardHint');
+    if(rewardHint)rewardHint.textContent=pools.active?`Choose from the ${pools.cards.length}-card Working Ability Pool, or skip.`:'Choose one card for the run, or skip.';
+    rewardChoices.replaceChildren(...choices.map(card=>{const button=document.createElement('button');button.className='rewardChoice';button.innerHTML=`<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'}</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;}));
+    rewardGate.classList.remove('hidden');
+  }
   rewardGate.querySelector('#cardRewardSkip').addEventListener('click',closeReward);
 
   function chooseOffer(offer){const api=state.api;if(!api)return;state.totem?.reset();deck.unlockRun();api.PC.selectCombatWeapon(offer.weaponId);StoneSettings.set('arena.weapon',offer.weaponId);deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});api.arena.started=true;state.setupOpen=false;startGate.classList.add('hidden');forceArenaReset();setOpeningStance(api,starters[0]);state.seenCleared=api.encounterState?.progress?.cleared||0;api.arena.paused=false;}
-  function renderOffers(){grid.replaceChildren(...buildRunOffers().map(offer=>{const weapon=STONE_WEAPONS[offer.weaponId]||{label:offer.weaponId,profile:''};const button=document.createElement('button');button.className='runOffer';button.innerHTML=`<div class="runOfferWeapon">${weapon.label}</div><div class="runOfferProfile">${weapon.profile||''}</div><div class="runFixedStances">${starters.map(card=>`<div class="runFixedStance"><b>${cleanName(card)}</b>${subtitle(card)}</div>`).join('')}</div><div class="runStarterCards">${offer.cards.map(card=>`<div class="runStarterCard"><b>${cleanName(card)}</b><span>${subtitle(card)}</span></div>`).join('')}</div>`;button.addEventListener('click',()=>chooseOffer(offer));return button;}));}
+  function renderOffers(){
+    const pools=currentPools();
+    const profileText=state.profile?`${state.profile.name} · `:'';
+    hint.textContent=pools.active
+      ?`${profileText}${pools.cards.length}-card Working Ability Pool · ${pools.nonStancePool.length} starter extras · room rewards stay inside the pool.`
+      :'Choose one weapon and two non-stance starter cards. Empty Ability Pool uses the legacy card lists.';
+    const offers=buildRunOffers({nonStancePool:pools.nonStancePool});
+    grid.replaceChildren(...offers.map(offer=>{const weapon=STONE_WEAPONS[offer.weaponId]||{label:offer.weaponId,profile:''};const button=document.createElement('button');button.className='runOffer';button.innerHTML=`<div class="runOfferWeapon">${weapon.label}</div><div class="runOfferProfile">${weapon.profile||''}</div><div class="runFixedStances">${starters.map(card=>`<div class="runFixedStance"><b>${cleanName(card)}</b>${subtitle(card)}</div>`).join('')}</div><div class="runStarterCards">${offer.cards.map(card=>`<div class="runStarterCard"><b>${cleanName(card)}</b><span>${subtitle(card)}</span></div>`).join('')}</div>`;button.addEventListener('click',()=>chooseOffer(offer));return button;}));
+  }
   function openSetup(){if(!state.api)return;state.setupOpen=true;state.api.arena.paused=true;renderOffers();startGate.classList.remove('hidden');}
   const topBar=document.getElementById('topBar');if(topBar&&!document.getElementById('runSetupBtn')){const button=document.createElement('button');button.className='tbtn';button.id='runSetupBtn';button.textContent='RUN';button.title='Choose a new run loadout';button.addEventListener('click',openSetup);topBar.insertBefore(button,topBar.firstChild);}
 
-  async function waitForArena(){const api=window.__arena;if(!api?.PC||api.deck!==deck||!api.arena||!api.encounterState){setTimeout(waitForArena,40);return;}state.api=api;state.seenCleared=api.encounterState.progress?.cleared||0;try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}renderOffers();startGate.classList.remove('hidden');monitorProgress();}
+  async function waitForArena(){
+    const api=window.__arena;if(!api?.PC||api.deck!==deck||!api.arena||!api.encounterState||!api.enemySystem){setTimeout(waitForArena,40);return;}
+    state.api=api;
+    state.profile=applyActiveCombatProfileToArena(state.api);
+    state.seenCleared=api.encounterState.progress?.cleared||0;
+    try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}
+    renderOffers();startGate.classList.remove('hidden');monitorProgress();
+  }
   function monitorProgress(){if(state.api){const cleared=state.api.encounterState?.progress?.cleared||0;if(state.api.arena.started&&cleared>state.seenCleared){state.seenCleared=cleared;state.totem?.arm(state.api.activeRoomId);}else if(cleared<state.seenCleared){state.seenCleared=cleared;state.totem?.reset();}}requestAnimationFrame(monitorProgress);}
   waitForArena();
 }
