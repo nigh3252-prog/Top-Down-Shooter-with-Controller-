@@ -16,7 +16,7 @@ The same mode is also available from Combat Arena's enemy selector.
 
 - **HADES-STYLE ENEMY COUNT** changes the total planned population.
 - **HADES-STYLE ENEMY INTRODUCTION** changes how quickly later or harder enemy types become eligible. It does not change reinforcement timing.
-- **PRESSURE BUDGET** separately controls simultaneous attack pressure through the Combat Director.
+- **PRESSURE BUDGET** separately controls simultaneous attack pressure through the Combat Director. It does not change reinforcement timing.
 
 ## Reinforcement flow
 
@@ -27,6 +27,7 @@ Native Hades enemies keep their queued spawn-ring system. Original and FLARE ros
 - the remaining enemies stay in reserve
 - new reinforcement rings begin as active enemies die and capacity opens
 - active enemies keep fighting while later enemies telegraph
+- Gradual, Faster, and Fast introduction settings all use the same reinforcement cadence
 
 Higher count settings therefore raise both the population visible during the main fight and the size of the reserve wave without dumping the entire batch into the room simultaneously.
 
