@@ -8,18 +8,34 @@ Enemy Lab's saved Working Arena Roster can drive a separate Combat Arena encount
 2. Open **ROSTER**.
 3. Select any enemies you want in the current combat-development pool.
 4. Choose **OPEN COMBAT ARENA**.
-5. The full Combat Arena opens with **ROSTER · Hades-Style Encounter** selected.
+5. Combat Arena opens with **ROSTER · Hades-Style Encounter** selected.
 
-The mode is also available directly from Combat Arena's enemy selector.
+The same mode is also available from Combat Arena's enemy selector.
+
+## Controls
+
+- **HADES-STYLE ENEMY COUNT** changes the total planned population.
+- **HADES-STYLE ENEMY INTRODUCTION** changes how quickly later or harder enemy types become eligible. It does not change reinforcement timing.
+- **PRESSURE BUDGET** separately controls simultaneous attack pressure through the Combat Director.
+
+## Reinforcement flow
+
+Native Hades enemies keep their queued spawn-ring system. Original and FLARE roster enemies use a matching adapter:
+
+- two spawn rings can telegraph at once
+- the active on-screen weight ceiling is approximately 65% of that runtime's planned population
+- the remaining enemies stay in reserve
+- new reinforcement rings begin as active enemies die and capacity opens
+- active enemies keep fighting while later enemies telegraph
+
+Higher count settings therefore raise both the population visible during the main fight and the size of the reserve wave without dumping the entire batch into the room simultaneously.
 
 ## Current behavior
 
 - The saved roster constrains which individual enemy types are eligible.
-- Hades-style budget, introduction, compatibility, and difficulty-ramp rules compose the encounters.
-- Original and FLARE enemies receive visible spawn rings before entering combat; Hades enemies retain their native spawn telegraphs.
-- The shared **HADES-STYLE ENEMY COUNT** control supports 1×, 2×, 5×, and 10× roster populations.
-- The shared **HADES-STYLE DIFFICULTY RAMP** control supports Slow, Medium, and High progression.
-- In roster mode, the Combat Director stays enabled. **PRESSURE BUDGET** remains a separate control for simultaneous attack pressure rather than total bodies.
+- Hades-style budget, introduction, compatibility, and count rules compose the encounters.
+- Original and FLARE enemies receive visible spawn rings; Hades enemies retain their native spawn telegraphs.
+- The shared enemy-count control supports 1×, 2×, 5×, and 10× roster populations.
 - An enemy marked **Lab Only**, such as the current Lion, appears only when deliberately selected.
 - An empty roster falls back to **ALL · Budgeted Encounter** so a room cannot become uncleared.
 - Existing All Enemies and Tartarus Mix modes remain available and keep their existing behavior.
