@@ -4,7 +4,7 @@
 
 import { FLARE_ENEMY_OPTIONS } from './flare-enemies.js';
 import { HADES_ENEMY_OPTIONS, HADES_TARTARUS_POOL_ID } from './hades-enemies.js';
-import { ALL_ENEMIES_BUDGET_OPTION } from './encounter-pools.js';
+import { ALL_ENEMIES_BUDGET_OPTION, WORKING_ROSTER_HADES_OPTION } from './encounter-pools.js';
 
 const STANDARD_RADIUS = .94;
 const STANDARD_HEIGHT = 4.15;
@@ -58,6 +58,7 @@ export const FUSION_ENEMY_IDS = Object.keys(FUSION_ARCHETYPES);
 
 export const FUSION_ENEMY_OPTIONS = [
   ALL_ENEMIES_BUDGET_OPTION,
+  WORKING_ROSTER_HADES_OPTION,
   { id:'lion', label:'Lion' },
   { id:'spid', label:'Spider' },
   { id:'sun', label:'Sun Serpent' },
