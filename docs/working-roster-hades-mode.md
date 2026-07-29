@@ -1,24 +1,38 @@
 # Working Roster Hades-Style Encounter Mode
 
-Enemy Lab's saved Working Arena Roster can now drive a separate Combat Arena encounter mode.
+Enemy Lab's saved Working Arena Roster can drive a separate Combat Arena encounter mode.
 
 ## Workflow
 
 1. Open `enemy-lab.html`.
 2. Open **ROSTER**.
 3. Select any enemies you want in the current combat-development pool.
-4. Choose **START HADES-STYLE**.
-5. Combat Arena restarts using only those selected enemies as eligible encounter types.
+4. Choose **OPEN COMBAT ARENA**.
+5. The full Combat Arena opens with **ROSTER · Hades-Style Encounter** selected.
 
-The same mode is also available from Combat Arena's enemy selector as **ROSTER · Hades-Style Encounter**.
+The mode is also available directly from Combat Arena's enemy selector.
 
 ## Current behavior
 
-- The ordinary Hades-style budget, introduction, compatibility, and count arc is preserved.
 - The saved roster constrains which individual enemy types are eligible.
-- An enemy marked **Lab Only**, such as the current Lion, appears only when it was deliberately selected.
+- Hades-style budget, introduction, compatibility, and difficulty-ramp rules compose the encounters.
+- Original and FLARE enemies receive visible spawn rings before entering combat; Hades enemies retain their native spawn telegraphs.
+- The shared **HADES-STYLE ENEMY COUNT** control supports 1×, 2×, 5×, and 10× roster populations.
+- The shared **HADES-STYLE DIFFICULTY RAMP** control supports Slow, Medium, and High progression.
+- In roster mode, the Combat Director stays enabled. **PRESSURE BUDGET** remains a separate control for simultaneous attack pressure rather than total bodies.
+- An enemy marked **Lab Only**, such as the current Lion, appears only when deliberately selected.
 - An empty roster falls back to **ALL · Budgeted Encounter** so a room cannot become uncleared.
-- Existing All Enemies and Tartarus Mix modes are unchanged.
+- Existing All Enemies and Tartarus Mix modes remain available and keep their existing behavior.
+
+## Population caps
+
+The roster multiplier scales each selected encounter group, with temporary per-runtime safety caps:
+
+- Original runtime: 20 bodies for the selected type.
+- FLARE runtime: 20 bodies for the selected type.
+- Hades runtime: up to 200 queued/active bodies under its native active-weight and type limits.
+
+These caps keep the current adapters bounded while still allowing substantially larger phone stress tests.
 
 ## Current limitation
 
