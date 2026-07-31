@@ -44,7 +44,21 @@ Combat Arena applies the active profile before resetting the opening playable ro
 
 Rat Step and Deep Launch remain the fixed run-foundation stances. Additional starting cards come from selected non-stance cards in the Working Ability Pool. Room-clear rewards stay inside the full selected Ability Pool. An empty pool preserves the legacy starter and reward lists.
 
-All 46 Arcana retain their existing card objects and authored effect runtimes. The full Combat Arena initializes all eleven Arcana runtime families under the same authored runtime context used by Enemy Lab. This includes the rebuilt/signature family containing Homing Flares, Dragon Arc, Whirling Tornado, and Water Prison.
+All 46 Arcana retain their existing card objects and authored effect runtimes. The full Combat Arena initializes all eleven Arcana runtime families under the same authored runtime context used by Enemy Lab:
+
+- original Arcana effects
+- rebuilt/signature Arcana
+- Flame Strike
+- Wind Slash
+- Air Basics
+- Next Source
+- Next Twenty Basics
+- Next Twenty Dashes
+- Fusion and Heroic Leap
+- Allied Arcana
+- Arcane Types
+
+This includes the rebuilt/signature family containing Homing Flares, Dragon Arc, Whirling Tornado, and Water Prison.
 
 The existing `wizard-arcana:tweaks-changed` event distributes the saved Arcana size to every runtime family. Each family uses that shared multiplier for its own visuals and gameplay footprint; the profile does not create 46 separate size values.
 
