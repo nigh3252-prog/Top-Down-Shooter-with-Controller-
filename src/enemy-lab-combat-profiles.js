@@ -1,5 +1,4 @@
 import {
-  applyCombatProfileStorage,
   deleteCombatProfile,
   readActiveCombatProfile,
   readCombatProfileDraft,
@@ -78,12 +77,14 @@ export function installEnemyLabCombatProfiles({
     [data-combat-profiles-root] .profileField input[type=range]{padding:0;height:28px}
     [data-combat-profiles-root] .profileRangeValue{color:var(--gold);font-size:10px}
     [data-combat-profiles-root] .profileActions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    [data-combat-profiles-root] .profilePoolActions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    [data-combat-profiles-root] .profilePoolActions .choice{min-height:58px}
     [data-combat-profiles-root] .profileCard{padding:9px;border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58)}
     [data-combat-profiles-root] .profileCard.active{border-color:#b9e4ff;background:rgba(50,119,157,.15)}
     [data-combat-profiles-root] .profileCard h3{margin:0 0 4px;color:var(--text);font-size:11px}
     [data-combat-profiles-root] .profileCard p{margin:0 0 7px;color:var(--muted);font-size:8px;line-height:1.45}
     [data-combat-profiles-root] .profileCard .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
-    @media(max-width:560px){[data-combat-profiles-root] .profileGrid{grid-template-columns:1fr}}
+    @media(max-width:560px){[data-combat-profiles-root] .profileGrid,[data-combat-profiles-root] .profilePoolActions{grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 
@@ -114,17 +115,17 @@ export function installEnemyLabCombatProfiles({
     targetWindow.__enemyLabWorkingRoster?.setIds?.(profile.enemyIds);
     targetWindow.__enemyLabWorkingAbilityPool?.setIds?.(profile.abilityIds);
   }
-  function applyToLab(profile){
-    const applied=applyCombatProfileStorage(storage,profile);
-    syncDevelopmentPools(applied);
-    draft=readCombatProfileDraft(storage);
-    name=applied.name;
-    editingId=applied.id;
-    return applied;
-  }
-  function openArena(profile){
+  function activateSavedProfile(profile){
     const active=setActiveCombatProfile(storage,profile);
     syncDevelopmentPools(active);
+    draft=readCombatProfileDraft(storage);
+    name=active.name;
+    editingId=active.id;
+    return active;
+  }
+  function applyToLab(profile){return activateSavedProfile(profile);}
+  function openArena(profile){
+    const active=activateSavedProfile(profile);
     const destination=new URL('./combat-arena.html',document.location.href);destination.search='';
     setTimeout(()=>document.location.assign(destination),0);
     return{profile:active,destination:String(destination)};
@@ -145,9 +146,12 @@ export function installEnemyLabCombatProfiles({
       idleRange:draft.idleRange,
       directorMode:draft.directorMode,
     });
-    profiles=readCombatProfiles(storage);editingId=saved.id;name=saved.name;draft={...saved};syncCategoryLabel();return saved;
+    const active=activateSavedProfile(saved);
+    profiles=readCombatProfiles(storage);syncCategoryLabel();return active;
   }
   function newDraft(){editingId=null;name='';draft=readCombatProfileDraft(storage);}
+  function openRosterEditor(){profileOpen=false;targetWindow.__enemyLabWorkingRoster?.open?.();}
+  function openAbilityEditor(){profileOpen=false;targetWindow.__enemyLabWorkingAbilityPool?.open?.();}
 
   function renderProfiles(){
     if(!profileOpen)return;
@@ -155,9 +159,26 @@ export function installEnemyLabCombatProfiles({
     profiles=readCombatProfiles(storage);
     const active=readActiveCombatProfile(storage);
     const current=readCombatProfileDraft(storage);
-    if(hint)hint.textContent='Save and reopen a complete combat environment: enemies, ability availability, Hades spawning, director behavior, and enemy simulation tuning.';
+    if(hint)hint.textContent='Choose the roster and Ability Pool here, then save a repeatable combat environment with Hades spawning, director behavior, and enemy tuning.';
     const root=document.createElement('div');root.className='valueList';root.dataset.combatProfilesRoot='1';
     root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${current.enemyIds.length} enemies and ${current.abilityIds.length} abilities.`));
+
+    const poolActions=document.createElement('div');poolActions.className='profilePoolActions';
+    poolActions.append(
+      makeChoice(document,{
+        label:`EDIT ENEMY ROSTER · ${current.enemyIds.length}`,
+        sub:'Choose exactly which enemies this profile can compose',
+        meta:'OPENS ROSTER',
+        onClick:openRosterEditor,
+      }),
+      makeChoice(document,{
+        label:`EDIT ABILITY POOL · ${current.abilityIds.length}`,
+        sub:'Choose starter extras and room-reward availability',
+        meta:'OPENS ABILITY POOL',
+        onClick:openAbilityEditor,
+      }),
+    );
+    root.appendChild(poolActions);
 
     const editor=document.createElement('div');editor.className='profileEditor';
     const grid=document.createElement('div');grid.className='profileGrid';
@@ -190,19 +211,19 @@ export function installEnemyLabCombatProfiles({
     editor.appendChild(grid);
 
     const actions=document.createElement('div');actions.className='profileActions';
-    const saveButton=document.createElement('button');saveButton.className='miniBtn';saveButton.textContent=editingId?'UPDATE PROFILE':'SAVE PROFILE';
+    const saveButton=document.createElement('button');saveButton.className='miniBtn';saveButton.textContent=editingId?'UPDATE & ACTIVATE':'SAVE & ACTIVATE';
     saveButton.addEventListener('click',()=>{if(!name.trim()){nameInput.focus();return;}saveCurrent();renderProfiles();});
     const newButton=document.createElement('button');newButton.className='miniBtn';newButton.textContent='NEW PROFILE';newButton.addEventListener('click',()=>{newDraft();renderProfiles();});
     actions.append(saveButton,newButton);editor.appendChild(actions);root.appendChild(editor);
 
-    if(!profiles.length)root.appendChild(makeStatus(document,'NO SAVED PROFILES','Choose a name and save the current roster, ability pool, and tuning above.'));
+    if(!profiles.length)root.appendChild(makeStatus(document,'NO SAVED PROFILES','Choose a roster and Ability Pool, enter a name, then save and activate the current environment.'));
     for(const profile of profiles){
       const card=document.createElement('div');card.className=`profileCard${active?.id===profile.id?' active':''}`;
       const title=document.createElement('h3');title.textContent=profile.name;
       const summary=document.createElement('p');
       summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · ${profile.spawnMultiplier}× · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
       const row=document.createElement('div');row.className='row';
-      const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD';load.addEventListener('click',()=>{applyToLab(profile);renderProfiles();});
+      const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD & ACTIVATE';load.addEventListener('click',()=>{applyToLab(profile);renderProfiles();});
       const open=document.createElement('button');open.className='miniBtn';open.textContent='OPEN ARENA';open.addEventListener('click',()=>openArena(profile));
       const remove=document.createElement('button');remove.className='miniBtn';remove.textContent='DELETE';remove.addEventListener('click',()=>{profiles=deleteCombatProfile(storage,profile.id);if(editingId===profile.id)newDraft();syncCategoryLabel();renderProfiles();});
       row.append(load,open,remove);card.append(title,summary,row);root.appendChild(card);
@@ -221,7 +242,7 @@ export function installEnemyLabCombatProfiles({
   const api={
     installed:true,
     getProfiles:()=>readCombatProfiles(storage),
-    save:profile=>{const saved=saveCombatProfile(storage,profile);profiles=readCombatProfiles(storage);syncCategoryLabel();if(profileOpen)renderProfiles();return saved;},
+    save:profile=>{const saved=activateSavedProfile(saveCombatProfile(storage,profile));profiles=readCombatProfiles(storage);syncCategoryLabel();if(profileOpen)renderProfiles();return saved;},
     load:profile=>applyToLab(profile),
     openProfile:profile=>openArena(profile),
     remove:id=>{profiles=deleteCombatProfile(storage,id);syncCategoryLabel();if(profileOpen)renderProfiles();return profiles;},
