@@ -41,10 +41,10 @@ function optionSelect(document,values,current){
   return select;
 }
 
-function rangeField(document,draft,key,label,{min,max,step}){
+function rangeField(document,draft,key,label,{min,max,step,suffix=''}){
   const input=document.createElement('input');input.type='range';input.min=String(min);input.max=String(max);input.step=String(step);input.value=String(draft[key]);
-  const value=document.createElement('strong');value.className='profileRangeValue';value.textContent=String(draft[key]);
-  input.addEventListener('input',()=>{draft[key]=Number(input.value);value.textContent=input.value;});
+  const value=document.createElement('strong');value.className='profileRangeValue';value.textContent=`${draft[key]}${suffix}`;
+  input.addEventListener('input',()=>{draft[key]=Number(input.value);value.textContent=`${input.value}${suffix}`;});
   const wrap=document.createElement('div');wrap.append(input,value);return makeField(document,label,wrap);
 }
 
@@ -116,7 +116,7 @@ export function installEnemyLabCombatProfiles({
     targetWindow.__enemyLabWorkingAbilityPool?.setIds?.(profile.abilityIds);
   }
   function activateSavedProfile(profile){
-    const active=setActiveCombatProfile(storage,profile);
+    const active=setActiveCombatProfile(storage,profile,{eventTarget:targetWindow});
     syncDevelopmentPools(active);
     draft=readCombatProfileDraft(storage);
     name=active.name;
@@ -144,6 +144,7 @@ export function installEnemyLabCombatProfiles({
       enemyHealth:draft.enemyHealth,
       enemySize:draft.enemySize,
       idleRange:draft.idleRange,
+      arcanaSize:draft.arcanaSize,
       directorMode:draft.directorMode,
     });
     const active=activateSavedProfile(saved);
@@ -159,9 +160,9 @@ export function installEnemyLabCombatProfiles({
     profiles=readCombatProfiles(storage);
     const active=readActiveCombatProfile(storage);
     const current=readCombatProfileDraft(storage);
-    if(hint)hint.textContent='Choose the roster and Ability Pool here, then save a repeatable combat environment with Hades spawning, director behavior, and enemy tuning.';
+    if(hint)hint.textContent='Choose the roster and Ability Pool here, then save a repeatable combat environment with Hades spawning, Arcana size, director behavior, and enemy tuning.';
     const root=document.createElement('div');root.className='valueList';root.dataset.combatProfilesRoot='1';
-    root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${current.enemyIds.length} enemies and ${current.abilityIds.length} abilities.`));
+    root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${current.enemyIds.length} enemies, ${current.abilityIds.length} abilities, and Arcana size ${current.arcanaSize}×.`));
 
     const poolActions=document.createElement('div');poolActions.className='profilePoolActions';
     poolActions.append(
@@ -208,6 +209,7 @@ export function installEnemyLabCombatProfiles({
     grid.appendChild(rangeField(document,draft,'enemyHealth','ENEMY HEALTH',{min:.25,max:5,step:.05}));
     grid.appendChild(rangeField(document,draft,'enemySize','ENEMY SIZE',{min:1,max:3.5,step:.1}));
     grid.appendChild(rangeField(document,draft,'idleRange','IDLE RANGE',{min:1,max:6,step:.25}));
+    grid.appendChild(rangeField(document,draft,'arcanaSize','ARCANA SIZE',{min:1,max:5,step:.25,suffix:'×'}));
     editor.appendChild(grid);
 
     const actions=document.createElement('div');actions.className='profileActions';
@@ -221,7 +223,7 @@ export function installEnemyLabCombatProfiles({
       const card=document.createElement('div');card.className=`profileCard${active?.id===profile.id?' active':''}`;
       const title=document.createElement('h3');title.textContent=profile.name;
       const summary=document.createElement('p');
-      summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · ${profile.spawnMultiplier}× · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
+      summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · Arcana ${profile.arcanaSize}× · ${profile.spawnMultiplier}× enemies · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
       const row=document.createElement('div');row.className='row';
       const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD & ACTIVATE';load.addEventListener('click',()=>{applyToLab(profile);renderProfiles();});
       const open=document.createElement('button');open.className='miniBtn';open.textContent='OPEN ARENA';open.addEventListener('click',()=>openArena(profile));
