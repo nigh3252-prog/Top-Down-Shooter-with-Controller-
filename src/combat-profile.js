@@ -14,8 +14,14 @@ import {
   setHadesEncounterSpawnMultiplier,
 } from './hades-encounter-tuning.js';
 import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
+import {
+  ARCANA_TWEAKS_EVENT,
+  clampArcanaSize,
+  readArcanaTweaks,
+  writeArcanaTweaks,
+} from './wizard-arcana-settings.js';
 
-export const COMBAT_PROFILE_VERSION=1;
+export const COMBAT_PROFILE_VERSION=2;
 export const COMBAT_PROFILES_STORAGE_KEY='enemyLab.combatProfiles.v1';
 export const ACTIVE_COMBAT_PROFILE_STORAGE_KEY='arena.activeCombatProfile.v1';
 export const MAX_COMBAT_PROFILES=20;
@@ -46,10 +52,12 @@ const jsonSet=(storage,key,value)=>{try{storage?.setItem?.(key,JSON.stringify(va
 const rawGet=(storage,key,fallback)=>{try{const value=storage?.getItem?.(key);return value==null?fallback:value;}catch{return fallback;}};
 const rawSet=(storage,key,value)=>{try{storage?.setItem?.(key,String(value));return true;}catch{return false;}};
 const sameIds=(left=[],right=[])=>left.length===right.length&&left.every((id,index)=>id===right[index]);
+const profileOptionsForStorage=(storage,options={})=>({arcanaSizeFallback:readArcanaTweaks(storage).sizeMultiplier,...options});
 
 export function normalizeCombatProfile(profile={}, {
   enemyCatalog=ARENA_ENEMY_CATALOG,
   abilityCatalog=ARENA_ABILITY_CATALOG,
+  arcanaSizeFallback=1,
   now=Date.now(),
   idFactory=null,
 }={}){
@@ -74,6 +82,7 @@ export function normalizeCombatProfile(profile={}, {
     enemyHealth:rounded(profile.enemyHealth,2.5,.25,5),
     enemySize:rounded(profile.enemySize,1.5,1,3.5),
     idleRange:rounded(profile.idleRange,3,1,6),
+    arcanaSize:clampArcanaSize(profile.arcanaSize??arcanaSizeFallback),
     directorMode,
     encounterMode:WORKING_ROSTER_HADES_ID,
     cadence:'native-hades',
@@ -85,18 +94,18 @@ export function normalizeCombatProfile(profile={}, {
 export function readCombatProfiles(storage=globalThis.localStorage,options={}){
   const raw=jsonGet(storage,COMBAT_PROFILES_STORAGE_KEY,[]);
   if(!Array.isArray(raw))return[];
-  const seen=new Set();
+  const seen=new Set(),normalizedOptions=profileOptionsForStorage(storage,options);
   return raw
-    .map(profile=>normalizeCombatProfile(profile,options))
+    .map(profile=>normalizeCombatProfile(profile,normalizedOptions))
     .filter(profile=>profile.id&&!seen.has(profile.id)&&seen.add(profile.id))
     .sort((left,right)=>right.updatedAt-left.updatedAt)
     .slice(0,MAX_COMBAT_PROFILES);
 }
 
 export function writeCombatProfiles(storage=globalThis.localStorage,profiles=[],options={}){
-  const seen=new Set();
+  const seen=new Set(),normalizedOptions=profileOptionsForStorage(storage,options);
   const normalized=(profiles||[])
-    .map(profile=>normalizeCombatProfile(profile,options))
+    .map(profile=>normalizeCombatProfile(profile,normalizedOptions))
     .filter(profile=>profile.id&&!seen.has(profile.id)&&seen.add(profile.id))
     .sort((left,right)=>right.updatedAt-left.updatedAt)
     .slice(0,MAX_COMBAT_PROFILES);
@@ -106,16 +115,17 @@ export function writeCombatProfiles(storage=globalThis.localStorage,profiles=[],
 
 export function saveCombatProfile(storage=globalThis.localStorage,profile={},options={}){
   const now=finite(options.now,Date.now());
-  const existing=readCombatProfiles(storage,{...options,now});
+  const normalizedOptions=profileOptionsForStorage(storage,{...options,now});
+  const existing=readCombatProfiles(storage,normalizedOptions);
   const current=existing.find(entry=>entry.id===String(profile.id||''));
   const normalized=normalizeCombatProfile({
     ...current,
     ...profile,
     createdAt:current?.createdAt??profile.createdAt??now,
     updatedAt:now,
-  },{...options,now});
+  },normalizedOptions);
   const next=[normalized,...existing.filter(entry=>entry.id!==normalized.id)];
-  writeCombatProfiles(storage,next,{...options,now});
+  writeCombatProfiles(storage,next,normalizedOptions);
   return normalized;
 }
 
@@ -143,14 +153,19 @@ export function readCombatProfileDraft(storage=globalThis.localStorage,{
     enemyHealth:rounded(jsonGet(storage,STORAGE_KEYS.profileEnemyHealth,2.5),2.5,.25,5),
     enemySize:rounded(jsonGet(storage,STORAGE_KEYS.profileEnemySize,1.5),1.5,1,3.5),
     idleRange:rounded(jsonGet(storage,STORAGE_KEYS.profileIdleRange,3),3,1,6),
+    arcanaSize:readArcanaTweaks(storage).sizeMultiplier,
     directorMode:DIRECTOR_MODE_IDS.has(String(jsonGet(storage,STORAGE_KEYS.directorMode,'pressureBudget')))?String(jsonGet(storage,STORAGE_KEYS.directorMode,'pressureBudget')):'pressureBudget',
   };
 }
 
 export function applyCombatProfileStorage(storage=globalThis.localStorage,profile={},options={}){
-  const normalized=normalizeCombatProfile(profile,options);
+  const normalized=normalizeCombatProfile(profile,profileOptionsForStorage(storage,options));
   writeWorkingRoster(storage,normalized.enemyIds,options.enemyCatalog||ARENA_ENEMY_CATALOG);
   writeWorkingAbilityPool(storage,normalized.abilityIds,options.abilityCatalog||ARENA_ABILITY_CATALOG);
+  writeArcanaTweaks(
+    {sizeMultiplier:normalized.arcanaSize},
+    {storage,eventTarget:options.eventTarget||globalThis.window},
+  );
   rawSet(storage,STORAGE_KEYS.spawnMultiplier,normalized.spawnMultiplier);
   rawSet(storage,STORAGE_KEYS.introduction,normalized.introduction);
   jsonSet(storage,STORAGE_KEYS.spawnKind,WORKING_ROSTER_HADES_ID);
@@ -177,14 +192,16 @@ export function clearActiveCombatProfile(storage=globalThis.localStorage){
 export function readActiveCombatProfile(storage=globalThis.localStorage,options={}){
   const raw=jsonGet(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,null);
   if(!raw)return null;
-  const profile=normalizeCombatProfile(raw,options);
+  const normalizedOptions=profileOptionsForStorage(storage,options);
+  const profile=normalizeCombatProfile(raw,normalizedOptions);
   if(options.validateSelection===false)return profile;
   const draft=readCombatProfileDraft(storage,options);
   const matches=sameIds(profile.enemyIds,draft.enemyIds)&&sameIds(profile.abilityIds,draft.abilityIds)&&
     profile.spawnMultiplier===draft.spawnMultiplier&&profile.introduction===draft.introduction&&
     profile.pressureBudget===draft.pressureBudget&&profile.aggression===draft.aggression&&
     profile.enemySpeed===draft.enemySpeed&&profile.enemyHealth===draft.enemyHealth&&
-    profile.enemySize===draft.enemySize&&profile.idleRange===draft.idleRange&&profile.directorMode===draft.directorMode;
+    profile.enemySize===draft.enemySize&&profile.idleRange===draft.idleRange&&
+    profile.arcanaSize===draft.arcanaSize&&profile.directorMode===draft.directorMode;
   if(matches)return profile;
   clearActiveCombatProfile(storage);
   return null;
@@ -227,6 +244,7 @@ export function installCombatProfileTuningPersistence({
   document.getElementById?.('hadesDifficultyRampSelect')?.addEventListener('change',()=>clearActiveCombatProfile(storage));
   document.getElementById?.('spawnSelect')?.addEventListener('change',()=>clearActiveCombatProfile(storage));
   document.getElementById?.('modeGrid')?.addEventListener('click',event=>{if(event.target.closest?.('button'))clearActiveCombatProfile(storage);});
+  document.defaultView?.addEventListener?.(ARCANA_TWEAKS_EVENT,()=>clearActiveCombatProfile(storage));
   return true;
 }
 
@@ -236,7 +254,8 @@ export function applyCombatProfileToArena(api,profile,{
   options={},
 }={}){
   if(!api?.enemySystem)return null;
-  const normalized=setActiveCombatProfile(storage,profile,options);
+  const eventTarget=document?.defaultView||globalThis.window;
+  const normalized=setActiveCombatProfile(storage,profile,{...options,eventTarget});
   setHadesEncounterSpawnMultiplier(normalized.spawnMultiplier);
   setHadesEncounterDifficultyRamp(normalized.introduction);
   api.enemySystem.setSpawnKind?.(WORKING_ROSTER_HADES_ID);
