@@ -30,6 +30,8 @@ assert.ok(secondApply>reset,'profile controls must be synchronized again after t
 
 assert.match(profilesUi,/SAVE & ACTIVATE/,'saving a profile must visibly make it the active environment');
 assert.match(profilesUi,/const active=activateSavedProfile\(saved\)/,'saving must write the profile tuning and active-profile marker, not only the named snapshot');
+assert.match(profilesUi,/function activateSavedProfile\(profile\)/,'profile activation must have one shared storage and pool synchronization path');
+assert.match(profilesUi,/setActiveCombatProfile\(storage,profile\)/,'saved and loaded profiles must set the active Combat Arena environment');
 assert.match(profilesUi,/EDIT ENEMY ROSTER/,'profiles must provide a direct roster-selection path');
 assert.match(profilesUi,/EDIT ABILITY POOL/,'profiles must provide a direct Ability Pool selection path');
 assert.match(profilesUi,/LOAD & ACTIVATE/,'loading a profile must make its environment current');
