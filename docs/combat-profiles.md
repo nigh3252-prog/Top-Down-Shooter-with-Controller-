@@ -48,6 +48,8 @@ All 46 Arcana retain their existing card objects and authored effect runtimes. T
 
 The existing `wizard-arcana:tweaks-changed` event distributes the saved Arcana size to every runtime family. Each family uses that shared multiplier for its own visuals and gameplay footprint; the profile does not create 46 separate size values.
 
+Only one carryover check is needed. Keep the established Enemy Lab Arcana size, save and activate the profile, and confirm a representative Arcana has the same footprint in Combat Arena. There is no need to test several different multipliers or manually exercise all 46 cards for size coverage.
+
 ## Active-profile detachment
 
 Manual changes to the roster, Ability Pool, encounter count/introduction, Combat Director mode, pressure, aggression, speed, health, enemy size, idle range, or Arcana size detach the active profile. The saved profile remains unchanged. Save the modified environment as a new profile or update the currently edited profile.
