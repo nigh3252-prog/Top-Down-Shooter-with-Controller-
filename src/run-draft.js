@@ -98,7 +98,25 @@ export function installRunDraft(deck){
   }
   rewardGate.querySelector('#cardRewardSkip').addEventListener('click',closeReward);
 
-  function chooseOffer(offer){const api=state.api;if(!api)return;state.totem?.reset();deck.unlockRun();api.PC.selectCombatWeapon(offer.weaponId);StoneSettings.set('arena.weapon',offer.weaponId);deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});api.arena.started=true;state.setupOpen=false;startGate.classList.add('hidden');forceArenaReset();setOpeningStance(api,starters[0]);state.seenCleared=api.encounterState?.progress?.cleared||0;api.arena.paused=false;}
+  function chooseOffer(offer){
+    const api=state.api;if(!api)return;
+    state.totem?.reset();
+    deck.unlockRun();
+    api.PC.selectCombatWeapon(offer.weaponId);
+    StoneSettings.set('arena.weapon',offer.weaponId);
+    deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});
+    api.arena.started=true;
+    state.setupOpen=false;
+    startGate.classList.add('hidden');
+    // Apply before reset so the newly generated opening room uses the saved count,
+    // roster, pressure, and enemy tuning. Reapply after reset to synchronize controls.
+    state.profile=applyActiveCombatProfileToArena(api)||state.profile;
+    forceArenaReset();
+    state.profile=applyActiveCombatProfileToArena(api)||state.profile;
+    setOpeningStance(api,starters[0]);
+    state.seenCleared=api.encounterState?.progress?.cleared||0;
+    api.arena.paused=false;
+  }
   function renderOffers(){
     const pools=currentPools();
     const profileText=state.profile?`${state.profile.name} · `:'';
