@@ -35,8 +35,8 @@ for(const family of families){
     `${family.installer} must initialize under the authored Arcana runtime context in Combat Arena`,
   );
   const source=await readFile(new URL(`../src/${family.file}`,import.meta.url),'utf8');
-  assert.match(source,/readArcanaTweaks/,`${family.file} must read the saved Arcana size`);
-  assert.match(source,/ARCANA_TWEAKS_EVENT/,`${family.file} must react to Arcana size changes`);
+  assert.match(source,/readArcanaTweaks/,`${family.file} must read the saved shared Arcana size`);
+  assert.match(source,/ARCANA_TWEAKS_EVENT/,`${family.file} must react when the shared Arcana size is applied`);
   assert.match(source,/clampArcanaSize/,`${family.file} must use the shared 1×–5× size contract`);
 }
 
@@ -46,4 +46,4 @@ assert.match(profileSource,/arcanaSize:clampArcanaSize/);
 assert.match(profileSource,/writeArcanaTweaks\(/);
 assert.match(profileSource,/profile\.arcanaSize===draft\.arcanaSize/);
 
-console.log('All 46 Arcana runtime families and shared size settings are covered');
+console.log('All 46 Arcana runtime families and the shared size setting are covered');
