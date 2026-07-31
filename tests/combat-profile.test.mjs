@@ -14,6 +14,7 @@ import {
   setActiveCombatProfile,
 } from '../src/combat-profile.js';
 import { WORKING_ROSTER_HADES_ID } from '../src/encounter-pools.js';
+import { ARCANA_TWEAKS_KEY } from '../src/wizard-arcana-settings.js';
 
 function memoryStorage(){
   const data=new Map();
@@ -31,7 +32,7 @@ const abilityIds=[ARENA_ABILITY_CATALOG[0].id,ARENA_ABILITY_CATALOG[31].id,ARENA
 const normalized=normalizeCombatProfile({
   id:'crowded',name:'  Crowded   Arcana Test  ',enemyIds:[...enemyIds,'missing'],abilityIds:[...abilityIds,'missing'],
   spawnMultiplier:7,introduction:'INVALID',pressureBudget:9,aggression:0,enemySpeed:9,enemyHealth:0,enemySize:9,idleRange:0,
-  directorMode:'missing',createdAt:10,updatedAt:20,
+  arcanaSize:9,directorMode:'missing',createdAt:10,updatedAt:20,
 });
 assert.equal(normalized.name,'Crowded Arcana Test');
 assert.deepEqual(normalized.enemyIds,enemyIds);
@@ -44,6 +45,7 @@ assert.equal(normalized.enemySpeed,1.5);
 assert.equal(normalized.enemyHealth,.25);
 assert.equal(normalized.enemySize,3.5);
 assert.equal(normalized.idleRange,1);
+assert.equal(normalized.arcanaSize,5);
 assert.equal(normalized.directorMode,'pressureBudget');
 assert.equal(normalized.encounterMode,WORKING_ROSTER_HADES_ID);
 assert.equal(normalized.cadence,'native-hades');
@@ -51,7 +53,7 @@ assert.equal(normalized.cadence,'native-hades');
 const saved=saveCombatProfile(storage,{
   id:'crowded',name:'Crowded Arcana Test',enemyIds,abilityIds,
   spawnMultiplier:5,introduction:'high',pressureBudget:3.5,aggression:1.4,
-  enemySpeed:.75,enemyHealth:3.25,enemySize:1.8,idleRange:4.5,directorMode:'battleCircle',
+  enemySpeed:.75,enemyHealth:3.25,enemySize:1.8,idleRange:4.5,arcanaSize:2.75,directorMode:'battleCircle',
 },{now:100});
 assert.equal(readCombatProfiles(storage).length,1);
 assert.equal(readCombatProfiles(storage)[0].updatedAt,100);
@@ -60,6 +62,7 @@ assert.equal(updated.createdAt,100);
 assert.equal(updated.updatedAt,200);
 assert.equal(readCombatProfiles(storage).length,1);
 assert.equal(readCombatProfiles(storage)[0].name,'Crowded Arcana Updated');
+assert.equal(readCombatProfiles(storage)[0].arcanaSize,2.75);
 
 const applied=applyCombatProfileStorage(storage,updated);
 const draft=readCombatProfileDraft(storage);
@@ -73,12 +76,15 @@ assert.equal(draft.enemySpeed,.75);
 assert.equal(draft.enemyHealth,3.25);
 assert.equal(draft.enemySize,1.8);
 assert.equal(draft.idleRange,4.5);
+assert.equal(draft.arcanaSize,2.75);
+assert.equal(JSON.parse(storage.getItem(ARCANA_TWEAKS_KEY)).sizeMultiplier,2.75);
 assert.equal(draft.directorMode,'battleCircle');
 assert.equal(applied.encounterMode,WORKING_ROSTER_HADES_ID);
 
 setActiveCombatProfile(storage,updated);
 assert.equal(JSON.parse(storage.getItem(ACTIVE_COMBAT_PROFILE_STORAGE_KEY)).id,'crowded');
 assert.equal(readActiveCombatProfile(storage).name,'Crowded Arcana Updated');
+assert.equal(readActiveCombatProfile(storage).arcanaSize,2.75);
 
 const calls=[];
 const api={
@@ -107,6 +113,7 @@ assert.deepEqual(calls,[
   ['cycle',false],
   ['mode','battleCircle'],
 ]);
+assert.equal(JSON.parse(storage.getItem(ARCANA_TWEAKS_KEY)).sizeMultiplier,2.75);
 
 const cycling={...updated,directorMode:'cycle'};
 const cycleCalls=[];
@@ -128,6 +135,9 @@ assert.ok(!cycleCalls.some(call=>call[0]==='mode'));
 
 storage.setItem('enemyLab.workingAbilityPool.v1',JSON.stringify([ARENA_ABILITY_CATALOG[0].id]));
 assert.equal(readActiveCombatProfile(storage),null,'manual pool changes detach the saved active profile');
+setActiveCombatProfile(storage,cycling);
+storage.setItem(ARCANA_TWEAKS_KEY,JSON.stringify({sizeMultiplier:1.25,damageMultiplier:1}));
+assert.equal(readActiveCombatProfile(storage),null,'manual Arcana size changes detach the saved active profile');
 setActiveCombatProfile(storage,cycling);
 
 deleteCombatProfile(storage,'crowded');
