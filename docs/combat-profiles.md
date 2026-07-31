@@ -1,47 +1,49 @@
 # Combat Profiles
 
-Combat Profiles are the final development handoff between Enemy Lab and Combat Arena.
+Combat Profiles save repeatable Combat Arena development environments.
 
-## Saved profile contents
+## Profile contents
 
 Each profile stores:
 
-- Working Arena Roster enemy IDs
-- Working Ability Pool card IDs
-- Roster Hades-style encounter mode
-- Native Hades spawn cadence
-- Enemy-count multiplier
-- Enemy-introduction speed
+- Working Arena Roster
+- Working Ability Pool
+- ROSTER · Hades-Style Encounter mode
+- native Hades spawn cadence
+- enemy count multiplier
+- enemy introduction speed
 - Combat Director mode
 - Pressure Budget
-- Aggression
-- Enemy speed
-- Enemy health
-- Enemy size
-- Idle range
+- aggression
+- enemy speed
+- enemy health
+- enemy size
+- idle range
 
-The current two-slot test deck and weapon selection are not stored. They remain run/player choices.
+The exact current two-slot deck and weapon are deliberately not stored. Those remain run/player decisions.
 
 ## Enemy Lab workflow
 
-1. Build the Working Arena Roster.
-2. Build the Working Ability Pool.
-3. Open **PROFILES**.
-4. Name and tune the profile.
-5. Choose **SAVE PROFILE**.
-6. Choose **OPEN ARENA** on a saved profile.
+1. Open **PROFILES**.
+2. Use **EDIT ENEMY ROSTER** to choose the enemies for the profile.
+3. Use **EDIT ABILITY POOL** to choose starter-extra and room-reward availability.
+4. Return to **PROFILES**.
+5. Name and tune the environment.
+6. Choose **SAVE & ACTIVATE**.
+7. Open Combat Arena normally, or use the saved profile's **OPEN ARENA** button.
 
-**LOAD** restores a profile into Enemy Lab without navigating away. A loaded profile can be updated or saved as a new profile.
+**SAVE & ACTIVATE** writes both the named snapshot and the current active environment. This means the selected roster, Ability Pool, enemy count, pressure, and other tuning carry into Combat Arena even when the user navigates there after saving rather than pressing **OPEN ARENA** immediately.
+
+**LOAD & ACTIVATE** restores an older profile into the Enemy Lab development pools and makes it the current environment.
 
 ## Combat Arena behavior
 
-Opening a profile applies its enemy roster and tuning to **ROSTER · Hades-Style Encounter**.
+Combat Arena applies the active profile before resetting the opening playable room. The opening encounter therefore uses the saved roster, enemy-count multiplier, Pressure Budget, director mode, and enemy tuning rather than applying those settings only after the room already exists.
 
-Rat Step and Deep Launch remain the fixed starter stances. The Working Ability Pool controls:
+Rat Step and Deep Launch remain the fixed run-foundation stances. Additional starting cards come from selected non-stance cards in the Working Ability Pool. Room-clear rewards stay inside the full selected Ability Pool. An empty pool preserves the legacy starter and reward lists.
 
-- non-stance cards offered during run setup
-- all room-clear reward cards
+All 46 Arcana retain their existing card objects and authored effect runtimes. Five early Arcana runtime families were originally restricted to the embedded Enemy Lab; the full Combat Arena now initializes those same implementations so their visuals, movement, damage, charges, and manual sequences resolve there as well.
 
-An empty Working Ability Pool preserves the legacy run offers and reward pool.
+## Active-profile detachment
 
-Manual changes detach the active profile rather than being overwritten on the next load. The changed roster, pool, and tuning can then be saved as another profile.
+Manual changes to the roster, Ability Pool, encounter count/introduction, Combat Director mode, pressure, aggression, speed, health, size, or idle range detach the active profile. The saved profile remains unchanged. Save the modified environment as a new profile or update the currently edited profile.
