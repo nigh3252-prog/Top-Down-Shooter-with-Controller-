@@ -1,4 +1,5 @@
 import { STANCE_CARDS } from './stance-cards.js';
+import { guardPoseFor } from './guard-poses.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
 
 export const GATE2_STANCE_IDS=Object.freeze(['S24','S26','S01']);
@@ -11,6 +12,7 @@ export const GATE2_FAILURE_ATTACKS=Object.freeze({
 const BASELINE_CHAIN_BY_ID=new Map(
   STANCE_CARDS.map(stance=>[stance.id,Object.freeze([...(stance.chain||[])])]),
 );
+const STANCE_BY_ID=new Map(STANCE_CARDS.map(stance=>[stance.id,stance]));
 const pairKey=(stanceId,weaponId)=>`${stanceId}:${weaponId}`;
 const freezeProfile=profile=>Object.freeze({
   ...profile,
@@ -141,9 +143,10 @@ export function injectGate2FailureAttacks(PC){
   return true;
 }
 
-function baseTimingFor(PC,weapon){
-  const tune={...(PC.TUNE_DEFAULTS||{}),...(weapon?.tune||{})};
+function paceSnapshot(PC,weaponId){
+  const tune=PC.combatState.tune;
   return{
+    weaponId,
     weight:Number(tune.weight),
     windup:Number(tune.windup),
     follow:Number(tune.follow),
@@ -151,16 +154,17 @@ function baseTimingFor(PC,weapon){
   };
 }
 
-function applyPace(PC,weapon,profile){
+function restorePace(PC,baseline,currentWeaponId){
+  if(!baseline||baseline.weaponId!==currentWeaponId)return false;
   const tune=PC.combatState.tune;
-  const base=baseTimingFor(PC,weapon);
-  if(!profile){
-    if(Number.isFinite(base.weight))tune.weight=base.weight;
-    if(Number.isFinite(base.windup))tune.windup=base.windup;
-    if(Number.isFinite(base.follow))tune.follow=base.follow;
-    if(Number.isFinite(base.recovery))tune.recovery=base.recovery;
-    return;
+  for(const key of ['weight','windup','follow','recovery']){
+    if(Number.isFinite(baseline[key]))tune[key]=baseline[key];
   }
+  return true;
+}
+
+function applyPace(PC,profile){
+  const tune=PC.combatState.tune;
   const length=Number(tune.length)||1;
   const strike=Math.max(.36,Number(profile.pace.strike)||1);
   const effectiveWeight=(strike-1-(length-1)*.36)/.78+.35;
@@ -170,12 +174,25 @@ function applyPace(PC,weapon,profile){
   tune.recovery=Math.max(.2,(Number(profile.pace.recovery)||strike)/strike);
 }
 
+function gripSnapshot(PC){
+  return{
+    gripCenter:PC.RIG.gripCenter,
+    handR:[PC.RIG.handR.x,PC.RIG.handR.y,PC.RIG.handR.z],
+    handL:[PC.RIG.handL.x,PC.RIG.handL.y,PC.RIG.handL.z],
+  };
+}
+
+function restoreGrip(PC,baseline){
+  if(!baseline)return false;
+  PC.RIG.gripCenter=baseline.gripCenter;
+  PC.RIG.handR.set(...baseline.handR);
+  PC.RIG.handL.set(...baseline.handL);
+  return true;
+}
+
 function applyGrip(PC,profile){
+  if(profile.gripMode==='normal')return;
   const RIG=PC.RIG;
-  RIG.gripCenter=PC.BASE_RIG?.gripCenter??-.14;
-  RIG.handR.set(0,-.05,.02);
-  RIG.handL.set(0,-.24,-.02);
-  if(!profile)return;
   const bladeLen=Math.max(.08,RIG.bladeTip-RIG.bladeBase);
   if(profile.gripMode==='halfSword'){
     RIG.gripCenter=RIG.bladeBase+bladeLen*.18;
@@ -196,6 +213,18 @@ function applyGrip(PC,profile){
   }
 }
 
+function resetCombatForPair(handle){
+  const c=handle.arena.chain||{};
+  Object.assign(c,{
+    stage:'idle',comboDeadline:0,finisherDeadline:0,inputLockT:0,lightLockT:0,
+    activeSlot:-1,pendingSlot:-1,pendingStage:null,pendingExpiresAt:0,pendingInput:null,
+  });
+  const charge=handle.arena.charge||{};
+  Object.assign(charge,{active:false,queued:false,buttonHeld:false,hold:0,forceTier:null});
+  const state=handle.PC.combatState;
+  state.attack=null;state.t=0;state.pending=null;state.pendingGroup=null;state.readyLock=0;state.chargePull=0;
+}
+
 export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.window}={}){
   const handle=arenaHandle;
   const PC=handle?.PC;
@@ -210,6 +239,9 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
     startCombatAttack:PC.startCombatAttack,
   };
   let modifiedStance=null;
+  let activeContextKey=null;
+  let paceBaseline=null;
+  let gripBaseline=null;
   let lastSnapshot=null;
 
   function restoreStanceChain(stance){
@@ -226,9 +258,20 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
     return resolveGate2PilotProfile({stance,weapon,weaponId});
   }
 
+  function leaveContext(currentWeaponId){
+    restorePace(PC,paceBaseline,currentWeaponId);
+    restoreGrip(PC,gripBaseline);
+    paceBaseline=null;
+    gripBaseline=null;
+    activeContextKey=null;
+  }
+
   function apply(){
     const resolved=current();
     const stance=handle.arena.stance||null;
+    const weaponId=resolved.weaponId;
+    const nextContext=resolved.active?pairKey(resolved.stanceId,weaponId):null;
+
     if(modifiedStance&&modifiedStance!==stance)restoreStanceChain(modifiedStance);
     if(resolved.active&&resolved.profile?.moveKeys&&stance){
       stance.chain=[...resolved.profile.moveKeys];
@@ -236,9 +279,21 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
     }else if(stance&&modifiedStance===stance){
       restoreStanceChain(stance);
     }
-    const weapon=PC.currentWeapon?.()||null;
-    applyPace(PC,weapon,resolved.active?resolved.profile:null);
-    applyGrip(PC,resolved.active?resolved.profile:null);
+
+    if(nextContext!==activeContextKey){
+      leaveContext(weaponId);
+      if(resolved.active){
+        activeContextKey=nextContext;
+        paceBaseline=paceSnapshot(PC,weaponId);
+        gripBaseline=gripSnapshot(PC);
+      }
+    }
+    if(resolved.active){
+      applyPace(PC,resolved.profile);
+      restoreGrip(PC,gripBaseline);
+      applyGrip(PC,resolved.profile);
+    }
+
     lastSnapshot=Object.freeze({
       active:resolved.active,
       stanceId:resolved.stanceId,
@@ -291,16 +346,31 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
     return result;
   };
 
+  function selectPair({stanceId,weaponId}={}){
+    const stance=STANCE_BY_ID.get(String(stanceId||''));
+    const requestedWeapon=String(weaponId||'');
+    if(!stance||!isGate2PilotPair(stance.id,requestedWeapon))return{ok:false,error:'Unknown Gate 2 pilot pair'};
+    resetCombatForPair(handle);
+    if(PC.combatState.weapon!==requestedWeapon)PC.selectCombatWeapon(requestedWeapon);
+    if(modifiedStance&&modifiedStance!==stance)restoreStanceChain(modifiedStance);
+    handle.arena.stance=stance;
+    handle.arena.stanceIndex=0;
+    resetCombatForPair(handle);
+    PC.setReadyPose(guardPoseFor(stance));
+    const resolved=apply();
+    return{ok:true,resolved,snapshot:lastSnapshot};
+  }
+
   apply();
   const api={
     installed:true,
     apply,
+    selectPair,
     snapshot:()=>lastSnapshot,
     resolve:current,
     destroy(){
       if(modifiedStance)restoreStanceChain(modifiedStance);
-      applyPace(PC,PC.currentWeapon?.()||null,null);
-      applyGrip(PC,null);
+      leaveContext(String(PC.combatState.weapon||''));
       PC.updateCombat=original.updateCombat;
       PC.getWeaponHitZones=original.getWeaponHitZones;
       PC.setReadyPose=original.setReadyPose;
