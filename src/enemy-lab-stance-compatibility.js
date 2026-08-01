@@ -6,6 +6,11 @@ import {
   resolveStanceWeaponCompatibility,
   stanceClassCounts,
 } from './stance-compatibility.js';
+import {
+  GATE2_STANCE_IDS,
+  GATE2_WEAPON_IDS,
+  resolveGate2PilotProfile,
+} from './stance-gate2-runtime.js';
 
 const cleanName=value=>String(value||'').replace(/^S\d+\s*/,'').trim();
 
@@ -40,13 +45,12 @@ function currentSnapshot(document){
   const stance=runtime?.arena?.stance||null;
   const weaponId=String(runtime?.combatState?.weapon||'');
   const weapon=STONE_WEAPONS[weaponId]||null;
-  return {
-    runtime,
-    stance,
-    weaponId,
-    weapon,
-    compatibility:resolveStanceWeaponCompatibility({stance,weapon,weaponId}),
-  };
+  const compatibility=resolveStanceWeaponCompatibility({stance,weapon,weaponId});
+  const gate2=resolveGate2PilotProfile({stance,weapon,weaponId});
+  const liveGate2=runtime?.combatState?.stance2Gate2||null;
+  const effectiveChain=liveGate2?.effectiveChain||gate2.effectiveChain||[];
+  const attackLabels=effectiveChain.map(key=>runtime?.PC?.ATTACKS?.[key]?.label||key);
+  return{runtime,stance,weaponId,weapon,compatibility,gate2,liveGate2,effectiveChain,attackLabels};
 }
 
 export function installEnemyLabStanceCompatibility({document=globalThis.document}={}){
@@ -67,6 +71,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     [data-stance-compatibility-root] .statusCard[data-tone="full"]{border-color:#75d3ad;background:rgba(43,124,93,.18)}
     [data-stance-compatibility-root] .statusCard[data-tone="adapted"]{border-color:#e0bb6d;background:rgba(134,100,41,.18)}
     [data-stance-compatibility-root] .statusCard[data-tone="unusable"]{border-color:#e27777;background:rgba(142,54,54,.2)}
+    [data-stance-compatibility-root] .statusCard[data-tone="pilot"]{border-color:#ba8cff;background:rgba(102,62,156,.24)}
     [data-stance-compatibility-root] .stanceMatrix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
     [data-stance-compatibility-root] .stanceClassGroup{border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px;background:rgba(0,0,0,.13)}
     [data-stance-compatibility-root] .stanceClassGroup b{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.08em}
@@ -83,14 +88,14 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     const button=categoryButton();if(!button)return;
     const snapshot=currentSnapshot(document);
     const title=button.querySelector('b');
-    if(title)title.textContent=snapshot.compatibility.tier==='unknown'?'STANCE 2.0':`STANCE 2.0 · ${snapshot.compatibility.label}`;
+    if(!title)return;
+    if(snapshot.compatibility.tier==='unknown')title.textContent='STANCE 2.0';
+    else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.gate2.active?' · G2':''}`;
   }
   function ensureCategory(){
     if(categoryButton()){syncCategoryLabel();return;}
     const button=makeChoice(document,{
-      label:'STANCE 2.0',
-      sub:'Weight-class compatibility',
-      className:'stanceCompatibilityCategory',
+      label:'STANCE 2.0',sub:'Weight-class compatibility',className:'stanceCompatibilityCategory',
       onClick:event=>{event.preventDefault();event.stopPropagation();activate();},
     });
     button.disabled=false;
@@ -106,11 +111,14 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     if(!open)return;
     const snapshot=currentSnapshot(document);
     const stanceId=String(snapshot.stance?.id||'');
-    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier].join('|');
+    const liveId=String(snapshot.liveGate2?.profileId||'');
+    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,liveId].join('|');
     if(!force&&key===lastKey)return;
     lastKey=key;
     syncCategoryLabel();
-    if(hint)hint.textContent='Gate 1 is diagnostic only: FULL, ADAPTED, and UNUSABLE are visible, but attack behavior is unchanged.';
+    if(hint)hint.textContent=snapshot.gate2.active
+      ?'Gate 2 is live for this pilot pairing: attack chain, stance pace, grip, reach, damage, and stagger adaptation are active.'
+      :'This pairing remains a Gate 1 diagnostic. Gate 2 currently covers Rat Step, Long Blade Form, and Hammerfall with dagger, longsword, and greatsword.';
     const oldTop=values.scrollTop;
     const root=document.createElement('div');
     root.className='valueList';
@@ -121,14 +129,34 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     }else{
       const preferred=snapshot.compatibility.preferredWeapon?'PREFERRED WEAPON':'OFF-STYLE WEAPON';
       root.appendChild(makeStatus(
-        document,
-        snapshot.compatibility.label,
+        document,snapshot.compatibility.label,
         `${cleanName(snapshot.stance?.name)||stanceId} · ${snapshot.compatibility.stanceClass} stance with ${snapshot.weapon?.label||snapshot.weaponId} · ${snapshot.compatibility.weaponClass} weapon · ${preferred}`,
         snapshot.compatibility.tier,
       ));
     }
 
-    root.appendChild(makeStatus(document,'GATE 1 SCOPE','This gate classifies and displays compatibility only. It does not yet replace attacks, timing, stagger, stamina, or defense.'));
+    if(snapshot.gate2.active){
+      const live=snapshot.liveGate2;
+      root.appendChild(makeStatus(
+        document,
+        live?.label||snapshot.gate2.profile?.label||'GATE 2 PILOT ACTIVE',
+        `${snapshot.attackLabels.join(' → ')} · grip ${live?.gripMode||snapshot.gate2.profile?.gripMode||'normal'}${live?.failed?' · damaging hit zones disabled':''}`,
+        'pilot',
+      ));
+      const consequence=snapshot.compatibility.tier==='full'
+        ?'Full expression uses the stance-authored chain with stance-dominant timing.'
+        :snapshot.compatibility.tier==='adapted'
+          ?'Adapted expression substitutes compact moves, changes grip, shortens effective reach, and reduces damage and stagger.'
+          :'Failed expression uses an authored misuse animation, cannot charge, and creates no damaging weapon hit zones.';
+      root.appendChild(makeStatus(document,'GATE 2 CONSEQUENCE',consequence,snapshot.compatibility.tier));
+    }else{
+      root.appendChild(makeStatus(
+        document,'OUTSIDE GATE 2 PILOT',
+        `Gate 2 currently covers ${GATE2_STANCE_IDS.join(', ')} crossed with ${GATE2_WEAPON_IDS.join(', ')}. This combination still uses existing combat behavior.`,
+      ));
+    }
+
+    root.appendChild(makeStatus(document,'GATE 2 PILOT SCOPE','Rat Step represents Light, Long Blade Form represents Medium, and Hammerfall Guard represents Heavy. Dagger, longsword, and greatsword supply the three weapon classes.'));
 
     const matrix=document.createElement('div');matrix.className='stanceMatrix';
     const cells=[
@@ -136,10 +164,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       ['MEDIUM / LIGHT','ADAPTED','1-class gap'],['MEDIUM / MEDIUM','FULL','0-class gap'],['MEDIUM / HEAVY','ADAPTED','1-class gap'],
       ['HEAVY / LIGHT','UNUSABLE','2-class gap'],['HEAVY / MEDIUM','ADAPTED','1-class gap'],['HEAVY / HEAVY','FULL','0-class gap'],
     ];
-    for(const [label,result,gap] of cells){
-      const cell=makeStatus(document,label,`${result} · ${gap}`,result.toLowerCase());
-      matrix.appendChild(cell);
-    }
+    for(const [label,result,gap] of cells)matrix.appendChild(makeStatus(document,label,`${result} · ${gap}`,result.toLowerCase()));
     root.appendChild(matrix);
 
     const counts=stanceClassCounts();
@@ -147,9 +172,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     for(const stanceClass of STANCE_CLASSES){
       const group=document.createElement('div');group.className='stanceClassGroup';
       const title=document.createElement('b');title.textContent=`${stanceClass.toUpperCase()} STANCES`;
-      const names=STANCE_CARDS
-        .filter(stance=>STANCE_CLASS_BY_ID[stance.id]===stanceClass)
-        .map(stance=>cleanName(stance.name));
+      const names=STANCE_CARDS.filter(stance=>STANCE_CLASS_BY_ID[stance.id]===stanceClass).map(stance=>cleanName(stance.name));
       const detail=document.createElement('span');detail.textContent=names.join(' · ');
       group.append(title,detail);root.appendChild(group);
     }
@@ -167,12 +190,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   ensureCategory();
   refreshTimer=globalThis.setInterval?.(()=>{syncCategoryLabel();render(false);},250)||0;
 
-  const api={
-    installed:true,
-    open:activate,
-    snapshot:()=>currentSnapshot(document),
-    destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);},
-  };
+  const api={installed:true,open:activate,snapshot:()=>currentSnapshot(document),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
   globalThis.__enemyLabStanceCompatibility=api;
   return api;
 }

@@ -37,3 +37,15 @@ export function weaponAllowsCleave({ weaponDef, attackSlot = -1, maxCharge = fal
   if (staminaClass !== 'Light') return true;
   return attackSlot === 2 && maxCharge === true;
 }
+
+function bootStanceGate2Runtime(){
+  if(typeof window==='undefined'||typeof location==='undefined')return;
+  if(!/(?:^|\/)combat-arena\.html$/i.test(location.pathname||''))return;
+  if(new URLSearchParams(location.search||'').get('capture')==='1')return;
+  import('./stance-gate2-runtime.js')
+    .then(module=>module.installStanceGate2Runtime({windowRef:window}))
+    .catch(error=>console.warn('[stance-gate2] runtime did not install',error));
+}
+
+if(typeof queueMicrotask==='function')queueMicrotask(bootStanceGate2Runtime);
+else if(typeof setTimeout==='function')setTimeout(bootStanceGate2Runtime,0);
