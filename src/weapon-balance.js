@@ -34,18 +34,37 @@ export function weaponAllowsCleave({ weaponDef, attackSlot = -1, maxCharge = fal
   if (!WEAPON_STAMINA_MULTIPLIERS[staminaClass]) {
     throw new Error(`[weapon-balance] Missing or invalid staminaClass: ${JSON.stringify(staminaClass)}`);
   }
+
+  // Stance 2.0 Gate 3 writes an expression mode onto the arena's cloned weapon
+  // definition. Outside the nine-pair pilot this field is absent, preserving the
+  // original weapon-class cleave behavior exactly.
+  const mode=weaponDef?.stance2CleaveMode;
+  const group=String(weaponDef?.stance2CurrentAttackGroup||'');
+  if(mode==='failed')return false;
+  if(mode==='full-light')return attackSlot===2&&maxCharge===true;
+  if(mode==='adapted-light')return false;
+  if(mode==='full-medium')return group==='horizontal'||group==='vertical';
+  if(mode==='adapted-medium')return attackSlot===2&&maxCharge===true;
+  if(mode==='full-heavy')return true;
+  if(mode==='adapted-heavy')return attackSlot===2&&maxCharge===true;
+
   if (staminaClass !== 'Light') return true;
   return attackSlot === 2 && maxCharge === true;
 }
 
-function bootStanceGate2Runtime(){
+async function bootStanceRuntimes(){
   if(typeof window==='undefined'||typeof location==='undefined')return;
   if(!/(?:^|\/)combat-arena\.html$/i.test(location.pathname||''))return;
   if(new URLSearchParams(location.search||'').get('capture')==='1')return;
-  import('./stance-gate2-runtime.js')
-    .then(module=>module.installStanceGate2Runtime({windowRef:window}))
-    .catch(error=>console.warn('[stance-gate2] runtime did not install',error));
+  try{
+    const gate2=await import('./stance-gate2-runtime.js');
+    gate2.installStanceGate2Runtime({windowRef:window});
+    const gate3=await import('./stance-gate3-payoffs.js');
+    gate3.installStanceGate3Runtime({windowRef:window});
+  }catch(error){
+    console.warn('[stance-2] runtime did not install',error);
+  }
 }
 
-if(typeof queueMicrotask==='function')queueMicrotask(bootStanceGate2Runtime);
-else if(typeof setTimeout==='function')setTimeout(bootStanceGate2Runtime,0);
+if(typeof queueMicrotask==='function')queueMicrotask(bootStanceRuntimes);
+else if(typeof setTimeout==='function')setTimeout(bootStanceRuntimes,0);
