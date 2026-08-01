@@ -1,14 +1,9 @@
-// Merge-forward integration wrapper. The complete current-main combat module
-// keeps Pilebunker defaults, vertical melee aim, and the approved weapon core;
-// this layer adds the centralized Blood Slash / Bing Bong effect runtime.
-//
-// The pinned module has its own relative-import module graph, including its own
-// arena-enemy registry instance. Bridge the local router into that registry so
-// Pilebunker sees and damages the same enemies rendered by this branch.
+// Current-main combat composition. The local core preserves the validated
+// weapon/attack implementation, the Pilebunker layer adds its approved combat
+// behavior, and this module installs the remaining dash and Arcana runtimes.
 
-import { installPlayerCombat as installMainPlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/player-combat.js';
-import { setArenaEnemySource as setPinnedArenaEnemySource } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/arena-enemy-registry.js';
-import { getArenaEnemySystem } from './arena-enemy-registry.js';
+import { installPlayerCombat as installMainPlayerCombat } from './player-combat-pilebunker.js';
+import { getArenaEnemySystem, setArenaEnemySource } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
@@ -39,7 +34,7 @@ export function installPlayerCombat(api){
   const identityQ=new THREE.Quaternion();
   const enemyRegistryBridge=createArenaEnemyRegistryBridge({
     getLocalSystem:getArenaEnemySystem,
-    setPinnedSource:setPinnedArenaEnemySource,
+    setPinnedSource:setArenaEnemySource,
   });
   const basicDashRuntime=installBasicDashRuntime(api);
   const dashMagicJet=installDashMagicJet({
