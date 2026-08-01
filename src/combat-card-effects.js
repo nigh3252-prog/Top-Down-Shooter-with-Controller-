@@ -155,7 +155,7 @@ function segmentsIntersect(a,b,c,d){
 }
 function blockedByWall(start,end,segments){return(segments||[]).some(w=>w?.a&&w?.b&&segmentsIntersect(start,end,w.a,w.b));}
 
-export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnemySystem,getStance=()=>null,getMazeSegments=()=>[]}={}){
+export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnemySystem,getStance=()=>null,getSwing=()=>null,getMazeSegments=()=>[]}={}){
   if(!THREE||!scene||!PC)throw new Error('[combat-card-effects] THREE, scene, and PC are required.');
   const hookBag=hooks||{};
   const baseZones=PC.getWeaponHitZones.bind(PC);
@@ -167,9 +167,9 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
     coreTrail:null,coreTrailColor:null,expandedTrail:null,
   };
 
-  function currentStance(){return getStance?.()||globalThis.window?.__arena?.arena?.stance||null;}
-  function currentSwing(){return globalThis.window?.__arena?.arena?.swing||null;}
-  function currentWalls(){return getMazeSegments?.()||globalThis.window?.__arena?.mazeWorld?.getCollisionSegments?.()||[];}
+  function currentStance(){return getStance?.()||null;}
+  function currentSwing(){return getSwing?.()||null;}
+  function currentWalls(){return getMazeSegments?.()||[];}
   function activeExecution(){
     const ex=state.execution;
     return!!ex&&!!PC.combatState.attack&&PC.combatState.attackKey===ex.attackKey&&PC.combatState.attackGroup===ex.group;

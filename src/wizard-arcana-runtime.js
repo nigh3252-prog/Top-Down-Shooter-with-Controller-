@@ -91,14 +91,8 @@ export function reflectVelocity2D(velocity,wallA,wallB){
   return{x:velocity.x-2*dot*nx,z:velocity.z-2*dot*nz};
 }
 
-function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{
-    const params=new URLSearchParams(location.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    const parent=window.parent;
-    return !!(parent&&parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
-  }catch{return false;}
+function isEnemyLabRuntime(runtimeContext){
+  return runtimeContext?.mode==='enemy-lab'||runtimeContext?.config?.mode==='enemy-lab';
 }
 
 function enemyRadius(enemy,system){
@@ -213,9 +207,9 @@ function damageEnemy(system,enemy,amount,knock={x:0,z:0},options={}){
   enemy.flash=Math.max(enemy.flash||0,.08);return true;
 }
 
-export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[]}={}){
+export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],runtimeContext=null}={}){
   const initialTweaks=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime(runtimeContext))return{state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},update(){},reset(){},dispose(){}};
   const state={effects:[],castSerial:0,lastCast:null,sizeMultiplier:initialTweaks.sizeMultiplier};
 
   function add(effect){state.effects.push(effect);return effect;}

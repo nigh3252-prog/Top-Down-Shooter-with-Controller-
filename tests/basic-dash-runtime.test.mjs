@@ -39,9 +39,9 @@ function makeScenario({ moveX=0, moveZ=0 }={}){
   };
   const gamepad={ axes:[moveX,moveZ], buttons:Array.from({length:16},()=>({pressed:false})) };
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{getGamepads(){return[gamepad];}}});
-  globalThis.window={ __arena:handle };
   const runtime=installBasicDashRuntime({
     THREE:{ Vector3, Quaternion },actorVisual,activeModel,yawQ,
+    runtimeContext:{ runtime:handle },
     hooks:{ commitFacing(value){ facing=value; } },
   });
   return{actorPos,actorVisual,activeModel,handle,runtime,get facing(){return facing;}};

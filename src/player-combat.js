@@ -548,8 +548,6 @@ function closePilebunkerSectionForNextPanelInit(){
 
 function installPilebunkerPlayerCombat(api){
   const PC=installCorePlayerCombat(api);
-  const arenaPage=/(?:^|\/)combat-arena\.html$/i.test(location.pathname)||/HEX MAZE COMBAT/i.test(document.title);
-  if(!arenaPage)return PC;
 
   const {THREE}=api;
   const UP=new THREE.Vector3(0,1,0),shoulder=new THREE.Vector3(),localPoint=new THREE.Vector3(),worldTip=new THREE.Vector3(),worldBase=new THREE.Vector3();
@@ -772,8 +770,6 @@ import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls
 
 export function installPlayerCombat(api){
   const PC=installPilebunkerPlayerCombat(api);
-  const arenaPage=/(?:^|\/)combat-arena\.html$/i.test(location.pathname)||/HEX MAZE COMBAT/i.test(document.title);
-  if(!arenaPage)return PC;
 
   const {THREE}=api;
   const playerWorld=new THREE.Vector3();
@@ -783,15 +779,18 @@ export function installPlayerCombat(api){
   const dashMagicJet=installDashMagicJet({
     THREE,scene:api.scene,
     getDashState:()=>basicDashRuntime.state,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-    getRoomKey:()=>window.__arena?.activeRoomId??null,
+    getMazeSegments:()=>api.runtimeContext?.getMazeSegments?.() || [],
+    getRoomKey:()=>api.runtimeContext?.getActiveRoomId?.() ?? null,
     getInterrupted:()=>{
-      const handle=window.__arena;
+      const handle=api.runtimeContext?.runtime;
       return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
     },
   });
   installDashJetPanel({runtime:dashMagicJet});
-  installEnemyLabArcanaControlsHotfix();
+  installEnemyLabArcanaControlsHotfix({
+    document:api.runtimeContext?.document,
+    getEditor:()=>api.runtimeContext?.getDeckEditor?.() || null,
+  });
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -804,7 +803,7 @@ export function installPlayerCombat(api){
   }
   function advanceArenaPlayer(dx,dz){
     const moveX=Number(dx)||0,moveZ=Number(dz)||0;
-    const position=window.__arena?.actorPos;
+    const position=api.runtimeContext?.actorPosition;
     if(!position)return false;
     if(Number.isFinite(position.x))position.x+=moveX;
     if(Number.isFinite(position.y))position.y+=moveZ;
@@ -818,38 +817,44 @@ export function installPlayerCombat(api){
     THREE,scene:api.scene,PC,hooks:api.hooks,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getStance:()=>window.__arena?.arena?.stance||null,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getStance:()=>api.runtimeContext?.getStance?.() || null,
+    getSwing:()=>api.runtimeContext?.getSwing?.() || null,
+    getMazeSegments:()=>api.runtimeContext?.getMazeSegments?.() || [],
   });
   const wizardArcanaDamageScaler=installWizardArcanaDamageScaler({getEnemySystem:getArenaEnemySystem});
   const wizardArcanaRuntime=installWizardArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>api.runtimeContext?.getMazeSegments?.() || [],
+    runtimeContext:api.runtimeContext,
   });
   const wizardFlameStrikeRuntime=installWizardFlameStrikeRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
+    runtimeContext:api.runtimeContext,
   });
   const wizardWindSlashRuntime=installWizardWindSlashRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
+    runtimeContext:api.runtimeContext,
   });
   const wizardAirBasicsRuntime=installWizardAirBasicsRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>api.runtimeContext?.getMazeSegments?.() || [],
+    runtimeContext:api.runtimeContext,
   });
   const wizardNextSourceRuntime=installWizardNextSourceRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>api.runtimeContext?.getMazeSegments?.() || [],
     advancePlayer:advanceArenaPlayer,
+    runtimeContext:api.runtimeContext,
   });
 
   // The local registry is shared by the arena renderer, Pilebunker, card

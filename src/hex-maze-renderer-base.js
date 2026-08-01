@@ -146,6 +146,7 @@ function insetDoorTargetTowardRoom(maze, roomId, door, hexSize, inset = .7){
 export function createMazeWorld({
   THREE, maze, roomId = null, hexSize = 2.6, wallHeight = 1.8,
   wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(),
+  runtimeConfig = null, getActorPosition = () => null,
 } = {}){
   if(!THREE || !maze) throw new Error('createMazeWorld requires THREE and a maze.');
   const room = roomId === null ? null : maze.rooms.find(candidate => candidate.id === roomId);
@@ -245,7 +246,7 @@ export function createMazeWorld({
       mesh.position.y = mesh.userData.baseY - eased * mesh.userData.doorHeight;
       if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
     }
-    const actorPos = globalThis.__arena?.actorPos;
+    const actorPos = getActorPosition?.();
     if(actorPos){
       const player = { x:actorPos.x, z:actorPos.y };
       forest.updateCutaways(dt, player);

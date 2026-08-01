@@ -74,8 +74,14 @@ function worldYawFromObject(object){
   return Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
 }
 
-function installRoadieRun(){
-  if(typeof window === 'undefined' || window.__roadieRun) return;
+const installedWindows=new WeakSet();
+
+export function installRoadieRun({window:win=globalThis.window,document:doc=win?.document,runtimeContext=null}={}){
+  if(!win || installedWindows.has(win)) return null;
+  installedWindows.add(win);
+  const navigator=win.navigator||globalThis.navigator;
+  const performance=win.performance||globalThis.performance||{now:()=>Date.now()};
+  const requestAnimationFrame=win.requestAnimationFrame?.bind(win)||globalThis.requestAnimationFrame||(callback=>setTimeout(()=>callback(performance.now()),16));
 
   const state = createRoadieState();
   let lastFrameTime = performance.now();
@@ -114,15 +120,10 @@ function installRoadieRun(){
 
   if(!gamepadMaskInstalled){
     console.error('Roadie run did not load: unable to reserve the controller Cross button. Dodge remains unchanged.', installError);
-    window.__roadieRun = {
-      unavailable:true,
-      error:installError,
-      gamepadButton:ROADIE_GAMEPAD_BUTTON,
-    };
-    return;
+    return { unavailable:true, error:installError, gamepadButton:ROADIE_GAMEPAD_BUTTON };
   }
 
-  function arenaApi(){ return window.__arena || null; }
+  function arenaApi(){ return runtimeContext?.runtime || null; }
 
   function performDodgeTap(){
     arenaApi()?.triggerDodge?.();
@@ -291,9 +292,9 @@ function installRoadieRun(){
     lastAfterPosition = { x:api.actorPos.x, z:api.actorPos.y };
   }
 
-  window.addEventListener('blur', cancelHold);
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) cancelHold(); });
-  window.__roadieRun = {
+  win.addEventListener('blur', cancelHold);
+  doc?.addEventListener('visibilitychange', ()=>{ if(doc.hidden) cancelHold(); });
+  const api = {
     state,
     beginHold,
     endHold,
@@ -303,6 +304,5 @@ function installRoadieRun(){
     tuning:{ HOLD_THRESHOLD, EXTRA_RUN_SPEED, SKID_DURATION, SKID_START_SPEED },
   };
   requestAnimationFrame(frame);
+  return api;
 }
-
-if(typeof window !== 'undefined') installRoadieRun();

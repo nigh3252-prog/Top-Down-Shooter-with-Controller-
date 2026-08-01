@@ -55,13 +55,8 @@ export function pointInWindSlashArc({
   return angle<=halfAngle+padding;
 }
 
-function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{
-    const params=new URLSearchParams(location.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));
-  }catch{return false;}
+function isEnemyLabRuntime(runtimeContext){
+  return runtimeContext?.mode==='enemy-lab'||runtimeContext?.config?.mode==='enemy-lab';
 }
 
 function normalize2(x,z){const length=Math.hypot(x,z)||1;return{x:x/length,z:z/length};}
@@ -112,9 +107,9 @@ function makeImpactFlash(THREE,scene,x,y,z,size){
   group.position.set(x,y,z);group.renderOrder=8;scene.add(group);return group;
 }
 
-export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySystem}={}){
+export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySystem,runtimeContext=null}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime(runtimeContext))return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier};
 
   function add(effect){state.effects.push(effect);return effect;}

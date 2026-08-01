@@ -86,18 +86,21 @@ function cardDetails(card){
     ],
   };
 }
-function readJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'')??fallback;}catch{return fallback;}}
+function readJson(key,fallback,storage=globalThis.localStorage){try{return JSON.parse(storage?.getItem(key)||'')??fallback;}catch{return fallback;}}
 function sameIds(a,b){return a.length===b.length&&a.every((id,index)=>id===b[index]);}
 
-export function installEnemyLabDeckEditor(deck){
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+export function installEnemyLabDeckEditor(deck,{document:doc=globalThis.document,runtimeContext=null}={}){
+  const parentDocument=doc;
+  if(!parentDocument)return { current:null };
+  const storage=parentDocument.defaultView?.localStorage||globalThis.localStorage;
+  const requestAnimationFrame=parentDocument.defaultView?.requestAnimationFrame?.bind(parentDocument.defaultView)
+    ||(callback=>setTimeout(()=>callback(Date.now()),16));
+  const editorRef={ current:null };
 
   const catalog=fullEnemyLabCatalog();
   const byId=new Map(catalog.map(card=>[card.id,card]));
   const families=['ALL','STANCES','BING BONG','POWBUNKER','BLOOD SLASH'];
-  const storedUi=readJson(ENEMY_LAB_DECK_UI_KEY,{});
+  const storedUi=readJson(ENEMY_LAB_DECK_UI_KEY,{},storage);
   let family=families.includes(storedUi?.family)?storedUi.family:'ALL';
   let activeView=null;
   let selectedIds=[];
@@ -109,8 +112,8 @@ export function installEnemyLabDeckEditor(deck){
   const editorScrollPositions=new Map();
   const expandedByContext=new Map();
 
-  function persistUi(){localStorage.setItem(ENEMY_LAB_DECK_UI_KEY,JSON.stringify({family}));}
-  function persistDeck(){localStorage.setItem(ENEMY_LAB_DECK_KEY,JSON.stringify({version:1,cardIds:selectedIds}));}
+  function persistUi(){storage?.setItem(ENEMY_LAB_DECK_UI_KEY,JSON.stringify({family}));}
+  function persistDeck(){storage?.setItem(ENEMY_LAB_DECK_KEY,JSON.stringify({version:1,cardIds:selectedIds}));}
   function selectedCards(){return selectedIds.map(id=>byId.get(id)).filter(Boolean);}
   function hasStance(cards=selectedCards()){return cards.some(card=>!isNonStance(card));}
   function normalizeStoredDeck(value){
@@ -122,7 +125,7 @@ export function installEnemyLabDeckEditor(deck){
     const message=parentDocument.getElementById('message');
     if(message)message.textContent=text;
   }
-  function arenaRuntime(){return window.__arena||null;}
+  function arenaRuntime(){return runtimeContext?.runtime||null;}
   function applySelected({announce=true,shuffle=true}={}){
     const cards=selectedCards();
     if(!cards.length||!hasStance(cards)){
@@ -467,7 +470,7 @@ export function installEnemyLabDeckEditor(deck){
     dock.dataset.deckEditorInstalled='1';
     installStyles();
     nativeDefaultIds=deck.pool.map(card=>card.id).filter(id=>byId.has(id));
-    const stored=normalizeStoredDeck(readJson(ENEMY_LAB_DECK_KEY,{}));
+    const stored=normalizeStoredDeck(readJson(ENEMY_LAB_DECK_KEY,{},storage));
     selectedIds=stored.length&&hasStance(stored.map(id=>byId.get(id)))?stored:nativeDefaultIds.slice();
     if(!sameIds(selectedIds,deck.pool.map(card=>card.id))){applySelected({announce:false,shuffle:true});}
     else persistDeck();
@@ -507,7 +510,7 @@ export function installEnemyLabDeckEditor(deck){
       }
     }).observe(values,{childList:true});
 
-    window.__enemyLabDeckEditor={
+    editorRef.current={
       get catalog(){return catalog.slice();},
       get cardIds(){return selectedIds.slice();},
       get activeView(){return activeView;},
@@ -518,4 +521,5 @@ export function installEnemyLabDeckEditor(deck){
     };
   }
   finishInstall();
+  return editorRef;
 }

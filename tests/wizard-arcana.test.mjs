@@ -202,12 +202,12 @@ assert.ok(Math.abs(reflected.x+1)<1e-9&&Math.abs(reflected.z)<1e-9);
 const events=[];
 const stamina={v:31,pending:5,recoverDelayT:.2};
 globalThis.window={
-  __arena:{arena:{stamina}},
   dispatchEvent:event=>events.push(event),
 };
 const stance={id:'S-ARCANA-TEST',name:'TEST STANCE',type:'stance',chain:['horizontal4','vertical8','horizontal5']};
 const card=WIZARD_ARCANA_CARDS[0];
-const deck=createStanceDeck({rng:()=>0});
+const runtimeContext={window:globalThis.window,getArenaState:()=>({stamina}),mode:'enemy-lab'};
+const deck=createStanceDeck({rng:()=>0,runtimeContext});
 deck.beginRun([stance,card],{openingStanceId:stance.id});
 assert.equal(deck.hand[0].id,card.id);
 const proxy=deck.play(0);

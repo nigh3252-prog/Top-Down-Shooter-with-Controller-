@@ -35,93 +35,76 @@ function optionById(options, id, fallbackId){
     || options[0];
 }
 
-function isCombatArenaRuntime(){
-  return typeof document !== 'undefined' && /(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname || '');
+function isCombatArenaRuntime(runtimeConfig){
+  return runtimeConfig?.mode === 'arena';
+}
+function isEnemyLabRuntime(runtimeConfig){
+  return runtimeConfig?.mode === 'enemy-lab';
 }
 
-function isEnemyLabRuntime(){
-  if(typeof document === 'undefined') return false;
-  try{
-    const params = new URLSearchParams(globalThis.location?.search || '');
-    if(String(params.get('layout') || '').trim().toLowerCase() === 'arena') return true;
-
-    const parent = globalThis.parent;
-    const isArenaFrame = parent && parent !== globalThis && globalThis.frameElement?.id === 'arenaFrame';
-    const parentPage = isArenaFrame ? parent.location.pathname.split('/').pop() : '';
-    return parentPage === 'enemy-lab.html';
-  }catch{
-    return false;
-  }
+function requestedCellSizeId(runtimeConfig){
+  const normalized = String(runtimeConfig?.cellSize || '').trim().toLowerCase();
+  return MAZE_CELL_SIZE_OPTIONS.some(option => option.id === normalized) ? normalized : null;
 }
 
-function requestedCellSizeId(){
-  try{
-    const value = new URLSearchParams(globalThis.location?.search || '').get('cellSize');
-    const normalized = String(value || '').trim().toLowerCase();
-    return MAZE_CELL_SIZE_OPTIONS.some(option => option.id === normalized) ? normalized : null;
-  }catch{
-    return null;
-  }
+function cellSizeStorageKey(runtimeConfig){
+  return isEnemyLabRuntime(runtimeConfig) ? LAB_CELL_SIZE_KEY : CELL_SIZE_KEY;
 }
 
-function cellSizeStorageKey(){
-  return isEnemyLabRuntime() ? LAB_CELL_SIZE_KEY : CELL_SIZE_KEY;
+function defaultCellSizeId(runtimeConfig){
+  return isEnemyLabRuntime(runtimeConfig) ? DEFAULT_LAB_CELL_SIZE_ID : DEFAULT_CELL_SIZE_ID;
 }
 
-function defaultCellSizeId(){
-  return isEnemyLabRuntime() ? DEFAULT_LAB_CELL_SIZE_ID : DEFAULT_CELL_SIZE_ID;
-}
-
-function selectedCellSize(){
-  const explicit = requestedCellSizeId();
+function selectedCellSize(runtimeConfig){
+  const explicit = requestedCellSizeId(runtimeConfig);
   return optionById(
     MAZE_CELL_SIZE_OPTIONS,
-    explicit || storageGet(cellSizeStorageKey()),
-    defaultCellSizeId(),
+    explicit || storageGet(cellSizeStorageKey(runtimeConfig)),
+    defaultCellSizeId(runtimeConfig),
   );
 }
 
-export function getMazeRuntimeSettings(){
+export function getMazeRuntimeSettings({ runtimeConfig = null } = {}){
   return {
-    cellSize:selectedCellSize(),
+    cellSize:selectedCellSize(runtimeConfig),
     roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS, storageGet(ROOM_SIZE_KEY), DEFAULT_ROOM_SIZE_ID),
   };
 }
 
-export function configuredHexSize(requestedHexSize){
+export function configuredHexSize(requestedHexSize, { runtimeConfig = null } = {}){
   const requested = Number(requestedHexSize);
   if(!Number.isFinite(requested)) return requestedHexSize;
   // The gameplay maze uses large world-unit cells. Lab/debug renderers use tiny
   // values such as 1 or 2.6 and must not inherit the gameplay override.
   if(requested < 10) return requested;
-  const stored = storageGet(cellSizeStorageKey());
-  if(stored === null && !requestedCellSizeId() && !isCombatArenaRuntime()) return requested;
-  return selectedCellSize().value;
+  const stored = storageGet(cellSizeStorageKey(runtimeConfig));
+  if(stored === null && !requestedCellSizeId(runtimeConfig) && !isCombatArenaRuntime(runtimeConfig)) return requested;
+  return selectedCellSize(runtimeConfig).value;
 }
 
-export function configuredRoomSize(defaultMin, defaultMax, presetId = null){
+export function configuredRoomSize(defaultMin, defaultMax, presetId = null, { runtimeConfig = null } = {}){
   if(presetId){
     const preset = optionById(MAZE_ROOM_SIZE_OPTIONS, presetId, DEFAULT_ROOM_SIZE_ID);
     return { min:preset.min, max:preset.max, id:preset.id };
   }
   const stored = storageGet(ROOM_SIZE_KEY);
-  if(stored === null && !isCombatArenaRuntime()){
+  if(stored === null && !isCombatArenaRuntime(runtimeConfig)){
     return { min:Number(defaultMin), max:Number(defaultMax), id:'custom' };
   }
   const preset = optionById(MAZE_ROOM_SIZE_OPTIONS, stored, DEFAULT_ROOM_SIZE_ID);
   return { min:preset.min, max:preset.max, id:preset.id };
 }
 
-function makeSelectRow({ id, label, options, value }){
-  const row = document.createElement('div');
+function makeSelectRow({ id, label, options, value, document:doc = globalThis.document }){
+  const row = doc.createElement('div');
   row.className = 'selectRow mazeSettingRow';
-  const title = document.createElement('label');
+  const title = doc.createElement('label');
   title.htmlFor = id;
   title.textContent = label;
-  const select = document.createElement('select');
+  const select = doc.createElement('select');
   select.id = id;
   for(const option of options){
-    const element = document.createElement('option');
+    const element = doc.createElement('option');
     element.value = option.id;
     element.textContent = option.label;
     select.appendChild(element);
@@ -131,13 +114,13 @@ function makeSelectRow({ id, label, options, value }){
   return { row, select };
 }
 
-export function installMazeRuntimeControls(){
-  if(typeof document === 'undefined' || document.getElementById('mazeCellSizeSelect')) return false;
-  const simBody = document.getElementById('body-sim');
-  const sliderRoot = document.getElementById('dirSliders');
+export function installMazeRuntimeControls({ document:doc = globalThis.document, runtimeConfig = null } = {}){
+  if(!doc || doc.getElementById('mazeCellSizeSelect')) return false;
+  const simBody = doc.getElementById('body-sim');
+  const sliderRoot = doc.getElementById('dirSliders');
   if(!simBody || !sliderRoot) return false;
 
-  const style = document.createElement('style');
+  const style = doc.createElement('style');
   style.id = 'mazePhonePanelStyle';
   style.textContent = `
     #panel{padding-right:36px!important;scrollbar-width:auto!important}
@@ -151,12 +134,12 @@ export function installMazeRuntimeControls(){
     .mazeSettingRow{margin-bottom:12px}
     .mazeReloadNote{margin:-3px 0 10px;color:#4a6f6a;font-size:8.5px;line-height:1.45;letter-spacing:.04em}
   `;
-  document.head.appendChild(style);
+  doc.head.appendChild(style);
 
-  const settings = getMazeRuntimeSettings();
-  const group = document.createElement('div');
+  const settings = getMazeRuntimeSettings({ runtimeConfig });
+  const group = doc.createElement('div');
   group.className = 'mazeSettingsGroup';
-  const heading = document.createElement('div');
+  const heading = doc.createElement('div');
   heading.className = 'ptitle';
   heading.textContent = 'MAZE GEOMETRY';
 
@@ -165,16 +148,18 @@ export function installMazeRuntimeControls(){
     label:'CELL SIZE',
     options:MAZE_CELL_SIZE_OPTIONS,
     value:settings.cellSize.id,
+    document:doc,
   });
   const room = makeSelectRow({
     id:'mazeRoomSizeSelect',
     label:'CELLS PER ROOM',
     options:MAZE_ROOM_SIZE_OPTIONS,
     value:settings.roomSize.id,
+    document:doc,
   });
-  const note = document.createElement('div');
+  const note = doc.createElement('div');
   note.className = 'mazeReloadNote';
-  note.textContent = isEnemyLabRuntime()
+  note.textContent = isEnemyLabRuntime(runtimeConfig)
     ? 'Enemy Lab uses its own cell-size setting and defaults to Large 24.'
     : 'Changing either option rebuilds the entire maze. Compact 12 + Medium 7–10 is now the default.';
   group.append(heading, cell.row, room.row, note);
@@ -182,14 +167,9 @@ export function installMazeRuntimeControls(){
 
   const reloadWith = (key, value) => {
     storageSet(key, value);
-    globalThis.location?.reload?.();
+    doc.defaultView?.location?.reload?.();
   };
-  cell.select.addEventListener('change', ()=>reloadWith(cellSizeStorageKey(), cell.select.value));
+  cell.select.addEventListener('change', ()=>reloadWith(cellSizeStorageKey(runtimeConfig), cell.select.value));
   room.select.addEventListener('change', ()=>reloadWith(ROOM_SIZE_KEY, room.select.value));
   return true;
-}
-
-if(typeof document !== 'undefined'){
-  queueMicrotask(()=>installMazeRuntimeControls());
-  if(isCombatArenaRuntime()) import('./roadie-run.js').catch(error=>console.error('Roadie run failed to load', error));
 }

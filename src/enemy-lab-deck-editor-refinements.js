@@ -22,13 +22,9 @@ export function wizardArcanaCards(catalog=[]){
   return catalog.filter(isWizardArcana);
 }
 
-export function installEnemyLabDeckEditorRefinements(){
-  if(typeof window==='undefined'||window.__enemyLabDeckEditorRefinementsInstalled)return;
-  window.__enemyLabDeckEditorRefinementsInstalled=true;
-
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+export function installEnemyLabDeckEditorRefinements({document:doc=globalThis.document,getEditor=()=>null}={}){
+  const parentDocument=doc;
+  if(!parentDocument)return;
 
   const state={arcanaFamily:false,tweaksOpen:false,suppressCoreFamily:false};
   const styleId='enemyLabDeckEditorRefinementStyles';
@@ -167,7 +163,7 @@ export function installEnemyLabDeckEditorRefinements(){
 
   function decorateEditor(values){
     if(state.tweaksOpen)return;
-    const editor=window.__enemyLabDeckEditor;
+    const editor=getEditor();
     const root=values.querySelector('.deckEditorRoot');
     if(!editor||!root)return;
 
@@ -214,7 +210,7 @@ export function installEnemyLabDeckEditorRefinements(){
   function renderArcanaTweaks(){
     const dock=parentDocument.getElementById('labDock'),values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
     if(!dock||!values||!categories)return;
-    const editor=window.__enemyLabDeckEditor;
+    const editor=getEditor();
     if(editor?.activeView){
       state.tweaksOpen=false;
       const baseCategory=categories.querySelector('.choice:not([data-deck-editor-category]):not([data-arcana-tweaks-category])');
@@ -295,7 +291,7 @@ export function installEnemyLabDeckEditorRefinements(){
 
   const finishInstall=(attempt=0)=>{
     const values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
-    if(!values||!categories||!window.__enemyLabDeckEditor){if(attempt<240)setTimeout(()=>finishInstall(attempt+1),40);return;}
+    if(!values||!categories||!getEditor()){if(attempt<240)setTimeout(()=>finishInstall(attempt+1),40);return;}
     ensureTweaksCategory(categories);
 
     new MutationObserver(()=>{ensureTweaksCategory(categories);queueDecoration();}).observe(categories,{childList:true,subtree:true});
@@ -313,7 +309,7 @@ export function installEnemyLabDeckEditorRefinements(){
       const batch=event.target.closest?.('.deckBatchBtn[data-arcana-batch="1"]');
       if(batch&&state.arcanaFamily){
         event.preventDefault();event.stopImmediatePropagation();
-        const editor=window.__enemyLabDeckEditor,selected=new Set(editor.cardIds);
+        const editor=getEditor(),selected=new Set(editor.cardIds);
         for(const card of wizardArcanaCards(editor.catalog)){if(!selected.has(card.id)){editor.add(card.id);selected.add(card.id);}}
         queueDecoration();return;
       }
@@ -321,17 +317,11 @@ export function installEnemyLabDeckEditorRefinements(){
       const remove=event.target.closest?.('.deckEditorRoot[data-view="browse"] .deckCardAction[data-browse-deck-action="remove"]');
       if(!remove)return;
       event.preventDefault();event.stopImmediatePropagation();
-      const id=remove.closest('.deckCardTile')?.dataset.cardId,editor=window.__enemyLabDeckEditor;
+      const id=remove.closest('.deckCardTile')?.dataset.cardId,editor=getEditor();
       if(!id||!editor)return;
       if(!editor.remove(id))setMessage('The deck needs at least one stance card.');
     },true);
 
-    window.__enemyLabArcanaControls={
-      get arcanaFamily(){return state.arcanaFamily;},
-      get tweaksOpen(){return state.tweaksOpen;},
-      showTweaks:renderArcanaTweaks,
-      setSize:sizeMultiplier=>writeArcanaTweaks({sizeMultiplier}),
-    };
     queueDecoration();
   };
 

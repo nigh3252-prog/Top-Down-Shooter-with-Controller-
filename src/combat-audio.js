@@ -1,9 +1,8 @@
 // Stone Wanderer combat audio director.
 //
 // weapon-lab.html imports this directly and calls onAttackStart/onDummyEvent at
-// the exact point those events happen in its own combat code. No iframe, no DOM
-// scraping, no MutationObserver — the old wrapper needed those because the lab
-// lived behind an iframe boundary; now it's the same page.
+// the exact point those events happen in its own combat code. It is now wired
+// directly into the same-document runtime instead of observing a child page.
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

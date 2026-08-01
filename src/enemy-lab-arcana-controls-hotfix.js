@@ -16,13 +16,9 @@ export function setTextIfChanged(node,text){
   return true;
 }
 
-export function installEnemyLabArcanaControlsHotfix(){
-  if(typeof window==='undefined'||window.__enemyLabArcanaControlsHotfixInstalled)return;
-  window.__enemyLabArcanaControlsHotfixInstalled=true;
-
-  let parentDocument;
-  try{parentDocument=window.parent?.document;}catch{return;}
-  if(!parentDocument||window.parent===window)return;
+export function installEnemyLabArcanaControlsHotfix({document:doc=globalThis.document,getEditor=()=>null}={}){
+  const parentDocument=doc;
+  if(!parentDocument)return;
 
   const state={arcanaFilter:false,queued:false};
   const queue=callback=>typeof queueMicrotask==='function'?queueMicrotask(callback):setTimeout(callback,0);
@@ -39,7 +35,7 @@ export function installEnemyLabArcanaControlsHotfix(){
     parentDocument.head.appendChild(style);
   }
 
-  function editor(){return window.__enemyLabDeckEditor||null;}
+  function editor(){return getEditor?.()||null;}
   function browseRoot(){return parentDocument.querySelector('.deckEditorRoot[data-view="browse"]');}
   function arcanaButton(root){
     let button=root?.querySelector('[data-wizard-arcana-family]');
@@ -164,9 +160,5 @@ export function installEnemyLabArcanaControlsHotfix(){
 
   const values=parentDocument.getElementById('labValues');
   if(values)new MutationObserver(queueApply).observe(values,{childList:true,subtree:true});
-  window.__enemyLabArcanaHotfix={
-    get filtering(){return state.arcanaFilter;},
-    setDamage:damageMultiplier=>writeArcanaTweaks({damageMultiplier}),
-  };
   queueApply();
 }

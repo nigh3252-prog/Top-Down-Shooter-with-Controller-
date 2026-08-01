@@ -93,9 +93,8 @@ export function safeAdvanceDistance(frame,distance,walls=[],clearance=.52){
   return allowed;
 }
 
-function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(location.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+function isEnemyLabRuntime(runtimeContext){
+  return runtimeContext?.mode==='enemy-lab'||runtimeContext?.config?.mode==='enemy-lab';
 }
 function normalize2(x,z){const length=Math.hypot(x,z)||1;return{x:x/length,z:z/length};}
 function playerFrame(getPlayer){const p=getPlayer?.()||{},forward=normalize2(Number(p.forwardX)||0,Number(p.forwardZ)||1);return{x:Number(p.x)||0,z:Number(p.z)||0,forward};}
@@ -141,9 +140,9 @@ function makeSparkArc(THREE,scene,spec,size){
   const edge=new THREE.Mesh(new THREE.RingGeometry((spec.overlay.radius-.12)*size,(spec.overlay.radius+.04)*size,48,1,start,length),makeMaterial(THREE,SPARK_HOT,.96,true));edge.rotation.x=Math.PI/2;edge.position.y=.39;edge.userData.baseOpacity=.96;group.add(edge);group.renderOrder=7;scene.add(group);return group;
 }
 
-export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],advancePlayer=()=>false}={}){
+export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],advancePlayer=()=>false,runtimeContext=null}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime(runtimeContext))return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier};
   const add=effect=>(state.effects.push(effect),effect);
   function remove(effect){if(effect.mesh)disposeObject(effect.mesh);for(const mesh of effect.meshes||[])disposeObject(mesh);for(const flash of effect.flashes||[])disposeObject(flash);const index=state.effects.indexOf(effect);if(index>=0)state.effects.splice(index,1);}

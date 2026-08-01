@@ -38,11 +38,11 @@ function arrowForAttack(key){
   return'·';
 }
 function subtitle(card){return isNonStance(card)?(card.description||'Non-stance combat card'):(card.chain?.map(arrowForAttack).join(' ')||'Stance card');}
-function showMessage(text){const msg=document.getElementById('msg');if(!msg)return;msg.textContent=text;msg.style.opacity=1;}
+function showMessage(text,doc=globalThis.document){const msg=doc?.getElementById('msg');if(!msg)return;msg.textContent=text;msg.style.opacity=1;}
 
-function addStyles(){
-  if(document.getElementById('runDraftStyles'))return;
-  const style=document.createElement('style');style.id='runDraftStyles';style.textContent=`
+function addStyles(doc=globalThis.document){
+  if(doc?.getElementById('runDraftStyles'))return;
+  const style=doc.createElement('style');style.id='runDraftStyles';style.textContent=`
   #startGate{overflow:auto;padding:max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));box-sizing:border-box}
   #startCard.runDraftCard{width:min(980px,100%);max-width:none;text-align:left;padding:18px;box-sizing:border-box}
   #startCard .sgTitle{text-align:center;margin-bottom:6px}#startCard .sgHint{text-align:center;margin-bottom:14px}
@@ -61,16 +61,22 @@ function addStyles(){
   #cardRewardSkip{width:100%;font-family:inherit;font-size:10px;letter-spacing:.15em;color:#8ebbb3;background:transparent;border:1px solid #2c4a47;border-radius:6px;padding:11px;margin-top:10px}
   @media(max-width:680px){#startCard.runDraftCard{padding:12px}#runOfferGrid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:5px}.runOffer{min-width:min(78vw,260px);scroll-snap-align:center}#cardRewardChoices{grid-template-columns:1fr}.rewardChoice{min-height:82px}#cardRewardGate{align-items:flex-start;overflow:auto;padding-top:max(14px,env(safe-area-inset-top))}}
   @media(orientation:landscape) and (max-height:520px){#startGate{align-items:flex-start!important;padding:max(4px,env(safe-area-inset-top)) 6px max(4px,env(safe-area-inset-bottom))!important}#startCard.runDraftCard{padding:6px 8px!important;border-radius:7px!important;box-shadow:0 3px 0 rgba(0,0,0,.28)!important}#startCard .sgTitle{font-size:11px!important;line-height:1.1!important;margin:0 0 4px!important}#startCard .sgHint,.runOfferProfile,.runStarterCard span,#runSetupActions{display:none!important}#runOfferGrid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important;padding:0!important;overflow:visible!important}.runOffer{min-width:0!important;padding:5px!important;border-radius:6px!important}.runOfferWeapon{font-size:11px!important;line-height:1.05!important;margin-bottom:4px!important}.runFixedStances{gap:3px!important;margin-bottom:4px!important}.runFixedStance{padding:3px 2px!important;font-size:8px!important;line-height:1.05!important}.runFixedStance b,.runStarterCard b{font-size:8px!important;margin-bottom:1px!important}.runStarterCards{gap:3px!important}.runStarterCard{padding:4px!important}#cardRewardGate{align-items:flex-start!important;padding:4px 6px!important}#cardRewardCard{padding:7px!important}#cardRewardTitle{font-size:11px!important;margin-bottom:2px!important}#cardRewardHint{display:none!important}#cardRewardChoices{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important}.rewardChoice{min-height:72px!important;padding:5px!important}.rewardChoice .rewardType{margin-bottom:3px!important}.rewardChoice b{font-size:9px!important}.rewardChoice span{font-size:8px!important;line-height:1.2!important;margin-top:3px!important}#cardRewardSkip{padding:6px!important;margin-top:5px!important}}
-  `;document.head.appendChild(style);
+  `;doc.head.appendChild(style);
 }
 
-function forceArenaReset(){const panel=document.getElementById('panel'),reset=document.getElementById('resetBtn');if(!panel||!reset)return;panel.classList.remove('hidden');reset.click();}
+function forceArenaReset(api){api?.reset?.();}
 function setOpeningStance(api,stance){if(!stance)return;api.arena.stance=stance;api.arena.stanceIndex=0;api.PC.setReadyPose?.(guardPoseFor(stance));}
 
-export function installRunDraft(deck){
-  if(typeof window==='undefined'||typeof document==='undefined'||window.__STONE_RUN_DRAFT_INSTALLED__)return;
+const installedRuntimes=new WeakSet();
+
+export function installRunDraft(deck,{runtimeContext=null}={}){
+  const document=runtimeContext?.document||globalThis.document;
+  const requestAnimationFrame=document?.defaultView?.requestAnimationFrame?.bind(document.defaultView)
+    ||globalThis.requestAnimationFrame||(callback=>setTimeout(()=>callback(Date.now()),16));
+  const runtime=runtimeContext?.runtime;
+  if(!document||!runtime||installedRuntimes.has(runtime))return;
   const startGate=document.getElementById('startGate'),startCard=document.getElementById('startCard');if(!startGate||!startCard)return;
-  window.__STONE_RUN_DRAFT_INSTALLED__=true;addStyles();
+  installedRuntimes.add(runtime);addStyles(document);
   const starters=STARTER_STANCE_IDS.map(id=>ALL_STANCE_CARDS.find(card=>card.id===id)).filter(Boolean);
   if(starters.length!==2){const err=document.getElementById('err');if(err){err.style.display='block';err.textContent='Run setup missing Rat Step or Deep Launch';}return;}
   const state={api:null,setupOpen:true,rewardOpen:false,seenCleared:0,rewardRoomId:null,totem:null};
@@ -85,12 +91,12 @@ export function installRunDraft(deck){
   function openReward(roomId){if(!state.api||state.rewardOpen||state.setupOpen)return;state.rewardOpen=true;state.rewardRoomId=roomId;state.api.arena.paused=true;const choices=drawRewardChoices();rewardChoices.replaceChildren(...choices.map(card=>{const button=document.createElement('button');button.className='rewardChoice';button.innerHTML=`<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'}</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;}));rewardGate.classList.remove('hidden');}
   rewardGate.querySelector('#cardRewardSkip').addEventListener('click',closeReward);
 
-  function chooseOffer(offer){const api=state.api;if(!api)return;state.totem?.reset();deck.unlockRun();api.PC.selectCombatWeapon(offer.weaponId);StoneSettings.set('arena.weapon',offer.weaponId);deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});api.arena.started=true;state.setupOpen=false;startGate.classList.add('hidden');forceArenaReset();setOpeningStance(api,starters[0]);state.seenCleared=api.encounterState?.progress?.cleared||0;api.arena.paused=false;}
+  function chooseOffer(offer){const api=state.api;if(!api)return;state.totem?.reset();deck.unlockRun();api.PC.selectCombatWeapon(offer.weaponId);StoneSettings.set('arena.weapon',offer.weaponId);deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});api.arena.started=true;state.setupOpen=false;startGate.classList.add('hidden');forceArenaReset(api);setOpeningStance(api,starters[0]);state.seenCleared=api.encounterState?.progress?.cleared||0;api.arena.paused=false;}
   function renderOffers(){grid.replaceChildren(...buildRunOffers().map(offer=>{const weapon=STONE_WEAPONS[offer.weaponId]||{label:offer.weaponId,profile:''};const button=document.createElement('button');button.className='runOffer';button.innerHTML=`<div class="runOfferWeapon">${weapon.label}</div><div class="runOfferProfile">${weapon.profile||''}</div><div class="runFixedStances">${starters.map(card=>`<div class="runFixedStance"><b>${cleanName(card)}</b>${subtitle(card)}</div>`).join('')}</div><div class="runStarterCards">${offer.cards.map(card=>`<div class="runStarterCard"><b>${cleanName(card)}</b><span>${subtitle(card)}</span></div>`).join('')}</div>`;button.addEventListener('click',()=>chooseOffer(offer));return button;}));}
   function openSetup(){if(!state.api)return;state.setupOpen=true;state.api.arena.paused=true;renderOffers();startGate.classList.remove('hidden');}
   const topBar=document.getElementById('topBar');if(topBar&&!document.getElementById('runSetupBtn')){const button=document.createElement('button');button.className='tbtn';button.id='runSetupBtn';button.textContent='RUN';button.title='Choose a new run loadout';button.addEventListener('click',openSetup);topBar.insertBefore(button,topBar.firstChild);}
 
-  async function waitForArena(){const api=window.__arena;if(!api?.PC||api.deck!==deck||!api.arena||!api.encounterState){setTimeout(waitForArena,40);return;}state.api=api;state.seenCleared=api.encounterState.progress?.cleared||0;try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}renderOffers();startGate.classList.remove('hidden');monitorProgress();}
+  async function waitForArena(){const api=runtimeContext?.runtime;if(!api?.PC||api.deck!==deck||!api.arena||!api.encounterState){setTimeout(waitForArena,40);return;}state.api=api;state.seenCleared=api.encounterState.progress?.cleared||0;try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:text=>showMessage(text,document)});}catch{return;}renderOffers();startGate.classList.remove('hidden');monitorProgress();}
   function monitorProgress(){if(state.api){const cleared=state.api.encounterState?.progress?.cleared||0;if(state.api.arena.started&&cleared>state.seenCleared){state.seenCleared=cleared;state.totem?.arm(state.api.activeRoomId);}else if(cleared<state.seenCleared){state.seenCleared=cleared;state.totem?.reset();}}requestAnimationFrame(monitorProgress);}
   waitForArena();
 }

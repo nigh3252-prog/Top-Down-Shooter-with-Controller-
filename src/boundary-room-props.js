@@ -152,12 +152,12 @@ function choosePoint(candidates, placed, center, doors, rules){
   return null;
 }
 
-function installPhysics(world, knockables, blockerSegments, random){
+function installPhysics(world, knockables, blockerSegments, random, getActorPosition=()=>null){
   const baseCollision = world.getCollisionSegments.bind(world);
   world.getCollisionSegments = () => [...baseCollision(), ...blockerSegments];
   let previousActor = null;
   return dt => {
-    const actorPos = globalThis.__arena?.actorPos;
+    const actorPos = getActorPosition?.();
     if(!actorPos) return;
     const actor = { x:actorPos.x, z:actorPos.y };
     const actorDelta = previousActor ? { x:actor.x - previousActor.x, z:actor.z - previousActor.z } : { x:0, z:0 };
@@ -202,7 +202,7 @@ function installPhysics(world, knockables, blockerSegments, random){
   };
 }
 
-export function applyBoundaryRoomProps({ THREE, maze, roomId = null, hexSize = 20, world } = {}){
+export function applyBoundaryRoomProps({ THREE, maze, roomId = null, hexSize = 20, world, runtimeConfig = null, getActorPosition = () => null } = {}){
   if(!THREE || !maze || !world?.group || roomId === null) return world;
   const district = districtForRoom(maze.seed, roomId);
   const random = createSeededRandom(`${maze.seed}:${roomId}:boundary-props-v1`);
@@ -269,7 +269,7 @@ export function applyBoundaryRoomProps({ THREE, maze, roomId = null, hexSize = 2
     });
   }
 
-  const updateProps = installPhysics(world, knockables, blockerSegments, random);
+  const updateProps = installPhysics(world, knockables, blockerSegments, random, getActorPosition);
   const baseUpdate = world.update.bind(world);
   world.update = dt => {
     baseUpdate(dt);

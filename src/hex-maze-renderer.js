@@ -18,7 +18,7 @@ installAkaiCompactInterface();
 export function createMazeWorld(options = {}){
   const configuredOptions = {
     ...options,
-    hexSize:configuredHexSize(options.hexSize ?? 2.6),
+    hexSize:configuredHexSize(options.hexSize ?? 2.6, { runtimeConfig:options.runtimeConfig }),
   };
   const arenaLayout = configuredOptions.maze?.options?.layout === 'arena';
   if(!arenaLayout) replaceHalfInternalWallsWithGaps(configuredOptions.maze);

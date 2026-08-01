@@ -11,17 +11,6 @@ import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
 
-function isEnemyLabRuntime(){
-  if(typeof window==='undefined'||typeof document==='undefined')return false;
-  try{
-    const params=new URLSearchParams(globalThis.location?.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    const parent=globalThis.parent;
-    const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
-    return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
-  }catch{return false;}
-}
-
 function sourceOrderedEnemyLabArcana(){
   const windIndex=WIZARD_ARCANA_CARDS.findIndex(card=>card?.arcanaId==='WIND-SLASH');
   if(windIndex<0)return[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS];
@@ -52,20 +41,27 @@ export function restoreStaminaState(stamina,snapshot){
   if(!stamina||!snapshot)return false;
   stamina.v=snapshot.v;stamina.pending=snapshot.pending;stamina.recoverDelayT=snapshot.recoverDelayT;return true;
 }
-function currentArenaStamina(){return typeof window!=='undefined'?window.__arena?.arena?.stamina||null:null;}
-function queueNonStanceEffect(eventName,card,staminaSnapshot){
-  const fire=()=>{restoreStaminaState(currentArenaStamina(),staminaSnapshot);window.dispatchEvent(new CustomEvent(eventName,{detail:{card}}));};
+function currentArenaStamina(runtimeContext){return runtimeContext?.getArenaState?.()?.stamina||null;}
+function queueNonStanceEffect(eventName,card,staminaSnapshot,runtimeContext){
+  const fire=()=>{
+    restoreStaminaState(currentArenaStamina(runtimeContext),staminaSnapshot);
+    const win=runtimeContext?.window||globalThis.window||globalThis;
+    const EventCtor=win?.CustomEvent||globalThis.CustomEvent;
+    if(EventCtor)win?.dispatchEvent?.(new EventCtor(eventName,{detail:{card}}));
+  };
   if(typeof queueMicrotask==='function')queueMicrotask(fire);else setTimeout(fire,0);
 }
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
-function canPlayAbility(card){
-  if(typeof window==='undefined')return false;
-  if(card?.id===POW_BUNKER_CARD.id)return typeof window.__POWBUNKER_CAN_PLAY__==='function'&&window.__POWBUNKER_CAN_PLAY__();
-  if(typeof window.__ABILITY_CARD_CAN_PLAY__==='function')return window.__ABILITY_CARD_CAN_PLAY__(card)!==false;
+function canPlayAbility(card,runtimeContext){
+  const win=runtimeContext?.window||globalThis.window||globalThis;
+  if(!win)return false;
+  if(card?.id===POW_BUNKER_CARD.id)return typeof win.__POWBUNKER_CAN_PLAY__==='function'&&win.__POWBUNKER_CAN_PLAY__();
+  if(typeof win.__ABILITY_CARD_CAN_PLAY__==='function')return win.__ABILITY_CARD_CAN_PLAY__(card)!==false;
   return true;
 }
 
-export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
+export function createStanceDeck({rng=Math.random,shuffleTime=2,runtimeContext=null}={}){
+  const document=runtimeContext?.document||globalThis.document;
   const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false};
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
@@ -122,11 +118,11 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     play(slot){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){
-        if(!canPlayAbility(card))return null;
-        const proxy=proxyActiveStance(card,'__abilityProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina);scheduleDecoration();return proxy;
+        if(!canPlayAbility(card,runtimeContext))return null;
+        const proxy=proxyActiveStance(card,'__abilityProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina(runtimeContext));consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,runtimeContext);scheduleDecoration();return proxy;
       }
       if(card.type==='modifier'){
-        const proxy=proxyActiveStance(card,'__modifierProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'bloodslash:play',card,stamina);scheduleDecoration();return proxy;
+        const proxy=proxyActiveStance(card,'__modifierProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina(runtimeContext));consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'bloodslash:play',card,stamina,runtimeContext);scheduleDecoration();return proxy;
       }
       s.lastStance=card;consumeSlot(slot,card);scheduleDecoration();return card;
     },
@@ -134,13 +130,14 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     update(dt){if(s.shuffleT<0)return;s.shuffleT-=dt;if(s.shuffleT<=0){s.shuffleT=-1;dealFresh(s.pool);}scheduleDecoration();},
   };
 
-  if(isEnemyLabRuntime()){
+  if(runtimeContext?.mode==='enemy-lab'){
     registerEnemyLabArcanaCatalog();
-    installEnemyLabDeckEditor(api);
-    installEnemyLabDeckEditorRefinements();
+    const editorRef=installEnemyLabDeckEditor(api,{document,runtimeContext});
+    if(runtimeContext)runtimeContext.getDeckEditor=()=>editorRef?.current||null;
+    installEnemyLabDeckEditorRefinements({document,runtimeContext,getEditor:()=>editorRef?.current||null});
   }
-  if(typeof document!=='undefined'&&document.getElementById('startGate')&&!isEnemyLabRuntime()){
-    const install=()=>import('./run-draft.js').then(module=>module.installRunDraft(api)).catch(error=>{console.error('Run draft UI failed to install',error);const err=document.getElementById('err');if(err){err.style.display='block';err.textContent=`Run draft UI did not load\n${error?.message||error}`;}});
+  if(document?.getElementById('startGate')&&runtimeContext?.mode!=='enemy-lab'){
+    const install=()=>import('./run-draft.js').then(module=>module.installRunDraft(api,{runtimeContext})).catch(error=>{console.error('Run draft UI failed to install',error);const err=document.getElementById('err');if(err){err.style.display='block';err.textContent=`Run draft UI did not load\n${error?.message||error}`;}});
     if(typeof queueMicrotask==='function')queueMicrotask(install);else setTimeout(install,0);
   }
   return api;

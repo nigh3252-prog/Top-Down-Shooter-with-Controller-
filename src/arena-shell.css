@@ -1,11 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>HEX MAZE COMBAT — stone wanderer × encounter director</title>
-<style>
-  html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touch-action:none;
+html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touch-action:none;
     -webkit-user-select:none;user-select:none;font-family:ui-monospace,Menlo,Consolas,monospace}
   canvas{display:block}
   /* ---- top bar ---- */
@@ -98,6 +91,7 @@
   #tabs button.on{color:#e8a04c;border-color:#6e3a24;background:rgba(110,58,36,.14)}
   .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:10px 0 7px}
   button.ptitle{display:block;width:100%;text-align:left;background:transparent;border:none;
+
     cursor:pointer;font-family:inherit;padding:6px 0;margin:4px 0 3px}
   .modeGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
   .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
@@ -148,114 +142,3 @@
     #cardRow{left:max(8px,env(safe-area-inset-left))}
     .scard{width:54px;height:74px}
   }
-</style>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
-  }
-}
-</script>
-</head>
-<body>
-<div id="topBar">
-  <button class="tbtn" id="menuBtn">MENU</button>
-  <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
-</div>
-<div id="hud">
-  <div id="hpWrap"><div id="hpFill"></div></div>
-  <div id="stWrap"><div id="stPending"></div><div id="stFill"></div></div>
-</div>
-<div id="msg"></div>
-<div id="vig"></div>
-<div id="roomTransition"><div class="rtTitle" id="rtTitle">ROOM TRANSITION</div></div>
-<div id="joyBase"></div><div id="joyKnob"></div>
-<div class="btnrow">
-  <button class="pbtn" id="atkBtn" aria-label="Light attack">
-    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">· ·</span>
-  </button>
-  <button class="pbtn" id="heavyBtn" aria-label="Heavy attack">
-    <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span>
-  </button>
-</div>
-<div id="cardRow">
-  <div id="deckSide">
-    <div id="drawQueue" aria-label="Upcoming stance cards">
-      <span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span>
-    </div>
-    <button id="shuffleBtn" aria-label="Shuffle stance cards">↻</button>
-  </div>
-  <div id="handCards">
-    <button class="scard" id="card0">
-      <span class="ckey">LB</span><span class="cicon" aria-hidden="true"></span>
-      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
-    </button>
-    <button class="scard" id="card1">
-      <span class="ckey">RB</span><span class="cicon" aria-hidden="true"></span>
-      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
-    </button>
-  </div>
-</div>
-<div id="panel" class="hidden">
-  <div id="tabs">
-    <button id="tabDir" class="on">DIRECTOR</button>
-    <button id="tabFeel">FEEL</button>
-  </div>
-  <div id="dirTab">
-    <button class="ptitle sect" data-sect="director" data-label="ENCOUNTER DIRECTOR"></button>
-    <div class="sbody" id="body-director">
-      <div class="modeGrid" id="modeGrid"></div>
-    </div>
-    <button class="ptitle sect" data-sect="loadout" data-label="LOADOUT"></button>
-    <div class="sbody" id="body-loadout">
-      <div class="pairRow">
-        <button class="wide" id="weaponBtn">WEAPON</button>
-        <button class="wide" id="stanceBtn">STANCE</button>
-      </div>
-    </div>
-    <button class="ptitle sect" data-sect="combatTiming" data-label="COMBO TIMING"></button>
-    <div class="sbody" id="body-combatTiming">
-      <div class="modeGrid" id="combatModeGrid"></div>
-      <div class="ptitle" id="combatModeNote" style="margin-top:8px;line-height:1.45"></div>
-    </div>
-    <button class="ptitle sect" data-sect="sim" data-label="SIM"></button>
-    <div class="sbody" id="body-sim">
-      <div class="selectRow">
-        <label for="spawnSelect">ENEMY TYPE</label>
-        <select id="spawnSelect"></select>
-      </div>
-      <div id="dirSliders"></div>
-    </div>
-    <button class="wide" id="resetBtn">RESET FIGHT</button>
-  </div>
-  <div id="feelTab" style="display:none">
-    <button class="ptitle sect" data-sect="keyframe" data-label="EDITING KEYFRAME"></button>
-    <div class="sbody" id="body-keyframe">
-      <div id="keyRow"></div>
-      <div id="feelSliders"></div>
-    </div>
-    <button class="wide" id="testBtn">TEST THIS TIER</button>
-    <div class="ptitle" style="margin-top:10px">light chains the stance combo · heavy hold charges to cartoon</div>
-  </div>
-</div>
-<div id="hint">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DODGE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>
-<div id="err"></div>
-<div id="startGate">
-  <div id="startCard">
-    <div class="sgTitle">HEX MAZE COMBAT</div>
-    <div class="sgHint">Clear the sealed room, reopen its doors, and explore the braided dungeon.</div>
-    <button id="sgFsBtn">⛶ FULLSCREEN</button>
-    <button id="startBtn">TAP TO START</button>
-  </div>
-</div>
-
-<script type="module">
-import { createArenaRuntime } from './src/arena-runtime.js';
-import { runtimeConfigFromLocation } from './src/arena-runtime-config.js';
-
-const config=runtimeConfigFromLocation(window.location);
-const runtime=createArenaRuntime({ config, context:{ source:'combat-arena' } });
-runtime.start();
-</script>
-</body>
-</html>

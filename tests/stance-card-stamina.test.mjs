@@ -18,7 +18,6 @@ if (typeof globalThis.CustomEvent === 'undefined') {
 const events = [];
 const stamina = { v:37, pending:9, recoverDelayT:.25 };
 globalThis.window = {
-  __arena:{ arena:{ stamina } },
   __POWBUNKER_CAN_PLAY__:() => true,
   dispatchEvent:event => events.push(event.type),
 };
@@ -41,7 +40,8 @@ const stance = {
   type:'stance',
   chain:['horizontal4', 'vertical8', 'horizontal5'],
 };
-const deck = createStanceDeck({ rng:() => 0 });
+const runtimeContext = { window:globalThis.window, getArenaState:()=>({ stamina }), mode:'arena' };
+const deck = createStanceDeck({ rng:() => 0, runtimeContext });
 deck.rebuild([stance]);
 
 // Deterministic shuffle puts Bing Bong in slot 0 and Pilebunker in slot 1.

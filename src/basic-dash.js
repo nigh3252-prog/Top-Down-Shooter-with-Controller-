@@ -78,7 +78,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   }
 
   function arenaHandle(){
-    const handle = globalThis.window?.__arena || globalThis.__arena;
+    const handle = api.runtimeContext?.runtime;
     return handle?.arena && handle?.actorPos ? handle : null;
   }
 
