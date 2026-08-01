@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:dash && npm run test:combat && npm run test:arcana && npm run test:flare && npm run test:hades && npm run test:encounters && npm run test:maze:quick && npm run test:boundary-rooms",
+    "test": "node tests/run-all.mjs",
     "test:dash": "node tests/basic-dash.test.mjs && node tests/basic-dash-runtime.test.mjs && node tests/dash-magic-jet.test.mjs",
     "test:combat": "node tests/combat-pass.test.mjs",
     "test:arcana": "node tests/wizard-arcana.test.mjs && node tests/wizard-air-basics.test.mjs && node tests/wizard-next-source.test.mjs",
