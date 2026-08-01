@@ -116,9 +116,11 @@ if(typeof window!=='undefined'&&/(?:^|\/)enemy-lab\.html$/.test(window.location?
     import('./enemy-lab-working-roster.js'),
     import('./enemy-lab-working-ability-pool.js'),
     import('./enemy-lab-combat-profiles.js'),
-  ]).then(([rosterModule,abilityModule,profileModule])=>{
+    import('./enemy-lab-stance-compatibility.js'),
+  ]).then(([rosterModule,abilityModule,profileModule,stanceModule])=>{
     rosterModule.installEnemyLabWorkingRoster({catalog:ARENA_ENEMY_CATALOG,families:ARENA_ENEMY_FAMILIES});
     abilityModule.installEnemyLabWorkingAbilityPool();
     profileModule.installEnemyLabCombatProfiles();
-  }).catch(error=>console.warn('[enemy-lab-development-pools] could not install',error));
+    stanceModule.installEnemyLabStanceCompatibility();
+  }).catch(error=>console.warn('[enemy-lab-development-tools] could not install',error));
 }
