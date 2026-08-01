@@ -1,97 +1,61 @@
 # Source Moves Prototype
 
-A phone/controller-friendly HTML5 top-down action prototype.
+A static, phone- and controller-friendly HTML5 top-down action prototype.
 
-## Repo layout
+## Supported experiences
 
-- `index.html` — launcher.
-- `top-down-shooter.html` — the original top-down shooter prototype (notes below).
-- `weapon-lab.html` — the Stone Wanderer weapon test lab: Red Toll greatsword, bent-horizon scrolling world, combat audio, and Stance Cards / Individual Moves modes. A single ES-module page that imports everything from `src/` directly — no runtime HTML patching.
-- `combat-arena.html` — the Combat Arena: an encounter-director goblin arena played with the Stone Wanderer's full weapon + stance-card combat. Its braided hex dungeon is stored as lightweight run data, while only the current oversized combat room is live at once. Clearing a room makes its unopened exits weapon-hittable; opening and entering one uses a brief occluded doorway transition before the next room is constructed. Stance cards work as a One Step From Eden-style deck: two hand slots played with LB/RB (or Q/E), each play switches your stance, fully refills stamina, and draws a replacement; using up the deck reshuffles instantly, while a manual shuffle (Circle/R) tosses the hand and takes a countdown. Missed swings refund as recoverable gray stamina unless the player gets hit, landed attacks keep their stamina cost, and horizontal/vertical/thrust attacks have different costs. Light attack is a two-hit combo gated on hit 1 connecting, while heavy uses the stance finisher and can be held to charge across the WIMPY→CARTOON feel tiers (scaling windup, damage, knockback, stun, hitstop, lunge). Dodge with i-frames, phone joystick + on-screen buttons, and gamepad support. Shares the rig and combat interpreter with `weapon-lab.html` via `src/stone-wanderer.js` and `src/player-combat.js`.
-- `hex-maze-lab.html` — a phone-friendly deterministic hex-maze diagnostic view with generation steps, original dead ends, braids, room numbers, derived doors, and validation failures.
-- `src/` — real source modules (`stone-wanderer.js`, `player-combat.js`, `weapons.js`, `attacks.js`, `stance-cards.js`, `enemies.js`, `combat-director.js`, `feel.js`, `combat-audio.js`, `lab-modes.js`, `bent-world.js`, …). See `src/README.md` for the module architecture.
-- `archive/` — the retired iframe wrapper, the old string-patched lab core, and donor pages. Kept for reference only; nothing links to them.
-- `docs/` — source-move libraries (Hades, Diablo III) used as design references.
+Only two game experiences are supported at the repository root:
 
-## Recent combat pass
+- [`combat-arena.html`](combat-arena.html) — the playable Combat Arena. It combines the Stone Wanderer combat runtime, stance-card deck, director-driven encounters, deterministic hex rooms, room transitions, and touch/gamepad input.
+- [`enemy-lab.html`](enemy-lab.html) — the Enemy Lab. It uses the same local runtime in lab mode and adds direct controls for enemy families, solo tests, matching packs, mixed waves, room sizing, tuning, deck editing, clearing, and repeat runs.
 
-Authored stance cards now select distinct mostly-European ready guards with a
-smaller Japanese set. Hit-confirmed Light 1 links from its recovery directly
-into Light 2, a landed Heavy can link into one Light, and the old saber slot is
-now a curved two-handed katana with saved-setting migration.
+[`index.html`](index.html) is the small launcher for those two experiences. No other root HTML page is a supported application entry point.
 
-## Current goal
+## Unified runtime
 
-This is a first-pass feel test for a top-down ARPG/brawler combat model:
+Both live pages create one same-document runtime through native ES modules:
 
-- Core movement/actions are modeled after Hades' Stygian Blade: light attack combo, dash, and Nova Smash-style heavy/special.
-- The live ability tray is modeled after the One Step From Eden idea of two currently available deck cards.
-- Tray card effects are sourced from baseline Diablo III skills.
-- Graphics are intentionally placeholder shapes.
+- `src/arena-runtime-config.js` resolves explicit mode and preserves the supported seed, layout, cell-size, tuning, Enemy Lab flags, URL compatibility, and existing storage keys.
+- `src/arena-runtime.js` owns the arena, player, maze, encounters, deck, input, rendering, and lifecycle. Its explicit API includes `ready`, `start`/`stop`/`destroy`/`reset`, state setters, snapshots, control access, lab scenario methods, combat/deck actions, and `subscribe`.
+- `src/arena-control-registry.js` publishes stable control descriptors and register/remove/change/invoke events. Consumers do not scrape arena DOM panels.
+- `src/enemy-lab-controller.js` owns the Lab dock and calls the runtime directly for manual room `-777` scenarios, clear/repeat flows, result badges, and tuning.
 
-## Experimental branch note
+Runtime context is injected into gameplay modules. The active graph has no child-page wrapper, DOM bridge, or production runtime globals.
 
-Branch `experiment/soft-aim-assist` adds an attack-aim and family-safe mode experiment:
+## Static development
 
-- Soft aim assist is the default. Attacks use movement/facing direction, then nudge toward the best enemy in front.
-- Right stick aiming overrides assist while the stick is actively held.
-- The Aim button cycles Soft / Auto / Manual.
-- Soft mode avoids pure nearest-enemy snapping.
-- Auto mode continuously points the player at the closest enemy within a nearby range, while still allowing right-stick override.
-- Manual disables target assist.
-- Melee attacks get a small lunge/magnetism when an enemy is just outside comfortable range.
-- Right hamburger/Menu button pauses and opens the existing expanded HUD/menu rather than a separate pause overlay.
-- Pause freezes gameplay updates until the Menu button is pressed again.
-- Hold left three-dots/View for 1 second to toggle Boys Mode on or off.
-- Boys Mode persists after release: player cannot take damage, and enemies stop near the player instead of attacking.
-- Downed state now has an on-screen Respawn button instead of requiring browser refresh.
-- Keyboard fallback: T cycles aim mode; P or Escape toggles pause.
+There is no bundler or build step. Serve the repository over HTTP(S) so native modules and the import map work:
 
-## Phone UI controls
+```text
+python -m http.server 4173
+```
 
-Top-left browser/game overlay buttons:
+Then open `http://127.0.0.1:4173/` and choose Combat Arena or Enemy Lab. Opening the module pages through `file://` is not a supported setup.
 
-- ☰: collapse or restore the HUD, tray, and touch controls. Collapsed mode leaves a tiny mini-HUD for HP, mana, and current cards. If paused, tapping ☰ resumes.
-- ⛶: request fullscreen. Browser support varies; it works best from a direct tap and may still depend on Chrome/Vercel/phone rules.
-- − / +: toggle a slightly zoomed-out arena view.
+Run the deterministic Node test suite with:
 
-## Gameplay controls
+```text
+npm test
+```
 
-Backbone / gamepad:
+The focused tests cover runtime configuration precedence, control registration and lifecycle, combat seams, maze/room behavior, deck persistence, and the wizard/Enemy Lab integrations.
 
-- Left stick: move
-- Right stick: face/aim, if available
-- Square / X button: light attack combo
-- Triangle / Y button: heavy/special
-- Cross / A button: dodge
-- LB: cast left tray card
-- RB: cast right tray card
-- Circle / B button: shuffle/reload tray
-- Right hamburger/Menu: pause and open existing HUD/menu; press again to resume
-- Hold left three-dots/View for 1 second: toggle Boys Mode safety mode
+## Current controls
 
-Keyboard fallback:
+The same controls are available in both experiences where the action applies:
 
-- WASD / arrows: move
-- J: light attack
-- L: heavy/special
-- K: dodge
-- Q/E: cast left/right tray cards
-- R: shuffle/reload tray
-- T: cycle aim assist mode
-- P or Escape: pause menu
+- Move with the phone joystick, WASD/arrow keys, or the left stick.
+- Light attack: on-screen LIGHT, `J`, Square/X, or the right trigger.
+- Hold heavy attack: on-screen HEAVY, `L`, or Triangle/Y.
+- Dodge: `K`, Cross/A, or the left trigger.
+- Play the two stance cards with LB/RB or `Q`/`E`; shuffle with Circle/B or `R`.
+- Cycle weapon with `X`; cycle stance with `T` as a development shortcut.
+- Open or close the menu with `M` or `P`; use the fullscreen button in the page controls.
 
-## Source move notes
+Enemy Lab additionally exposes its LAB dock for choosing an enemy and starting, clearing, repeating, or tuning a test. The dock closes while a test is active and can be reopened from the page control.
 
-This prototype intentionally uses source move logic for testing. Names and presentation should be replaced before any public-facing release.
+## Archive and reference policy
 
-Current implemented references:
+`archive/` contains historical prototypes, donor pages, and research snapshots only. They are not supported entry points, are not part of the live import graph, and may depend on obsolete APIs or assets. Keep them as reference material; extract a feature into the active runtime deliberately and add a focused test instead of reviving an archived wrapper.
 
-- Hades / Stygian Blade: Strike > Chop > Thrust combo, dash, Nova Smash-style AoE special.
-- Diablo III / Barbarian: Ground Stomp, Cleave, Ancient Spear.
-- Diablo III / Demon Hunter: Vault, Caltrops.
-- Diablo III / Wizard: Frost Nova.
-
-## Running
-
-Open `index.html` in a browser, or host the repository with GitHub Pages/Vercel as a static site.
+See [`src/README.md`](src/README.md) for the active module boundary and [`archive/README.md`](archive/README.md) for the archive catalog.

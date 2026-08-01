@@ -1,40 +1,47 @@
-# Archive
+# Archive and reference boundary
 
-Retired HTML pages are kept here for historical reference only. Nothing in the
-live repo links to them. Archived pages are not maintained as runnable app entry
-points and may fail to load because they depend on obsolete module APIs, inline
-prototype assumptions, or removed assets.
+Everything under `archive/` is historical reference material. It is not a
+supported application surface and nothing in the live root links to it. The
+only supported root experiences are `combat-arena.html` and `enemy-lab.html`,
+with `index.html` as their launcher.
 
-- `archive/stone-wanderer-stance-chain-lab-wrapper.html` — the old official lab entry
-  point. It worked by fetching the core page below, string-patching its HTML at
-  load time (weapon injection, Red Toll tuning UI, lab modes, audio hooks), and
-  running the result in an iframe. It was later superseded by the now-archived
-  `archive/demos/weapon-lab.html`. **This wrapper no longer runs** — it expects
-  old `src/` module APIs (patch-string exports) that were rewritten.
-- `archive/stone-wanderer-stance-chain-lab-core.html` — the raw core the wrapper
-  patched, including the bent-horizon integration pass. Superseded by the
-  later weapon lab and retained only as source reference.
-- `archive/stone-wanderer-individual-move-test.html` — donor/reference for the move
-  rating UI, since merged into `src/lab-modes.js`.
-- `archive/sound-foundry-retro-beasts.html` — donor/reference for procedural audio
-  recipes behind `src/combat-audio.js`.
-- `archive/stone-lab-audio-test.html` — old audio hook test page.
+Archived pages may fail to load because they use old module APIs, inline
+prototype assumptions, obsolete assets, or the retired wrapper approach. Their
+filenames and imports are preserved so research remains searchable; they are
+not instructions for the current runtime.
 
-## Archived root demos
+## Retired wrapper and donor snapshots
 
-These pages were formerly root-level prototypes, viewers, and labs. They are
-preserved as source snapshots under `archive/demos/`; they are historical
-references and are not required to remain runnable.
+- `stone-wanderer-stance-chain-lab-wrapper.html` — the former fetch-and-patch
+  lab wrapper. It is retained to document the pre-runtime architecture and is
+  not a supported way to compose a page.
+- `stone-wanderer-stance-chain-lab-core.html` — the raw pre-runtime core used
+  by that wrapper.
+- `stone-wanderer-individual-move-test.html` — donor for the old move-rating
+  UI.
+- `sound-foundry-retro-beasts.html` and `stone-lab-audio-test.html` — donor
+  audio experiments.
 
-- `archive/demos/carapace-stalker-viewer.html`
-- `archive/demos/falcon-pilebunker-punch-lab-v2.html`
-- `archive/demos/fencer_hit_feel_lab_v3.html`
-- `archive/demos/fusion-lab-v2.html`
-- `archive/demos/hex-maze-lab.html`
-- `archive/demos/mace-goblin-sandbox-v2.html`
-- `archive/demos/melee_combat_director_lab_v6.html`
-- `archive/demos/pot-goblin-viewer.html`
-- `archive/demos/punch-lab.html`
-- `archive/demos/threejs_midair_lifted_ground_slice_v1.html`
-- `archive/demos/top-down-shooter.html`
-- `archive/demos/weapon-lab.html`
+## Archived demos
+
+The former prototype pages are kept under `archive/demos/` as snapshots only:
+
+```text
+carapace-stalker-viewer.html
+falcon-pilebunker-punch-lab-v2.html
+fencer_hit_feel_lab_v3.html
+fusion-lab-v2.html
+hex-maze-lab.html
+mace-goblin-sandbox-v2.html
+melee_combat_director_lab_v6.html
+pot-goblin-viewer.html
+punch-lab.html
+threejs_midair_lifted_ground_slice_v1.html
+top-down-shooter.html
+weapon-lab.html
+```
+
+The old `bent-world.js`, `carapace-stalker-rig.js`, `enemies.js`,
+`enemy-attacks.js`, and `lab-modes.js` research boundary is described in
+[`src/README.md`](../src/README.md). Preserve these snapshots unless a future
+task explicitly migrates their useful behavior into the unified runtime.

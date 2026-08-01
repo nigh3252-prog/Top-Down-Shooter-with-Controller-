@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Combat Arena / Enemy Lab</title>
+<title>Supported Experiences · Combat Arena / Enemy Lab</title>
 <style>
 :root{color-scheme:dark;--bg:#05070d;--panel:rgba(10,15,24,.88);--line:rgba(255,255,255,.17);--text:#eef6ff;--muted:#aab3c5;--blue:#8dbfff;--purple:#c474ff;--gold:#f3ce79}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 28%,#253552 0,#101724 48%,#05070d 100%);color:var(--text);font-family:system-ui,Segoe UI,Arial,sans-serif}.wrap{min-height:100dvh;display:grid;place-items:center;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.card{width:min(760px,96vw);border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,rgba(17,25,39,.92),rgba(6,10,17,.86));box-shadow:0 24px 80px #000b;padding:22px;display:grid;gap:16px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}h1{margin:0;font-size:clamp(28px,6vw,46px);line-height:1.02}p{margin:0;color:var(--muted);line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile{display:grid;gap:5px;min-height:120px;padding:18px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.055);color:var(--text);text-decoration:none;box-shadow:inset 0 1px rgba(255,255,255,.08)}.tile strong{font-size:20px}.tile span{font-size:13px;color:var(--muted);line-height:1.35}.tile.primary{background:linear-gradient(180deg,rgba(141,191,255,.25),rgba(141,191,255,.07));border-color:rgba(141,191,255,.38)}.tile.beast{background:linear-gradient(180deg,rgba(196,116,255,.25),rgba(196,116,255,.07));border-color:rgba(196,116,255,.40)}.note{font-size:12px;color:#95a3bf;border-top:1px solid rgba(255,255,255,.10);padding-top:12px}@media(max-width:640px){.card{padding:16px;border-radius:22px}.grid{grid-template-columns:1fr}.tile{min-height:92px;padding:14px}}
 </style>
@@ -11,14 +11,14 @@
 <body>
 <main class="wrap">
   <section class="card">
-    <div class="eyebrow">Top-down action prototype</div>
-    <h1>Pick a play area</h1>
-    <p>Combat Arena is the game. Enemy Lab is the focused testing surface for enemies, encounters, cards, and tuning.</p>
+    <div class="eyebrow">Supported root experiences</div>
+    <h1>Choose a live experience</h1>
+    <p>Combat Arena is the game. Enemy Lab is the same local runtime with a focused testing surface for enemies, encounters, cards, and tuning.</p>
     <div class="grid">
-      <a class="tile beast" href="combat-arena.html"><strong>Combat Arena</strong><span>Director-driven goblin arena. Stance-chain combos, hold-to-charge feel tiers, dodge, waves. Phone joystick + gamepad.</span></a>
-      <a class="tile primary" href="enemy-lab.html"><strong>Enemy Lab</strong><span>Touch-driven chamber for solo enemies, matching packs, mixed waves, deck testing, and gameplay tuning.</span></a>
+      <a class="tile beast" href="combat-arena.html"><strong>Combat Arena</strong><span>Director-driven combat, stance-chain combos, hold-to-charge feel tiers, rooms, dodge, and waves. Phone joystick + gamepad.</span></a>
+      <a class="tile primary" href="enemy-lab.html"><strong>Enemy Lab</strong><span>Same-document testing chamber for solo enemies, matching packs, mixed waves, deck testing, and gameplay tuning.</span></a>
     </div>
-    <p class="note">Retired prototypes and donor pages live under <code>archive/</code> as source reference only.</p>
+    <p class="note">Serve this repository over HTTP(S) for native ES modules. Retired prototypes and donor pages live under <code>archive/</code> as source reference only.</p>
   </section>
 </main>
 </body>
