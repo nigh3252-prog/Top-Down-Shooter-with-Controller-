@@ -55,6 +55,21 @@ export function installPlayerCombat(api){
   installDashJetPanel({runtime:dashMagicJet});
   installEnemyLabArcanaControlsHotfix();
 
+  // Arcana were authored and validated through the embedded Enemy Lab. Every
+  // runtime family now initializes under that same context in the full Combat
+  // Arena, then the real URL is restored immediately. This keeps one authored
+  // implementation for all 46 cards without enabling Lab-only deck/editor UI.
+  function installArenaArcanaRuntime(factory){
+    const current=new URL(location.href);
+    const alreadyEnabled=current.searchParams.get('enemyLab')==='1'||current.searchParams.get('mode')==='enemy-lab';
+    if(alreadyEnabled)return factory();
+    const original=`${location.pathname}${location.search}${location.hash}`;
+    current.searchParams.set('enemyLab','1');
+    history.replaceState(history.state,'',current);
+    try{return factory();}
+    finally{history.replaceState(history.state,'',original);}
+  }
+
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
     if(root?.getWorldPosition)root.getWorldPosition(playerWorld);else playerWorld.set(0,0,0);
@@ -84,42 +99,42 @@ export function installPlayerCombat(api){
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
   const wizardArcanaDamageScaler=installWizardArcanaDamageScaler({getEnemySystem:getArenaEnemySystem});
-  const wizardArcanaRuntime=installWizardArcanaRuntime({
+  const wizardArcanaRuntime=installArenaArcanaRuntime(()=>installWizardArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-  });
-  const wizardRebuiltArcanaRuntime=installWizardRebuiltArcanaRuntime({
+  }));
+  const wizardRebuiltArcanaRuntime=installArenaArcanaRuntime(()=>installWizardRebuiltArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-  });
-  const wizardFlameStrikeRuntime=installWizardFlameStrikeRuntime({
+  }));
+  const wizardFlameStrikeRuntime=installArenaArcanaRuntime(()=>installWizardFlameStrikeRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-  });
-  const wizardWindSlashRuntime=installWizardWindSlashRuntime({
+  }));
+  const wizardWindSlashRuntime=installArenaArcanaRuntime(()=>installWizardWindSlashRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-  });
-  const wizardAirBasicsRuntime=installWizardAirBasicsRuntime({
+  }));
+  const wizardAirBasicsRuntime=installArenaArcanaRuntime(()=>installWizardAirBasicsRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-  });
-  const wizardNextSourceRuntime=installWizardNextSourceRuntime({
+  }));
+  const wizardNextSourceRuntime=installArenaArcanaRuntime(()=>installWizardNextSourceRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
     advancePlayer:advanceArenaPlayer,
-  });
-  const wizardNextTwentyBasicsRuntime=installWizardNextTwentyBasicsRuntime({
+  }));
+  const wizardNextTwentyBasicsRuntime=installArenaArcanaRuntime(()=>installWizardNextTwentyBasicsRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
@@ -128,7 +143,7 @@ export function installPlayerCombat(api){
     translatePlayer:(dx,dz)=>window.__arena?.translateArcanaPlayer?.(dx,dz),
     setMovementLock:(locked)=>window.__arena?.setArcanaMovementLock?.(locked),
     setFacingLock:(direction)=>window.__arena?.setArcanaFacingLock?.(direction),
-  });
+  }));
   let arcanaDamageAdapter=null,arcanaDamageSystem=null;
   function syncArcanaDamageInterceptor(){
     let system=null;try{system=getArenaEnemySystem();}catch{return false;}
@@ -138,7 +153,7 @@ export function installPlayerCombat(api){
     system?.setPlayerDamageInterceptor?.(arcanaDamageAdapter);
     return true;
   }
-  const wizardNextTwentyDashRuntime=installWizardNextTwentyDashRuntime({
+  const wizardNextTwentyDashRuntime=installArenaArcanaRuntime(()=>installWizardNextTwentyDashRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
@@ -160,8 +175,8 @@ export function installPlayerCombat(api){
     registerDecoy:(decoy)=>getArenaEnemySystem()?.registerWizardDecoy?.(decoy),
     unregisterDecoy:(id)=>getArenaEnemySystem()?.unregisterWizardDecoy?.(id),
     damagePlayer:(amount,options)=>getArenaEnemySystem()?.damagePlayer?.(amount,{kind:'arcana-status',name:options?.status||'Status',targetableIndependent:options?.targetableIndependent===true}),
-  });
-  const wizardFusionLeapRuntime=installWizardFusionLeapRuntime({
+  }));
+  const wizardFusionLeapRuntime=installArenaArcanaRuntime(()=>installWizardFusionLeapRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
@@ -171,21 +186,21 @@ export function installPlayerCombat(api){
     setPlayerAirborne:(value,context)=>window.__arena?.setArcanaPlayerAirborne?.(value,context),
     setPlayerHeight:(value,context)=>window.__arena?.setArcanaPlayerHeight?.(value,context),
     setEnemyCarried:(enemy,detail)=>window.__arena?.setArcanaEnemyCarried?.(enemy,detail),
-  });
-  const wizardArcaneTypesRuntime=installWizardArcaneTypesRuntime({
+  }));
+  const wizardArcaneTypesRuntime=installArenaArcanaRuntime(()=>installWizardArcaneTypesRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
     validatePosition:(position)=>window.__arena?.validateArcanaTeleportEndpoint?.(position)?.ok===true,
     applyEnemyStatus:(enemy,kind,duration,options)=>getArenaEnemySystem()?.applyStatus?.(enemy,kind,duration,options),
-  });
-  const wizardAlliedArcanaRuntime=installWizardAlliedArcanaRuntime({
+  }));
+  const wizardAlliedArcanaRuntime=installArenaArcanaRuntime(()=>installWizardAlliedArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-  });
+  }));
 
   const previousAbilityCanPlay=window.__ABILITY_CARD_CAN_PLAY__;
   const fusionLeapIds=new Set(['FLAME-FUSION','HEROIC-LEAP']);
@@ -231,8 +246,8 @@ export function installPlayerCombat(api){
     if(preserved?.fusion&&wizardFusionLeapRuntime.state)wizardFusionLeapRuntime.state.resources=Object.fromEntries(Object.entries(preserved.fusion).map(([id,value])=>[id,{...value}]));
     if(preserved?.arcaneTypes&&wizardArcaneTypesRuntime.state){
       wizardArcaneTypesRuntime.state.cooldowns={...preserved.arcaneTypes.cooldowns};
-      wizardArcaneTypesRuntime.state.aquaCharges=preserved.arcaneTypes.aquaCharges;
-      wizardArcaneTypesRuntime.state.aquaChargeProgress=preserved.arcaneTypes.aquaChargeProgress;
+      wizardArcaneTypesRuntime.state.aquaCharges=preserved.arcanaTypes?.aquaCharges??preserved.arcaneTypes.aquaCharges;
+      wizardArcaneTypesRuntime.state.aquaChargeProgress=preserved.arcanaTypes?.aquaChargeProgress??preserved.arcaneTypes.aquaChargeProgress;
     }
     if(preserved?.alliedCooldowns){wizardAlliedArcanaRuntime.cooldowns.clear();for(const [id,value] of Object.entries(preserved.alliedCooldowns))wizardAlliedArcanaRuntime.cooldowns.set(id,value);}
     return{preservedResources:!!preserved};
