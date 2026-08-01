@@ -99,8 +99,22 @@ arena.stance=stanceById('S23');
 PC.setReadyPose({});
 assert.deepEqual(stanceById('S24').chain,originalRatStep,'leaving the pilot stance should restore its authored chain');
 assert.equal(runtime.snapshot().active,false);
+for(const key of ['weight','windup','follow','recovery']){
+  assert.equal(combatState.tune[key],STONE_WEAPONS.greatsword.tune[key],`non-pilot ${key} tuning must remain untouched`);
+}
+
+const selected=runtime.selectPair({stanceId:'S01',weaponId:'dagger'});
+assert.equal(selected.ok,true);
+assert.equal(arena.stance.id,'S01');
+assert.equal(combatState.weapon,'dagger');
+assert.equal(runtime.snapshot().profileId,'hammerfall-dagger-failed');
+assert.equal(PC.getWeaponHitZones().length,0);
+assert.equal(runtime.selectPair({stanceId:'S02',weaponId:'dagger'}).ok,false);
 
 runtime.destroy();
 assert.deepEqual(stanceById('S24').chain,originalRatStep);
 assert.equal(combatState.stance2Gate2,undefined);
+for(const key of ['weight','windup','follow','recovery']){
+  assert.equal(combatState.tune[key],STONE_WEAPONS.dagger.tune[key],`destroy should restore dagger ${key} tuning`);
+}
 console.log('stance gate 2 runtime tests passed');
