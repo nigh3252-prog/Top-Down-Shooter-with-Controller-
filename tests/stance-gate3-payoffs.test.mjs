@@ -41,104 +41,77 @@ assert.equal(weaponAllowsCleave({weaponDef:cleaveWeapon,attackSlot:2,maxCharge:t
 cleaveWeapon.stance2CleaveMode='failed';
 assert.equal(weaponAllowsCleave({weaponDef:cleaveWeapon,attackSlot:2,maxCharge:true}),false);
 
-const combatState={
-  weapon:'dagger',
-  attack:null,
-  attackGroup:'vertical',
-  hitIds:new Set(),
-};
-const arena={
-  stance:stanceById('S24'),
-  chain:{activeSlot:0,stage:'idle',comboDeadline:0},
-  swing:{maxChargeCleave:false,stun:.2},
-};
-const calls=[];
-const PC={
-  combatState,
-  currentWeapon:()=>STONE_WEAPONS[combatState.weapon],
-  combatMovePenalty(){return .55;},
-  getWeaponHitZones(){return[{damage:10,stagger:1,from:{y:0},to:{y:1}}];},
-  startCombatAttack(key,group){calls.push(['attack',key,group]);combatState.attack={key};combatState.attackGroup=group;},
-  updateCombat(){calls.push(['update']);},
-};
-const windowRef={};
-const runtime=createStanceGate3Runtime({arenaHandle:{PC,combatState,arena},windowRef});
+function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],activeSlot=0,updateCombat=()=>{}}){
+  const combatState={weapon:weaponId,attack,attackGroup:'vertical',hitIds:new Set(hitIds)};
+  const arena={
+    stance:stanceById(stanceId),
+    chain:{activeSlot,stage:attack?'hit1':'idle',comboDeadline:0},
+    swing:{maxChargeCleave:false,stun:.2},
+  };
+  const PC={
+    combatState,
+    currentWeapon:()=>STONE_WEAPONS[combatState.weapon],
+    combatMovePenalty(){return movePenalty;},
+    getWeaponHitZones(){return[{damage:30,stagger:1,from:{y:0},to:{y:1}}];},
+    startCombatAttack(key,group){combatState.attack={key};combatState.attackGroup=group;},
+    updateCombat(){return updateCombat({PC,combatState,arena});},
+  };
+  const runtime=createStanceGate3Runtime({arenaHandle:{PC,combatState,arena},windowRef:{}});
+  return{PC,combatState,arena,runtime};
+}
 
-assert.equal(runtime.snapshot().payoffId,'light-mobile-expression');
-assert.equal(PC.combatMovePenalty(),.92,'full Light alignment should preserve movement');
-assert.equal(STONE_WEAPONS.dagger.stance2CleaveMode,'full-light');
+{
+  const {PC,combatState,arena,runtime}=makeHarness({stanceId:'S24',weaponId:'dagger'});
+  assert.equal(runtime.snapshot().payoffId,'light-mobile-expression');
+  assert.equal(PC.combatMovePenalty(),.92,'full Light alignment should preserve movement');
+  assert.equal(STONE_WEAPONS.dagger.stance2CleaveMode,'full-light');
 
-combatState.weapon='longsword';
-arena.stance=stanceById('S24');
-runtime.apply();
-assert.equal(runtime.snapshot().active,false);
-assert.equal(PC.combatMovePenalty(),.55,'adapted pair should not receive the Light movement payoff');
-assert.equal(STONE_WEAPONS.longsword.stance2CleaveMode,'adapted-medium');
-assert.equal(Object.hasOwn(STONE_WEAPONS.dagger,'stance2CleaveMode'),false,'switching weapons should restore the prior weapon definition');
+  combatState.weapon='longsword';
+  arena.stance=stanceById('S24');
+  runtime.apply();
+  assert.equal(runtime.snapshot().active,false);
+  assert.equal(PC.combatMovePenalty(),.55,'adapted pair should not receive the Light movement payoff');
+  assert.equal(STONE_WEAPONS.longsword.stance2CleaveMode,'adapted-medium');
+  assert.equal(Object.hasOwn(STONE_WEAPONS.dagger,'stance2CleaveMode'),false,'switching weapons should restore the prior weapon definition');
+  runtime.destroy();
+}
 
-arena.stance=stanceById('S26');
-combatState.weapon='longsword';
-combatState.attack={key:'vertical2'};
-combatState.attackGroup='vertical';
-combatState.hitIds=new Set(['enemy']);
-arena.chain.activeSlot=0;
-arena.chain.stage='hit1';
-arena.chain.comboDeadline=0;
-PC.updateCombat=runtime.destroy;
-// Restore the runtime after the deliberate method-reference probe above.
-runtime.destroy();
-const PC2={
-  combatState,
-  currentWeapon:()=>STONE_WEAPONS[combatState.weapon],
-  combatMovePenalty(){return .62;},
-  getWeaponHitZones(){return[{damage:10,stagger:1,from:{y:0},to:{y:1}}];},
-  startCombatAttack(key,group){combatState.attack={key};combatState.attackGroup=group;},
-  updateCombat(){
-    combatState.attack=null;
-    arena.chain.stage='hit1Ready';
-    arena.chain.comboDeadline=10;
-  },
-};
-const mediumRuntime=createStanceGate3Runtime({arenaHandle:{PC:PC2,combatState,arena},windowRef:{}});
-PC2.updateCombat();
-assert.ok(Math.abs(arena.chain.comboDeadline-10.35)<1e-9,'full Medium alignment should extend the confirmed follow-up window');
-assert.equal(STONE_WEAPONS.longsword.stance2CleaveMode,'full-medium');
-mediumRuntime.destroy();
+{
+  const {PC,arena,runtime}=makeHarness({
+    stanceId:'S26',weaponId:'longsword',attack:{key:'vertical2'},hitIds:['enemy'],activeSlot:0,
+    updateCombat({combatState,arena}){
+      combatState.attack=null;
+      arena.chain.stage='hit1Ready';
+      arena.chain.comboDeadline=10;
+    },
+  });
+  PC.updateCombat();
+  assert.ok(Math.abs(arena.chain.comboDeadline-10.35)<1e-9,'full Medium alignment should extend the confirmed follow-up window');
+  assert.equal(STONE_WEAPONS.longsword.stance2CleaveMode,'full-medium');
+  runtime.destroy();
+}
 
-arena.stance=stanceById('S01');
-combatState.weapon='greatsword';
-combatState.attack={key:'vertical10'};
-combatState.attackGroup='vertical';
-combatState.hitIds=new Set();
-arena.chain.activeSlot=0;
-arena.swing.maxChargeCleave=false;
-arena.swing.stun=.2;
-const PC3={
-  combatState,
-  currentWeapon:()=>STONE_WEAPONS[combatState.weapon],
-  combatMovePenalty(){return .52;},
-  getWeaponHitZones(){return[{damage:30,stagger:1,from:{y:0},to:{y:1}}];},
-  startCombatAttack(){},
-  updateCombat(){},
-};
-const heavyRuntime=createStanceGate3Runtime({arenaHandle:{PC:PC3,combatState,arena},windowRef:{}});
-let zones=PC3.getWeaponHitZones();
-assert.equal(zones[0].stagger,2,'full Heavy alignment should double stagger');
-assert.equal(arena.swing.stun,.42,'full Heavy alignment should establish a stun floor');
-arena.chain.activeSlot=2;
-arena.swing.maxChargeCleave=true;
-arena.swing.stun=.2;
-zones=PC3.getWeaponHitZones();
-assert.equal(zones[0].stagger,2);
-assert.equal(arena.swing.stun,.78,'fully charged Heavy finisher should use the higher stun floor');
-assert.equal(STONE_WEAPONS.greatsword.stance2CleaveMode,'full-heavy');
+{
+  const {PC,combatState,arena,runtime}=makeHarness({stanceId:'S01',weaponId:'greatsword',attack:{key:'vertical10'}});
+  let zones=PC.getWeaponHitZones();
+  assert.equal(zones[0].stagger,2,'full Heavy alignment should double stagger');
+  assert.equal(arena.swing.stun,.42,'full Heavy alignment should establish a stun floor');
+  assert.equal(STONE_WEAPONS.greatsword.stance2CleaveMode,'full-heavy');
 
-arena.stance=stanceById('S23');
-combatState.weapon='dagger';
-heavyRuntime.apply();
-assert.equal(runtime.snapshot?.active??false,false);
-assert.equal(Object.hasOwn(STONE_WEAPONS.greatsword,'stance2CleaveMode'),false,'leaving the pilot should restore the modified weapon');
-heavyRuntime.destroy();
-assert.equal(combatState.stance2Gate3,undefined);
+  arena.chain.activeSlot=2;
+  arena.swing.maxChargeCleave=true;
+  arena.swing.stun=.2;
+  zones=PC.getWeaponHitZones();
+  assert.equal(zones[0].stagger,2);
+  assert.equal(arena.swing.stun,.78,'fully charged Heavy finisher should use the higher stun floor');
+
+  arena.stance=stanceById('S23');
+  combatState.weapon='dagger';
+  runtime.apply();
+  assert.equal(runtime.snapshot().active,false);
+  assert.equal(Object.hasOwn(STONE_WEAPONS.greatsword,'stance2CleaveMode'),false,'leaving the pilot should restore the modified weapon');
+  runtime.destroy();
+  assert.equal(combatState.stance2Gate3,undefined);
+}
 
 console.log('stance gate 3 payoff tests passed');
