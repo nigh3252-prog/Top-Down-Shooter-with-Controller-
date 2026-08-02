@@ -1,0 +1,55 @@
+/* Static Arena token asset. The boot coordinator selects this file before paint. */
+:root[data-arena-theme="akai"] {
+  color-scheme: dark;
+  --arena-bg: #06171d;
+  --arena-panel: rgba(3,14,19,.97);
+  --arena-panel-2: rgba(3,12,16,.93);
+  --arena-panel-solid: #031013;
+  --arena-line: rgba(226,244,239,.46);
+  --arena-line-soft: rgba(226,244,239,.18);
+  --arena-line-bright: #dc2d22;
+  --arena-text: #f4f1e7;
+  --arena-muted: #9ab9ba;
+  --arena-subtle: #77c9cf;
+  --arena-gold: #fff0b5;
+  --arena-gold-strong: #f3d887;
+  --arena-red: #dc2d22;
+  --arena-red-strong: #f13b2d;
+  --arena-red-soft: rgba(220,45,34,.16);
+  --arena-teal: #5fcbd2;
+  --arena-teal-strong: #79d9dc;
+  --arena-heavy: #5fcbd2;
+  --arena-shadow: #02090d;
+  --arena-track: #173b43;
+  --arena-control: rgba(2,12,16,.78);
+  --arena-control-active: rgba(95,203,210,.2);
+  --arena-card: linear-gradient(180deg,rgba(4,16,21,.94),rgba(2,9,13,.9));
+  --arena-card-active: rgba(27,79,87,.9);
+  --arena-joystick: rgba(95,203,210,.42);
+  --arena-error: #ff8f82;
+  --arena-error-panel: rgba(22,6,5,.9);
+  --arena-disabled: .42;
+  --arena-font: Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --arena-world-bg: #06171d;
+  --arena-world-fog: #0a2730;
+  --arena-world-floor-a: #245b64;
+  --arena-world-floor-b: #1c4a54;
+  --arena-world-floor-dark: #12343c;
+  --arena-world-ink: #071014;
+  --arena-world-accent: #c7251d;
+  --arena-world-lantern: #ffefb0;
+  --arena-world-lantern-warm: #ffb85b;
+
+  --arena-background: var(--arena-bg);
+  --arena-surface: var(--arena-panel);
+  --arena-surface-raised: var(--arena-panel-2);
+  --arena-border: var(--arena-line);
+  --arena-border-subtle: var(--arena-line-soft);
+  --arena-accent: var(--arena-gold);
+  --arena-accent-strong: var(--arena-gold-strong);
+  --arena-danger: var(--arena-red);
+  --arena-danger-strong: var(--arena-red-strong);
+  --arena-positive: var(--arena-teal);
+  --arena-positive-strong: var(--arena-teal-strong);
+  --arena-font-family: var(--arena-font);
+}
