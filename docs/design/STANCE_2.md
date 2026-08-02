@@ -41,7 +41,7 @@ One-class mismatches receive alternate compact moves, modified grip, shortened e
 
 Two-class mismatches use authored failed-use animations, create no damaging weapon hit zones, cannot charge their heavy input, and retain meaningful recovery.
 
-## Gate 3 — EXPERIMENTAL PILOT
+## Gate 3 — CURRENT PILOT
 
 Gate 3 gives each matched class a distinct rule payoff rather than one universal damage bonus.
 
@@ -85,13 +85,35 @@ Adapted pairings do not inherit the matched class's full privilege:
 - Adapted Medium and Heavy weapons cleave only on a fully charged finisher.
 - Unusable pairings never cleave.
 
-These values and exact rules are prototype tuning, not final balance.
+## Gate 4 — EXPERIMENTAL PILOT
 
-## Deferred gates
+Gate 4 makes reaching zero stamina an active stance-transition test rather than passive waiting.
 
-### Gate 4
+### Exhaustion Catch
 
-Exhaustion Catch, stance-transition timing, stumble/exhaustion failure, and final stamina-capacity tuning.
+- Spending the final available stamina opens a **0.72-second** catch window.
+- Playing a true stance card during the window succeeds, changes stance through the ordinary card path, and restores stamina through the existing full-refill rule.
+- Ability and modifier cards do not count as a catch.
+- A successful catch clears outstanding post-swing movement recovery so the transition reads as clean continuation.
+- A whiff that creates recoverable stamina cancels the catch. Missing an attack should not create an exhaustion punishment when its stamina is already being refunded.
+
+### Missed timing
+
+- When the catch window expires, the miss waits for the committed attack to finish before applying the stumble.
+- Failure creates a **3.0-second attack lock**.
+- The first **0.35 seconds** are a pronounced stumble at sharply reduced movement.
+- Movement then accelerates smoothly back toward full speed over the remaining lock duration.
+- Dodge remains available and is not slowed by the stumble curve.
+- Stance cards remain playable, allowing stamina recovery, but a late card does not erase the already-missed timing penalty.
+- Dodging does not cancel the attack lock; the Gate 4 runtime reapplies its owned lock after the ordinary dodge chain reset.
+
+### Current stamina scope
+
+The prototype retains the current 100-point stamina capacity and current weapon-class costs. Capacity should be tuned only after the catch timing and failure severity are judged in play. This avoids changing both the frequency and the consequence of exhaustion in the same pass.
+
+There is still no ordinary passive stamina regeneration.
+
+## Deferred gate
 
 ### Gate 5
 
@@ -99,4 +121,4 @@ Stance-specific defensive actions and full rollout across all 30 stances and the
 
 ## Follow-up animation work
 
-GitHub issue #111 tracks a later polish pass for sword failure animations. The goal is stronger top-down silhouettes and exaggerated readable misuse, potentially informed by Smash Bros.-style animation language. It does not block Gate 3.
+GitHub issue #111 tracks a later polish pass for sword failure animations. The goal is stronger top-down silhouettes and exaggerated readable misuse, potentially informed by Smash Bros.-style animation language.
