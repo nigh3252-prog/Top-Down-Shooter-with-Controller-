@@ -1,4 +1,4 @@
-import { isWizardArcanaCard } from './wizard-arcana-cards.js';
+import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import {
   ARCANA_TWEAKS_EVENT,
   clampArcanaSize,
@@ -195,7 +195,7 @@ function damageEnemy(system,enemy,amount,knock={x:0,z:0},options={}){
 
 export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[]}={}){
   const initialTweaks=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},dispose(){}};
   const state={effects:[],castSerial:0,lastCast:null,sizeMultiplier:initialTweaks.sizeMultiplier};
 
   function add(effect){state.effects.push(effect);return effect;}
@@ -260,6 +260,8 @@ export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem
     else return false;
     window.dispatchEvent(new CustomEvent('wizard-arcana:cast',{detail:{card,serial:state.castSerial}}));return true;
   }
+  function canPlay(card){return card?.arcanaId==='FLAME-CROSS'||card?.arcanaId==='BOUNCING-BLAZE';}
+  function play(card,context={}){return canPlay(card)?cast(card,context):false;}
 
   function updateFlameCrossCombo(effect,dt){
     effect.age+=dt;
@@ -362,5 +364,5 @@ export function installWizardArcanaRuntime({THREE,scene,getPlayer,getEnemySystem
   window.addEventListener('wizard-arcana:play',onPlay);
   window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   window.__WIZARD_ARCANA_RUNTIME__=state;
-  return{state,cast,update,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_ARCANA_RUNTIME__===state)delete window.__WIZARD_ARCANA_RUNTIME__;}};
+  return{state,cast,canPlay,play,update,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();if(window.__WIZARD_ARCANA_RUNTIME__===state)delete window.__WIZARD_ARCANA_RUNTIME__;}};
 }

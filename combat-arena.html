@@ -258,7 +258,7 @@ import * as THREE from 'three';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
-import { STANCE_CARDS } from './src/stance-cards.js';
+import { gameContent } from './src/game-content.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
@@ -267,7 +267,7 @@ import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { staminaCostForWeapon, weaponAllowsCleave } from './src/weapon-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
-import { FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
+import { ARENA_ENEMY_OPTIONS } from './src/arena-enemy-catalog.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
@@ -278,6 +278,8 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './src/room-encounters.js';
 import { createRoomTransitionController } from './src/room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './src/ability-capture.js';
+
+const STANCE_CARDS = gameContent.cards.list({family:'stance'});
 
 /* ============================================================
    COMBAT ARENA
@@ -403,7 +405,7 @@ const arena = {
   combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
   stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
 };
-const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime });
+const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null });
 function staminaCostForGroup(group){
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
   return staminaCostForWeapon(base, PC.currentWeapon());
@@ -513,6 +515,7 @@ const PC = installPlayerCombat({
     }
   }
 });
+deck.setEffectDispatcher(PC.cardEffectDispatcher);
 const combatState = PC.combatState;
 combatState.hideArms = true; // procedural rig still drives the weapon; its puppet arms stay invisible
 installRedTollGreatsword({
@@ -1453,7 +1456,7 @@ const spawnSelect=document.getElementById('spawnSelect');
 [
   { id:'mixed', label:'Mixed Pure Strains' },
   { id:'goblins', label:'Goblins Only' },
-  ...FUSION_ENEMY_OPTIONS
+  ...ARENA_ENEMY_OPTIONS
 ].forEach(({id,label})=>{
   const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);
 });
@@ -1858,7 +1861,7 @@ function resetCaptureRuntimes(config={}){
   }
   for(const resource of normalizeCaptureFixtures(config.fixtures).resources){const runtime=runtimes[resource.runtimeId];if(runtime?.state&&Object.hasOwn(runtime.state,resource.key))runtime.state[resource.key]=resource.value;}
   const deckFixture=normalizeCaptureFixtures(config.fixtures).deck,existingCaptureDeck=captureFixtureDeck;captureFixtureDeck=null;
-  if(deckFixture){const stance=STANCE_CARDS[0],primary=captureCardById(deckFixture.primaryArcanaId),opposite=captureCardById(deckFixture.oppositeArcanaId);if(stance&&primary&&opposite){captureFixtureDeck=existingCaptureDeck||createStanceDeck({rng:()=>0});captureFixtureDeck.beginRun([stance,primary,opposite],{openingStanceId:stance.id});}}
+  if(deckFixture){const stance=STANCE_CARDS[0],primary=captureCardById(deckFixture.primaryArcanaId),opposite=captureCardById(deckFixture.oppositeArcanaId);if(stance&&primary&&opposite){captureFixtureDeck=existingCaptureDeck||createStanceDeck({rng:()=>0,effectDispatcher:PC.cardEffectDispatcher,compatibilityAdapter:null});captureFixtureDeck.beginRun([stance,primary,opposite],{openingStanceId:stance.id});}}
 }
 function captureForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};}
 function captureLocalPoint(value={}){
@@ -2006,10 +2009,11 @@ function setCaptureMove(value={}){
   return arenaMoveInput();
 }
 function castCaptureCard(card,captureConfig={}){
-  if(!card?.playEvent)return false;
+  if(!card?.effectId||!PC.cardEffectDispatcher)return false;
   window.__ARCANA_CAPTURE_CONFIG__={...captureConfig,capture:true};
-  window.dispatchEvent(new CustomEvent(card.playEvent,{detail:{card,capture:true,captureStage:captureConfig.stage,renderMode:captureConfig.renderMode,effects:captureConfig.effects,input:captureConfig.input,action:captureConfig.action}}));
-  return true;
+  const context={card,capture:true,captureStage:captureConfig.stage,renderMode:captureConfig.renderMode,effects:captureConfig.effects,input:captureConfig.input,action:captureConfig.action};
+  if(!PC.cardEffectDispatcher.canPlay(card,context))return false;
+  return PC.cardEffectDispatcher.play(card,context)!==false;
 }
 function captureWorldSnapshot(){
   const forward=captureForward();

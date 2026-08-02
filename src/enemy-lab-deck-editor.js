@@ -1,6 +1,8 @@
-import { STANCE_CARDS } from './stance-cards.js';
-import { POW_BUNKER_CARD } from './powbunker-card.js';
-import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
+import { getCard, listCards } from './card-registry.js';
+
+const POW_BUNKER_CARD = getCard('A01-PILEBUNKER');
+const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
+const BING_BONG_CARD = getCard('S31-BING-BONG');
 
 const ENEMY_LAB_DECK_KEY='enemyLab.deck.v1';
 const ENEMY_LAB_DECK_UI_KEY='enemyLab.deck.ui.v1';
@@ -10,7 +12,14 @@ function uniqueCards(cards){
   const seen=new Set();
   return cards.filter(card=>card?.id&&!seen.has(card.id)&&seen.add(card.id));
 }
-function fullEnemyLabCatalog(){return uniqueCards([...STANCE_CARDS,BING_BONG_CARD,POW_BUNKER_CARD,BLOOD_SLASH_CARD]);}
+function fullEnemyLabCatalog(){
+  return uniqueCards([
+    ...listCards({family:'stance'}),
+    ...listCards({family:'arcana'}),
+    ...listCards({family:'special-stance'}),
+    ...listCards({family:'non-stance'}),
+  ]);
+}
 function cardFamily(card){
   if(card?.id===BING_BONG_CARD.id)return'BING BONG';
   if(card?.id===POW_BUNKER_CARD.id)return'POWBUNKER';

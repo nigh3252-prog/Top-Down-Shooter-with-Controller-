@@ -71,7 +71,7 @@ assert.equal(originalSystem.telegraphCount,2,'roster mode opens two Hades-style 
 assert.equal(originalSystem.queuedSpawnCount,7,'the rest of the batch is held as reinforcements');
 assert.equal(rootGroup.children.some(item=>item.isEnemyRoot),false,'enemy models are detached until the preview ring completes');
 const openingRingXs=rootGroup.children.map(item=>item.position?.x).filter(Number.isFinite).sort((a,b)=>a-b);
-assert.deepEqual(openingRingXs,[6,7],'the opening previews prioritize nearby suitable spawn points');
+assert.deepEqual(openingRingXs,[6,6],'the opening previews preserve the base roster batch order');
 
 originalSystem.update(.4,{x:0,z:0});
 assert.equal(childUpdates,0,'AI remains paused while no enemy has finished spawning');

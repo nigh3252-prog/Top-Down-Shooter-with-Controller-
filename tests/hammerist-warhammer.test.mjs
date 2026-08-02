@@ -10,7 +10,26 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const weaponsSource = readFileSync(resolve(here, '../src/weapons.js'), 'utf8');
-const combatSource = readFileSync(resolve(here, '../src/player-combat.js'), 'utf8');
+const combatEntrySource = readFileSync(resolve(here, '../src/player-combat.js'), 'utf8');
+const combatPilebunkerSource = readFileSync(resolve(here, '../src/player-combat-pilebunker.js'), 'utf8');
+const combatCoreSource = readFileSync(resolve(here, '../src/player-combat-core.js'), 'utf8');
+const combatSource = [combatEntrySource, combatPilebunkerSource, combatCoreSource].join('\n');
+
+assert.match(
+  combatEntrySource,
+  /from '\.\/player-combat-pilebunker\.js'/,
+  'combat entry should compose the local pilebunker layer',
+);
+assert.match(
+  combatPilebunkerSource,
+  /from '\.\/player-combat-core\.js'/,
+  'pilebunker layer should compose the local pinned combat core',
+);
+assert.doesNotMatch(
+  combatSource,
+  /cdn\.jsdelivr\.net\/gh\/rnighswander\/Top-Down-Android-Game@[^'"\s]+\/src\/player-combat\.js/,
+  'the player combat chain should not self-import from jsDelivr',
+);
 
 assert.equal(STONE_WEAPON_ORDER.includes('warhammer'), true, 'War Hammer stays in the shared weapon order');
 assert.equal(STONE_WEAPONS.warhammer.kind, 'hammer', 'War Hammer keeps the hammer combat contract');

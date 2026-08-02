@@ -1,7 +1,11 @@
-import { STANCE_CARDS } from './stance-cards.js';
-import { BING_BONG_CARD, BLOOD_SLASH_CARD } from './combat-modifier-cards.js';
-import { POW_BUNKER_CARD } from './powbunker-card.js';
+import { getCard, listCards } from './card-registry.js';
+import { readonlyMap } from './card-definition.js';
 import { WIZARD_ARCANA_CATALOG, isWizardArcanaCard } from './wizard-arcana-catalog.js';
+
+const STANCE_CARDS=listCards({family:'stance'});
+const BING_BONG_CARD=getCard('S31-BING-BONG');
+const POW_BUNKER_CARD=getCard('A01-PILEBUNKER');
+const BLOOD_SLASH_CARD=getCard('M01-BLOOD-SLASH');
 
 export const ARENA_ABILITY_FAMILIES=Object.freeze([
   'STANCES',
@@ -48,7 +52,7 @@ export const ARENA_ABILITY_CATALOG=Object.freeze([
 ]);
 
 export const ARENA_ABILITY_CARDS=Object.freeze(ARENA_ABILITY_CATALOG.map(entry=>entry.card));
-export const ARENA_ABILITY_CATALOG_BY_ID=new Map(ARENA_ABILITY_CATALOG.map(entry=>[entry.id,entry]));
+export const ARENA_ABILITY_CATALOG_BY_ID=readonlyMap(ARENA_ABILITY_CATALOG.map(entry=>[entry.id,entry]));
 
 export function getArenaAbilityCatalogEntry(value){
   return ARENA_ABILITY_CATALOG_BY_ID.get(String(value||''))||null;

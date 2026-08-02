@@ -83,6 +83,14 @@ const teleports=[],targetability=[],playerHits=[],mazeWalls=[];let teleportValid
 const runtime=installWizardNextTwentyDashRuntime({THREE,scene,getPlayer:()=>player,getMoveInput:()=>({x:0,z:0}),getEnemySystem:()=>system,getMazeSegments:()=>mazeWalls,startDashMotion,validateTeleportEndpoint:endpoint=>teleportValidator(endpoint),teleportPlayer:position=>{teleports.push(position);return teleportResponder(position);},setPlayerTargetable:value=>targetability.push(value),damagePlayer:(amount,options)=>playerHits.push({amount,options})});
 const cast=id=>runtime.cast({id:`WOL-${id}`,arcanaId:id});
 
+for(const id of WIZARD_NEXT_TWENTY_DASH_IDS){
+  runtime.reset();
+  const card={id:`WOL-${id}`,arcanaId:id};
+  assert.equal(runtime.canPlay(card),true,`${id} must be accepted by the direct dash canPlay method`);
+  assert.equal(runtime.play(card),true,`${id} must be accepted by the direct dash play method`);
+}
+runtime.reset();
+
 // Neutral movement delegates direction selection to the accepted ordinary-dash fallback.
 assert.equal(cast('SEARING-RUSH'),true);assert.equal('direction' in motionCalls[0],false);assert.deepEqual({source:motionCalls[0].source,grantIframes:motionCalls[0].grantIframes,applyDodgeCooldown:motionCalls[0].applyDodgeCooldown},{source:'arcana',grantIframes:false,applyDodgeCooldown:false});assert.equal(cast('AIR-BURST'),false,'a second Arcana dash cannot consume while dash recovery is active');finishMotion({x:0,z:-8.4});step(.4,.02);assert.equal(runtime.snapshot().resources['SEARING-RUSH'].remaining>0,true);assert.ok(runtime.snapshot().semanticEvents.some(event=>event.kind==='dash-complete'&&event.arcanaId==='SEARING-RUSH'));
 

@@ -147,6 +147,7 @@ const BASE_EATK = {
   rockThrow:    { kind:'ranged', name:'Rock Throw',    range:3.3*S,  tokenCost:.5,   windup:.78, active:.08, recovery:.60, cooldown:2.05, damage:8,  arc:0,   knock:.2*S, projectile:true },
   captainSmash: { kind:'melee',  name:'Smash',         range:1.24*S, tokenCost:2.25, windup:1.20, active:.24, recovery:.95, cooldown:2.15, damage:30, arc:1.0, knock:1.2*S, wantsSolo:true }
 };
+export const ARENA_ENEMY_ATTACKS = Object.freeze(BASE_EATK);
 const EATK = { ...BASE_EATK, ...FUSION_ATTACKS };
 
 export function createArenaEnemySystem({
