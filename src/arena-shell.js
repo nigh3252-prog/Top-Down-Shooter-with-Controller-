@@ -1,4 +1,76 @@
-export const ARENA_SHELL_HTML = "<div id=\"topBar\">\r\n  <button class=\"tbtn\" id=\"menuBtn\">MENU</button>\r\n  <button class=\"tbtn icon\" id=\"fsBtn\" aria-label=\"Toggle fullscreen\" title=\"Toggle fullscreen\">⛶</button>\r\n</div>\r\n<div id=\"hud\">\r\n  <div id=\"hpWrap\"><div id=\"hpFill\"></div></div>\r\n  <div id=\"stWrap\"><div id=\"stPending\"></div><div id=\"stFill\"></div></div>\r\n</div>\r\n<div id=\"msg\"></div>\r\n<div id=\"vig\"></div>\r\n<div id=\"roomTransition\"><div class=\"rtTitle\" id=\"rtTitle\">ROOM TRANSITION</div></div>\r\n<div id=\"joyBase\"></div><div id=\"joyKnob\"></div>\r\n<div class=\"btnrow\">\r\n  <button class=\"pbtn\" id=\"atkBtn\" aria-label=\"Light attack\">\r\n    <span class=\"btnGlyph\">□</span><span class=\"btnArrow\" id=\"atkArrow\">· ·</span>\r\n  </button>\r\n  <button class=\"pbtn\" id=\"heavyBtn\" aria-label=\"Heavy attack\">\r\n    <span class=\"btnGlyph\">△</span><span class=\"btnArrow\" id=\"heavyArrow\">·</span>\r\n  </button>\r\n</div>\r\n<div id=\"cardRow\">\r\n  <div id=\"deckSide\">\r\n    <div id=\"drawQueue\" aria-label=\"Upcoming stance cards\">\r\n      <span class=\"queuedCard\"></span><span class=\"queuedCard\"></span><span class=\"queuedCard\"></span><span class=\"queuedCard\"></span>\r\n    </div>\r\n    <button id=\"shuffleBtn\" aria-label=\"Shuffle stance cards\">↻</button>\r\n  </div>\r\n  <div id=\"handCards\">\r\n    <button class=\"scard\" id=\"card0\">\r\n      <span class=\"ckey\">LB</span><span class=\"cicon\" aria-hidden=\"true\"></span>\r\n      <span class=\"crows\"><span class=\"crow\"><b>□</b><span class=\"cardLight\">· ·</span></span><span class=\"crow\"><b>△</b><span class=\"cardHeavy\">·</span></span></span>\r\n    </button>\r\n    <button class=\"scard\" id=\"card1\">\r\n      <span class=\"ckey\">RB</span><span class=\"cicon\" aria-hidden=\"true\"></span>\r\n      <span class=\"crows\"><span class=\"crow\"><b>□</b><span class=\"cardLight\">· ·</span></span><span class=\"crow\"><b>△</b><span class=\"cardHeavy\">·</span></span></span>\r\n    </button>\r\n  </div>\r\n</div>\r\n<div id=\"panel\" class=\"hidden\">\r\n  <div id=\"tabs\">\r\n    <button id=\"tabDir\" class=\"on\">DIRECTOR</button>\r\n    <button id=\"tabFeel\">FEEL</button>\r\n  </div>\r\n  <div id=\"dirTab\">\r\n    <button class=\"ptitle sect\" data-sect=\"director\" data-label=\"ENCOUNTER DIRECTOR\"></button>\r\n    <div class=\"sbody\" id=\"body-director\">\r\n      <div class=\"modeGrid\" id=\"modeGrid\"></div>\r\n    </div>\r\n    <button class=\"ptitle sect\" data-sect=\"loadout\" data-label=\"LOADOUT\"></button>\r\n    <div class=\"sbody\" id=\"body-loadout\">\r\n      <div class=\"pairRow\">\r\n        <button class=\"wide\" id=\"weaponBtn\">WEAPON</button>\r\n        <button class=\"wide\" id=\"stanceBtn\">STANCE</button>\r\n      </div>\r\n    </div>\r\n    <button class=\"ptitle sect\" data-sect=\"combatTiming\" data-label=\"COMBO TIMING\"></button>\r\n    <div class=\"sbody\" id=\"body-combatTiming\">\r\n      <div class=\"modeGrid\" id=\"combatModeGrid\"></div>\r\n      <div class=\"ptitle\" id=\"combatModeNote\" style=\"margin-top:8px;line-height:1.45\"></div>\r\n    </div>\r\n    <button class=\"ptitle sect\" data-sect=\"sim\" data-label=\"SIM\"></button>\r\n    <div class=\"sbody\" id=\"body-sim\">\r\n      <div class=\"selectRow\">\r\n        <label for=\"spawnSelect\">ENEMY TYPE</label>\r\n        <select id=\"spawnSelect\"></select>\r\n      </div>\r\n      <div id=\"dirSliders\"></div>\r\n    </div>\r\n    <button class=\"wide\" id=\"resetBtn\">RESET FIGHT</button>\r\n  </div>\r\n  <div id=\"feelTab\" style=\"display:none\">\r\n    <button class=\"ptitle sect\" data-sect=\"keyframe\" data-label=\"EDITING KEYFRAME\"></button>\r\n    <div class=\"sbody\" id=\"body-keyframe\">\r\n      <div id=\"keyRow\"></div>\r\n      <div id=\"feelSliders\"></div>\r\n    </div>\r\n    <button class=\"wide\" id=\"testBtn\">TEST THIS TIER</button>\r\n    <div class=\"ptitle\" style=\"margin-top:10px\">light chains the stance combo · heavy hold charges to cartoon</div>\r\n  </div>\r\n</div>\r\n<div id=\"hint\">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DODGE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>\r\n<div id=\"err\"></div>\r\n<div id=\"startGate\">\r\n  <div id=\"startCard\">\r\n    <div class=\"sgTitle\">HEX MAZE COMBAT</div>\r\n    <div class=\"sgHint\">Clear the sealed room, reopen its doors, and explore the braided dungeon.</div>\r\n    <button id=\"sgFsBtn\">⛶ FULLSCREEN</button>\r\n    <button id=\"startBtn\">TAP TO START</button>\r\n  </div>\r\n</div>";
+export const ARENA_SHELL_HTML = `<div id="topBar">
+  <button class="tbtn" id="menuBtn">MENU</button>
+  <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
+</div>
+<div id="hud">
+  <div id="hpWrap"><div id="hpFill"></div></div>
+  <div id="stWrap"><div id="stPending"></div><div id="stFill"></div></div>
+</div>
+<div id="msg"></div>
+<div id="vig"></div>
+<div id="roomTransition"><div class="rtTitle" id="rtTitle">ROOM TRANSITION</div></div>
+<div id="joyBase"></div><div id="joyKnob"></div>
+<div class="btnrow">
+  <button class="pbtn" id="atkBtn" aria-label="Light attack">
+    <span class="btnGlyph">□</span><span class="btnArrow" id="atkArrow">· ·</span>
+  </button>
+  <button class="pbtn" id="heavyBtn" aria-label="Heavy attack">
+    <span class="btnGlyph">△</span><span class="btnArrow" id="heavyArrow">·</span>
+  </button>
+</div>
+<div id="cardRow">
+  <div id="deckSide">
+    <div id="drawQueue" aria-label="Upcoming stance cards">
+      <span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span><span class="queuedCard"></span>
+    </div>
+    <button id="shuffleBtn" aria-label="Shuffle stance cards">↻</button>
+  </div>
+  <div id="handCards">
+    <button class="scard" id="card0">
+      <span class="ckey">LB</span><span class="cicon" aria-hidden="true"></span>
+      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
+    </button>
+    <button class="scard" id="card1">
+      <span class="ckey">RB</span><span class="cicon" aria-hidden="true"></span>
+      <span class="crows"><span class="crow"><b>□</b><span class="cardLight">· ·</span></span><span class="crow"><b>△</b><span class="cardHeavy">·</span></span></span>
+    </button>
+  </div>
+</div>
+<div id="panel" class="hidden" aria-label="Pause menu">
+  <div class="pauseTitle">PAUSED</div>
+  <section class="pauseSection" aria-labelledby="themeTitle">
+    <h2 id="themeTitle">VISUAL STYLE</h2>
+    <div id="themeChoices" class="themeGrid" role="group" aria-label="Visual style">
+      <button class="themeChoice" type="button" data-arena-theme-option="neutral" aria-pressed="false">NEUTRAL</button>
+      <button class="themeChoice" type="button" data-arena-theme-option="original" aria-pressed="false">ORIGINAL</button>
+      <button class="themeChoice" type="button" data-arena-theme-option="akai" aria-pressed="false">AKAI</button>
+    </div>
+  </section>
+  <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">
+    <h2 id="controlsTitle">CONTROLS</h2>
+    <p>MOVE <span>WASD / STICK</span></p>
+    <p>LIGHT <span>J / □ / RT</span></p>
+    <p>HEAVY <span>L / △</span></p>
+    <p>DODGE <span>K / × / LT</span></p>
+    <p>CARDS <span>Q/E / LB/RB</span></p>
+    <p>SHUFFLE <span>R / ○</span></p>
+    <p>WEAPON <span>X / D-PAD ↑↓</span></p>
+    <p>MENU <span>P/M / START/SELECT</span></p>
+  </section>
+  <button class="wide" id="resumeBtn" type="button">RESUME</button>
+</div>
+<!-- Internal run-draft reset hook. It is never rendered as player-facing UI. -->
+<button id="resetBtn" type="button" hidden aria-hidden="true" tabindex="-1">RESET FIGHT</button>
+<div id="hint">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DODGE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>
+<div id="err"></div>
+<div id="startGate">
+  <div id="startCard">
+    <div class="sgTitle">HEX MAZE COMBAT</div>
+    <div class="sgHint">Clear the sealed room, reopen its doors, and explore the braided dungeon.</div>
+    <button id="sgFsBtn">⛶ FULLSCREEN</button>
+    <button id="startBtn">TAP TO START</button>
+  </div>
+</div>`;
 
 export const ARENA_THEME_SHELL_HTML = '<div id="akaiRoomPlaque" aria-hidden="true"><span class="akaiSigil">境</span><strong>BOUNDARY</strong><small>SEALED COURTYARD</small></div>';
 

@@ -74,47 +74,26 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   #shuffleBtn{width:30px;height:30px;font-family:inherit;font-size:16px;line-height:1;color:#9fd2c9;
     background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:0;touch-action:none}
   #shuffleBtn:active{background:#2c4a47}
-  /* ---- panel ---- */
-  #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(78vw,300px);
-    max-height:calc(100vh - 66px);overflow-y:scroll;padding:10px 12px 16px;box-sizing:border-box;
-    background:linear-gradient(180deg,rgba(10,20,22,.94),rgba(10,20,22,.85));
+  /* ---- player pause menu ---- */
+  #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(82vw,318px);
+    max-height:calc(100vh - 66px);overflow-y:auto;padding:13px 14px 15px;box-sizing:border-box;
+    background:linear-gradient(180deg,rgba(10,20,22,.96),rgba(10,20,22,.90));
     border:1px solid #2c4a47;border-radius:8px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
-    scrollbar-width:auto;scrollbar-color:#6e3a24 #122426}
-  #panel::-webkit-scrollbar{width:22px}
+    scrollbar-width:auto;scrollbar-color:#6e3a24 #122426;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  #panel::-webkit-scrollbar{width:14px}
   #panel::-webkit-scrollbar-track{background:#122426;border-left:1px solid #2c4a47;border-radius:0 8px 8px 0}
-  #panel::-webkit-scrollbar-thumb{background:#6e3a24;border:5px solid #122426;border-radius:12px;min-height:56px}
+  #panel::-webkit-scrollbar-thumb{background:#6e3a24;border:4px solid #122426;border-radius:9px;min-height:42px}
   #panel::-webkit-scrollbar-thumb:hover{background:#e8a04c}
   #panel.hidden{display:none}
-  #tabs{display:flex;gap:6px;margin-bottom:10px}
-  #tabs button{flex:1;font-family:inherit;font-size:10px;letter-spacing:.15em;padding:8px 0;
-    color:#4a6f6a;background:transparent;border:1px solid #24403e;border-radius:5px}
-  #tabs button.on{color:#e8a04c;border-color:#6e3a24;background:rgba(110,58,36,.14)}
-  .ptitle{color:#4a6f6a;font-size:9px;letter-spacing:.2em;margin:10px 0 7px}
-  button.ptitle{display:block;width:100%;text-align:left;background:transparent;border:none;
-    cursor:pointer;font-family:inherit;padding:6px 0;margin:4px 0 3px}
-  .modeGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
-  .modeGrid button{font-family:inherit;font-size:9px;letter-spacing:.03em;line-height:1.25;color:#9fd2c9;
-    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:8px 3px;min-height:42px}
-  .modeGrid button.on{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
-  .srow{margin-bottom:22px}
-  .slabel{color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;display:flex;justify-content:space-between;margin-bottom:2px}
-  .sval{color:#e8a04c}
-  .selectRow{margin:4px 0 18px}
-  .selectRow label{display:block;color:#7fb8b0;font-size:9.5px;letter-spacing:.06em;margin-bottom:6px}
-  .selectRow select{width:100%;box-sizing:border-box;font-family:inherit;font-size:10px;letter-spacing:.04em;
-    color:#e8a04c;background:#122426;border:1px solid #2c4a47;border-radius:5px;padding:8px 9px}
-  /* slider sits at 84% width so each row keeps an empty gutter on both sides —
-     a thumb-free strip to grab when scrolling the panel on a phone */
-  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:84%;display:block;margin:6px auto 0;height:24px;background:transparent}
-  #panel input[type=range]::-webkit-slider-runnable-track{height:3px;background:#243f3d;border-radius:2px}
-  #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-6px;
-    border-radius:50%;background:#e8a04c;border:2px solid #0d191b;box-shadow:0 0 0 1px #6e3a24}
-  #panel input[type=range]::-moz-range-track{height:3px;background:#243f3d;border-radius:2px}
-  #panel input[type=range]::-moz-range-thumb{width:13px;height:13px;border:2px solid #0d191b;border-radius:50%;background:#e8a04c}
-  #keyRow{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:12px}
-  #keyRow button{font-family:inherit;font-size:8.5px;letter-spacing:.05em;color:#9fd2c9;
-    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:7px 1px}
-  #keyRow button.on{color:#e8a04c;border-color:#6e3a24}
+  .pauseTitle{color:#e8a04c;font-size:14px;letter-spacing:.22em;text-align:center;margin:0 0 13px}
+  .pauseSection{margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid rgba(44,74,71,.62)}
+  .pauseSection h2{color:#7fb8b0;font-size:9px;font-weight:400;letter-spacing:.2em;margin:0 0 8px}
+  .themeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .themeChoice{font-family:inherit;font-size:9px;letter-spacing:.06em;line-height:1.25;color:#9fd2c9;
+    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 4px;min-height:38px}
+  .themeChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
+  .controlsHelp p{display:flex;justify-content:space-between;gap:12px;margin:5px 0;color:#7fb8b0;font-size:9px;letter-spacing:.06em}
+  .controlsHelp p span{color:#9fd2c9;text-align:right;white-space:nowrap}
   .wide{width:100%;font-family:inherit;font-size:10px;letter-spacing:.12em;color:#e8a04c;
     background:rgba(110,58,36,.16);border:1px solid #6e3a24;border-radius:5px;padding:9px 0;margin-top:6px}
   .wide:active{background:#2c4a47}
@@ -168,24 +147,16 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .scard:active{background:var(--arena-card-active)}.scard .ckey{color:var(--arena-muted)}.scard .crows{color:var(--arena-gold)}.scard .crow b{color:var(--arena-text)}
   #shuffleBtn{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line)}
   #panel{background:linear-gradient(180deg,var(--arena-panel),var(--arena-panel-2));border-color:var(--arena-line);scrollbar-color:var(--arena-line-bright) var(--arena-panel-solid)}
-  #tabs button,.modeGrid button,#keyRow button{color:var(--arena-muted);border-color:var(--arena-line-soft)}
-  #tabs button.on,.modeGrid button.on,#keyRow button.on{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
-  .ptitle,.slabel{color:var(--arena-subtle)}.sval{color:var(--arena-gold)}
+  .pauseTitle{color:var(--arena-gold)}.pauseSection{border-color:var(--arena-line-soft)}.pauseSection h2{color:var(--arena-subtle)}
+  .themeChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
+  .themeChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .controlsHelp p{color:var(--arena-subtle)}.controlsHelp p span{color:var(--arena-text)}
   .wide{color:var(--arena-gold);background:var(--arena-red-soft);border-color:var(--arena-line-bright)}
   #startCard{background:var(--arena-panel);border-color:var(--arena-line-bright)}#startCard .sgTitle{color:var(--arena-gold)}#startCard .sgHint{color:var(--arena-text)}
   #startBtn{color:var(--arena-bg);background:var(--arena-gold)}#sgFsBtn{color:var(--arena-text);border-color:var(--arena-line)}
   #err{color:var(--arena-error);background:var(--arena-error-panel);border-color:var(--arena-line-bright)}
 
-  :root[data-arena-mode="arena"] #tabs,
-  :root[data-arena-mode="arena"] [data-sect="director"],
-  :root[data-arena-mode="arena"] #body-director,
-  :root[data-arena-mode="arena"] [data-sect="combatTiming"],
-  :root[data-arena-mode="arena"] #body-combatTiming,
-  :root[data-arena-mode="arena"] [data-sect="sim"],
-  :root[data-arena-mode="arena"] #body-sim,
-  :root[data-arena-mode="arena"] #resetBtn,
-  :root[data-arena-mode="arena"] #feelTab{display:none!important}
-  :root[data-arena-mode="enemy-lab"] #topBar,
+  :root[data-arena-mode="enemy-lab"] #menuBtn,
   :root[data-arena-mode="enemy-lab"] #panel,
   :root[data-arena-mode="enemy-lab"] #startGate{display:none!important}
 

@@ -26,6 +26,7 @@ import { getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS,
 import { installRoadieRun } from './roadie-run.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
 import { resolveArenaTheme } from './arena-theme-registry.js';
+import * as arenaThemeRegistry from './arena-theme-registry.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -33,6 +34,11 @@ import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOp
 export function createArenaRuntime({ config = {}, controlRegistry = createArenaControlRegistry() } = {}) {
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
+  const ARENA_VISUAL_STYLE_OPTIONS=Object.freeze([
+    {id:'neutral',label:'NEUTRAL'},
+    {id:'original',label:'ORIGINAL'},
+    {id:'akai',label:'AKAI'},
+  ]);
   document.documentElement.dataset.arenaMode = runtimeConfig.mode;
   document.documentElement.dataset.arenaTheme = arenaTheme.id;
   provideArenaRuntimeConfig(runtimeConfig);
@@ -264,7 +270,7 @@ const PC = installPlayerCombat({
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
     onWeaponSelected(){ ensureStanceMatchesWeapon(); rebuildDeck(); },
-    onWeaponUISync(){ updateModePanel(); },
+    onWeaponUISync(){},
     timeScaleModifier(att, t, phase){
       const s = arena.charge.active ? arena.charge.s : arena.swing.s;
       if(phase === 0) return s.windup;
@@ -300,7 +306,6 @@ function setStance(index){
   arena.stance = pool[arena.stanceIndex];
   PC.setReadyPose(guardPoseFor(arena.stance));
   resetChainState();
-  updateModePanel();
 }
 function cycleStance(){ setStance(arena.stanceIndex + 1); announce(arena.stance ? stancePoolForWeapon()[(arena.stanceIndex)%stancePoolForWeapon().length].name : '', .9); }
 function ensureStanceMatchesWeapon(){
@@ -329,7 +334,7 @@ function playCard(slot){
   const pool = stancePoolForWeapon();
   const idx = pool.findIndex(st => st.id === card.id);
   if(idx >= 0) setStance(idx);
-  else { arena.stance = card; resetChainState(); updateModePanel(); }
+  else { arena.stance = card; resetChainState(); }
   // drop any follow-up queued from the old stance
   combatState.pending = null; combatState.pendingGroup = null;
   combatState.readyLock = 0;
@@ -422,7 +427,7 @@ let roomTransition = null;
 
 /* ---------- enemies ---------- */
 const enemySystem = createArenaEnemySystem({
-  THREE, worldRoot, arenaRadius:ARENA, navigation:mazeNavigation, roomEncounterMode:true,
+  THREE, worldRoot, controlRegistry, arenaRadius:ARENA, navigation:mazeNavigation, roomEncounterMode:true,
   onEncounterCleared(roomId){
     encounterState?.clearRoom(roomId);
     syncDoorStates();
@@ -979,7 +984,6 @@ function watchPlayerState(dt){
     arena.prevWave = enemySystem.wave;
     if(arena.cycleMode){
       // director already advanced to the next mode via cycleOnWaveClear
-      updateModePanel();
       announce('WAVE ' + enemySystem.wave + ' · ' + modeLabel(enemySystem.director.getMode()));
     } else {
       announce('WAVE ' + enemySystem.wave);
@@ -1103,7 +1107,23 @@ function gatherInput(){
 /* ---------- UI ---------- */
 const panel=document.getElementById('panel');
 const menuBtn=document.getElementById('menuBtn');
+const resumeBtn=document.getElementById('resumeBtn');
+const themeButtons=[...document.querySelectorAll('[data-arena-theme-option]')];
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
+function syncThemeButtons(){
+  themeButtons.forEach(button=>{
+    const active=button.dataset.arenaThemeOption===arenaTheme.id;
+    button.classList.toggle('on',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
+function selectArenaThemeFromMenu(id){
+  const storage=(()=>{try{return globalThis.localStorage;}catch{return null;}})();
+  const location=globalThis.location;
+  const selectArenaTheme=arenaThemeRegistry.selectArenaTheme;
+  if(typeof selectArenaTheme!=='function')throw new Error('Arena theme selection API is unavailable.');
+  return selectArenaTheme(id,{storage,location});
+}
 function toggleMenu(){
   const opening = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !opening);
@@ -1113,6 +1133,9 @@ function toggleMenu(){
 }
 function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
 menuBtn.addEventListener('click', toggleMenu);
+resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'))toggleMenu(); });
+themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
+syncThemeButtons();
 const startGate=document.getElementById('startGate');
 document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
@@ -1136,96 +1159,34 @@ function syncFsButtons(){
 document.addEventListener('fullscreenchange', syncFsButtons);
 document.addEventListener('webkitfullscreenchange', syncFsButtons);
 syncFsButtons();
-document.getElementById('resetBtn').addEventListener('click', ()=>{ respawn(); toggleMenu(); });
-document.getElementById('weaponBtn').addEventListener('click', ()=>cycleWeapon());
-document.getElementById('stanceBtn').addEventListener('click', ()=>cycleStance());
-/* tabs */
-const tabDir=document.getElementById('tabDir'), tabFeel=document.getElementById('tabFeel');
-const dirTab=document.getElementById('dirTab'), feelTab=document.getElementById('feelTab');
-tabDir.addEventListener('click', ()=>{ tabDir.classList.add('on'); tabFeel.classList.remove('on');
-  dirTab.style.display='block'; feelTab.style.display='none'; });
-tabFeel.addEventListener('click', ()=>{ tabFeel.classList.add('on'); tabDir.classList.remove('on');
-  feelTab.style.display='block'; dirTab.style.display='none'; });
-/* collapsible section headers (same ▸/▾ pattern as the hit-feel tuning panel) */
-document.querySelectorAll('button.sect').forEach(h=>{
-  const body = document.getElementById('body-'+h.dataset.sect);
-  const key = 'arena.section.'+h.dataset.sect;
-  let collapsed = !!StoneSettings.get(key, false);
-  const apply = ()=>{
-    body.style.display = collapsed ? 'none' : 'block';
-    h.textContent = (collapsed ? '▸ ' : '▾ ') + h.dataset.label;
-  };
-  apply();
-  h.addEventListener('click', ()=>{ collapsed = !collapsed; StoneSettings.set(key, collapsed); apply(); });
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  respawn();
+  if(!panel.classList.contains('hidden'))toggleMenu();
 });
-/* director mode grid */
-const modeGrid=document.getElementById('modeGrid');
 const CYCLE_MODE_ID = 'cycle';
 function modeLabel(id){ return DIRECTOR_MODES.find(m=>m.id===id)?.label || id; }
 function setMode(id, { reset = true } = {}){
   arena.cycleMode = (id === CYCLE_MODE_ID);
   enemySystem.setCycleOnWaveClear(arena.cycleMode);
   if(!arena.cycleMode) enemySystem.setDirectorMode(id);
-  StoneSettings.set('arena.directorMode', id);   // picked mode sticks across reloads
-  updateModePanel();
-  if(reset) respawn();   // switching director mode = full scene reset
+  StoneSettings.set('arena.directorMode', id);
+  if(reset) respawn();
 }
-DIRECTOR_MODES.forEach(m=>{
-  const b=document.createElement('button');
-  b.textContent=m.label; b.dataset.id=m.id;
-  b.addEventListener('click', ()=>setMode(m.id));
-  modeGrid.appendChild(b);
-});
-{ // CYCLE pseudo-mode: rotates through the real modes each wave
-  const b=document.createElement('button');
-  b.textContent='Cycle All'; b.dataset.id=CYCLE_MODE_ID;
-  b.addEventListener('click', ()=>setMode(CYCLE_MODE_ID));
-  modeGrid.appendChild(b);
-}
-const combatModeGrid=document.getElementById('combatModeGrid');
-const combatModeNote=document.getElementById('combatModeNote');
 function setCombatInputMode(id, { reset = true } = {}){
   const next = getCombatInputMode(id);
   arena.combatInputMode = next.id;
   StoneSettings.set('arena.combatInputMode', next.id);
   resetChainState();
   if(reset) respawn();
-  updateModePanel();
   if(reset) announce(next.label, .9);
 }
-COMBAT_INPUT_MODES.forEach(mode=>{
-  const b=document.createElement('button');
-  b.textContent=mode.label;
-  b.dataset.id=mode.id;
-  b.title=mode.note;
-  b.addEventListener('click', ()=>setCombatInputMode(mode.id));
-  combatModeGrid.appendChild(b);
-});
-
-function updateModePanel(){
-  const mode = enemySystem.director.getMode();
-  const active = arena.cycleMode ? CYCLE_MODE_ID : mode;
-  modeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===active));
-  const inputMode = combatInputMode();
-  combatModeGrid.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===inputMode.id));
-  combatModeNote.textContent = inputMode.note;
-}
-/* sim sliders */
-const spawnSelect=document.getElementById('spawnSelect');
-[
+/* Enemy Lab receives these descriptors through the typed control registry. */
+const SPAWN_OPTIONS = Object.freeze([
   { id:'mixed', label:'Mixed Pure Strains' },
   { id:'goblins', label:'Goblins Only' },
   ...ARENA_ENEMY_OPTIONS
-].forEach(({id,label})=>{
-  const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);
-});
+]);
 enemySystem.setSpawnKind(StoneSettings.get('arena.spawnKind', enemySystem.spawnKind));
-spawnSelect.value=enemySystem.spawnKind;
-spawnSelect.addEventListener('change', ()=>{
-  enemySystem.setSpawnKind(spawnSelect.value);
-  StoneSettings.set('arena.spawnKind', enemySystem.spawnKind);
-  respawn();
-});
 const DIR_SLIDERS = [
   { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
@@ -1235,58 +1196,7 @@ const DIR_SLIDERS = [
   { label:'ENEMY SIZE',      min:1,  max:3.5, step:.1,  get:()=>enemySystem.heightScale,    set:v=>enemySystem.setHeightScale(v) },
   { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
 ];
-const dirBox=document.getElementById('dirSliders');
-DIR_SLIDERS.forEach(d=>{
-  const row=document.createElement('div'); row.className='srow';
-  const lab=document.createElement('div'); lab.className='slabel';
-  const val=document.createElement('span'); val.className='sval'; val.textContent=d.get();
-  lab.textContent=d.label+' '; lab.appendChild(val);
-  const inp=document.createElement('input'); inp.type='range';
-  inp.setAttribute('aria-label', d.label);
-  inp.min=d.min; inp.max=d.max; inp.step=d.step; inp.value=d.get();
-  inp.addEventListener('input', ()=>{ d.set(parseFloat(inp.value)); val.textContent=inp.value; });
-  row.appendChild(lab); row.appendChild(inp); dirBox.appendChild(row);
-});
-/* feel keyframe editor */
 let selKey='HAYMAKER';
-const keyRow=document.getElementById('keyRow');
-const feelEls={};
-FEEL_KEY_ORDER.forEach(k=>{
-  const b=document.createElement('button'); b.textContent=k; b.dataset.k=k;
-  if(k===selKey) b.classList.add('on');
-  b.addEventListener('click', ()=>{
-    selKey=k;
-    keyRow.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.k===k));
-    syncFeelSliders();
-  });
-  keyRow.appendChild(b);
-});
-const feelBox=document.getElementById('feelSliders');
-FEEL_PARAMS.forEach(pr=>{
-  const row=document.createElement('div'); row.className='srow';
-  const lab=document.createElement('div'); lab.className='slabel';
-  const val=document.createElement('span'); val.className='sval';
-  lab.textContent=pr.label+' '; lab.appendChild(val);
-  const inp=document.createElement('input'); inp.type='range';
-  inp.min=pr.min; inp.max=pr.max; inp.step=(pr.max-pr.min)/60;
-  inp.addEventListener('input', ()=>{
-    FEEL[selKey][pr.k]=parseFloat(inp.value);
-    val.textContent=parseFloat(inp.value).toFixed(2);
-  });
-  row.appendChild(lab); row.appendChild(inp); feelBox.appendChild(row);
-  feelEls[pr.k]={inp,val};
-});
-function syncFeelSliders(){
-  for(const pr of FEEL_PARAMS){
-    feelEls[pr.k].inp.value = FEEL[selKey][pr.k];
-    feelEls[pr.k].val.textContent = Number(FEEL[selKey][pr.k]).toFixed(2);
-  }
-}
-syncFeelSliders();
-document.getElementById('testBtn').addEventListener('click', ()=>{
-  panel.classList.add('hidden');
-  beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3);
-});
 
 /* ---------- HUD ---------- */
 const hpFill=document.getElementById('hpFill');
@@ -1823,6 +1733,16 @@ function captureInitialOptions(){
 
 function registerRuntimeControls(){
   const source='arena-runtime';
+  for(const option of ARENA_VISUAL_STYLE_OPTIONS)controlRegistry.register(
+    {id:'visuals',label:'VISUALS',source},
+    {
+      id:`visuals.${option.id}`,
+      kind:'button',
+      label:option.label,
+      active:()=>arenaTheme.id===option.id,
+      invoke:()=>selectArenaThemeFromMenu(option.id),
+    },
+  );
   for(const mode of [...DIRECTOR_MODES,{id:CYCLE_MODE_ID,label:'Cycle All'}])controlRegistry.register(
     {id:'director',label:'ENCOUNTER DIRECTOR',source},
     {id:`director.${mode.id}`,kind:'button',label:mode.label,active:()=>((arena.cycleMode?CYCLE_MODE_ID:enemySystem.director.getMode())===mode.id),invoke:()=>setMode(mode.id)},
@@ -1835,7 +1755,7 @@ function registerRuntimeControls(){
   );
   controlRegistry.register({id:'simulation',label:'SIM',source},{
     id:'simulation.spawn-kind',kind:'select',label:'ENEMY TYPE',get:()=>enemySystem.spawnKind,
-    options:()=>[...spawnSelect.options].map(option=>({value:option.value,label:option.textContent})),
+    options:()=>SPAWN_OPTIONS.map(option=>({value:option.id,label:option.label})),
     set:value=>{enemySystem.setSpawnKind(value);StoneSettings.set('arena.spawnKind',enemySystem.spawnKind);respawn();return true;},
   });
   DIR_SLIDERS.forEach((descriptor,index)=>controlRegistry.register(
@@ -1844,7 +1764,7 @@ function registerRuntimeControls(){
   ));
   for(const key of FEEL_KEY_ORDER)controlRegistry.register(
     {id:'feel',label:'FEEL',source},
-    {id:`feel.key.${key}`,kind:'button',label:key,active:()=>selKey===key,invoke:()=>{selKey=key;syncFeelSliders();return true;}},
+    {id:`feel.key.${key}`,kind:'button',label:key,active:()=>selKey===key,invoke:()=>{selKey=key;return true;}},
   );
   for(const descriptor of FEEL_PARAMS)controlRegistry.register(
     {id:'feel',label:'FEEL',source},
@@ -1904,7 +1824,6 @@ if(!arena.stance) ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 respawn();
-updateModePanel();
 
 if(ABILITY_CAPTURE_MODE){
   captureController=createAbilityCaptureController({
