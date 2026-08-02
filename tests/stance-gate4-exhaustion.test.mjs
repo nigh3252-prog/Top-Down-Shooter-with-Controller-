@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createStanceGate4Runtime } from '../src/stance-gate4-exhaustion.js';
 
-function makeHarness(){
+function makeHarness({attackAfter=0}={}){
   const stamina={v:10,pending:0,recoverDelayT:0};
   const combatState={weapon:'longsword',attack:null,attackKey:'vertical5',pending:null,pendingGroup:null,readyLock:0};
   const arena={
@@ -13,7 +13,7 @@ function makeHarness(){
   const move={x:0,z:0};
   const PC={
     combatState,
-    startCombatAttack(){combatState.attack={key:'vertical5'};stamina.v=0;},
+    startCombatAttack(){combatState.attack={key:'vertical5'};stamina.v=attackAfter;},
     updateCombat(){},
   };
   const deck={
@@ -36,6 +36,14 @@ function makeHarness(){
   assert.equal(h.stamina.v,100);
   h.PC.updateCombat(.42);
   assert.equal(h.runtime.snapshot().phase,'idle');
+  h.runtime.destroy();
+}
+
+{
+  const h=makeHarness({attackAfter:2});
+  h.PC.startCombatAttack('vertical5','vertical');
+  assert.equal(h.stamina.v,0,'a remainder smaller than the cheapest available attack should collapse to zero');
+  assert.equal(h.runtime.snapshot().phase,'open','the unusable remainder should open Exhaustion Catch');
   h.runtime.destroy();
 }
 
