@@ -1,8 +1,12 @@
 import { cardRestoresStamina } from './stance-deck.js';
-import { createExhaustionCatchEngine } from './exhaustion-catch.js';
+import { createExhaustionCatchEngine, EXHAUSTION_CATCH_DEFAULTS } from './exhaustion-catch.js';
+import { evaluateStanceSpend, STANCE_SPEND_SOURCES } from './stance-spend-policy.js';
+import { StoneSettings } from './settings.js';
 
-const BASE_STAMINA_COSTS=Object.freeze({horizontal:18,vertical:14,stab:10,default:14});
-const CLASS_STAMINA_MULTIPLIER=Object.freeze({Light:.5,Medium:1,Heavy:1.5});
+const CATCH_WINDOW_BASE=EXHAUSTION_CATCH_DEFAULTS.windowDuration;
+const CATCH_WINDOW_SETTING='arena.stance2.catchWindowMultiplier';
+const CHARGE_COST_MULTIPLIER=.75;
+const clampMultiplier=value=>Math.max(1,Math.min(10,Math.round(Number(value)||1)));
 
 function installHud(document){
   if(!document)return()=>{};
@@ -20,6 +24,7 @@ function installHud(document){
       #exhaustionCatchHud[data-phase="missed"],#exhaustionCatchHud[data-phase="failed"]{border-color:#ff786d;color:#ffaaa2} #exhaustionCatchHud[data-phase="missed"] .catchFill,#exhaustionCatchHud[data-phase="failed"] .catchFill{background:#ff786d}
       #stWrap.catchOpen{border-color:#ffd06c;box-shadow:0 0 8px rgba(255,208,108,.7)}
       #stWrap.catchFailed{border-color:#ff786d;box-shadow:0 0 8px rgba(255,120,109,.65)}
+      #body-stance2Gate4 .stance2ControlNote{color:#5f8781;font-size:8px;line-height:1.45;margin:-12px 0 12px}
     `;
     document.head.appendChild(style);
     root=document.createElement('div');
@@ -35,10 +40,12 @@ function installHud(document){
     stamina.classList.toggle('catchOpen',phase==='open'||phase==='success');
     stamina.classList.toggle('catchFailed',phase==='missed'||phase==='failed');
     if(phase==='open'){
-      label.textContent='PLAY STANCE';time.textContent=snapshot.remaining.toFixed(2);
+      const amount=Math.max(0,Number(snapshot.trigger?.overdrawAmount)||0);
+      label.textContent=amount>0?`OVERDRAW +${amount.toFixed(0)} · PLAY STANCE`:'PLAY STANCE';
+      time.textContent=snapshot.remaining.toFixed(2);
       fill.style.transform=`scaleX(${Math.max(0,snapshot.remaining/snapshot.windowDuration)})`;
     }else if(phase==='success'){
-      label.textContent='CATCH';time.textContent='CLEAN';fill.style.transform='scaleX(1)';
+      label.textContent='STANCE CATCH';time.textContent='CLEAN';fill.style.transform='scaleX(1)';
     }else if(phase==='missed'){
       label.textContent='MISSED';time.textContent='STUMBLE';fill.style.transform='scaleX(1)';
     }else if(phase==='failed'){
@@ -48,15 +55,157 @@ function installHud(document){
   };
 }
 
+function installCatchControls(document,{initialMultiplier=2,onChange=()=>{}}={}){
+  if(!document)return{destroy(){},setValue(){}};
+  const parent=document.getElementById('dirTab');
+  const reset=document.getElementById('resetBtn');
+  if(!parent||!reset)return{destroy(){},setValue(){}};
+  document.getElementById('body-stance2Gate4')?.previousElementSibling?.remove();
+  document.getElementById('body-stance2Gate4')?.remove();
+
+  const header=document.createElement('button');
+  header.className='ptitle sect';
+  header.type='button';
+  const body=document.createElement('div');
+  body.className='sbody';
+  body.id='body-stance2Gate4';
+  const row=document.createElement('div');row.className='srow';
+  const label=document.createElement('div');label.className='slabel';
+  const value=document.createElement('span');value.className='sval';
+  label.textContent='STANCE CATCH WINDOW ';label.appendChild(value);
+  const input=document.createElement('input');
+  input.type='range';input.min='1';input.max='10';input.step='1';
+  input.setAttribute('aria-label','Stance Catch window multiplier');
+  const note=document.createElement('div');note.className='stance2ControlNote';
+  note.textContent='Whole-number multiplier of the 0.72 second base window. Stored for future playtests.';
+  row.append(label,input);body.append(row,note);
+  parent.insertBefore(header,reset);parent.insertBefore(body,reset);
+
+  let collapsed=!!StoneSettings.get('arena.section.stance2Gate4',false);
+  const syncHeader=()=>{
+    header.textContent=`${collapsed?'▸':'▾'} STANCE 2.0`;
+    body.style.display=collapsed?'none':'block';
+  };
+  const syncValue=raw=>{
+    const multiplier=clampMultiplier(raw);
+    input.value=String(multiplier);
+    value.textContent=`×${multiplier} · ${(CATCH_WINDOW_BASE*multiplier).toFixed(2)} SEC`;
+    return multiplier;
+  };
+  syncHeader();syncValue(initialMultiplier);
+  header.addEventListener('click',()=>{
+    collapsed=!collapsed;StoneSettings.set('arena.section.stance2Gate4',collapsed);syncHeader();
+  });
+  input.addEventListener('input',()=>{
+    const multiplier=syncValue(input.value);
+    StoneSettings.set(CATCH_WINDOW_SETTING,multiplier);
+    onChange(multiplier);
+  });
+  return{
+    setValue(multiplier){syncValue(multiplier);},
+    destroy(){header.remove();body.remove();},
+  };
+}
+
+function installCatchVisual({PC,windowRef,documentRef}={}){
+  if(!PC||!windowRef||!documentRef)return{update(){},pulse(){},destroy(){}};
+  let visual=null,lastSnapshot=null,pendingPulse=null,destroyed=false;
+  const create=async()=>{
+    try{
+      const THREE=await import('three');
+      if(destroyed)return;
+      const segments=96,radius=1.48;
+      const points=[];
+      for(let index=0;index<=segments;index++){
+        const angle=-Math.PI/2-(index/segments)*Math.PI*2;
+        points.push(new THREE.Vector3(Math.cos(angle)*radius,.075,Math.sin(angle)*radius));
+      }
+      const baseGeometry=new THREE.BufferGeometry().setFromPoints(points);
+      const arcGeometry=baseGeometry.clone();arcGeometry.setDrawRange(0,2);
+      const group=new THREE.Group();group.name='Stance Catch Ring';group.visible=false;
+      const baseMaterial=new THREE.LineBasicMaterial({color:0xd29d45,transparent:true,opacity:.24,depthWrite:false});
+      const arcMaterial=new THREE.LineBasicMaterial({color:0xffe09a,transparent:true,opacity:.95,depthWrite:false});
+      const base=new THREE.Line(baseGeometry,baseMaterial);
+      const arc=new THREE.Line(arcGeometry,arcMaterial);
+      const flashMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+      const flash=new THREE.Mesh(new THREE.RingGeometry(1.04,1.72,64),flashMaterial);
+      flash.rotation.x=-Math.PI/2;flash.position.y=.082;flash.visible=false;
+      const light=new THREE.PointLight(0xffefc7,0,8,2);light.position.set(0,2.1,0);
+      group.add(base,arc,flash,light);
+      visual={THREE,segments,group,base,arc,flash,light,flashTime:0,flashDuration:.24,baseGeometry,arcGeometry,baseMaterial,arcMaterial,flashMaterial,parent:null};
+      if(pendingPulse){pulse(pendingPulse);pendingPulse=null;}
+      update(lastSnapshot,0);
+    }catch(error){console.warn('[stance-gate4] Catch Ring did not install',error);}
+  };
+  create();
+  function ensureParent(){
+    if(!visual)return null;
+    const actorRoot=PC.combatLayer?.parent?.parent?.parent||PC.combatLayer?.parent?.parent||null;
+    if(actorRoot&&visual.group.parent!==actorRoot){visual.group.parent?.remove(visual.group);actorRoot.add(visual.group);visual.parent=actorRoot;}
+    return actorRoot;
+  }
+  function pulse(kind='open'){
+    if(!visual){pendingPulse=kind;return;}
+    visual.flashTime=visual.flashDuration;
+    visual.flash.visible=true;
+    const color=kind==='success'?0x8dffd0:kind==='missed'?0xff8177:0xffffff;
+    visual.flashMaterial.color.setHex(color);visual.light.color.setHex(color);
+  }
+  function update(snapshot,dt=0){
+    lastSnapshot=snapshot||lastSnapshot;
+    if(!visual||!lastSnapshot)return;
+    ensureParent();
+    const phase=lastSnapshot.phase||'idle';
+    const visible=phase==='open'||phase==='success'||phase==='missed';
+    visual.group.visible=visible||visual.flashTime>0;
+    visual.base.visible=visible;visual.arc.visible=visible;
+    if(phase==='open'){
+      const fraction=Math.max(0,Math.min(1,lastSnapshot.remaining/Math.max(.001,lastSnapshot.windowDuration)));
+      visual.arcGeometry.setDrawRange(0,Math.max(2,Math.floor(visual.segments*fraction)+1));
+      visual.arcMaterial.color.setHex(0xffe09a);visual.baseMaterial.color.setHex(0xd29d45);
+      visual.arcMaterial.opacity=.72+Math.sin(lastSnapshot.elapsed*18)*.2;
+    }else if(phase==='success'){
+      visual.arcGeometry.setDrawRange(0,visual.segments+1);
+      visual.arcMaterial.color.setHex(0x74d9b2);visual.baseMaterial.color.setHex(0x74d9b2);visual.arcMaterial.opacity=.9;
+    }else if(phase==='missed'){
+      visual.arcGeometry.setDrawRange(0,visual.segments+1);
+      visual.arcMaterial.color.setHex(0xff786d);visual.baseMaterial.color.setHex(0xff786d);visual.arcMaterial.opacity=.95;
+    }
+    if(visual.flashTime>0){
+      visual.flashTime=Math.max(0,visual.flashTime-Math.max(0,Number(dt)||0));
+      const strength=visual.flashTime/visual.flashDuration;
+      visual.flash.visible=true;visual.flashMaterial.opacity=strength*.82;
+      visual.flash.scale.setScalar(1+(1-strength)*.72);
+      visual.light.intensity=5.2*strength;
+    }else{
+      visual.flash.visible=false;visual.flashMaterial.opacity=0;visual.light.intensity=0;
+    }
+  }
+  return{
+    update,pulse,
+    destroy(){
+      destroyed=true;
+      if(!visual)return;
+      visual.group.parent?.remove(visual.group);
+      visual.baseGeometry.dispose();visual.arcGeometry.dispose();visual.flash.geometry.dispose();
+      visual.baseMaterial.dispose();visual.arcMaterial.dispose();visual.flashMaterial.dispose();
+      visual=null;
+    },
+  };
+}
+
 export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.window,documentRef=globalThis.document,basePlayerSpeed=8.5,engineOptions={}}={}){
   const handle=arenaHandle,PC=handle?.PC,arena=handle?.arena,deck=handle?.deck;
   if(!PC?.combatState||!arena?.stamina||!deck?.play)throw new Error('[stance-gate4] missing Combat Arena stamina/deck handle');
-  const engine=createExhaustionCatchEngine(engineOptions);
+  let windowMultiplier=documentRef?clampMultiplier(StoneSettings.get(CATCH_WINDOW_SETTING,2)):clampMultiplier(engineOptions.windowMultiplier||1);
+  const engine=createExhaustionCatchEngine({...engineOptions,windowDuration:engineOptions.windowDuration??CATCH_WINDOW_BASE*windowMultiplier});
   const renderHud=installHud(documentRef);
-  const original={updateCombat:PC.updateCombat,startCombatAttack:PC.startCombatAttack,deckPlay:deck.play};
+  const visual=installCatchVisual({PC,windowRef,documentRef});
+  const controls=installCatchControls(documentRef,{initialMultiplier:windowMultiplier,onChange:setWindowMultiplier});
+  const original={updateCombat:PC.updateCombat,startCombatAttack:PC.startCombatAttack,deckPlay:deck.play,spendQuote:globalThis.__STANCE_SPEND_QUOTE__};
   let lastStamina=Number(arena.stamina.v)||0;
   let lastActorPosition=readActorPosition();
-  let pendingFailure=false,ownsAttackLock=false,lastSnapshot=null;
+  let pendingFailure=false,ownsAttackLock=false,lastSnapshot=null,pendingSpendQuote=null,spendContext=null;
 
   function readActorPosition(){
     const p=handle.actorPos;if(!p)return null;
@@ -70,31 +219,40 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
   function currentIdentity(){
     return{attackKey:String(PC.combatState.attackKey||''),weaponId:String(PC.combatState.weapon||''),stanceId:String(arena.stance?.id||'')};
   }
-  function minimumUsableAttackCost(){
-    const weapon=PC.currentWeapon?.()||null;
-    const multiplier=CLASS_STAMINA_MULTIPLIER[weapon?.staminaClass]??1;
-    const chain=Array.isArray(arena.stance?.chain)?arena.stance.chain:[];
-    const costs=chain.map(key=>{
-      const group=PC.ATTACKS?.[key]?.group||'default';
-      return (BASE_STAMINA_COSTS[group]??BASE_STAMINA_COSTS.default)*multiplier;
-    }).filter(Number.isFinite);
-    return costs.length?Math.min(...costs):BASE_STAMINA_COSTS.stab*multiplier;
+  function quoteStanceSpend({cost}={}){
+    const actualCost=Math.max(0,Number(cost)||0);
+    const chargeRelease=spendContext!=='attack'&&arena.charge?.active&&!!PC.combatState.attack;
+    const chargeFraction=chargeRelease?Math.max(0,Math.min(1,(Number(arena.charge.tier)-1/3)/(2/3))):0;
+    const factor=chargeRelease?CHARGE_COST_MULTIPLIER*chargeFraction:1;
+    if(factor<=engine.config.epsilon)return{quotedCost:actualCost};
+    const source=chargeRelease?STANCE_SPEND_SOURCES.charge:STANCE_SPEND_SOURCES.attack;
+    const requestedCost=actualCost*factor;
+    const decision=evaluateStanceSpend({
+      available:arena.stamina.v,
+      cost:requestedCost,
+      source,
+      catchPhase:engine.snapshot().phase,
+      epsilon:engine.config.epsilon,
+    });
+    if(!decision.allowed)return{quotedCost:actualCost,decision};
+    if(decision.opensCatch||decision.overdraw)pendingSpendQuote=decision;
+    if(arena.swing)arena.swing.overdrawAmount=decision.overdrawAmount;
+    return{quotedCost:decision.actualSpent/factor,decision};
   }
-  function collapseUnusableRemainder(current){
-    const minimum=minimumUsableAttackCost();
-    if(current>=minimum-engine.config.epsilon)return current;
-    const stranded=Math.max(0,current);
-    arena.stamina.v=0;
-    if(stranded>0&&arena.swing&&Number.isFinite(Number(arena.swing.staminaSpent))){
-      arena.swing.staminaSpent+=stranded;
-    }
-    return 0;
-  }
+  globalThis.__STANCE_SPEND_QUOTE__=quoteStanceSpend;
+
   function observeStamina(source='attack'){
-    let current=Number(arena.stamina.v)||0;
-    const spent=current<lastStamina-engine.config.epsilon;
-    if(spent&&current>engine.config.epsilon)current=collapseUnusableRemainder(current);
-    const event=engine.trigger({before:lastStamina,after:current,source,...currentIdentity()});
+    const current=Number(arena.stamina.v)||0;
+    const quote=pendingSpendQuote;
+    const event=engine.trigger({
+      before:lastStamina,after:current,source,
+      ...currentIdentity(),
+      requestedCost:quote?.requestedCost||0,
+      actualSpent:quote?.actualSpent||Math.max(0,lastStamina-current),
+      overdrawAmount:quote?.overdrawAmount||0,
+      overdraw:quote?.overdraw===true,
+    });
+    pendingSpendQuote=null;
     lastStamina=current;
     return event;
   }
@@ -127,19 +285,21 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
     const reduction=Math.min(along,intended*(1-snapshot.movementMultiplier));
     if(reduction>0){current.x-=nx*reduction;current.z-=nz*reduction;writeActorPosition(current);}
   }
-  function publish(){
-    lastSnapshot=engine.snapshot();
+  function publish(dt=0){
+    lastSnapshot=Object.freeze({...engine.snapshot(),windowMultiplier,baseWindowDuration:CATCH_WINDOW_BASE});
     PC.combatState.stance2Gate4=lastSnapshot;
-    renderHud(lastSnapshot);
+    renderHud(lastSnapshot);visual.update(lastSnapshot,dt);
     return lastSnapshot;
   }
   function processEvents(){
     for(const event of engine.drainEvents()){
-      if(event.type==='success'){
-        pendingFailure=false;clearGate4Lock();
+      if(event.type==='opened'){
+        visual.pulse('open');
+      }else if(event.type==='success'){
+        pendingFailure=false;clearGate4Lock();visual.pulse('success');
         windowRef?.__stance2Gate3Runtime?.clearMovementRecovery?.();
       }else if(event.type==='missed'){
-        pendingFailure=true;
+        pendingFailure=true;visual.pulse('missed');
       }else if(event.type==='failure-finished'){
         pendingFailure=false;clearGate4Lock();
       }else if(event.type==='cancelled'){
@@ -153,11 +313,22 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
     windowRef?.__stance2Gate3Runtime?.clearMovementRecovery?.();
     processEvents();
   }
+  function setWindowMultiplier(value){
+    windowMultiplier=clampMultiplier(value);
+    StoneSettings.set(CATCH_WINDOW_SETTING,windowMultiplier);
+    engine.setWindowDuration(CATCH_WINDOW_BASE*windowMultiplier);
+    controls.setValue(windowMultiplier);publish();
+    return windowMultiplier;
+  }
 
   PC.startCombatAttack=function(...args){
     const before=Number(arena.stamina.v)||0;
-    lastStamina=before;
-    const result=original.startCombatAttack.apply(this,args);
+    lastStamina=before;pendingSpendQuote=null;
+    if(arena.swing)arena.swing.overdrawAmount=0;
+    spendContext='attack';
+    let result;
+    try{result=original.startCombatAttack.apply(this,args);}
+    finally{spendContext=null;}
     observeStamina('attack-start');processEvents();publish();
     return result;
   };
@@ -179,11 +350,11 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
       engine.cancel('whiff-refund');
     }
     engine.update(dt);processEvents();maybeBeginFailure();
-    const before=publish();
+    const before=publish(dt);
     if(before.phase==='failed'){enforceFailureLock(before);applyFailureMovement(dt,before);}
     const result=original.updateCombat.apply(this,args);
     maybeBeginFailure();
-    const after=publish();
+    const after=publish(0);
     if(after.phase==='failed')enforceFailureLock(after);
     lastActorPosition=readActorPosition();
     lastStamina=Number(arena.stamina.v)||0;
@@ -192,12 +363,16 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
 
   publish();
   const api={
-    installed:true,engine,snapshot:()=>lastSnapshot,
-    reset(reason='manual'){engine.reset(reason);pendingFailure=false;clearGate4Lock();publish();},
+    installed:true,engine,snapshot:()=>lastSnapshot,setWindowMultiplier,
+    reset(reason='manual'){engine.reset(reason);pendingFailure=false;pendingSpendQuote=null;clearGate4Lock();publish();},
     destroy(){
-      engine.reset('destroy');pendingFailure=false;clearGate4Lock();
+      engine.reset('destroy');pendingFailure=false;pendingSpendQuote=null;clearGate4Lock();
       PC.updateCombat=original.updateCombat;PC.startCombatAttack=original.startCombatAttack;deck.play=original.deckPlay;
-      delete PC.combatState.stance2Gate4;renderHud(engine.snapshot());
+      if(globalThis.__STANCE_SPEND_QUOTE__===quoteStanceSpend){
+        if(typeof original.spendQuote==='function')globalThis.__STANCE_SPEND_QUOTE__=original.spendQuote;
+        else delete globalThis.__STANCE_SPEND_QUOTE__;
+      }
+      delete PC.combatState.stance2Gate4;renderHud(engine.snapshot());visual.destroy();controls.destroy();
       if(windowRef?.__stance2Gate4Runtime===api)delete windowRef.__stance2Gate4Runtime;
     },
   };
