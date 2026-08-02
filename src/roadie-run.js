@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 export const ROADIE_GAMEPAD_BUTTON = 0; // Standard Gamepad mapping: PlayStation Cross / Xbox A.
 
 const HOLD_THRESHOLD = .17;
@@ -74,7 +75,7 @@ function worldYawFromObject(object){
   return Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
 }
 
-function installRoadieRun(){
+export function installRoadieRun(){
   if(typeof window === 'undefined' || window.__roadieRun) return;
 
   const state = createRoadieState();
@@ -122,7 +123,7 @@ function installRoadieRun(){
     return;
   }
 
-  function arenaApi(){ return window.__arena || null; }
+  function arenaApi(){ return getArenaRuntime() || null; }
 
   function performDodgeTap(){
     arenaApi()?.triggerDodge?.();
@@ -305,4 +306,3 @@ function installRoadieRun(){
   requestAnimationFrame(frame);
 }
 
-if(typeof window !== 'undefined') installRoadieRun();

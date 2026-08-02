@@ -1,3 +1,5 @@
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
+
 export const MAZE_CELL_SIZE_OPTIONS = Object.freeze([
   Object.freeze({ id:'compact', label:'Compact · 12', value:12 }),
   Object.freeze({ id:'small', label:'Small · 16', value:16 }),
@@ -36,22 +38,14 @@ function optionById(options, id, fallbackId){
 }
 
 function isCombatArenaRuntime(){
-  return typeof document !== 'undefined' && /(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname || '');
+  const mode=getArenaRuntimeConfig()?.mode;
+  return mode?mode==='arena':typeof document !== 'undefined'&&/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');
 }
 
 function isEnemyLabRuntime(){
-  if(typeof document === 'undefined') return false;
-  try{
-    const params = new URLSearchParams(globalThis.location?.search || '');
-    if(String(params.get('layout') || '').trim().toLowerCase() === 'arena') return true;
-
-    const parent = globalThis.parent;
-    const isArenaFrame = parent && parent !== globalThis && globalThis.frameElement?.id === 'arenaFrame';
-    const parentPage = isArenaFrame ? parent.location.pathname.split('/').pop() : '';
-    return parentPage === 'enemy-lab.html';
-  }catch{
-    return false;
-  }
+  const config=getArenaRuntimeConfig();
+  if(config)return config.enemyLab===true;
+  try{return new URLSearchParams(globalThis.location?.search||'').get('enemyLab')==='1';}catch{return false;}
 }
 
 function requestedCellSizeId(){
@@ -189,7 +183,3 @@ export function installMazeRuntimeControls(){
   return true;
 }
 
-if(typeof document !== 'undefined'){
-  queueMicrotask(()=>installMazeRuntimeControls());
-  if(isCombatArenaRuntime()) import('./roadie-run.js').catch(error=>console.error('Roadie run failed to load', error));
-}

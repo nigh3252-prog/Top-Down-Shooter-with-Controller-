@@ -462,6 +462,5 @@ export function createArenaEnemySystem(options={}){
     factionService,originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);
-  globalThis.__enemyLabEnemySystem=api;
   return api;
 }

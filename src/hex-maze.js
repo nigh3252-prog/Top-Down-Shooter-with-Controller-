@@ -5,6 +5,7 @@ import {
   createHexMaze as createRoomFirstHexMaze,
 } from './hex-maze-base.js';
 import { configuredRoomSize } from './maze-runtime-settings.js';
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 function requestedLayout(options = {}){
   const explicit = String(options.layout ?? '').trim().toLowerCase();
@@ -13,16 +14,10 @@ function requestedLayout(options = {}){
   try{
     const ownLayout = new URLSearchParams(globalThis.location?.search || '').get('layout');
     if(ownLayout) return ownLayout.trim().toLowerCase();
-
-    const parent = globalThis.parent;
-    const isArenaFrame = parent && parent !== globalThis && globalThis.frameElement?.id === 'arenaFrame';
-    const parentPage = isArenaFrame ? parent.location.pathname.split('/').pop() : '';
-    if(parentPage === 'enemy-lab.html') return 'arena';
   }catch{
-    // Cross-origin parents cannot be inspected. Fall through to the normal maze.
+    // Malformed ambient URLs fall through to the explicit runtime config.
   }
-
-  return 'maze';
+  return getArenaRuntimeConfig()?.layout || 'maze';
 }
 
 function createOpenArenaMaze(options = {}){

@@ -25,10 +25,7 @@ export function wizardArcanaCards(catalog=[]){
 export function installEnemyLabDeckEditorRefinements(){
   if(typeof window==='undefined'||window.__enemyLabDeckEditorRefinementsInstalled)return;
   window.__enemyLabDeckEditorRefinementsInstalled=true;
-
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+  const parentWindow=window,parentDocument=document;
 
   const state={arcanaFamily:false,tweaksOpen:false,suppressCoreFamily:false};
   const styleId='enemyLabDeckEditorRefinementStyles';

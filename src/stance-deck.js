@@ -1,3 +1,4 @@
+import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.js';
 // One Step From Eden-style stance-card deck: a shuffled draw pile feeds two
 // hand slots. Ability/modifier cards preserve the active stance while their
 // dedicated events resolve.
@@ -12,14 +13,7 @@ const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
 const BING_BONG_CARD = getCard('S31-BING-BONG');
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined'||typeof document==='undefined')return false;
-  try{
-    const params=new URLSearchParams(globalThis.location?.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    const parent=globalThis.parent;
-    const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
-    return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
-  }catch{return false;}
+  return getArenaRuntimeConfig()?.enemyLab===true;
 }
 
 export function cardRestoresStamina(card){
@@ -35,7 +29,7 @@ export function restoreStaminaState(stamina,snapshot){
   if(!stamina||!snapshot)return false;
   stamina.v=snapshot.v;stamina.pending=snapshot.pending;stamina.recoverDelayT=snapshot.recoverDelayT;return true;
 }
-function currentArenaStamina(){return typeof window!=='undefined'?window.__arena?.arena?.stamina||null:null;}
+function currentArenaStamina(){return typeof window!=='undefined'?getArenaRuntime()?.arena?.stamina||null:null;}
 function queueNonStanceEffect({card,staminaSnapshot,detail={},dispatch=()=>undefined}){
   const fire=()=>{
     restoreStaminaState(currentArenaStamina(),staminaSnapshot);
