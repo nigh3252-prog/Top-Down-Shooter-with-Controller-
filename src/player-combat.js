@@ -1,4 +1,4 @@
-import { getArenaRuntime } from './arena-runtime-context.js';
+import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.js';
 // Current-main combat composition. The local core preserves the validated
 // weapon/attack implementation, the Pilebunker layer adds its approved combat
 // behavior, and this module installs the remaining dash and Arcana runtimes.
@@ -8,7 +8,7 @@ import { getArenaEnemySystem, setArenaEnemySource } from './arena-enemy-registry
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
-import { installDashJetPanel } from './dash-magic-jet-panel.js';
+import { createDashJetControlDescriptors } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
 import { createEffectDispatcher, createRuntimeHandlerTable } from './effect-registry.js';
 import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
@@ -23,12 +23,14 @@ import { installWizardFusionLeapRuntime } from './wizard-fusion-leap-runtime.js'
 import { installWizardArcaneTypesRuntime } from './wizard-arcane-types-runtime.js';
 import { installWizardAlliedArcanaRuntime } from './wizard-allied-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
-import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
 
 export function installPlayerCombat(api){
   const PC=installMainPlayerCombat(api);
-  const arenaPage=/(?:^|\/)combat-arena\.html$/i.test(location.pathname)||/HEX MAZE COMBAT/i.test(document.title);
-  if(!arenaPage)return PC;
+  const runtimeMode=getArenaRuntimeConfig()?.mode;
+  const supportedArenaRuntime=runtimeMode==='arena'||runtimeMode==='enemy-lab'
+    ||/(?:^|\/)combat-arena\.html$/i.test(location.pathname)
+    ||/HEX MAZE COMBAT/i.test(document.title);
+  if(!supportedArenaRuntime)return PC;
 
   const {THREE}=api;
   const playerWorld=new THREE.Vector3();
@@ -49,23 +51,13 @@ export function installPlayerCombat(api){
       return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
     },
   });
-  installDashJetPanel({runtime:dashMagicJet});
-  installEnemyLabArcanaControlsHotfix();
+  for(const descriptor of createDashJetControlDescriptors(dashMagicJet))api.controlRegistry?.register?.({id:'dash-jet',label:'DASH JET',source:'player-combat'},descriptor);
 
   // Arcana were authored and validated through the embedded Enemy Lab. Every
   // runtime family now initializes under that same context in the full Combat
   // Arena, then the real URL is restored immediately. This keeps one authored
   // implementation for all 46 cards without enabling Lab-only deck/editor UI.
-  function installArenaArcanaRuntime(factory){
-    const current=new URL(location.href);
-    const alreadyEnabled=current.searchParams.get('enemyLab')==='1'||current.searchParams.get('mode')==='enemy-lab';
-    if(alreadyEnabled)return factory();
-    const original=`${location.pathname}${location.search}${location.hash}`;
-    current.searchParams.set('enemyLab','1');
-    history.replaceState(history.state,'',current);
-    try{return factory();}
-    finally{history.replaceState(history.state,'',original);}
-  }
+  const installArenaArcanaRuntime=factory=>factory();
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;

@@ -2,8 +2,8 @@ export { drawMazeDebug } from './hex-maze-renderer-base.js';
 
 import { createMazeWorld as createBaseMazeWorld } from './hex-maze-renderer-base.js';
 import { configuredHexSize } from './maze-runtime-settings.js';
-import { applyAkaiMazeStyle, installAkaiInterfaceStyle } from './akai-visual-style.js';
-import { installAkaiCompactInterface } from './akai-compact-interface.js';
+import { applyAkaiMazeStyle } from './akai-visual-style.js';
+import { applyArenaThemeWorldStyle } from './arena-theme-registry.js';
 import { applyBoundaryDistrictExtensions } from './boundary-districts.js';
 import { replaceHalfInternalWallsWithGaps } from './boundary-room-topology.js';
 import { applyBoundaryRoomWallGaps } from './boundary-room-wall-gaps.js';
@@ -12,8 +12,11 @@ import { applyBoundaryRoomProps } from './boundary-room-props.js';
 
 const BOUNDARY_VISUAL_BUILD = 'boundary-districts-post-main-sync-20260720';
 
-installAkaiInterfaceStyle();
-installAkaiCompactInterface();
+const THEME_WORLD_HOOKS=Object.freeze({
+  neutral:({world})=>world,
+  original:({world})=>world,
+  akai:context=>applyAkaiMazeStyle(context),
+});
 
 export function createMazeWorld(options = {}){
   const configuredOptions = {
@@ -36,7 +39,9 @@ export function createMazeWorld(options = {}){
     return world;
   }
   applyBoundaryRoomWallGaps({ ...configuredOptions, world });
-  applyAkaiMazeStyle({ ...configuredOptions, world });
+  applyArenaThemeWorldStyle(configuredOptions.theme?.id||configuredOptions.theme||'neutral',{
+    ...configuredOptions,world,hooks:THEME_WORLD_HOOKS,
+  });
   applyBoundaryDistrictExtensions({ ...configuredOptions, world });
   applyBoundaryRoomFloor({ ...configuredOptions, world });
   return applyBoundaryRoomProps({ ...configuredOptions, world });

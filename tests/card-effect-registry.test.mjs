@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { provideArenaRuntime } from '../src/arena-runtime-context.js';
 import {
   CARD_DEFINITIONS,
   CARD_FAMILIES,
@@ -122,6 +123,7 @@ globalThis.window={
   __arena:{arena:{stamina}},
   dispatchEvent:event=>{events.push(event.type);return true;},
 };
+provideArenaRuntime({config:{mode:'arena',enemyLab:false},arena:{stamina}});
 const stance={id:'S-REGISTRY-TEST',name:'TEST STANCE',type:'stance',chain:['horizontal4','vertical8','horizontal5']};
 const blockingDispatcher=createEffectDispatcher({handlers:{bloodSlash:{canPlay:()=>false,play:()=>true}}});
 const deck=createStanceDeck({rng:()=>0,effectDispatcher:blockingDispatcher});

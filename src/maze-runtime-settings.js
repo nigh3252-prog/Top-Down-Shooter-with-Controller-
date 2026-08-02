@@ -82,6 +82,20 @@ export function getMazeRuntimeSettings(){
   };
 }
 
+export function setMazeRuntimeCellSize(id,{reload=true}={}){
+  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),defaultCellSizeId());
+  storageSet(cellSizeStorageKey(),option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
+}
+
+export function setMazeRuntimeRoomSize(id,{reload=true}={}){
+  const option=optionById(MAZE_ROOM_SIZE_OPTIONS,String(id||''),DEFAULT_ROOM_SIZE_ID);
+  storageSet(ROOM_SIZE_KEY,option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
+}
+
 export function configuredHexSize(requestedHexSize){
   const requested = Number(requestedHexSize);
   if(!Number.isFinite(requested)) return requestedHexSize;
@@ -174,12 +188,8 @@ export function installMazeRuntimeControls(){
   group.append(heading, cell.row, room.row, note);
   simBody.insertBefore(group, sliderRoot);
 
-  const reloadWith = (key, value) => {
-    storageSet(key, value);
-    globalThis.location?.reload?.();
-  };
-  cell.select.addEventListener('change', ()=>reloadWith(cellSizeStorageKey(), cell.select.value));
-  room.select.addEventListener('change', ()=>reloadWith(ROOM_SIZE_KEY, room.select.value));
+  cell.select.addEventListener('change', ()=>setMazeRuntimeCellSize(cell.select.value));
+  room.select.addEventListener('change', ()=>setMazeRuntimeRoomSize(room.select.value));
   return true;
 }
 

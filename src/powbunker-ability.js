@@ -311,6 +311,11 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
   function setSize(v){tuning.size=clamp(Number(v)||.16,.14,.40);try{localStorage.setItem(STORAGE.size,String(tuning.size));}catch(_){}return tuning.size;}
   function setArmHeight(v){tuning.armHeight=clamp(Number(v)||0,-3,3);try{localStorage.setItem(STORAGE.armHeight,String(tuning.armHeight));}catch(_){}return tuning.armHeight;}
   function setWeaponMode(v){const mode=['stance','left','right','hidden'].includes(v)?v:'stance';tuning.weaponMode=mode;try{localStorage.setItem(STORAGE.weaponMode,mode);}catch(_){}return mode;}
+  function controlDescriptors(){return Object.freeze([
+    Object.freeze({id:'pilebunker.size',kind:'range',label:'PILEBUNKER SIZE',min:.14,max:.40,step:.005,get:()=>tuning.size,set:value=>(setSize(value),true)}),
+    Object.freeze({id:'pilebunker.arm-height',kind:'range',label:'THEORETICAL ARM HEIGHT',min:-3,max:3,step:.05,get:()=>tuning.armHeight,set:value=>(setArmHeight(value),true)}),
+    Object.freeze({id:'pilebunker.weapon-mode',kind:'select',label:'WEAPON DURING PILEBUNKER',get:()=>tuning.weaponMode,options:()=>[['stance','STANCE POSITION'],['left','LEFT-SIDE CARRY'],['right','RIGHT-SIDE CARRY'],['hidden','HIDDEN']].map(([value,label])=>({value,label})),set:value=>(setWeaponMode(value),true)}),
+  ]);}
   function dispose(){
     char.parent?.remove(char);char.traverse(o=>{if(o.isMesh)o.geometry?.dispose?.();});
     for(const material of new Set([...Object.values(pb.materials),pb.glowMat]))material?.dispose?.();
@@ -318,7 +323,7 @@ export function createPowBunkerAbility({ THREE, scene } = {}) {
   }
 
   return{
-    attach,start,update,consumeEvents,impactFeedback,applyHostPose,dispose,setSize,setArmHeight,setWeaponMode,tuning,
+    attach,start,update,consumeEvents,impactFeedback,applyHostPose,dispose,setSize,setArmHeight,setWeaponMode,controlDescriptors,tuning,
     fistWorld,prevFistWorld,forwardWorld,
     get active(){return state.active;},
     get phase(){return state.phase;},

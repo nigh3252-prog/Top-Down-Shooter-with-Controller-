@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { provideArenaRuntime } from '../src/arena-runtime-context.js';
 import {
   cardRestoresStamina,
   captureStaminaState,
@@ -22,6 +23,7 @@ globalThis.window = {
   __POWBUNKER_CAN_PLAY__:() => true,
   dispatchEvent:event => events.push(event.type),
 };
+provideArenaRuntime({config:{mode:'arena',enemyLab:false},arena:{stamina}});
 
 assert.equal(cardRestoresStamina({ type:'stance' }), true);
 assert.equal(cardRestoresStamina({ type:'ability' }), false);

@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>HEX MAZE COMBAT — stone wanderer × encounter director</title>
+<script>
+(()=>{const ids=new Set(['neutral','original','akai']),aliases={base:'neutral',default:'neutral',none:'neutral','brown-green':'original','original-brown-green':'original','cyan-red':'akai','akai-cyan-red':'akai'};const valid=value=>{const id=String(value||'').trim().toLowerCase();return aliases[id]||ids.has(id)&&id||null};let saved=null;try{saved=localStorage.getItem('arena.theme')}catch{}const query=valid(new URLSearchParams(location.search).get('theme'));document.documentElement.dataset.arenaTheme=query||valid(saved)||'neutral'})();
+</script>
+<link rel="stylesheet" href="./src/arena-theme-neutral.css">
+<link rel="stylesheet" href="./src/arena-theme-original.css">
+<link rel="stylesheet" href="./src/arena-theme-akai.css">
 <link rel="stylesheet" href="./src/arena-shell.css">
 
 <script type="importmap">

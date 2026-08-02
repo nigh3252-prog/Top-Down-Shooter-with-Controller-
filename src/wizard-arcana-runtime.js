@@ -4,6 +4,7 @@ import {
   clampArcanaSize,
   readArcanaTweaks,
 } from './wizard-arcana-settings.js';
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const FIRE=0xff7438;
@@ -89,12 +90,10 @@ export function reflectVelocity2D(velocity,wallA,wallB){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
   try{
+    const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;
     const params=new URLSearchParams(location.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    const parent=window.parent;
-    return !!(parent&&parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
+    return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(location.pathname||'');
   }catch{return false;}
 }
 

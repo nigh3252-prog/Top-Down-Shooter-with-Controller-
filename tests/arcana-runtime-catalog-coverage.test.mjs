@@ -38,7 +38,7 @@ for(const family of families)for(const id of family.ids){
 }
 
 const playerCombat=await readFile(new URL('../src/player-combat.js',import.meta.url),'utf8');
-const arenaSource=await readFile(new URL('../combat-arena.html',import.meta.url),'utf8');
+const arenaSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
 for(const family of families){
   const escaped=family.installer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   assert.match(

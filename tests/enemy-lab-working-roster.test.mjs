@@ -44,6 +44,6 @@ const installerSource=fs.readFileSync(new URL('../src/install-enemy-lab-developm
 const labSource=fs.readFileSync(new URL('../enemy-lab.html',import.meta.url),'utf8');
 assert.doesNotMatch(catalogSource,/enemy-lab-working-roster\.js/,'the shared catalog should remain free of Lab installer side effects');
 assert.match(installerSource,/enemy-lab-working-roster\.js/,'the explicit Enemy Lab installer should own roster setup');
-assert.match(labSource,/installEnemyLabDevelopmentTools\(\)/,'roster tooling should remain explicitly scoped to Enemy Lab');
+assert.match(labSource,/installEnemyLabDevelopmentTools\(\{runtime\}\)/,'roster tooling should remain explicitly scoped to Enemy Lab');
 
 console.log('Enemy Lab working roster: ok');

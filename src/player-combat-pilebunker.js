@@ -5,14 +5,14 @@
 
 import { installPlayerCombat as installBasePlayerCombat } from './player-combat-core.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
-import { createPowBunkerAbility, installPowBunkerTuningPanel } from './powbunker-ability.js';
+import { createPowBunkerAbility } from './powbunker-ability.js';
 import { installArenaEnemyRegistryProbe, getArenaEnemies, getArenaEnemySystem } from './arena-enemy-registry.js';
 import { isVerticalAimGroup, selectVerticalAimTarget, correctionForSegmentY, verticalAimPhaseWeight } from './vertical-melee-aim.js';
 import { createPilebunkerCombatEffect } from './pilebunker-combat-effect.js';
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const PILEBUNKER_GAME_DEFAULTS_SCHEMA=1;
 const PILEBUNKER_GAME_DEFAULTS_STORAGE='arena.pilebunker.gameDefaultsSchema';
-const PILEBUNKER_SECTION_STORAGE='stoneWandererSettings.v1.arena.section.powbunker';
 const PILEBUNKER_EFFECT_MAX=Object.freeze({
   pullRadius:14,
   pullStrength:26,
@@ -36,17 +36,13 @@ function needsPilebunkerGameDefaults(){
 function markPilebunkerGameDefaultsApplied(){
   try{localStorage.setItem(PILEBUNKER_GAME_DEFAULTS_STORAGE,String(PILEBUNKER_GAME_DEFAULTS_SCHEMA));}catch(_){}
 }
-function closePilebunkerSectionForNextPanelInit(){
-  // The arena's accordion reads this after installPlayerCombat returns. Writing
-  // it on every page load means the Pilebunker field always starts closed, but
-  // the player can still open and use it normally during the current session.
-  try{localStorage.setItem(PILEBUNKER_SECTION_STORAGE,'true');}catch(_){}
-}
-
 export function installPlayerCombat(api){
   const PC=installBasePlayerCombat(api);
-  const arenaPage=/(?:^|\/)combat-arena\.html$/i.test(location.pathname)||/HEX MAZE COMBAT/i.test(document.title);
-  if(!arenaPage)return PC;
+  const runtimeMode=getArenaRuntimeConfig()?.mode;
+  const supportedArenaRuntime=runtimeMode==='arena'||runtimeMode==='enemy-lab'
+    ||/(?:^|\/)combat-arena\.html$/i.test(location.pathname)
+    ||/HEX MAZE COMBAT/i.test(document.title);
+  if(!supportedArenaRuntime)return PC;
 
   const {THREE}=api;
   const UP=new THREE.Vector3(0,1,0),shoulder=new THREE.Vector3(),localPoint=new THREE.Vector3(),worldTip=new THREE.Vector3(),worldBase=new THREE.Vector3();
@@ -54,10 +50,7 @@ export function installPlayerCombat(api){
   const applyGameDefaults=needsPilebunkerGameDefaults();
   const ability=createPowBunkerAbility({THREE,scene:api.scene});
   if(applyGameDefaults){ability.setSize(.300);ability.setArmHeight(3);ability.setWeaponMode('right');}
-  installPowBunkerTuningPanel(ability);
-  const tuningNote=document.querySelector('#body-powbunker > .ptitle');
-  if(tuningNote)tuningNote.textContent='SMASH 64 · SIZE 0.300 · ARM HEIGHT 3.00 · RIGHT-HAND CARRY · APPROVED LEFT-HAND PILEBUNKER VISUAL';
-  closePilebunkerSectionForNextPanelInit();
+  for(const descriptor of ability.controlDescriptors())api.controlRegistry?.register?.({id:'pilebunker',label:'PILEBUNKER',source:'player-combat'},descriptor);
   installArenaEnemyRegistryProbe();
 
   const original={attach:PC.attachCombatToActiveModel,update:PC.updateCombat,start:PC.startCombatAttack,trigger:PC.triggerCombatAttack,zones:PC.getWeaponHitZones,movePenalty:PC.combatMovePenalty};
@@ -126,7 +119,7 @@ export function installPlayerCombat(api){
 
   const combatEffect=createPilebunkerCombatEffect({THREE,scene:api.scene,getEnemies:getArenaEnemies,getPlayer:getPlayerTransform,hitEnemy:hitArenaEnemy});
   if(applyGameDefaults){for(const [key,value] of Object.entries(PILEBUNKER_EFFECT_MAX))combatEffect.setTuning(key,value);markPilebunkerGameDefaultsApplied();}
-  combatEffect.installPanel();
+  for(const descriptor of combatEffect.controlDescriptors())api.controlRegistry?.register?.({id:'pilebunker',label:'PILEBUNKER',source:'player-combat'},descriptor);
 
   /* guided Pilebunker aim: movement-stick direction, retained when centred */
   const guidedAim={active:false,yaw:0,lastRoot:new THREE.Vector3(),currentRoot:new THREE.Vector3(),keys:new Set()};

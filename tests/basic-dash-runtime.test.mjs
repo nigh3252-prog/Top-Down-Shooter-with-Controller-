@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { installBasicDashRuntime } from '../src/basic-dash.js';
+import { provideArenaRuntime } from '../src/arena-runtime-context.js';
 
 class Quaternion {
   constructor(){ this.angle=0; }
@@ -40,6 +41,7 @@ function makeScenario({ moveX=0, moveZ=0 }={}){
   const gamepad={ axes:[moveX,moveZ], buttons:Array.from({length:16},()=>({pressed:false})) };
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{getGamepads(){return[gamepad];}}});
   globalThis.window={ __arena:handle };
+  provideArenaRuntime({...handle,config:{mode:'arena',enemyLab:false}});
   const runtime=installBasicDashRuntime({
     THREE:{ Vector3, Quaternion },actorVisual,activeModel,yawQ,
     hooks:{ commitFacing(value){ facing=value; } },

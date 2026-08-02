@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions } from './arena-runtime-context.js';
 import {
   AQUA_BEAM_SPEC,
   ARCANE_INTERVENTION_SPEC,
@@ -147,11 +148,11 @@ export function normalizeWizardArcaneTypesRenderMode(value = 'style') {
   return 'style';
 }
 
-function activeRenderMode(eventTarget = globalThis.window) {
+function activeRenderMode() {
   try {
     const params = new URLSearchParams(globalThis.location?.search || '');
     if (params.get('capture') !== '1') return 'style';
-    const capture = eventTarget?.__abilityCapture?.snapshot?.() || {};
+    const capture = getArenaCaptureOptions() || {};
     return normalizeWizardArcaneTypesRenderMode(capture.stage || capture.renderMode || params.get('stage') || params.get('renderMode') || 'style');
   } catch {
     return 'style';
