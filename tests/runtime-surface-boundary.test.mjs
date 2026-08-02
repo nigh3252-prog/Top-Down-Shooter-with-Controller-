@@ -58,7 +58,7 @@ assert.match(antelope,/id:'antelope\.charge-speed'/);
 assert.match(antelope,/min:CHARGE_SPEED_MIN[\s\S]*max:CHARGE_SPEED_MAX[\s\S]*step:CHARGE_SPEED_STEP/);
 assert.doesNotMatch(antelope,/document\.|getElementById|createElement|installAntelopeTuningControl|antelopeTuningHeader/);
 assert.match(lab,/control\.kind==='range'/);
-assert.match(shellCss,/data-arena-theme="akai"[\s\S]*#akaiRoomPlaque/);
+assert.doesNotMatch(`${shell}\n${shellCss}\n${read('src/akai-visual-style.js')}`,/akaiRoomPlaque|SEALED COURTYARD/);
 assert.doesNotMatch(runtime,/buildTuningPanel\(|installDashJetPanel\(|installMazeRuntimeControls\(|\.installPanel\(\)/);
 for(const source of [playerCombat,pilebunker]){
   assert.match(source,/getArenaRuntimeConfig\(\)\?\.mode/);

@@ -72,12 +72,12 @@ assert.deepEqual(
   [
     { id: 'neutral', barrierStyle: 'classic', districtDressing: false, roomProps: false, plaque: false },
     { id: 'original', barrierStyle: 'forest', districtDressing: true, roomProps: true, plaque: false },
-    { id: 'akai', barrierStyle: 'forest', districtDressing: true, roomProps: true, plaque: true },
+    { id: 'akai', barrierStyle: 'forest', districtDressing: true, roomProps: true, plaque: false },
   ],
 );
 assert.equal(getArenaTheme('neutral').worldStyle.plaque, false);
 assert.equal(getArenaTheme('original').worldStyle.kind, 'original-brown-green');
-assert.equal(getArenaTheme('akai').worldStyle.plaque, true);
+assert.equal(getArenaTheme('akai').worldStyle.plaque, false);
 
 const storageData = new Map([[ARENA_THEME_STORAGE_KEY, 'original']]);
 const storage = {

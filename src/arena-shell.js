@@ -72,12 +72,10 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
   </div>
 </div>`;
 
-export const ARENA_THEME_SHELL_HTML = '<div id="akaiRoomPlaque" aria-hidden="true"><span class="akaiSigil">境</span><strong>BOUNDARY</strong><small>SEALED COURTYARD</small></div>';
-
 export function installArenaShell({ document = globalThis.document, mode = 'arena' } = {}) {
   if (!document?.body) throw new Error('Arena shell requires a document body.');
   if (document.getElementById('startGate')) return document.body;
   document.documentElement.dataset.arenaMode = mode;
-  document.body.insertAdjacentHTML('afterbegin', ARENA_SHELL_HTML + ARENA_THEME_SHELL_HTML);
+  document.body.insertAdjacentHTML('afterbegin', ARENA_SHELL_HTML);
   return document.body;
 }

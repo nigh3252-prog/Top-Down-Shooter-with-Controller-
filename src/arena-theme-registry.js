@@ -240,7 +240,7 @@ const THEME_DEFINITIONS = [
       barrierStyle: 'forest',
       districtDressing: true,
       roomProps: true,
-      plaque: true,
+      plaque: false,
       palette: {
         background: 0x06171d,
         fog: 0x0a2730,
