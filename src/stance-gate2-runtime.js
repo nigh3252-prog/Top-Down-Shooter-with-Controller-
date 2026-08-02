@@ -244,11 +244,19 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
   let gripBaseline=null;
   let lastSnapshot=null;
 
+  function cloneRuntimeStance(stance){
+    return{...stance,chain:[...(stance?.chain||[])]};
+  }
+
   function restoreStanceChain(stance){
     if(!stance)return;
     const baseline=BASELINE_CHAIN_BY_ID.get(stance.id);
-    if(baseline)stance.chain=[...baseline];
-    if(modifiedStance===stance)modifiedStance=null;
+    if(baseline&&!Object.isFrozen(stance))stance.chain=[...baseline];
+    if(modifiedStance===stance){
+      const canonical=STANCE_BY_ID.get(stance.id);
+      if(canonical&&canonical!==stance&&handle.arena.stance===stance)handle.arena.stance=canonical;
+      modifiedStance=null;
+    }
   }
 
   function current(){
@@ -268,12 +276,16 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
 
   function apply(){
     const resolved=current();
-    const stance=handle.arena.stance||null;
+    let stance=handle.arena.stance||null;
     const weaponId=resolved.weaponId;
     const nextContext=resolved.active?pairKey(resolved.stanceId,weaponId):null;
 
     if(modifiedStance&&modifiedStance!==stance)restoreStanceChain(modifiedStance);
     if(resolved.active&&resolved.profile?.moveKeys&&stance){
+      if(stance!==modifiedStance){
+        stance=cloneRuntimeStance(stance);
+        handle.arena.stance=stance;
+      }
       stance.chain=[...resolved.profile.moveKeys];
       modifiedStance=stance;
     }else if(stance&&modifiedStance===stance){

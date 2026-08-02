@@ -513,6 +513,7 @@ const PC = installPlayerCombat({
     }
   }
 });
+deck.setEffectDispatcher(PC.cardEffectDispatcher);
 const combatState = PC.combatState;
 combatState.hideArms = true; // procedural rig still drives the weapon; its puppet arms stay invisible
 installRedTollGreatsword({
