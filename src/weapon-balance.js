@@ -26,7 +26,17 @@ export function getWeaponStaminaMultiplier(weaponDef) {
 export function staminaCostForWeapon(baseCost, weaponDef) {
   const base = Number(baseCost);
   if (!Number.isFinite(base)) throw new Error(`[weapon-balance] Invalid base stamina cost: ${JSON.stringify(baseCost)}`);
-  return base * getWeaponStaminaMultiplier(weaponDef);
+  const actualCost=base*getWeaponStaminaMultiplier(weaponDef);
+  const quoteHook=typeof globalThis.__STANCE_SPEND_QUOTE__==='function'?globalThis.__STANCE_SPEND_QUOTE__:null;
+  if(!quoteHook)return actualCost;
+  try{
+    const quote=quoteHook({cost:actualCost,baseCost:base,weaponDef});
+    const quoted=Number(quote?.quotedCost);
+    return Number.isFinite(quoted)&&quoted>=0?quoted:actualCost;
+  }catch(error){
+    console.warn('[weapon-balance] stance spend quote failed',error);
+    return actualCost;
+  }
 }
 
 export function weaponAllowsCleave({ weaponDef, attackSlot = -1, maxCharge = false } = {}) {
