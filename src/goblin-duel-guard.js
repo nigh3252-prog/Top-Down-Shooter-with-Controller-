@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { classifyGuardAttack,computeGuardDamage,isGuardableGoblin } from './goblin-guard.js';
 import { createMetalGuardAudio } from './goblin-guard-audio.js';
 import { createGoblinGuardVisuals } from './goblin-guard-visuals.js';
@@ -25,7 +26,7 @@ export function scoreGuardCandidate(enemy,player={x:0,z:0}){
   return distanceScore+kindScore-(Number(enemy.id)||0)*.0001;
 }
 function combatSnapshot(){
-  const runtime=globalThis.__arena,combat=runtime?.combatState,attack=combat?.attack;
+  const runtime=getArenaRuntime(),combat=runtime?.combatState,attack=combat?.attack;
   return{attackKey:combat?.attackKey||'',attackGroup:combat?.attackGroup||'',attackLabel:attack?.label||'',weaponId:combat?.weapon||'',charged:!!runtime?.arena?.charge?.active,chargeTier:Number(runtime?.arena?.charge?.tier)||0};
 }
 

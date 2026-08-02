@@ -9,17 +9,8 @@ import {
   normalizeHadesDifficultyRamp,
   normalizeHadesSpawnMultiplier,
 } from './hades-encounter-tuning.js';
-import { LUGARU_DUELIST_ID } from './lugaru-duelist.js';
 
 const tunedBySpawnKind=new Map(COMBINED_ENCOUNTER_GROUPS.map(group=>[group.spawnKind,group]));
-const originalIntroductionDepth=Object.freeze({
-  grunt:1,
-  dagger:2,
-  rock:2,
-  mace:3,
-  [LUGARU_DUELIST_ID]:5,
-  captain:6,
-});
 const SYSTEM_POPULATION_CAP=Object.freeze({original:20,flare:20,hades:20});
 
 function unique(values){return [...new Set((values||[]).filter(Boolean))];}
@@ -36,7 +27,7 @@ export function createWorkingRosterGroups(rosterIds,catalog=ARENA_ENEMY_CATALOG)
       label:enemy.label,
       system:enemy.system,
       spawnKind:enemy.spawnKind,
-      introductionDepth:originalIntroductionDepth[enemy.id]??tuned?.introductionDepth??enemy.introductionDepth??1,
+      introductionDepth:tuned?.introductionDepth??enemy.introductionDepth??1,
       encounterCost:tuned?.encounterCost??enemy.encounterCost??8,
       activeWeight:tuned?.activeWeight??enemy.activeWeight??1,
       maxCount:tuned?.maxCount??enemy.maxCount??8,

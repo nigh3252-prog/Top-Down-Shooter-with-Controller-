@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { ARENA_ENEMY_CATALOG } from './arena-enemy-catalog.js';
 import { readWorkingRoster } from './enemy-lab-working-roster.js';
 import { ALL_ENEMIES_BUDGET_ID, WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
@@ -89,9 +90,11 @@ export function rosterSpawnFlowSettings(plan,systemKey,fallbackCount=1){
   const groups=Array.isArray(plan?.groups)?plan.groups:[];
   const group=groups.find(entry=>entry?.system===systemKey);
   const plannedCount=clamp(Math.round(Number(group?.count)||Number(fallbackCount)||1),1,20);
+  const activeWeightCap=Math.max(2.5,plannedCount*.65);
   return {
     plannedCount,
-    activeWeightCap:Math.max(2.5,plannedCount*.65),
+    // Keep the published cadence value stable across JS floating-point forms.
+    activeWeightCap:Number(activeWeightCap.toFixed(2)),
     simultaneousTelegraphs:Math.min(2,plannedCount),
     spawnDelay:clamp(Number(plan?.spawnDelay)||.72,.35,1.5),
   };
@@ -124,7 +127,7 @@ export function installRosterSpawnTelegraphSupport(system,{
     if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
       return{x:Number(player.x),z:Number(player.z)};
     }
-    const actor=globalThis.__arena?.actorPos;
+    const actor=getArenaRuntime()?.actorPos;
     if(Number.isFinite(Number(actor?.x))){
       const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
       if(Number.isFinite(z))return{x:Number(actor.x),z};

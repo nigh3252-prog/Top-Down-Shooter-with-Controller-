@@ -1,0 +1,54 @@
+/* Static Arena token asset. The boot coordinator selects this file before paint. */
+:root[data-arena-theme="neutral"],
+:root:not([data-arena-theme]) {
+  color-scheme: dark;
+  --arena-bg: #14191d;
+  --arena-panel: rgba(23,29,35,.94);
+  --arena-panel-2: rgba(23,29,35,.86);
+  --arena-panel-solid: #171d23;
+  --arena-line: #52606b;
+  --arena-line-soft: #3a454e;
+  --arena-line-bright: #73818c;
+  --arena-text: #eef4f6;
+  --arena-muted: #b3c0c8;
+  --arena-subtle: #82909a;
+  --arena-gold: #8fc7d2;
+  --arena-gold-strong: #6eabb8;
+  --arena-red: #db8b8b;
+  --arena-red-strong: #b76569;
+  --arena-red-soft: rgba(219,139,139,.16);
+  --arena-teal: #92cdd3;
+  --arena-teal-strong: #5fa6b2;
+  --arena-heavy: #bca9dc;
+  --arena-shadow: #0b0f12;
+  --arena-track: #2c353c;
+  --arena-control: rgba(39,48,57,.78);
+  --arena-control-active: #52606b;
+  --arena-card: rgba(29,37,44,.94);
+  --arena-card-active: #43515b;
+  --arena-joystick: rgba(190,207,216,.38);
+  --arena-error: #e4a1a1;
+  --arena-error-panel: rgba(34,18,20,.92);
+  --arena-disabled: .42;
+  --arena-font: ui-monospace,Menlo,Consolas,monospace;
+  --arena-world-bg: #0d191b;
+  --arena-world-fog: #0d191b;
+  --arena-world-floor-a: initial;
+  --arena-world-floor-b: initial;
+  --arena-world-floor-dark: initial;
+  --arena-world-ink: initial;
+  --arena-world-accent: #8fc7d2;
+
+  --arena-background: var(--arena-bg);
+  --arena-surface: var(--arena-panel);
+  --arena-surface-raised: var(--arena-panel-2);
+  --arena-border: var(--arena-line);
+  --arena-border-subtle: var(--arena-line-soft);
+  --arena-accent: var(--arena-gold);
+  --arena-accent-strong: var(--arena-gold-strong);
+  --arena-danger: var(--arena-red);
+  --arena-danger-strong: var(--arena-red-strong);
+  --arena-positive: var(--arena-teal);
+  --arena-positive-strong: var(--arena-teal-strong);
+  --arena-font-family: var(--arena-font);
+}

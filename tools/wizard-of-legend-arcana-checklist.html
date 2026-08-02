@@ -25,7 +25,7 @@
       <div class="notice"><strong>Next-twenty reference-lock:</strong> Ice Dagger through Chaotic Rift now have base-form Enemy Lab implementations. The fifteen continuous Dash Arcana reuse the approved Top Down Game dash movement while their source payloads remain independently auditable. All twenty comparison checkboxes stay open for batch review.</div>
       <div class="notice"><strong>Archetype sampler:</strong> One Agent plus nine distinct spell grammars now cover allied summons, wards, charm, projectile fusion, carried targets, returning projectiles, orbiting shields, vulnerable hold charge, stored-charge beam channeling, and delayed enemy teleportation. Aqua Beam is base-form only; all ten comparison checkboxes remain open for review.</div>
       <div class="hero-links">
-        <a href="index.html">← Game launcher</a>
+        <a href="../index.html">← Game launcher</a>
         <a href="https://youtu.be/cDyS1-SM2zc" target="_blank" rel="noreferrer">Original showcase ↗</a>
         <a href="#construction-language">Construction language</a>
       </div>
@@ -87,6 +87,9 @@
 (()=>{
   'use strict';
   const data=JSON.parse(document.getElementById('wol-data').textContent);
+  const assetPrefix='../';
+  data.video.src=assetPrefix+data.video.src;
+  data.entries.forEach(entry=>{entry.poster=assetPrefix+entry.poster;});
   const STORAGE_KEY='wol.arcanaChecklist.v1';
   const CATALOG_REVISION=4;
   const NEXT_TWENTY_IMPLEMENTED=['ice-dagger','rip-tide','aqua-arc','chaos-crusher','searing-rush','flare-rush','ignition-rush','air-burst','gust-burst','razor-burst','spike-track','toxic-trap','snare-track','thunder-line','circuit-line','shock-line','wave-front','frost-feint','frost-wing','chaotic-rift'];

@@ -277,6 +277,5 @@ export function installDashMagicJet({
       get active(){ return phase !== 'idle'; },
     },
   };
-  if(globalThis.window) globalThis.window.__dashMagicJet = runtime;
   return runtime;
 }

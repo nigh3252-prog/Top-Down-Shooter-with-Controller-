@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { axialToWorld, buildMazeEdges, hexCorners } from './hex-maze-navigation.js';
 import { createMazeForest } from './maze-forest.js';
 
@@ -245,7 +246,7 @@ export function createMazeWorld({
       mesh.position.y = mesh.userData.baseY - eased * mesh.userData.doorHeight;
       if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
     }
-    const actorPos = globalThis.__arena?.actorPos;
+    const actorPos = getArenaRuntime()?.actorPos;
     if(actorPos){
       const player = { x:actorPos.x, z:actorPos.y };
       forest.updateCutaways(dt, player);

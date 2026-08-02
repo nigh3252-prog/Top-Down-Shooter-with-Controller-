@@ -1,29 +1,19 @@
+import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.js';
 // One Step From Eden-style stance-card deck: a shuffled draw pile feeds two
 // hand slots. Ability/modifier cards preserve the active stance while their
 // dedicated events resolve.
 
-import { STANCE_CARDS } from './stance-cards.js';
-import { POW_BUNKER_CARD } from './powbunker-card.js';
-import { BLOOD_SLASH_CARD, BING_BONG_CARD } from './combat-modifier-cards.js';
-import { WIZARD_ARCANA_CATALOG, isWizardArcanaCard } from './wizard-arcana-catalog.js';
+import { getCard } from './card-registry.js';
+import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
 
-function isEnemyLabRuntime(){
-  if(typeof window==='undefined'||typeof document==='undefined')return false;
-  try{
-    const params=new URLSearchParams(globalThis.location?.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    const parent=globalThis.parent;
-    const framed=parent&&parent!==globalThis&&globalThis.frameElement?.id==='arenaFrame';
-    return !!(framed&&/(?:^|\/)enemy-lab\.html$/i.test(parent.location?.pathname||''));
-  }catch{return false;}
-}
+const POW_BUNKER_CARD = getCard('A01-PILEBUNKER');
+const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
+const BING_BONG_CARD = getCard('S31-BING-BONG');
 
-function registerEnemyLabArcanaCatalog(){
-  for(const card of WIZARD_ARCANA_CATALOG){
-    if(!STANCE_CARDS.some(existing=>existing?.id===card.id))STANCE_CARDS.push(card);
-  }
+function isEnemyLabRuntime(){
+  return getArenaRuntimeConfig()?.enemyLab===true;
 }
 
 export function cardRestoresStamina(card){
@@ -39,26 +29,48 @@ export function restoreStaminaState(stamina,snapshot){
   if(!stamina||!snapshot)return false;
   stamina.v=snapshot.v;stamina.pending=snapshot.pending;stamina.recoverDelayT=snapshot.recoverDelayT;return true;
 }
-function currentArenaStamina(){return typeof window!=='undefined'?window.__arena?.arena?.stamina||null:null;}
-function queueNonStanceEffect(eventName,card,staminaSnapshot,detail={}){
-  const fire=()=>{restoreStaminaState(currentArenaStamina(),staminaSnapshot);window.dispatchEvent(new CustomEvent(eventName,{detail:{card,...detail}}));};
+function currentArenaStamina(){return typeof window!=='undefined'?getArenaRuntime()?.arena?.stamina||null:null;}
+function queueNonStanceEffect({card,staminaSnapshot,detail={},dispatch=()=>undefined}){
+  const fire=()=>{
+    restoreStaminaState(currentArenaStamina(),staminaSnapshot);
+    return dispatch({card,...detail,staminaSnapshot});
+  };
   if(typeof queueMicrotask==='function')queueMicrotask(fire);else setTimeout(fire,0);
 }
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
+function normalizeCardDispatcher(dispatcher,canPlay=null,play=null){
+  if(dispatcher)return typeof dispatcher==='function'?{play:dispatcher}:dispatcher;
+  if(typeof canPlay==='function'||typeof play==='function')return{canPlay,play};
+  return null;
+}
 export function normalizeManualSequence(card){
   const source=card?.manualSequence;if(!source)return null;
   const presses=Math.max(2,Math.trunc(Number(source.presses)||0)),timeout=Math.max(.1,Number(source.timeout)||0);
   return Object.freeze({presses,timeout,label:String(source.label||card?.icon||'COMBO')});
 }
-function canPlayAbility(card){
-  if(typeof window==='undefined')return false;
-  if(card?.id===POW_BUNKER_CARD.id)return typeof window.__POWBUNKER_CAN_PLAY__==='function'&&window.__POWBUNKER_CAN_PLAY__();
-  if(typeof window.__ABILITY_CARD_CAN_PLAY__==='function')return window.__ABILITY_CARD_CAN_PLAY__(card)!==false;
-  return true;
+// Standalone consumers that have not injected the supported runtime dispatcher
+// can opt into the historical event/global contract explicitly. Combat Arena
+// passes compatibilityAdapter:null, so this adapter is never on its play path.
+export function createCardEffectCompatibilityAdapter({windowRef}={}){
+  const getWindow=()=>windowRef||globalThis.window;
+  return Object.freeze({
+    canPlay(card){
+      const target=getWindow();
+      if(!target)return false;
+      if(card?.id===POW_BUNKER_CARD.id)return typeof target.__POWBUNKER_CAN_PLAY__==='function'&&target.__POWBUNKER_CAN_PLAY__();
+      if(typeof target.__ABILITY_CARD_CAN_PLAY__==='function')return target.__ABILITY_CARD_CAN_PLAY__(card)!==false;
+      return true;
+    },
+    play(card,detail={}){
+      const target=getWindow();
+      if(!target?.dispatchEvent||typeof CustomEvent==='undefined'||!card?.playEvent)return undefined;
+      return target.dispatchEvent(new CustomEvent(card.playEvent,{detail:{card,...detail}}));
+    },
+  });
 }
 
-export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
-  const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null};
+export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=null,effectDispatcher=null,compatibilityAdapter=undefined,canPlay=null,play=null}={}){
+  const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
   function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];refill(0);refill(1);scheduleDecoration();}
@@ -75,6 +87,29 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
   function defaultPool(stances){
     const stanceCards=stances.some(card=>card.id===BING_BONG_CARD.id)?stances.slice():[...stances,BING_BONG_CARD];
     return[...stanceCards,POW_BUNKER_CARD,BLOOD_SLASH_CARD];
+  }
+
+  function canPlayCard(card,detail={}){
+    if(typeof s.cardDispatcher?.canPlay==='function'){
+      const result=s.cardDispatcher.canPlay(card,{...detail,deck:api});
+      if(result!==undefined)return result!==false;
+    }
+    if(card?.effectId&&typeof s.effectDispatcher?.canPlay==='function')return s.effectDispatcher.canPlay(card,{...detail,deck:api})!==false;
+    if(isNonStance(card)&&typeof s.compatibilityAdapter?.canPlay==='function')return s.compatibilityAdapter.canPlay(card,{...detail,deck:api})!==false;
+    return !isNonStance(card);
+  }
+
+  function dispatchCardPlay(card,detail={}){
+    if(typeof s.cardDispatcher?.play==='function'){
+      const result=s.cardDispatcher.play(card,{...detail,deck:api});
+      if(result!==undefined)return result;
+    }
+    if(card?.effectId&&typeof s.effectDispatcher?.play==='function'){
+      const result=s.effectDispatcher.play(card,{...detail,deck:api});
+      if(result!==undefined)return result;
+    }
+    if(typeof s.compatibilityAdapter?.play==='function')return s.compatibilityAdapter.play(card,{...detail,deck:api});
+    return undefined;
   }
 
   function decorateCards(){
@@ -123,24 +158,33 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
     rebuild(cards){applyPool(s.runLocked?s.pool:defaultPool(cards));},
     beginRun(cards,{openingStanceId='S24'}={}){s.runLocked=true;applyPool(cards);const opening=s.stancePool.find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;},
     unlockRun(){s.runLocked=false;},
+    setCardDispatcher(dispatcher){s.cardDispatcher=normalizeCardDispatcher(dispatcher);return api;},
+    setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
+    setCompatibilityAdapter(adapter){s.compatibilityAdapter=adapter||null;return api;},
     addCard(card){if(!card)return false;s.pool.push(card);if(!isNonStance(card))s.stancePool.push(card);s.discard.push(card);return true;},
     play(slot){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){
-        if(!canPlayAbility(card))return null;
+        if(!canPlayCard(card,{slot}))return null;
         const proxy=proxyActiveStance(card,'__abilityProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina()),spec=normalizeManualSequence(card);
         if(spec){
           const active=s.manualSequence&&s.manualSequence.cardId===card.id?s.manualSequence:{slot,cardId:card.id,press:0,total:spec.presses,remaining:spec.timeout,timeout:spec.timeout,label:spec.label};
           active.press++;active.remaining=active.timeout;s.manualSequence=active;
           const sequence={press:active.press,total:active.total,timeout:active.timeout,complete:active.press>=active.total};
-          queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,{sequence,slot});
+          queueNonStanceEffect({card,staminaSnapshot:stamina,detail:{sequence,slot},dispatch:detail=>dispatchCardPlay(card,detail)});
           if(sequence.complete){s.manualSequence=null;consumeSlot(slot,card);}
           scheduleDecoration();return{...proxy,__manualSequence:sequence};
         }
-        consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'powbunker:play',card,stamina,{slot});scheduleDecoration();return proxy;
+        consumeSlot(slot,card);queueNonStanceEffect({card,staminaSnapshot:stamina,detail:{slot},dispatch:detail=>dispatchCardPlay(card,detail)});scheduleDecoration();return proxy;
       }
       if(card.type==='modifier'){
-        const proxy=proxyActiveStance(card,'__modifierProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect(card.playEvent||'bloodslash:play',card,stamina);scheduleDecoration();return proxy;
+        if(!canPlayCard(card,{slot}))return null;
+        const proxy=proxyActiveStance(card,'__modifierProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina());consumeSlot(slot,card);queueNonStanceEffect({card,staminaSnapshot:stamina,detail:{slot},dispatch:detail=>dispatchCardPlay(card,detail)});scheduleDecoration();return proxy;
+      }
+      if(card.effectId){
+        if(!canPlayCard(card,{slot}))return null;
+        const result=dispatchCardPlay(card,{slot});
+        if(result===false)return null;
       }
       s.lastStance=card;consumeSlot(slot,card);scheduleDecoration();return card;
     },
@@ -154,7 +198,6 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2}={}){
   };
 
   if(isEnemyLabRuntime()){
-    registerEnemyLabArcanaCatalog();
     installEnemyLabDeckEditor(api);
     installEnemyLabDeckEditorRefinements();
   }

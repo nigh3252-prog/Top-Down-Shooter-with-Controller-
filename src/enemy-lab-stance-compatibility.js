@@ -1,4 +1,4 @@
-import { STANCE_CARDS } from './stance-cards.js';
+import { listCards } from './card-registry.js';
 import { STONE_WEAPONS } from './weapons.js';
 import {
   STANCE_CLASSES,
@@ -11,6 +11,8 @@ import {
   GATE2_WEAPON_IDS,
   resolveGate2PilotProfile,
 } from './stance-gate2-runtime.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
 
 const cleanName=value=>String(value||'').replace(/^S\d+\s*/,'').trim();
 
@@ -35,13 +37,7 @@ function makeStatus(document,title,body,tone=''){
   return card;
 }
 
-function activeRuntime(document){
-  const frame=document.getElementById('arenaFrame');
-  try{return frame?.contentWindow?.__arena||null;}catch{return null;}
-}
-
-function currentSnapshot(document){
-  const runtime=activeRuntime(document);
+function currentSnapshot(runtime){
   const stance=runtime?.arena?.stance||null;
   const weaponId=String(runtime?.combatState?.weapon||'');
   const weapon=STONE_WEAPONS[weaponId]||null;
@@ -53,7 +49,7 @@ function currentSnapshot(document){
   return{runtime,stance,weaponId,weapon,compatibility,gate2,liveGate2,effectiveChain,attackLabels};
 }
 
-export function installEnemyLabStanceCompatibility({document=globalThis.document}={}){
+export function installEnemyLabStanceCompatibility({document=globalThis.document,runtime=null}={}){
   if(!document)return{installed:false,reason:'missing-document'};
   const page=new URL(document.location?.href||globalThis.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
@@ -86,7 +82,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   const categoryButton=()=>categories.querySelector('[data-stance-compatibility-category="1"]');
   function syncCategoryLabel(){
     const button=categoryButton();if(!button)return;
-    const snapshot=currentSnapshot(document);
+    const snapshot=currentSnapshot(runtime);
     const title=button.querySelector('b');
     if(!title)return;
     if(snapshot.compatibility.tier==='unknown')title.textContent='STANCE 2.0';
@@ -109,7 +105,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   }
   function render(force=false){
     if(!open)return;
-    const snapshot=currentSnapshot(document);
+    const snapshot=currentSnapshot(runtime);
     const stanceId=String(snapshot.stance?.id||'');
     const liveId=String(snapshot.liveGate2?.profileId||'');
     const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,liveId].join('|');
@@ -190,7 +186,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   ensureCategory();
   refreshTimer=globalThis.setInterval?.(()=>{syncCategoryLabel();render(false);},250)||0;
 
-  const api={installed:true,open:activate,snapshot:()=>currentSnapshot(document),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
+  const api={installed:true,open:activate,snapshot:()=>currentSnapshot(runtime),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
   globalThis.__enemyLabStanceCompatibility=api;
   return api;
 }
