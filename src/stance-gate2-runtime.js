@@ -1,6 +1,8 @@
-import { STANCE_CARDS } from './stance-cards.js';
+import { listCards } from './card-registry.js';
 import { guardPoseFor } from './guard-poses.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
 
 export const GATE2_STANCE_IDS=Object.freeze(['S24','S26','S01']);
 export const GATE2_WEAPON_IDS=Object.freeze(['dagger','longsword','greatsword']);

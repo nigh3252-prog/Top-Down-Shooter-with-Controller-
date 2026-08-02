@@ -122,18 +122,3 @@ export const ARENA_ENEMY_OPTIONS = Object.freeze([
   option(HADES_TARTARUS_POOL_ID, 'HADES · Tartarus Mix'),
   ...listArenaEnemies({ family: 'HADES' }).map(enemy => option(enemy.id, `HADES · ${enemy.label}`)),
 ]);
-
-// Development tools remain scoped to the Enemy Lab page (enemy-lab.html).
-if (typeof window !== 'undefined' && /(?:^|\/)enemy-lab\.html$/.test(window.location?.pathname || '') && new URLSearchParams(window.location.search).get('capture') !== '1') {
-  Promise.all([
-    import('./enemy-lab-working-roster.js'),
-    import('./enemy-lab-working-ability-pool.js'),
-    import('./enemy-lab-combat-profiles.js'),
-    import('./enemy-lab-stance-compatibility.js'),
-  ]).then(([rosterModule, abilityModule, profileModule, stanceModule]) => {
-    rosterModule.installEnemyLabWorkingRoster({ catalog: ARENA_ENEMY_CATALOG, families: ARENA_ENEMY_FAMILIES });
-    abilityModule.installEnemyLabWorkingAbilityPool();
-    profileModule.installEnemyLabCombatProfiles();
-    stanceModule.installEnemyLabStanceCompatibility();
-  }).catch(error => console.warn('[enemy-lab-development-tools] could not install', error));
-}

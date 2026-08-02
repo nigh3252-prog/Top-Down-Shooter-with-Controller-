@@ -1,12 +1,15 @@
 import { ATTACK_DEFINITIONS } from './attacks.js';
-import { EXTRA_STANCE_CARDS, NON_STANCE_CARDS } from './ability-cards.js';
+import { listCards } from './card-registry.js';
 import { applyActiveCombatProfileToArena } from './combat-profile.js';
 import { guardPoseFor } from './guard-poses.js';
 import { createRewardTotemGate } from './reward-totem-gate.js';
-import { STANCE_CARDS } from './stance-cards.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
 import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
+const EXTRA_STANCE_CARDS = listCards({family:'special-stance'});
+const NON_STANCE_CARDS = listCards({family:'non-stance'});
 
 export const STARTER_STANCE_IDS = Object.freeze(['S24','S09']);
 export const ALL_STANCE_CARDS = Object.freeze([...STANCE_CARDS,...EXTRA_STANCE_CARDS]);

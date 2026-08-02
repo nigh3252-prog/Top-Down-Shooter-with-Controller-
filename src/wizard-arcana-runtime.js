@@ -1,4 +1,4 @@
-import { isWizardArcanaCard } from './wizard-arcana-cards.js';
+import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import {
   ARCANA_TWEAKS_EVENT,
   clampArcanaSize,
