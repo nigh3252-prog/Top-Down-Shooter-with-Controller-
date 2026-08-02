@@ -45,6 +45,9 @@ const worldStyle = ({
   fogNear = 34,
   fogFar = 78,
   materialPolicy = 'theme',
+  barrierStyle = 'forest',
+  districtDressing = true,
+  roomProps = true,
   plaque = false,
 }) => deepFreeze({
   hook,
@@ -52,6 +55,9 @@ const worldStyle = ({
   fogNear,
   fogFar,
   materialPolicy,
+  barrierStyle,
+  districtDressing,
+  roomProps,
   plaque,
   palette,
 });
@@ -105,6 +111,9 @@ const THEME_DEFINITIONS = [
       hook: 'neutral',
       kind: 'base',
       materialPolicy: 'base',
+      barrierStyle: 'classic',
+      districtDressing: false,
+      roomProps: false,
       plaque: false,
       palette: {
         background: 0x0d191b,
@@ -161,6 +170,9 @@ const THEME_DEFINITIONS = [
       hook: 'original',
       kind: 'original-brown-green',
       materialPolicy: 'original',
+      barrierStyle: 'forest',
+      districtDressing: true,
+      roomProps: true,
       plaque: false,
       palette: {
         background: 0x0d191b,
@@ -225,6 +237,9 @@ const THEME_DEFINITIONS = [
       fogNear: 30,
       fogFar: 88,
       materialPolicy: 'akai',
+      barrierStyle: 'forest',
+      districtDressing: true,
+      roomProps: true,
       plaque: true,
       palette: {
         background: 0x06171d,
@@ -310,6 +325,69 @@ function storageValue(storage) {
   } catch {
     return null;
   }
+}
+
+function writeStorageValue(storage, value) {
+  try {
+    if (typeof storage?.setItem === 'function') {
+      storage.setItem(ARENA_THEME_STORAGE_KEY, value);
+      return;
+    }
+    if (typeof storage?.set === 'function') {
+      storage.set(ARENA_THEME_STORAGE_KEY, value);
+      return;
+    }
+    if (storage && typeof storage === 'object') storage[ARENA_THEME_STORAGE_KEY] = value;
+  } catch {
+    // Storage can be unavailable or read-only in privacy-restricted contexts.
+  }
+}
+
+function readLocation() {
+  try { return globalThis.location || null; }
+  catch { return null; }
+}
+
+function locationUrl(location) {
+  const href = location?.href == null ? '' : String(location.href);
+  const hasHref = href.length > 0;
+  const pathname = location?.pathname == null ? '' : String(location.pathname);
+  const search = location?.search == null ? '' : String(location.search);
+  const hash = location?.hash == null ? '' : String(location.hash);
+  const source = hasHref ? href : `${pathname}${search}${hash}`;
+  if (!source) throw new TypeError('[arena-theme-registry] A location href is required to select an Arena theme.');
+
+  let url;
+  try {
+    url = new URL(source, location?.origin || 'http://arena.local');
+  } catch {
+    throw new TypeError(`[arena-theme-registry] Invalid location URL: ${source}`);
+  }
+  return { hasHref, pathname, url };
+}
+
+/**
+ * Persist a canonical theme selection and reload the current surface with the
+ * same URL plus the canonical theme query parameter. The storage and
+ * location dependencies are injectable for boot code and deterministic tests.
+ */
+export function selectArenaTheme(id, options = {}) {
+  const theme = requireArenaTheme(id);
+  const context = options || {};
+  const storage = context.storage === undefined ? readLocalStorage() : context.storage;
+  const location = context.location === undefined ? readLocation() : context.location;
+  if (typeof location?.replace !== 'function') {
+    throw new TypeError('[arena-theme-registry] A location.replace function is required to select an Arena theme.');
+  }
+
+  const current = locationUrl(location);
+  current.url.searchParams.set(ARENA_THEME_QUERY_PARAM, theme.id);
+  const target = current.hasHref
+    ? current.url.href
+    : `${current.pathname}${current.url.search}${current.url.hash}`;
+  writeStorageValue(storage, theme.id);
+  location.replace(target);
+  return theme;
 }
 
 function optionsFor(input) {
@@ -412,6 +490,7 @@ export const ARENA_THEME_REGISTRY_API = Object.freeze({
   get: getArenaTheme,
   require: requireArenaTheme,
   list: listArenaThemes,
+  select: selectArenaTheme,
   resolve: resolveArenaTheme,
   resolveSelection: resolveArenaThemeSelection,
   cssHref: getArenaThemeCssHref,

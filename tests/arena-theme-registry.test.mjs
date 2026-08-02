@@ -19,6 +19,7 @@ import {
   resolveArenaTheme,
   resolveArenaThemeId,
   resolveArenaThemeSelection,
+  selectArenaTheme,
 } from '../src/arena-theme-registry.js';
 
 assert.equal(ARENA_THEME_QUERY_PARAM, 'theme');
@@ -28,6 +29,7 @@ assert.equal(DEFAULT_ARENA_THEME_ID, 'neutral');
 assert.deepEqual(ARENA_THEME_IDS, ['neutral', 'original', 'akai']);
 assert.equal(ARENA_THEME_REGISTRY_API.resolve, resolveArenaTheme);
 assert.equal(ARENA_THEME_REGISTRY_API.applyWorldStyle, applyArenaThemeWorldStyle);
+assert.equal(ARENA_THEME_REGISTRY_API.select, selectArenaTheme);
 assert.ok(Object.isFrozen(ARENA_THEME_REGISTRY));
 
 const expectedTokenKeys = [
@@ -59,6 +61,20 @@ for (const theme of ARENA_THEME_REGISTRY) {
 }
 
 assert.equal(getArenaTheme('neutral').worldStyle.materialPolicy, 'base');
+assert.deepEqual(
+  ARENA_THEME_REGISTRY.map(theme => ({
+    id: theme.id,
+    barrierStyle: theme.worldStyle.barrierStyle,
+    districtDressing: theme.worldStyle.districtDressing,
+    roomProps: theme.worldStyle.roomProps,
+    plaque: theme.worldStyle.plaque,
+  })),
+  [
+    { id: 'neutral', barrierStyle: 'classic', districtDressing: false, roomProps: false, plaque: false },
+    { id: 'original', barrierStyle: 'forest', districtDressing: true, roomProps: true, plaque: false },
+    { id: 'akai', barrierStyle: 'forest', districtDressing: true, roomProps: true, plaque: true },
+  ],
+);
 assert.equal(getArenaTheme('neutral').worldStyle.plaque, false);
 assert.equal(getArenaTheme('original').worldStyle.kind, 'original-brown-green');
 assert.equal(getArenaTheme('akai').worldStyle.plaque, true);
@@ -79,6 +95,30 @@ assert.equal(resolveArenaTheme({ search: new URLSearchParams('theme=cyan-red') }
 assert.equal(resolveArenaThemeSelection({ search: '?theme=akai', storage }).source, 'query');
 assert.equal(resolveArenaThemeSelection({ search: '?theme=invalid', storage }).source, 'storage');
 assert.equal(resolveArenaThemeSelection({ search: '', storage: { getItem: () => null } }).source, 'default');
+
+const selectionStorageWrites = [];
+const selectionLocation = {
+  href: 'https://arena.test/combat-arena.html?seed=phase-2&theme=original&capture=1#hud',
+  replace(target) { selectionLocation.replaced = target; },
+};
+const selectionStorage = {
+  setItem(key, value) { selectionStorageWrites.push([key, value]); },
+};
+const selectedTheme = selectArenaTheme('DEFAULT', {
+  storage: selectionStorage,
+  location: selectionLocation,
+});
+assert.equal(selectedTheme.id, 'neutral');
+assert.deepEqual(selectionStorageWrites, [[ARENA_THEME_STORAGE_KEY, 'neutral']]);
+assert.equal(
+  selectionLocation.replaced,
+  'https://arena.test/combat-arena.html?seed=phase-2&theme=neutral&capture=1#hud',
+);
+assert.throws(() => selectArenaTheme('missing', {
+  storage: selectionStorage,
+  location: selectionLocation,
+}), /Unknown Arena theme/);
+assert.equal(selectionStorageWrites.length, 1);
 
 assert.equal(normalizeArenaThemeId('default'), 'neutral');
 assert.equal(normalizeArenaThemeId('original-brown-green'), 'original');
