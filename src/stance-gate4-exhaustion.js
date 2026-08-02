@@ -80,13 +80,20 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
     }).filter(Number.isFinite);
     return costs.length?Math.min(...costs):BASE_STAMINA_COSTS.stab*multiplier;
   }
+  function collapseUnusableRemainder(current){
+    const minimum=minimumUsableAttackCost();
+    if(current>=minimum-engine.config.epsilon)return current;
+    const stranded=Math.max(0,current);
+    arena.stamina.v=0;
+    if(stranded>0&&arena.swing&&Number.isFinite(Number(arena.swing.staminaSpent))){
+      arena.swing.staminaSpent+=stranded;
+    }
+    return 0;
+  }
   function observeStamina(source='attack'){
     let current=Number(arena.stamina.v)||0;
     const spent=current<lastStamina-engine.config.epsilon;
-    if(spent&&current>engine.config.epsilon){
-      const minimum=minimumUsableAttackCost();
-      if(current<minimum-engine.config.epsilon){arena.stamina.v=0;current=0;}
-    }
+    if(spent&&current>engine.config.epsilon)current=collapseUnusableRemainder(current);
     const event=engine.trigger({before:lastStamina,after:current,source,...currentIdentity()});
     lastStamina=current;
     return event;
