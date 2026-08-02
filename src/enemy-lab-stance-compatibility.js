@@ -1,4 +1,4 @@
-import { STANCE_CARDS } from './stance-cards.js';
+import { listCards } from './card-registry.js';
 import { STONE_WEAPONS } from './weapons.js';
 import {
   STANCE_CLASSES,
@@ -11,6 +11,8 @@ import {
   GATE2_WEAPON_IDS,
   resolveGate2PilotProfile,
 } from './stance-gate2-runtime.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
 
 const cleanName=value=>String(value||'').replace(/^S\d+\s*/,'').trim();
 

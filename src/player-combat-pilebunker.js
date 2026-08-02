@@ -187,7 +187,6 @@ export function installPlayerCombat(api){
   }
 
   function canPlay(){return!!api.activeModel&&!ability.active&&!PC.combatState.attack;}
-  window.__POWBUNKER_CAN_PLAY__=canPlay;window.__POWBUNKER=ability;window.__PILEBUNKER_EFFECT__=combatEffect;
   function ensureAttached(){const parent=api.actorVisual;if(parent)ability.attach(parent);}
   PC.attachCombatToActiveModel=function(){const out=original.attach();ensureAttached();return out;};
   PC.startCombatAttack=function(...args){if(ability.active)return false;return original.start(...args);};
@@ -223,7 +222,6 @@ export function installPlayerCombat(api){
     if(started){combatEffect.start();if(combatEffect.aimMode==='guided')beginGuidedAim();PC.combatState.attack=abilityBlocker;PC.combatState.attackKey='powBunker';PC.combatState.attackGroup='ability';PC.combatState.t=0;PC.combatState.fired=true;PC.combatState.hitIds=new Set();window.dispatchEvent(new CustomEvent('powbunker:started'));}
     return started;
   }
-  window.addEventListener('powbunker:play',playFromCard);
 
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     const state=PC.combatState,wasAbilityActive=ability.active,layer=PC.combatLayer;
@@ -249,5 +247,7 @@ export function installPlayerCombat(api){
 
   Object.defineProperty(PC,'powBunkerAbility',{value:ability,enumerable:true});
   Object.defineProperty(PC,'pilebunkerCombatEffect',{value:combatEffect,enumerable:true});
+  Object.defineProperty(PC,'canPlayPilebunker',{value:canPlay,enumerable:true});
+  Object.defineProperty(PC,'playPilebunker',{value:playFromCard,enumerable:true});
   return PC;
 }
