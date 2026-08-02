@@ -25,6 +25,7 @@ import { captureCardById, captureTargetPlacements, createAbilityCaptureControlle
 import { getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
 import { installRoadieRun } from './roadie-run.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
+import { installStanceGate3Runtime } from './stance-gate3-payoffs.js';
 import { resolveArenaTheme } from './arena-theme-registry.js';
 import * as arenaThemeRegistry from './arena-theme-registry.js';
 
@@ -1490,6 +1491,7 @@ function teleportArcanaPlayer(desired={}){
   return validation;
 }
 let running=false,destroyed=false,frameRequest=0,lastStateEmit=0;
+let stanceGate2Runtime=null,stanceGate3Runtime=null;
 function emitRuntimeState(now=performance.now()){
   if(now-lastStateEmit<200)return;
   lastStateEmit=now;
@@ -1793,7 +1795,17 @@ function startRuntime(){
   running=true;clock.getDelta();frameRequest=requestAnimationFrame(frame);emitRuntime({type:'lifecycle',running:true});return true;
 }
 function stopRuntime(){if(!running)return false;running=false;if(frameRequest)cancelAnimationFrame(frameRequest);frameRequest=0;emitRuntime({type:'lifecycle',running:false});return true;}
-function destroyRuntime(){if(destroyed)return false;stopRuntime();destroyed=true;renderer.dispose?.();clearArenaRuntime(runtimeHandle);emitRuntime({type:'lifecycle',destroyed:true});return true;}
+function destroyRuntime(){
+  if(destroyed)return false;
+  stopRuntime();
+  destroyed=true;
+  stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
+  stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
+  renderer.dispose?.();
+  clearArenaRuntime(runtimeHandle);
+  emitRuntime({type:'lifecycle',destroyed:true});
+  return true;
+}
 
 let captureController=null;
 const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0});
@@ -1812,7 +1824,10 @@ const runtimeHandle={
 };
 provideArenaRuntime(runtimeHandle);
 registerRuntimeControls();
-installStanceGate2Runtime({arenaHandle:runtimeHandle,windowRef:window});
+if(!ABILITY_CAPTURE_MODE){
+  stanceGate2Runtime=installStanceGate2Runtime({arenaHandle:runtimeHandle});
+  stanceGate3Runtime=installStanceGate3Runtime({arenaHandle:runtimeHandle,gate2Runtime:stanceGate2Runtime});
+}
 if(!runtimeConfig.enemyLab)installRoadieRun();
 
 /* ---------- boot ---------- */
