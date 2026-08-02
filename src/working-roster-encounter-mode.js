@@ -318,15 +318,27 @@ export function installWorkingRosterEncounterMode(source,{
   const spawnDescriptor=Object.getOwnPropertyDescriptor(source,'spawnKind');
   const baseSpawnKind=()=>spawnDescriptor?.get?.call(source)??ALL_ENEMIES_BUDGET_ID;
   let workingRosterMode=false;
+  let fallbackWarning='';
   const rosterIds=()=>readWorkingRoster(storage,catalog);
   const setRosterMode=value=>{
     workingRosterMode=!!value;
+    if(workingRosterMode)fallbackWarning='';
     source.originalSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.flareSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.hadesSystem?.setTelegraphedSpawns?.(true);
     setHadesRosterModeActive(workingRosterMode);
     if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
     return workingRosterMode;
+  };
+
+  const fallbackEmptyRoster=()=>{
+    const ids=rosterIds();
+    if(workingRosterMode&&!ids.length){
+      setRosterMode(false);
+      baseSetSpawnKind(ALL_ENEMIES_BUDGET_ID);
+      fallbackWarning='Working roster was cleared; falling back to All · Budgeted Encounter.';
+    }
+    return ids;
   };
 
   setCombinedEncounterPlanResolver(({depth=1,random=Math.random}={})=>{
@@ -340,24 +352,28 @@ export function installWorkingRosterEncounterMode(source,{
     if(kind===WORKING_ROSTER_HADES_ID){
       const active=rosterIds().length>0;
       setRosterMode(active);
+      if(!active)fallbackWarning='Working roster is empty; falling back to All · Budgeted Encounter.';
       return baseSetSpawnKind(ALL_ENEMIES_BUDGET_ID);
     }
     setRosterMode(false);
+    fallbackWarning='';
     return baseSetSpawnKind(kind);
   };
   Object.defineProperty(source,'spawnKind',{
     configurable:true,
     enumerable:true,
-    get:()=>workingRosterMode?WORKING_ROSTER_HADES_ID:baseSpawnKind(),
+    get:()=>fallbackEmptyRoster().length&&workingRosterMode?WORKING_ROSTER_HADES_ID:baseSpawnKind(),
   });
   source.getWorkingRosterEncounterStatus=()=>({
-    active:workingRosterMode,
-    ids:rosterIds(),
+    active:workingRosterMode&&fallbackEmptyRoster().length>0,
+    ids:fallbackEmptyRoster(),
     fallbackMode:ALL_ENEMIES_BUDGET_ID,
+    warning:fallbackWarning,
     spawnTelegraphs:true,
     reinforcementFlow:true,
     previewBeforeModel:true,
   });
+  source.syncWorkingRosterEncounterMode=()=>source.getWorkingRosterEncounterStatus();
   source.__workingRosterEncounterMode=true;
   if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
   return source;

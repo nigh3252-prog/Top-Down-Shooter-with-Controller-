@@ -54,14 +54,15 @@ function currentSnapshot(runtime){
   return{runtime,stance,weaponId,weapon,compatibility,gate2,gate3,movement,liveGate2,liveGate3,effectiveChain,attackLabels};
 }
 
-export function installEnemyLabStanceCompatibility({document=globalThis.document,runtime=null}={}){
+export function installEnemyLabStanceCompatibility({document=globalThis.document,runtime=null,sectionRegistry=null}={}){
   if(!document)return{installed:false,reason:'missing-document'};
   const page=new URL(document.location?.href||globalThis.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
-  const categories=document.getElementById('labCategories');
-  const values=document.getElementById('labValues');
-  const hint=document.getElementById('categoryHint');
-  if(!categories||!values)return{installed:false,reason:'missing-controls'};
+  const useRegistry=!!sectionRegistry;
+  const categories=useRegistry?null:document.getElementById('labCategories');
+  const values=useRegistry?null:document.getElementById('labValues');
+  const hint=useRegistry?null:document.getElementById('categoryHint');
+  if(!useRegistry&&(!categories||!values))return{installed:false,reason:'missing-controls'};
   if(document.documentElement.dataset.enemyLabStanceCompatibility==='1')return globalThis.__enemyLabStanceCompatibility||{installed:true};
   document.documentElement.dataset.enemyLabStanceCompatibility='1';
 
@@ -88,6 +89,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
 
   const categoryButton=()=>categories.querySelector('[data-stance-compatibility-category="1"]');
   function syncCategoryLabel(){
+    if(useRegistry)return;
     const button=categoryButton();if(!button)return;
     const snapshot=currentSnapshot(runtime);
     const title=button.querySelector('b');
@@ -107,11 +109,12 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   }
   function activate(){
     open=true;
+    if(useRegistry){sectionRegistry.select('diagnostics');sectionRegistry.invalidate('diagnostics');return;}
     for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.stanceCompatibilityCategory==='1');
     render(true);
   }
   function render(force=false){
-    if(!open)return;
+    if(!open&&!useRegistry)return null;
     const snapshot=currentSnapshot(runtime);
     const stanceId=String(snapshot.stance?.id||'');
     const live2=String(snapshot.liveGate2?.profileId||'');
@@ -127,7 +130,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       :snapshot.gate2.active
         ?'Gate 2 expression and its stance/weapon movement profile are live. Adapted and unusable pairs do not receive the matched-class Gate 3 payoff.'
         :'This pairing remains a Gate 1 diagnostic outside the current pilot.';
-    const oldTop=values.scrollTop;
+    const oldTop=values?.scrollTop||0;
     const root=document.createElement('div');
     root.className='valueList';
     root.dataset.stanceCompatibilityRoot='1';
@@ -212,18 +215,23 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       group.append(title,detail);root.appendChild(group);
     }
 
+    if(useRegistry)return root;
     values.replaceChildren(root);
     requestAnimationFrame(()=>{values.scrollTop=oldTop;});
   }
 
-  categories.addEventListener('click',event=>{
-    const button=event.target.closest?.('.choice');
-    if(!button||button.dataset.stanceCompatibilityCategory==='1')return;
-    open=false;
-  },true);
-  new MutationObserver(()=>ensureCategory()).observe(categories,{childList:true});
-  ensureCategory();
-  refreshTimer=globalThis.setInterval?.(()=>{syncCategoryLabel();render(false);},250)||0;
+  if(useRegistry){
+    open=true;
+    sectionRegistry.registerView({id:'stance-compatibility',sectionId:'diagnostics',label:'STANCE DIAGNOSTICS',description:'Inspect Gate 2 and Gate 3 stance/weapon compatibility.',order:20,render:()=>render(false)});
+  }else{
+    categories.addEventListener('click',event=>{
+      const button=event.target.closest?.('.choice');
+      if(!button||button.dataset.stanceCompatibilityCategory==='1')return;
+      open=false;
+    },true);
+    ensureCategory();
+  }
+  refreshTimer=globalThis.setInterval?.(()=>{if(useRegistry)sectionRegistry.invalidate('diagnostics');else{syncCategoryLabel();render(false);}},250)||0;
 
   const api={installed:true,open:activate,snapshot:()=>currentSnapshot(runtime),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
   globalThis.__enemyLabStanceCompatibility=api;

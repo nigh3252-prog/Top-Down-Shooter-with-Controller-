@@ -42,6 +42,7 @@ button:active{transform:translateY(1px);background:#264542}
 #labCategories .choice.captureCategory{border-color:#d67742;color:#ffc58e;background:rgba(119,52,24,.26)}
 #labCategories .choice.captureCategory.on{border-color:#ffd3a8;color:#fff2df;background:rgba(182,77,31,.42);box-shadow:inset 0 0 0 1px rgba(255,206,155,.24)}
 #labValues{padding:8px;min-width:0;min-height:0}
+.labSectionContent{display:flex;flex-direction:column;gap:9px;min-width:0}.labSectionPanel{display:flex;flex-direction:column;gap:7px;min-width:0;padding:9px;border:1px solid rgba(49,80,77,.72);border-radius:9px;background:rgba(9,28,29,.48)}.labSectionPanelHead{display:flex;flex-direction:column;gap:3px}.labSectionPanelHead b{color:var(--teal);font-size:10px;letter-spacing:.12em}.labSectionPanelHead span{color:var(--muted);font-size:8px;line-height:1.4}.labProfileBar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border:1px dashed rgba(123,202,189,.65);border-radius:8px;background:rgba(22,61,61,.2)}.labProfileBar b{color:var(--teal);font-size:9px;letter-spacing:.1em}.labProfileBar span{color:var(--muted);font-size:8px}.encounterModePanel{display:flex;flex-direction:column;gap:6px}.deckEditorWorkspace{display:flex;flex-direction:column;gap:7px;min-width:0;min-height:0}.deckEditorTabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}.deckEditorRoot{min-height:420px}
 .valueList{display:flex;gap:7px}
 .choice{flex:0 0 auto;min-width:0;padding:10px;text-align:left;display:flex;flex-direction:column;gap:4px}
 .choice b{font-size:10.5px;line-height:1.2}.choice span{font-size:8px;line-height:1.35;color:var(--muted)}.choice em{font-style:normal;font-size:7.5px;color:#aa7860;margin-top:auto}
@@ -61,9 +62,9 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
 #result{position:fixed;left:50%;top:20%;z-index:84;transform:translate(-50%,-12px);opacity:0;pointer-events:none;transition:.18s;padding:12px 15px;border:1px solid #8a5630;border-radius:9px;background:rgba(8,20,22,.94);text-align:center;box-shadow:0 8px 35px #0008}
 #result.on{opacity:1;transform:translate(-50%,0)}#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
 @media (orientation:landscape){
-  #labDock{top:0;right:0;bottom:0;width:min(48vw,560px);border-radius:14px 0 0 14px;border-right:0;grid-template-columns:minmax(230px,1fr) 30px 92px;grid-template-rows:auto 1fr auto;transform:translateX(calc(100% + 24px));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock{top:0;right:0;bottom:0;width:min(64vw,720px);border-radius:14px 0 0 14px;border-right:0;grid-template-columns:minmax(0,1fr) 24px minmax(108px,132px);grid-template-rows:auto 1fr auto;transform:translateX(calc(100% + 24px));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
   #labDock.on{transform:translateX(0)}#dockHead{grid-column:1/4;grid-row:1}#labValues{grid-column:1;grid-row:2;overflow-y:auto;touch-action:pan-y}#valueScrollGutter{grid-column:2;grid-row:2;border-left:1px solid rgba(49,80,77,.55);border-right:1px solid rgba(49,80,77,.55)}#valueScrollGutter::before{left:50%;bottom:10px;transform:translateX(-50%) rotate(-90deg);transform-origin:center}#valueScrollThumb{left:9px;right:9px;top:0;min-height:38px}#labCategories{grid-column:3;grid-row:2;flex-direction:column;overflow-y:auto;touch-action:pan-y}#message{grid-column:1/4;grid-row:3}
-  .valueList{flex-direction:column}.choice{width:100%;min-height:66px}.controlCard,.sliderCard,.statusCard,.sectionCard{width:100%}#labCategories .choice{width:100%;min-height:44px;padding:7px}
+  .valueList{flex-direction:column}.choice{width:100%;min-height:54px}.controlCard,.sliderCard,.statusCard,.sectionCard{width:100%}#labCategories .choice{width:100%;min-height:54px;padding:7px}.labSectionPanel{padding:8px}.labSectionPanel .choice{min-height:48px}
 }
 @media (orientation:portrait){
   #labDock{left:0;right:0;bottom:0;height:min(56dvh,560px);border-radius:16px 16px 0 0;grid-template-columns:1fr;grid-template-rows:auto 1fr 28px 58px auto;transform:translateY(105%);padding-bottom:env(safe-area-inset-bottom)}
@@ -95,25 +96,35 @@ import { ABILITY_CAPTURE_CARD_SUMMARIES, ABILITY_CAPTURE_CHECKPOINTS, normalizeC
 import { installArenaShell } from './src/arena-shell.js';
 import { runtimeConfigFromLocation } from './src/arena-runtime-config.js';
 import { createArenaRuntime } from './src/arena-runtime.js';
+import { createEnemyLabSectionRegistry } from './src/enemy-lab-section-registry.js';
+import { installEnemyLabSectionUI } from './src/enemy-lab-section-ui.js';
 
 const pageParams=new URLSearchParams(location.search),capturePage=pageParams.get('capture')==='1',cleanCapture=capturePage&&pageParams.get('clean')==='1';
 const runtimeConfig=runtimeConfigFromLocation(location,{mode:'enemy-lab',layout:'arena',seed:pageParams.get('seed')||'enemy-lab-001'});
 installArenaShell({mode:runtimeConfig.mode});
-const runtime=createArenaRuntime({config:runtimeConfig});
+const sectionRegistry=createEnemyLabSectionRegistry();
+const runtime=createArenaRuntime({config:runtimeConfig,sectionRegistry});
 const $=id=>document.getElementById(id);
 const dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories');
 const scrollGutter=$('valueScrollGutter'),scrollThumb=$('valueScrollThumb');
 const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
-if(!capturePage)installEnemyLabDevelopmentTools({runtime});
+if(!capturePage)installEnemyLabDevelopmentTools({runtime,sectionRegistry});
 document.body.classList.toggle('cleanCapture',cleanCapture);
 const storeKey='enemyLab.settings.v3';
 const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||localStorage.getItem('enemyLab.settings.v2')||localStorage.getItem('enemyLab.settings.v1')||'{}')}catch{return{}}})();
 const catalog=gameContent.enemies.list();
 const familyOrder=[...new Set(catalog.map(enemy=>enemy.family))];
-const fixedCategories=[['test','TEST','Start, clear, or repeat the configured test.','testCategory'],['capture','ARCANA CAPTURE','Directly cast Wizard Arcana in a deterministic fixed-step chamber.','captureCategory'],['type','TYPE','Choose the enemy family.',''],['enemy','ENEMY','Choose the exact focal enemy.',''],['spawn','SPAWN','Configure solo, pack, or paired-wave spawning.',''],['room','ROOM','Configure the test chamber.','']];
-const legacyCategoryMap={player:'controls:panel-loadout',combat:'controls:panel-combatTiming',director:'controls:panel-director',tuning:'controls:panel-sim',feel:'controls:panel-keyframe'};
-const restoredCategory=legacyCategoryMap[saved.category]||saved.category||'test';
-let state={category:capturePage?'capture':(restoredCategory==='capture'?'test':restoredCategory),family:familyOrder.includes(saved.family)?saved.family:'GOBLINS',enemyId:catalog.some(enemy=>enemy.id===saved.enemyId)?saved.enemyId:'grunt',mode:['solo','pack','wave'].includes(saved.mode)?saved.mode:'solo',packCount:Number(saved.packCount)||3,threat:['low','standard','high'].includes(saved.threat)?saved.threat:'standard',partnerId:saved.partnerId||''};
+const legacyCategoryMap={
+  test:'encounter',type:'enemies',enemy:'enemies',spawn:'encounter',room:'encounter',tools:'encounter',capture:'capture',
+  player:'loadout',combat:'combat',director:'combat',tuning:'combat',feel:'diagnostics',
+  'controls:panel-loadout':'loadout','controls:panel-combatTiming':'combat','controls:panel-director':'combat','controls:panel-sim':'combat','controls:panel-keyframe':'diagnostics',
+  'controls:visuals':'visuals','controls:loadout':'loadout','controls:combat':'combat','controls:director':'combat','controls:simulation':'combat','controls:feel':'diagnostics','controls:hitfeel':'diagnostics','controls:actions':'encounter','controls:maze':'encounter',
+  roster:'enemies','ability-pool':'profiles','profiles':'profiles','stance-2.0':'diagnostics','browse-cards':'loadout','current-deck':'loadout','arcana-tweaks':'visuals',
+};
+const fixedCategories=[];
+const restoredCategory=legacyCategoryMap[saved.category]||saved.category||'encounter';
+const safeCategory=sectionRegistry.sectionIds.includes(restoredCategory)?restoredCategory:'encounter';
+let state={category:capturePage?'capture':(safeCategory==='capture'?'encounter':safeCategory),family:familyOrder.includes(saved.family)?saved.family:'GOBLINS',enemyId:catalog.some(enemy=>enemy.id===saved.enemyId)?saved.enemyId:'grunt',mode:['solo','pack','wave'].includes(saved.mode)?saved.mode:'solo',packCount:Number(saved.packCount)||3,threat:['low','standard','high'].includes(saved.threat)?saved.threat:'standard',partnerId:saved.partnerId||'',encounterMode:['lab-direct','all-enemies-budget','working-roster-hades','flare-level-1','hades-tartarus'].includes(saved.encounterMode)?saved.encounterMode:'lab-direct'};
 const initialCaptureStage=String(pageParams.get('stage')||'motion').toLowerCase();
 const captureState={arcanaId:normalizeCaptureArcanaId(pageParams.get('arcana')||'DRAGON-ARC'),aim:normalizeCaptureAim(pageParams.get('aim')||'right').id,dummy:normalizeCaptureDummy(pageParams.get('layout')||'none').layout,rngSeed:pageParams.get('rngSeed')||4401,stage:initialCaptureStage,effects:pageParams.has('effects')?!['0','false','off'].includes(String(pageParams.get('effects')).toLowerCase()):!['motion','contract'].includes(initialCaptureStage),renderMode:pageParams.get('renderMode')||(['motion','contract'].includes(initialCaptureStage)?'proxy':'style')};
 let dockOpen=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0,controlsRefreshQueued=false;
@@ -131,9 +142,7 @@ const captureFacade=window.__abilityCapture={
   checkpoint:seconds=>captureBridge()?.checkpoint?.(seconds)??{ok:false,error:'Arcana Capture is still loading.'},
   catalog:ABILITY_CAPTURE_CARD_SUMMARIES,checkpoints:ABILITY_CAPTURE_CHECKPOINTS,
 };
-function tagCaptureCategory(){for(const button of categoriesEl.querySelectorAll('.choice'))if(button.textContent.trim()==='ARCANA CAPTURE'){button.dataset.testid='arcana-capture-category';button.dataset.arcanaCaptureCategory='1';}}
-new MutationObserver(tagCaptureCategory).observe(categoriesEl,{childList:true,subtree:true});
-categoriesEl.addEventListener('click',event=>{
+ categoriesEl.addEventListener('click',event=>{
   const button=event.target.closest?.('.choice');if(!button)return;
   const label=button.querySelector('b')?.textContent?.trim()||button.textContent.trim(),openingCapture=label==='ARCANA CAPTURE';
   if(openingCapture&&!capturePage){
@@ -205,6 +214,17 @@ runtime.subscribe(event=>{if(event.type==='menu'&&event.open!==dockOpen)setDockO
 function ensureArenaStarted(){runtime.setStarted(true);}function buildPlan(){const focal=currentEnemy();if(state.mode==='solo')return {label:`${focal.label} Solo`,groups:[{spawnKind:focal.id,count:1}]};if(state.mode==='pack')return {label:`${focal.label} Pack ×${state.packCount}`,groups:[{spawnKind:focal.id,count:state.packCount}]};const {focalCount,partnerCount,partner}=countsForWave();if(!partner)return null;return {label:`${focal.label} + ${partner.label}`,groups:[{spawnKind:focal.id,count:focalCount},{spawnKind:partner.id,count:partnerCount}]};}function showResult(title,detail){result.querySelector('b').textContent=title;result.querySelector('span').textContent=detail;result.classList.add('on');clearTimeout(resultTimer);resultTimer=setTimeout(()=>result.classList.remove('on'),2600);}function startTest(plan=buildPlan()){setMessage('');if(!plan){setMessage('No compatible partner is available for this wave.');return;}ensureArenaStarted();setDockOpen(false);const response=runtime.startLabScenario(-777,plan);if(!response?.ok){setMessage(response?.error||'Enemy Lab could not spawn this composition.');setDockOpen(true);return;}lastPlan=JSON.parse(JSON.stringify(plan));running=true;sawEnemy=false;testStart=performance.now();startHp=runtime.getSnapshot().playerHp;testBadge.innerHTML=`<strong>${plan.label.toUpperCase()}</strong> · spawning`;save();}function clearTest(){runtime.clearRoomRuntime();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
 function updateTestProgress(data=runtime.getSnapshot()){if(!running)return;const alive=data.aliveCount||0,pending=(data.queuedSpawnCount||0)+(data.telegraphCount||0);if(alive>0||pending>0)sawEnemy=true;const elapsed=(performance.now()-testStart)/1000;testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;if(sawEnemy&&alive===0&&pending===0){running=false;const damage=Math.max(0,Math.round(startHp-data.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;}else if(data.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}}function prepareRuntime(){const panel=$('panel'),menuButton=$('menuBtn');if(menuButton)menuButton.style.display='none';if(panel){panel.classList.add('hidden');panel.style.display='none';}runtime.setStarted(true);if(capturePage){captureFacade.reset(capturePayload());updateCaptureBadge();if(state.category==='capture')renderValues({preserveScroll:true});}else{runtime.clearRoomRuntime();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';}}
 runtime.subscribe(event=>{if(event.type==='state')updateTestProgress(event.snapshot);});prepareRuntime();$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));ensurePartner();renderAll();
+const directStartTest=startTest;
+startTest=(plan=buildPlan())=>{
+  if(state.encounterMode==='lab-direct')return directStartTest(plan);
+  setMessage('');ensureArenaStarted();setDockOpen(false);
+  const response=runtime.startPlannedLabEncounter?.(state.encounterMode);
+  if(!response?.ok){setMessage(response?.warning||response?.reason||'The planned encounter could not start.');setDockOpen(true);return;}
+  lastPlan=JSON.parse(JSON.stringify(response.plan));running=true;sawEnemy=false;testStart=performance.now();startHp=runtime.getSnapshot().playerHp;
+  testBadge.innerHTML=`<strong>${response.plan.label||state.encounterMode}</strong> · spawning`;save();
+};
+const sectionUI=installEnemyLabSectionUI({document,runtime,sectionRegistry,state,catalog,familyOrder,categoriesEl,values,categoryHint,choice,list,status,save,renderCapture,renderSpawn,renderRoom,renderType,renderEnemy,renderControlGroup,startTest:()=>startTest(),clearTest,setMessage});
+if(sectionUI){renderCategories=sectionUI.renderCategories;renderValues=sectionUI.renderValues;renderAll=sectionUI.renderAll;sectionUI.renderAll();}
 </script>
 </body>
 </html>

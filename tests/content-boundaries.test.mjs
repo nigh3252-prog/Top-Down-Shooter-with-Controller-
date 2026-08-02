@@ -34,6 +34,6 @@ assert.match(stanceDeck, /createCardEffectCompatibilityAdapter/, 'legacy standal
 assert.match(arenaRuntime, /compatibilityAdapter:\s*null/, 'Combat Arena disables the standalone compatibility adapter');
 
 assert.doesNotMatch(enemyCatalog, /import\(['"]\.\/enemy-lab-/, 'the enemy catalog has no Lab installer side effects');
-assert.match(lab, /installEnemyLabDevelopmentTools\(\{runtime\}\)/, 'Enemy Lab installs its tools explicitly against the same-document runtime');
+assert.match(lab, /installEnemyLabDevelopmentTools\(\{runtime,sectionRegistry\}\)/, 'Enemy Lab installs its tools explicitly against the same-document runtime and section registry');
 
 console.log('content import and runtime boundaries: ok');

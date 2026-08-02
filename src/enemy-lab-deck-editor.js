@@ -113,6 +113,9 @@ export function installEnemyLabDeckEditor(deck){
   let initialized=false;
   let rendering=false;
   let pendingBaseRestore=false;
+  let sectionRegistry=null;
+  let mountedValues=null;
+  let mountedCategories=null;
   const baseScrollPositions=new Map();
   const editorScrollPositions=new Map();
   const expandedByContext=new Map();
@@ -161,7 +164,7 @@ export function installEnemyLabDeckEditor(deck){
     return`base:${(active?.textContent||'TEST').trim()}`;
   }
   function editorContextKey(view=activeView,currentFamily=family){return view==='browse'?`browse:${currentFamily}`:'deck';}
-  function editorRoot(values){return values.querySelector('.deckEditorRoot');}
+  function editorRoot(values){return values?.querySelector?.('.deckEditorRoot')||null;}
   function saveBaseScroll(values,categories){
     baseScrollPositions.set(currentBaseKey(categories),{top:values.scrollTop,left:values.scrollLeft});
   }
@@ -174,6 +177,7 @@ export function installEnemyLabDeckEditor(deck){
     }));
   }
   function saveEditorScroll(values,key=editorContextKey()){
+    if(!values)return;
     const root=editorRoot(values);
     if(!root)return;
     const cards=root.querySelector('.deckEditorCardsPane');
@@ -193,6 +197,10 @@ export function installEnemyLabDeckEditor(deck){
   function saveActiveScroll(values,categories){
     if(activeView)saveEditorScroll(values);
     else saveBaseScroll(values,categories);
+  }
+  function requestEditorRender(){
+    if(sectionRegistry){sectionRegistry.invalidate('loadout');return;}
+    if(mountedValues&&mountedCategories)renderEditor(mountedValues,mountedCategories);
   }
 
   function installStyles(){
@@ -331,7 +339,7 @@ export function installEnemyLabDeckEditor(deck){
         saveEditorScroll(values);
         selectedIds.push(card.id);
         applySelected();
-        renderEditor(values,categories);
+        requestEditorRender();
       });
       add.disabled=inDeck;
       tile.append(info,add,details);
@@ -344,7 +352,7 @@ export function installEnemyLabDeckEditor(deck){
         selectedIds=selectedIds.filter(id=>id!==card.id);
         if(expandedByContext.get(editorContextKey())===card.id)expandedByContext.set(editorContextKey(),null);
         applySelected();
-        renderEditor(values,categories);
+        requestEditorRender();
       });
       remove.disabled=lastStance;
       tile.append(info,remove,details);
@@ -378,7 +386,7 @@ export function installEnemyLabDeckEditor(deck){
         const previousKey=editorContextKey();
         saveEditorScroll(values,previousKey);
         family=item;persistUi();
-        renderEditor(values,categories);
+        requestEditorRender();
       });
       familyBar.appendChild(button);
     }
@@ -389,7 +397,7 @@ export function installEnemyLabDeckEditor(deck){
       saveEditorScroll(values);
       selectedIds=uniqueCards([...selectedCards(),...missing]).map(card=>card.id);
       applySelected();
-      renderEditor(values,categories);
+      requestEditorRender();
     });
     addShown.disabled=!missing.length;
     const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent='This control column and the card list scroll independently.';
@@ -466,13 +474,31 @@ export function installEnemyLabDeckEditor(deck){
     restoreEditorScroll(values);
   }
 
+  function renderRegistryEditor(){
+    if(!initialized)return null;
+    activeView=activeView==='deck'?'deck':'browse';
+    const workspace=parentDocument.createElement('div');workspace.className='deckEditorWorkspace';
+    const tabs=parentDocument.createElement('div');tabs.className='deckEditorTabs';
+    for(const [view,label] of [['browse','BROWSE CARDS'],['deck','CURRENT DECK']]){
+      const button=parentDocument.createElement('button');button.type='button';button.className=`miniBtn${activeView===view?' on':''}`;button.textContent=label;
+      button.addEventListener('click',()=>{activeView=view;requestEditorRender();});tabs.appendChild(button);
+    }
+    const root=parentDocument.createElement('div');root.className='deckEditorRoot';root.dataset.view=activeView;
+    if(activeView==='browse')renderBrowse(root,null,null);else renderCurrentDeck(root,null,null);
+    workspace.append(tabs,root);
+    return workspace;
+  }
+
   function finishInstall(){
     const dock=parentDocument.getElementById('labDock');
-    const values=parentDocument.getElementById('labValues');
-    const categories=parentDocument.getElementById('labCategories');
-    if(!dock||!values||!categories||!deck.pool.length){setTimeout(finishInstall,50);return;}
+    const menu=getArenaRuntime()?.sectionRegistry||null;
+    const values=menu?null:parentDocument.getElementById('labValues');
+    const categories=menu?null:parentDocument.getElementById('labCategories');
+    if(!dock||(!menu&&(!values||!categories))||!deck.pool.length){setTimeout(finishInstall,50);return;}
     if(dock.dataset.deckEditorInstalled==='1')return;
     dock.dataset.deckEditorInstalled='1';
+    sectionRegistry=menu;
+    mountedValues=values;mountedCategories=categories;
     installStyles();
     nativeDefaultIds=deck.pool.map(card=>card.id).filter(id=>byId.has(id));
     const stored=normalizeStoredDeck(readJson(ENEMY_LAB_DECK_KEY,{}));
@@ -480,6 +506,21 @@ export function installEnemyLabDeckEditor(deck){
     if(!sameIds(selectedIds,deck.pool.map(card=>card.id))){applySelected({announce:false,shuffle:true});}
     else persistDeck();
     initialized=true;
+
+    if(menu){
+      activeView='browse';
+      menu.registerView({id:'deck-editor',sectionId:'loadout',label:'COMBAT DECK',description:'Browse cards and edit the current live deck.',order:20,render:renderRegistryEditor});
+      window.__enemyLabDeckEditor={
+        get catalog(){return catalog.slice();},
+        get cardIds(){return selectedIds.slice();},
+        get activeView(){return activeView;},
+        get family(){return family;},
+        add(id){if(!byId.has(id)||selectedIds.includes(id))return false;selectedIds.push(id);applySelected();requestEditorRender();return true;},
+        remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();requestEditorRender();return true;},
+        show(view='browse'){activeView=view==='deck'?'deck':'browse';menu.select('loadout');requestEditorRender();},
+      };
+      return;
+    }
 
     syncCategoryButtons(categories);
     values.addEventListener('scroll',()=>{
@@ -492,7 +533,7 @@ export function installEnemyLabDeckEditor(deck){
       if(editorButton){
         event.preventDefault();event.stopPropagation();
         activeView=editorButton.dataset.deckEditorCategory;
-        renderEditor(values,categories);
+      requestEditorRender();
         return;
       }
       if(activeView){
@@ -502,27 +543,14 @@ export function installEnemyLabDeckEditor(deck){
       pendingBaseRestore=true;
     },true);
 
-    new MutationObserver(()=>{
-      syncCategoryButtons(categories);
-      if(activeView&&!values.querySelector(`.deckEditorRoot[data-view="${activeView}"]`))renderEditor(values,categories);
-    }).observe(categories,{childList:true,subtree:true});
-    new MutationObserver(()=>{
-      if(activeView){
-        if(!values.querySelector(`.deckEditorRoot[data-view="${activeView}"]`))renderEditor(values,categories);
-      }else if(pendingBaseRestore){
-        pendingBaseRestore=false;
-        restoreBaseScroll(values,currentBaseKey(categories));
-      }
-    }).observe(values,{childList:true});
-
     window.__enemyLabDeckEditor={
       get catalog(){return catalog.slice();},
       get cardIds(){return selectedIds.slice();},
       get activeView(){return activeView;},
       get family(){return family;},
-      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;if(activeView)saveEditorScroll(values);selectedIds.push(id);applySelected();if(activeView)renderEditor(values,categories);return true;},
-      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;if(activeView)saveEditorScroll(values);selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)renderEditor(values,categories);return true;},
-      show(view='browse'){if(activeView)saveEditorScroll(values);activeView=view==='deck'?'deck':'browse';renderEditor(values,categories);},
+      add(id){if(!byId.has(id)||selectedIds.includes(id))return false;if(activeView)saveEditorScroll(values);selectedIds.push(id);applySelected();if(activeView)requestEditorRender();return true;},
+      remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;if(activeView)saveEditorScroll(values);selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();if(activeView)requestEditorRender();return true;},
+      show(view='browse'){if(activeView)saveEditorScroll(values);activeView=view==='deck'?'deck':'browse';requestEditorRender();},
     };
   }
   finishInstall();

@@ -51,6 +51,7 @@ function rangeField(document,draft,key,label,{min,max,step,suffix=''}){
 export function installEnemyLabCombatProfiles({
   storage=globalThis.localStorage,
   hostWindow=globalThis,
+  sectionRegistry=null,
 }={}){
   const targetWindow=hostWindow||globalThis;
   let document;
@@ -58,10 +59,11 @@ export function installEnemyLabCombatProfiles({
   if(!document)return{installed:false,reason:'missing-document'};
   const page=new URL(document.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
-  const categories=document.getElementById('labCategories');
-  const values=document.getElementById('labValues');
-  const hint=document.getElementById('categoryHint');
-  if(!categories||!values)return{installed:false,reason:'missing-controls'};
+  const useRegistry=!!sectionRegistry;
+  const categories=useRegistry?null:document.getElementById('labCategories');
+  const values=useRegistry?null:document.getElementById('labValues');
+  const hint=useRegistry?null:document.getElementById('categoryHint');
+  if(!useRegistry&&(!categories||!values))return{installed:false,reason:'missing-controls'};
   if(document.documentElement.dataset.enemyLabCombatProfiles==='1')return targetWindow.__enemyLabCombatProfiles||{installed:true};
   document.documentElement.dataset.enemyLabCombatProfiles='1';
 
@@ -96,12 +98,15 @@ export function installEnemyLabCombatProfiles({
 
   function categoryButton(){return categories.querySelector('[data-combat-profiles-category="1"]');}
   function syncCategoryLabel(){
+    if(useRegistry)return;
     const button=categoryButton();if(!button)return;
     const title=button.querySelector('b');if(title)title.textContent=profiles.length?`PROFILES · ${profiles.length}`:'PROFILES';
   }
-  function queueRender(){if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;if(profileOpen)renderProfiles();});}
+  function refreshProfiles(){if(useRegistry){sectionRegistry.invalidate('profiles');return;}renderProfiles();}
+  function queueRender(){if(useRegistry)return;if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;if(profileOpen)renderProfiles();});}
   function activateProfiles(){
     profileOpen=true;
+    if(useRegistry){sectionRegistry.select('profiles');sectionRegistry.invalidate('profiles');return;}
     for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.combatProfilesCategory==='1');
     renderProfiles();
   }
@@ -150,12 +155,12 @@ export function installEnemyLabCombatProfiles({
     profiles=readCombatProfiles(storage);syncCategoryLabel();return active;
   }
   function newDraft(){editingId=null;name='';draft=readCombatProfileDraft(storage);}
-  function openRosterEditor(){profileOpen=false;targetWindow.__enemyLabWorkingRoster?.open?.();}
-  function openAbilityEditor(){profileOpen=false;targetWindow.__enemyLabWorkingAbilityPool?.open?.();}
+  function openRosterEditor(){profileOpen=false;if(useRegistry){sectionRegistry.select('enemies');return;}targetWindow.__enemyLabWorkingRoster?.open?.();}
+  function openAbilityEditor(){profileOpen=false;if(useRegistry){sectionRegistry.select('profiles');sectionRegistry.invalidate('profiles');return;}targetWindow.__enemyLabWorkingAbilityPool?.open?.();}
 
   function renderProfiles(){
-    if(!profileOpen)return;
-    const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
+    if(!profileOpen&&!useRegistry)return null;
+    const oldTop=values?.scrollTop||0,oldLeft=values?.scrollLeft||0;
     profiles=readCombatProfiles(storage);
     const active=readActiveCombatProfile(storage);
     const current=readCombatProfileDraft(storage);
@@ -213,8 +218,8 @@ export function installEnemyLabCombatProfiles({
 
     const actions=document.createElement('div');actions.className='profileActions';
     const saveButton=document.createElement('button');saveButton.className='miniBtn';saveButton.textContent=editingId?'UPDATE & ACTIVATE':'SAVE & ACTIVATE';
-    saveButton.addEventListener('click',()=>{if(!name.trim()){nameInput.focus();return;}saveCurrent();renderProfiles();});
-    const newButton=document.createElement('button');newButton.className='miniBtn';newButton.textContent='NEW PROFILE';newButton.addEventListener('click',()=>{newDraft();renderProfiles();});
+    saveButton.addEventListener('click',()=>{if(!name.trim()){nameInput.focus();return;}saveCurrent();refreshProfiles();});
+    const newButton=document.createElement('button');newButton.className='miniBtn';newButton.textContent='NEW PROFILE';newButton.addEventListener('click',()=>{newDraft();refreshProfiles();});
     actions.append(saveButton,newButton);editor.appendChild(actions);root.appendChild(editor);
 
     if(!profiles.length)root.appendChild(makeStatus(document,'NO SAVED PROFILES','Choose a roster and Ability Pool, enter a name, then save and activate the current environment.'));
@@ -224,29 +229,33 @@ export function installEnemyLabCombatProfiles({
       const summary=document.createElement('p');
       summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · Arcana ${profile.arcanaSize}× · ${profile.spawnMultiplier}× enemies · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
       const row=document.createElement('div');row.className='row';
-      const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD & ACTIVATE';load.addEventListener('click',()=>{applyToLab(profile);renderProfiles();});
+      const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD & ACTIVATE';load.addEventListener('click',()=>{applyToLab(profile);refreshProfiles();});
       const open=document.createElement('button');open.className='miniBtn';open.textContent='OPEN ARENA';open.addEventListener('click',()=>openArena(profile));
-      const remove=document.createElement('button');remove.className='miniBtn';remove.textContent='DELETE';remove.addEventListener('click',()=>{profiles=deleteCombatProfile(storage,profile.id);if(editingId===profile.id)newDraft();syncCategoryLabel();renderProfiles();});
+      const remove=document.createElement('button');remove.className='miniBtn';remove.textContent='DELETE';remove.addEventListener('click',()=>{profiles=deleteCombatProfile(storage,profile.id);if(editingId===profile.id)newDraft();syncCategoryLabel();refreshProfiles();});
       row.append(load,open,remove);card.append(title,summary,row);root.appendChild(card);
     }
+    if(useRegistry)return root;
     values.replaceChildren(root);
     requestAnimationFrame(()=>{values.scrollTop=oldTop;values.scrollLeft=oldLeft;});
   }
 
-  categories.addEventListener('click',event=>{
-    const button=event.target.closest?.('.choice');if(!button||button.dataset.combatProfilesCategory==='1')return;profileOpen=false;
-  },true);
-  new MutationObserver(()=>{ensureCategory();if(profileOpen)queueRender();}).observe(categories,{childList:true});
-  new MutationObserver(()=>{if(profileOpen&&!values.querySelector('[data-combat-profiles-root="1"]'))queueRender();}).observe(values,{childList:true});
-  ensureCategory();
+  if(useRegistry){
+    profileOpen=true;
+    sectionRegistry.registerView({id:'combat-profiles',sectionId:'profiles',label:'SAVED PROFILES',description:'Save, activate, and open repeatable Lab environments.',order:10,render:()=>renderProfiles({mount:false})});
+  }else{
+    categories.addEventListener('click',event=>{
+      const button=event.target.closest?.('.choice');if(!button||button.dataset.combatProfilesCategory==='1')return;profileOpen=false;
+    },true);
+    ensureCategory();
+  }
 
   const api={
     installed:true,
     getProfiles:()=>readCombatProfiles(storage),
-    save:profile=>{const saved=activateSavedProfile(saveCombatProfile(storage,profile));profiles=readCombatProfiles(storage);syncCategoryLabel();if(profileOpen)renderProfiles();return saved;},
+    save:profile=>{const saved=activateSavedProfile(saveCombatProfile(storage,profile));profiles=readCombatProfiles(storage);syncCategoryLabel();if(profileOpen)refreshProfiles();return saved;},
     load:profile=>applyToLab(profile),
     openProfile:profile=>openArena(profile),
-    remove:id=>{profiles=deleteCombatProfile(storage,id);syncCategoryLabel();if(profileOpen)renderProfiles();return profiles;},
+    remove:id=>{profiles=deleteCombatProfile(storage,id);syncCategoryLabel();if(profileOpen)refreshProfiles();return profiles;},
     open:activateProfiles,
   };
   targetWindow.__enemyLabCombatProfiles=api;globalThis.__enemyLabCombatProfiles=api;return api;

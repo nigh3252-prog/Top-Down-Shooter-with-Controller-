@@ -12,6 +12,7 @@ import { staminaCostForWeapon, weaponAllowsCleave } from './weapon-balance.js';
 import { createArenaEnemySystem } from './arena-enemies.js';
 import { DIRECTOR_MODES } from './combat-director.js';
 import { ARENA_ENEMY_OPTIONS } from './arena-enemy-catalog.js';
+import { ALL_ENEMIES_BUDGET_ID, WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
 import { installCombatAudioDirector } from './combat-audio.js';
 import { installHitFeel } from './hit-feel.js';
 import { StoneSettings } from './settings.js';
@@ -32,7 +33,7 @@ import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
 
-export function createArenaRuntime({ config = {}, controlRegistry = createArenaControlRegistry() } = {}) {
+export function createArenaRuntime({ config = {}, controlRegistry = createArenaControlRegistry(), sectionRegistry = null } = {}) {
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   const ARENA_VISUAL_STYLE_OPTIONS=Object.freeze([
@@ -1198,6 +1199,58 @@ const DIR_SLIDERS = [
   { label:'IDLE RANGE',      min:1,  max:6,   step:.25, get:()=>enemySystem.idleRangeScale, set:v=>enemySystem.setIdleRangeScale(v) },
 ];
 let selKey='HAYMAKER';
+let selectedEncounterMode='lab-direct';
+let encounterModeWarning='';
+
+const LAB_DIRECT_ENCOUNTER_MODE='lab-direct';
+const PLANNED_ENCOUNTER_MODE_IDS=new Set(ARENA_ENEMY_OPTIONS.map(option=>option.id));
+const encounterModeLabel=id=>id===LAB_DIRECT_ENCOUNTER_MODE
+  ?'Direct Lab Composition'
+  :(ARENA_ENEMY_OPTIONS.find(option=>option.id===id)?.label||id);
+
+function selectEncounterMode(id){
+  const requested=String(id||'').trim();
+  if(requested===LAB_DIRECT_ENCOUNTER_MODE){
+    selectedEncounterMode=requested;
+    encounterModeWarning='';
+    return{ok:true,mode:selectedEncounterMode,label:encounterModeLabel(selectedEncounterMode)};
+  }
+  if(!PLANNED_ENCOUNTER_MODE_IDS.has(requested))return{ok:false,mode:selectedEncounterMode,reason:`Unknown encounter mode: ${requested||'(empty)'}`};
+  if(requested===WORKING_ROSTER_HADES_ID){
+    const rosterStatus=enemySystem.getWorkingRosterEncounterStatus?.();
+    if(!rosterStatus?.ids?.length){
+      enemySystem.setSpawnKind?.(ALL_ENEMIES_BUDGET_ID);
+      selectedEncounterMode=ALL_ENEMIES_BUDGET_ID;
+      encounterModeWarning='Working roster is empty; using All · Budgeted Encounter. Configure the roster to enable roster planning.';
+      return{ok:false,mode:selectedEncounterMode,reason:'roster-empty',warning:encounterModeWarning,label:encounterModeLabel(selectedEncounterMode)};
+    }
+  }
+  enemySystem.setSpawnKind?.(requested);
+  const actual=enemySystem.spawnKind;
+  if(requested===WORKING_ROSTER_HADES_ID&&actual!==requested){
+    selectedEncounterMode=ALL_ENEMIES_BUDGET_ID;
+    encounterModeWarning='Working roster is unavailable; using All · Budgeted Encounter.';
+    return{ok:false,mode:selectedEncounterMode,reason:'roster-unavailable',warning:encounterModeWarning,label:encounterModeLabel(selectedEncounterMode)};
+  }
+  selectedEncounterMode=requested;
+  encounterModeWarning='';
+  return{ok:true,mode:selectedEncounterMode,label:encounterModeLabel(selectedEncounterMode)};
+}
+
+function startPlannedLabEncounter(mode=selectedEncounterMode,{roomId=-777}={}){
+  const selection=selectEncounterMode(mode);
+  if(!selection.ok)return selection;
+  if(selection.mode===LAB_DIRECT_ENCOUNTER_MODE)return{ok:false,mode:selection.mode,reason:'Direct Lab Composition uses startLabScenario with an explicit focal plan.'};
+  try{
+    enemySystem.clearRoomRuntime?.();
+    enemySystem.startRoomEncounter?.(roomId);
+    const plan=enemySystem.currentEncounterPlan||null;
+    if(!plan)return{ok:false,mode:selection.mode,reason:'The planner did not produce an encounter plan.'};
+    return{ok:true,mode:selection.mode,plan};
+  }catch(error){
+    return{ok:false,mode:selection.mode,reason:error?.message||'The planned encounter could not start.'};
+  }
+}
 
 /* ---------- HUD ---------- */
 const hpFill=document.getElementById('hpFill');
@@ -1758,7 +1811,7 @@ function registerRuntimeControls(){
   controlRegistry.register({id:'simulation',label:'SIM',source},{
     id:'simulation.spawn-kind',kind:'select',label:'ENEMY TYPE',get:()=>enemySystem.spawnKind,
     options:()=>SPAWN_OPTIONS.map(option=>({value:option.id,label:option.label})),
-    set:value=>{enemySystem.setSpawnKind(value);StoneSettings.set('arena.spawnKind',enemySystem.spawnKind);respawn();return true;},
+    set:value=>{const selection=PLANNED_ENCOUNTER_MODE_IDS.has(String(value||''))?selectEncounterMode(value):{ok:true,mode:LAB_DIRECT_ENCOUNTER_MODE};if(!selection.ok)return false;if(selection.mode===LAB_DIRECT_ENCOUNTER_MODE){enemySystem.setSpawnKind(value);selectedEncounterMode=LAB_DIRECT_ENCOUNTER_MODE;encounterModeWarning='';}StoneSettings.set('arena.spawnKind',enemySystem.spawnKind);respawn();return true;},
   });
   DIR_SLIDERS.forEach((descriptor,index)=>controlRegistry.register(
     {id:'simulation',label:'SIM',source},
@@ -1808,10 +1861,10 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0});
-const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups()});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
-  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,
+  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
@@ -1819,6 +1872,7 @@ const runtimeHandle={
   getControlGroups:()=>controlRegistry.getControlGroups(),setControl:(id,value)=>controlRegistry.setControl(id,value),invokeControl:(id,...args)=>controlRegistry.invokeControl(id,...args),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   lightDown,heavyDown,attackDown,attackUp,triggerDodge,cycleWeapon,cycleStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };

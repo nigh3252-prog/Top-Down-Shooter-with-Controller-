@@ -56,12 +56,15 @@ function makeStatus(document,title,body){
   card.append(heading,detail);return card;
 }
 
-export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=globalThis.localStorage,document=globalThis.document,runtime=null}={}){
+export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=globalThis.localStorage,document=globalThis.document,runtime=null,sectionRegistry=null}={}){
   if(!document||!Array.isArray(catalog)||!catalog.length)return{installed:false,reason:'missing-enemy-lab'};
   const page=new URL(document.location?.href||globalThis.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
-  const categories=document.getElementById('labCategories'),values=document.getElementById('labValues'),hint=document.getElementById('categoryHint');
-  if(!categories||!values)return{installed:false,reason:'missing-controls'};
+  const useRegistry=!!sectionRegistry;
+  const categories=useRegistry?null:document.getElementById('labCategories');
+  const values=useRegistry?null:document.getElementById('labValues');
+  const hint=useRegistry?null:document.getElementById('categoryHint');
+  if(!useRegistry&&(!categories||!values))return{installed:false,reason:'missing-controls'};
   if(document.documentElement.dataset.enemyLabWorkingRoster==='1')return globalThis.__enemyLabWorkingRoster||{installed:true};
   document.documentElement.dataset.enemyLabWorkingRoster='1';
 
@@ -76,18 +79,21 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
   let rosterIds=readWorkingRoster(storage,catalog),rosterOpen=false,familyFilter='ALL',renderQueued=false;
   const familyOrder=['ALL',...(families||[])];
   const rosterSet=()=>new Set(rosterIds);
-  const persist=ids=>{rosterIds=writeWorkingRoster(storage,ids,catalog);syncCategoryLabel();return rosterIds;};
+  const persist=ids=>{rosterIds=writeWorkingRoster(storage,ids,catalog);runtime?.enemySystem?.syncWorkingRosterEncounterMode?.();if(!rosterIds.length&&runtime?.snapshot?.().encounterMode==='working-roster-hades')runtime?.selectEncounterMode?.(WORKING_ROSTER_HADES_ID);syncCategoryLabel();return rosterIds;};
 
   function categoryButton(){return categories.querySelector('[data-working-roster-category="1"]');}
   function syncCategoryLabel(){
+    if(useRegistry)return;
     const button=categoryButton();if(!button)return;
     const title=button.querySelector('b');if(title)title.textContent=rosterIds.length?`ROSTER · ${rosterIds.length}`:'ROSTER';
   }
-  function queueRender(){if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;if(rosterOpen)renderRoster();});}
+  function refreshRoster(){if(useRegistry){sectionRegistry.invalidate('enemies');return;}renderRoster();}
+  function queueRender(){if(useRegistry)return;if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;if(rosterOpen)renderRoster();});}
   function activateRoster(){
     rosterOpen=true;
+    if(useRegistry){sectionRegistry.select('enemies');sectionRegistry.invalidate('enemies');return;}
     for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.workingRosterCategory==='1');
-    renderRoster();
+    refreshRoster();
   }
   function ensureCategory(){
     if(categoryButton()){syncCategoryLabel();return;}
@@ -105,8 +111,8 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
     return{ok:true,ids:[...rosterIds],destination:String(destination)};
   }
   function renderRoster(){
-    if(!rosterOpen)return;
-    const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
+    if(!rosterOpen&&!useRegistry)return null;
+    const oldTop=values?.scrollTop||0,oldLeft=values?.scrollLeft||0;
     if(hint)hint.textContent='Build a saved draft roster, then open it in the full Combat Arena with Hades-style encounters.';
     const root=document.createElement('div');root.className='valueList';root.dataset.workingRosterRoot='1';
     root.appendChild(makeStatus(document,'WORKING ARENA ROSTER',`${rosterIds.length} of ${catalog.length} enemies selected. This is a local draft workspace, not a finished-content approval list.`));
@@ -126,11 +132,11 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
     const filterLabel=document.createElement('label');filterLabel.textContent='SHOW FAMILY';filterLabel.style.cssText='font-size:8.5px;color:var(--muted);letter-spacing:.07em';
     const select=document.createElement('select');
     for(const family of familyOrder){const option=document.createElement('option');option.value=family;option.textContent=family;option.selected=family===familyFilter;select.appendChild(option);}
-    select.addEventListener('change',()=>{familyFilter=select.value;renderRoster();});
+    select.addEventListener('change',()=>{familyFilter=select.value;refreshRoster();});
     const actions=document.createElement('div');actions.className='row';
     const shown=()=>catalog.filter(enemy=>familyFilter==='ALL'||enemy.family===familyFilter).map(enemy=>enemy.id);
     for(const [label,handler] of [['ADD SHOWN',()=>persist([...new Set([...rosterIds,...shown()])])],['REMOVE SHOWN',()=>{const remove=new Set(shown());persist(rosterIds.filter(id=>!remove.has(id)));}],['CLEAR',()=>persist([])]]){
-      const button=document.createElement('button');button.className='miniBtn';button.textContent=label;button.addEventListener('click',()=>{handler();renderRoster();});actions.appendChild(button);
+      const button=document.createElement('button');button.className='miniBtn';button.textContent=label;button.addEventListener('click',()=>{handler();refreshRoster();});actions.appendChild(button);
     }
     filterCard.append(filterLabel,select,actions);root.appendChild(filterCard);
 
@@ -143,29 +149,33 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
         sub:`${enemy.role} · ${readiness}`,
         meta:active?'IN WORKING ROSTER':`${enemy.family}${tags?` · ${tags}`:''}`,
         active,
-        onClick:()=>{persist(toggleWorkingRosterId(rosterIds,enemy.id,catalog));renderRoster();},
+        onClick:()=>{persist(toggleWorkingRosterId(rosterIds,enemy.id,catalog));refreshRoster();},
       });
       button.dataset.enemyId=enemy.id;button.dataset.rosterSelected=active?'1':'0';root.appendChild(button);
     }
+    if(useRegistry)return root;
     values.replaceChildren(root);
     requestAnimationFrame(()=>{values.scrollTop=oldTop;values.scrollLeft=oldLeft;});
   }
 
-  categories.addEventListener('click',event=>{
-    const button=event.target.closest?.('.choice');if(!button||button.dataset.workingRosterCategory==='1')return;
-    rosterOpen=false;
-  },true);
-  new MutationObserver(()=>{ensureCategory();if(rosterOpen)queueRender();}).observe(categories,{childList:true});
-  new MutationObserver(()=>{if(rosterOpen&&!values.querySelector('[data-working-roster-root="1"]'))queueRender();}).observe(values,{childList:true});
-  ensureCategory();
+  if(useRegistry){
+    rosterOpen=true;
+    sectionRegistry.registerView({id:'working-roster',sectionId:'enemies',label:'WORKING ROSTER',description:'Saved enemy IDs used by planner-backed encounters.',order:20,render:()=>renderRoster({mount:false})});
+  }else{
+    categories.addEventListener('click',event=>{
+      const button=event.target.closest?.('.choice');if(!button||button.dataset.workingRosterCategory==='1')return;
+      rosterOpen=false;
+    },true);
+    ensureCategory();
+  }
 
   const api={
     installed:true,
     catalog,
     getIds:()=>[...rosterIds],
     snapshot:()=>({ids:[...rosterIds],count:rosterIds.length,enemies:catalog.filter(enemy=>rosterSet().has(enemy.id))}),
-    setIds:ids=>{persist(ids);if(rosterOpen)renderRoster();return[...rosterIds];},
-    clear:()=>{persist([]);if(rosterOpen)renderRoster();return[];},
+    setIds:ids=>{persist(ids);if(rosterOpen)refreshRoster();return[...rosterIds];},
+    clear:()=>{persist([]);if(rosterOpen)refreshRoster();return[];},
     open:activateRoster,
     start:startHadesStyleEncounter,
   };
