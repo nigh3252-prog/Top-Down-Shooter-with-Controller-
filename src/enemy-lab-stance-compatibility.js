@@ -11,6 +11,8 @@ import {
   GATE2_WEAPON_IDS,
   resolveGate2PilotProfile,
 } from './stance-gate2-runtime.js';
+import { resolveGate3FullPayoff } from './stance-gate3-payoffs.js';
+import { resolveStanceMovementProfile } from './stance-movement-profiles.js';
 
 const cleanName=value=>String(value||'').replace(/^S\d+\s*/,'').trim();
 
@@ -47,10 +49,13 @@ function currentSnapshot(document){
   const weapon=STONE_WEAPONS[weaponId]||null;
   const compatibility=resolveStanceWeaponCompatibility({stance,weapon,weaponId});
   const gate2=resolveGate2PilotProfile({stance,weapon,weaponId});
+  const gate3=resolveGate3FullPayoff({stance,weapon,weaponId});
+  const movement=resolveStanceMovementProfile({stance,weapon,weaponId});
   const liveGate2=runtime?.combatState?.stance2Gate2||null;
+  const liveGate3=runtime?.combatState?.stance2Gate3||null;
   const effectiveChain=liveGate2?.effectiveChain||gate2.effectiveChain||[];
   const attackLabels=effectiveChain.map(key=>runtime?.PC?.ATTACKS?.[key]?.label||key);
-  return{runtime,stance,weaponId,weapon,compatibility,gate2,liveGate2,effectiveChain,attackLabels};
+  return{runtime,stance,weaponId,weapon,compatibility,gate2,gate3,movement,liveGate2,liveGate3,effectiveChain,attackLabels};
 }
 
 export function installEnemyLabStanceCompatibility({document=globalThis.document}={}){
@@ -72,6 +77,8 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     [data-stance-compatibility-root] .statusCard[data-tone="adapted"]{border-color:#e0bb6d;background:rgba(134,100,41,.18)}
     [data-stance-compatibility-root] .statusCard[data-tone="unusable"]{border-color:#e27777;background:rgba(142,54,54,.2)}
     [data-stance-compatibility-root] .statusCard[data-tone="pilot"]{border-color:#ba8cff;background:rgba(102,62,156,.24)}
+    [data-stance-compatibility-root] .statusCard[data-tone="payoff"]{border-color:#71d8ef;background:rgba(43,117,139,.22)}
+    [data-stance-compatibility-root] .statusCard[data-tone="movement"]{border-color:#9ad487;background:rgba(72,125,59,.22)}
     [data-stance-compatibility-root] .stanceMatrix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
     [data-stance-compatibility-root] .stanceClassGroup{border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px;background:rgba(0,0,0,.13)}
     [data-stance-compatibility-root] .stanceClassGroup b{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.08em}
@@ -87,10 +94,9 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   function syncCategoryLabel(){
     const button=categoryButton();if(!button)return;
     const snapshot=currentSnapshot(document);
-    const title=button.querySelector('b');
-    if(!title)return;
+    const title=button.querySelector('b');if(!title)return;
     if(snapshot.compatibility.tier==='unknown')title.textContent='STANCE 2.0';
-    else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.gate2.active?' · G2':''}`;
+    else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.gate3.active?' · G3':snapshot.gate2.active?' · G2':''}`;
   }
   function ensureCategory(){
     if(categoryButton()){syncCategoryLabel();return;}
@@ -111,14 +117,19 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     if(!open)return;
     const snapshot=currentSnapshot(document);
     const stanceId=String(snapshot.stance?.id||'');
-    const liveId=String(snapshot.liveGate2?.profileId||'');
-    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,liveId].join('|');
+    const live2=String(snapshot.liveGate2?.profileId||'');
+    const live3=String(snapshot.liveGate3?.payoffId||'');
+    const movementId=String(snapshot.liveGate3?.movementProfileId||snapshot.movement.profile?.id||'');
+    const recoveryKey=Number(snapshot.liveGate3?.recoveryRemaining||0).toFixed(1);
+    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,live2,live3,movementId,recoveryKey].join('|');
     if(!force&&key===lastKey)return;
     lastKey=key;
     syncCategoryLabel();
-    if(hint)hint.textContent=snapshot.gate2.active
-      ?'Gate 2 is live for this pilot pairing: attack chain, stance pace, grip, reach, damage, and stagger adaptation are active.'
-      :'This pairing remains a Gate 1 diagnostic. Gate 2 currently covers Rat Step, Long Blade Form, and Hammerfall with dagger, longsword, and greatsword.';
+    if(hint)hint.textContent=snapshot.gate3.active
+      ?'Gate 3 full-expression payoff and movement commitment are live for this matched pilot pairing.'
+      :snapshot.gate2.active
+        ?'Gate 2 expression and its stance/weapon movement profile are live. Adapted and unusable pairs do not receive the matched-class Gate 3 payoff.'
+        :'This pairing remains a Gate 1 diagnostic outside the current pilot.';
     const oldTop=values.scrollTop;
     const root=document.createElement('div');
     root.className='valueList';
@@ -149,6 +160,18 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
           ?'Adapted expression substitutes compact moves, changes grip, shortens effective reach, and reduces damage and stagger.'
           :'Failed expression uses an authored misuse animation, cannot charge, and creates no damaging weapon hit zones.';
       root.appendChild(makeStatus(document,'GATE 2 CONSEQUENCE',consequence,snapshot.compatibility.tier));
+
+      const movement=snapshot.movement.profile;
+      const recovery=Number(snapshot.liveGate3?.recoveryRemaining||0);
+      const recoveryText=movement?.recoveryDuration>0
+        ?` · recovery ${Number(movement.recoveryDuration).toFixed(2)} sec${recovery>0?` · ${recovery.toFixed(2)} sec remaining`:''}`
+        :'';
+      root.appendChild(makeStatus(
+        document,
+        `MOVEMENT · ${snapshot.liveGate3?.movementLabel||movement?.label||'PENDING'}`,
+        `${snapshot.liveGate3?.movementSummary||movement?.summary||'Movement profile is waiting for the runtime.'}${recoveryText}`,
+        'movement',
+      ));
     }else{
       root.appendChild(makeStatus(
         document,'OUTSIDE GATE 2 PILOT',
@@ -156,7 +179,22 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       ));
     }
 
-    root.appendChild(makeStatus(document,'GATE 2 PILOT SCOPE','Rat Step represents Light, Long Blade Form represents Medium, and Hammerfall Guard represents Heavy. Dagger, longsword, and greatsword supply the three weapon classes.'));
+    if(snapshot.gate3.active){
+      const live=snapshot.liveGate3;
+      root.appendChild(makeStatus(
+        document,
+        live?.label||snapshot.gate3.payoff?.label||'GATE 3 PAYOFF ACTIVE',
+        live?.summary||snapshot.gate3.payoff?.summary||'',
+        'payoff',
+      ));
+    }else if(snapshot.gate2.active){
+      root.appendChild(makeStatus(
+        document,'NO FULL-EXPRESSION PAYOFF',
+        `This ${snapshot.compatibility.label.toLowerCase()} pairing keeps its Gate 2 behavior and movement profile, but matched-class confirmation and breaking privileges remain locked. Cleave mode: ${snapshot.liveGate3?.cleaveMode||'pending runtime'}.`,
+      ));
+    }
+
+    root.appendChild(makeStatus(document,'GATE 3 PILOT PAYOFFS','Rat Step + dagger: movement freedom. Long Blade Form + longsword: larger confirmed follow-up window. Hammerfall + greatsword: doubled stagger, minimum stun, and unrestricted cleave.'));
 
     const matrix=document.createElement('div');matrix.className='stanceMatrix';
     const cells=[
