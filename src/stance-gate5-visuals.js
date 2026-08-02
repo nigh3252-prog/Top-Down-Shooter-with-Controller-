@@ -69,7 +69,7 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
     visual.parry.visible=parryActive||visual.pulseT>0;
     if(parryActive){
       const active=lastState.parryRemaining>0;
-      visual.parryMaterial.opacity=active?.62:.82;
+      visual.parryMaterial.opacity=active ? .62 : .82;
       visual.parry.scale.setScalar(active?1:1.18);
     }
     if(visual.pulseT>0){
