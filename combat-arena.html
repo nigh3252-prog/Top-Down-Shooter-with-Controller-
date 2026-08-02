@@ -258,7 +258,7 @@ import * as THREE from 'three';
 import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
-import { STANCE_CARDS } from './src/stance-cards.js';
+import { gameContent } from './src/game-content.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
@@ -278,6 +278,8 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './src/room-encounters.js';
 import { createRoomTransitionController } from './src/room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './src/ability-capture.js';
+
+const STANCE_CARDS = gameContent.cards.list({family:'stance'});
 
 /* ============================================================
    COMBAT ARENA
