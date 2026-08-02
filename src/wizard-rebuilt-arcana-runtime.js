@@ -3,6 +3,7 @@ import { pointSegmentDistance2D, segmentIntersection2D } from './wizard-arcana-r
 import { animateHomingFlareImpact, animateHomingFlareVisual, HOMING_FLARES_VISUAL_CONTRACT, makeHomingFlareImpactVisual, makeHomingFlareVisual } from './wizard-homing-flares-visuals.js';
 import { animateWhirlingTornadoTransient, animateWhirlingTornadoVisual, makeWhirlingTornadoTransientVisual, makeWhirlingTornadoVisual, WHIRLING_TORNADO_VISUAL_CONTRACT } from './wizard-whirling-tornado-visuals.js';
 import { animateWaterPrisonTransient, animateWaterPrisonVisual, makeWaterPrisonAttachedVisual, makeWaterPrisonProjectileVisual, makeWaterPrisonTransientVisual, WATER_PRISON_VISUAL_CONTRACT } from './wizard-water-prison-visuals.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -91,7 +92,7 @@ function activeSourceLockedAbilityRenderMode(){
   const search=typeof location==='undefined'?'':location.search;
   try{
     const params=new URLSearchParams(String(search||''));if(params.get('capture')!=='1')return'style';
-    const captureValue=window.__abilityCapture?.snapshot?.()?.renderMode,value=String(captureValue||params.get('renderMode')||'style').toLowerCase();
+    const captureValue=getArenaCaptureOptions()?.renderMode,value=String(captureValue||params.get('renderMode')||'style').toLowerCase();
     return value==='proxy'||value==='source'?value:'style';
   }catch{return sourceLockedAbilityRenderMode(search);}
 }
@@ -104,8 +105,7 @@ export function clockwiseOrbitPosition({ownerX=0,ownerZ=0,slot=0,count=7,age=0,r
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(location.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+  try{const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;const params=new URLSearchParams(location.search||'');return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(location.pathname||'');}catch{return false;}
 }
 function normalize2(x,z,fallback={x:0,z:1}){const length=Math.hypot(x,z);return length>1e-6?{x:x/length,z:z/length}:{...fallback};}
 function playerFrame(getPlayer){const player=getPlayer?.()||{},rawX=Number(player.forwardX),rawZ=Number(player.forwardZ),forward=normalize2(Number.isFinite(rawX)?rawX:0,Number.isFinite(rawZ)?rawZ:1);return{x:Number(player.x)||0,z:Number(player.z)||0,forward,right:{x:forward.z,z:-forward.x}};}

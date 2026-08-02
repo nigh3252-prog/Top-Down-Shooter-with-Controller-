@@ -1,5 +1,6 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
 import { pointSegmentDistance2D, segmentIntersection2D } from './wizard-arcana-runtime.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -157,11 +158,10 @@ export function normalizeNextTwentyBasicsVisualMode(stage='style'){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
   try{
+    const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;
     const params=new URLSearchParams(globalThis.location?.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));
+    return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');
   }catch{return false;}
 }
 function isCaptureRuntime(){try{return new URLSearchParams(globalThis.location?.search||'').get('capture')==='1';}catch{return false;}}
@@ -169,7 +169,7 @@ function currentVisualMode(){
   if(!isCaptureRuntime())return'style';
   let stage='style';
   try{
-    const capture=window.__abilityCapture?.snapshot?.()||{},params=new URLSearchParams(globalThis.location?.search||'');
+    const capture=getArenaCaptureOptions()||{},params=new URLSearchParams(globalThis.location?.search||'');
     stage=capture.stage||capture.renderMode||params.get('stage')||params.get('renderMode')||'style';
   }catch{}
   return normalizeNextTwentyBasicsVisualMode(stage);

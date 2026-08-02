@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const arena = read('combat-arena.html');
+const arenaRuntime = read('src/arena-runtime.js');
 const lab = read('enemy-lab.html');
 const playerCombat = read('src/player-combat.js');
 const pilebunker = read('src/player-combat-pilebunker.js');
 const stanceDeck = read('src/stance-deck.js');
 const enemyCatalog = read('src/arena-enemy-catalog.js');
 
-assert.match(arena, /from '\.\/src\/game-content\.js'/, 'Combat Arena enters card content through gameContent');
+assert.match(arenaRuntime, /from '\.\/game-content\.js'/, 'the shared Arena runtime enters card content through gameContent');
 assert.match(lab, /from '\.\/src\/game-content\.js'/, 'Enemy Lab enters enemy content through gameContent');
 assert.doesNotMatch(arena, /from '\.\/src\/stance-cards\.js'/, 'Combat Arena does not bypass the card registry');
 assert.doesNotMatch(lab, /from '\.\/src\/(?:fusion|flare|hades)-enemies\.js'/, 'Enemy Lab does not rebuild family catalogs');
@@ -30,9 +31,9 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(arena, /dispatchEvent\(new CustomEvent\(card\.playEvent/, 'Arena capture uses the injected dispatcher');
 assert.match(stanceDeck, /createCardEffectCompatibilityAdapter/, 'legacy standalone routing is isolated and named');
-assert.match(arena, /compatibilityAdapter:\s*null/, 'Combat Arena disables the standalone compatibility adapter');
+assert.match(arenaRuntime, /compatibilityAdapter:\s*null/, 'Combat Arena disables the standalone compatibility adapter');
 
 assert.doesNotMatch(enemyCatalog, /import\(['"]\.\/enemy-lab-/, 'the enemy catalog has no Lab installer side effects');
-assert.match(lab, /installEnemyLabDevelopmentTools\(\)/, 'Enemy Lab installs its tools explicitly');
+assert.match(lab, /installEnemyLabDevelopmentTools\(\{runtime\}\)/, 'Enemy Lab installs its tools explicitly against the same-document runtime');
 
 console.log('content import and runtime boundaries: ok');

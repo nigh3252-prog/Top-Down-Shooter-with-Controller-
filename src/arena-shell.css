@@ -123,6 +123,10 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   #err{position:fixed;bottom:6px;left:6px;right:6px;z-index:99;color:#ff9070;font-size:10px;
     background:rgba(20,8,6,.9);border:1px solid #6e3a24;border-radius:5px;padding:6px 8px;display:none;white-space:pre-wrap}
   #hint{display:none}
+  #hitFeelOverlay{position:fixed;inset:0;pointer-events:none;z-index:8;opacity:0;
+    background:radial-gradient(circle at var(--ix,50%) var(--iy,50%),rgba(255,255,255,.92) 0%,rgba(255,213,29,.40) 7%,rgba(255,118,24,.22) 18%,transparent 44%),radial-gradient(circle at center,transparent 46%,rgba(255,213,29,.08) 72%,rgba(255,118,24,.25) 100%);mix-blend-mode:screen}
+  #hitFeelOverlay.flash{animation:hitFeelFlash 360ms steps(6,end)}
+  @keyframes hitFeelFlash{0%{opacity:var(--iop,.95)}100%{opacity:0}}
   body.abilityCaptureClean #topBar,body.abilityCaptureClean #hud,body.abilityCaptureClean #msg,body.abilityCaptureClean #vig,
   body.abilityCaptureClean #joyBase,body.abilityCaptureClean #joyKnob,body.abilityCaptureClean .btnrow,
   body.abilityCaptureClean #cardRow,body.abilityCaptureClean #panel,body.abilityCaptureClean #startGate,
@@ -145,3 +149,49 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
     #cardRow{left:max(8px,env(safe-area-inset-left))}
     .scard{width:54px;height:74px}
   }
+
+  /* Theme tokens are resolved before first paint. Component rules stay static. */
+  html,body{background:var(--arena-bg);font-family:var(--arena-font)}
+  .tbtn{color:var(--arena-gold);background:var(--arena-control);border-color:var(--arena-line-bright)}
+  .tbtn:active,.pbtn:active,.pbtn.held{background:var(--arena-control-active)}
+  #hpWrap,#stWrap{background:var(--arena-panel-solid);border-color:var(--arena-line)}
+  #hpFill{background:linear-gradient(90deg,var(--arena-gold),var(--arena-red-strong))}
+  #stPending{background:color-mix(in srgb,var(--arena-muted) 38%,transparent)}
+  #stFill{background:linear-gradient(90deg,var(--arena-teal),var(--arena-teal-strong))}
+  #stWrap.exhaust{border-color:var(--arena-red)}#stWrap.exhaust #stFill{background:var(--arena-red)}
+  #msg,#roomTransition .rtTitle{color:var(--arena-gold)}
+  #joyBase{border-color:var(--arena-line);background:color-mix(in srgb,var(--arena-panel-solid) 35%,transparent)}
+  #joyKnob{background:var(--arena-joystick);border-color:var(--arena-line)}
+  .pbtn{border-color:var(--arena-line);color:var(--arena-text);background:var(--arena-control);box-shadow:0 3px 0 var(--arena-shadow)}
+  .pbtn .btnGlyph{color:var(--arena-muted)}#atkBtn{border-color:var(--arena-red);color:var(--arena-gold)}#heavyBtn{border-color:var(--arena-heavy);color:var(--arena-heavy)}
+  .scard{background:var(--arena-card);border-color:var(--arena-line);color:var(--arena-text);box-shadow:0 3px 0 var(--arena-shadow)}
+  .scard:active{background:var(--arena-card-active)}.scard .ckey{color:var(--arena-muted)}.scard .crows{color:var(--arena-gold)}.scard .crow b{color:var(--arena-text)}
+  #shuffleBtn{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line)}
+  #panel{background:linear-gradient(180deg,var(--arena-panel),var(--arena-panel-2));border-color:var(--arena-line);scrollbar-color:var(--arena-line-bright) var(--arena-panel-solid)}
+  #tabs button,.modeGrid button,#keyRow button{color:var(--arena-muted);border-color:var(--arena-line-soft)}
+  #tabs button.on,.modeGrid button.on,#keyRow button.on{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .ptitle,.slabel{color:var(--arena-subtle)}.sval{color:var(--arena-gold)}
+  .wide{color:var(--arena-gold);background:var(--arena-red-soft);border-color:var(--arena-line-bright)}
+  #startCard{background:var(--arena-panel);border-color:var(--arena-line-bright)}#startCard .sgTitle{color:var(--arena-gold)}#startCard .sgHint{color:var(--arena-text)}
+  #startBtn{color:var(--arena-bg);background:var(--arena-gold)}#sgFsBtn{color:var(--arena-text);border-color:var(--arena-line)}
+  #err{color:var(--arena-error);background:var(--arena-error-panel);border-color:var(--arena-line-bright)}
+
+  :root[data-arena-mode="arena"] #tabs,
+  :root[data-arena-mode="arena"] [data-sect="director"],
+  :root[data-arena-mode="arena"] #body-director,
+  :root[data-arena-mode="arena"] [data-sect="combatTiming"],
+  :root[data-arena-mode="arena"] #body-combatTiming,
+  :root[data-arena-mode="arena"] [data-sect="sim"],
+  :root[data-arena-mode="arena"] #body-sim,
+  :root[data-arena-mode="arena"] #resetBtn,
+  :root[data-arena-mode="arena"] #feelTab{display:none!important}
+  :root[data-arena-mode="enemy-lab"] #topBar,
+  :root[data-arena-mode="enemy-lab"] #panel,
+  :root[data-arena-mode="enemy-lab"] #startGate{display:none!important}
+
+  #akaiRoomPlaque{display:none}
+  :root[data-arena-theme="akai"] #akaiRoomPlaque{position:fixed;display:flex;z-index:24;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:104px;min-height:116px;padding:10px 8px 9px;box-sizing:border-box;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--arena-text);background:var(--arena-panel);border:1px solid var(--arena-line);box-shadow:0 12px 34px rgba(0,0,0,.45);pointer-events:none;text-align:center}
+  :root[data-arena-theme="akai"] #akaiRoomPlaque::before,:root[data-arena-theme="akai"] #akaiRoomPlaque::after{content:"";position:absolute;left:12px;right:12px;height:2px;background:var(--arena-red)}
+  :root[data-arena-theme="akai"] #akaiRoomPlaque::before{top:6px}:root[data-arena-theme="akai"] #akaiRoomPlaque::after{bottom:6px}
+  :root[data-arena-theme="akai"] #akaiRoomPlaque .akaiSigil{font-family:serif;font-size:26px;line-height:1;color:var(--arena-gold)}
+  :root[data-arena-theme="akai"] #akaiRoomPlaque strong{font-size:10px;letter-spacing:.16em}:root[data-arena-theme="akai"] #akaiRoomPlaque small{font-size:7px;letter-spacing:.12em;color:var(--arena-muted)}

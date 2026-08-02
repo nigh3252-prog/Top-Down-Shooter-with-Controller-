@@ -4,7 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const htmlPath=path.join(root,'wizard-of-legend-arcana-checklist.html');
+const htmlPath=path.join(root,'tools','wizard-of-legend-arcana-checklist.html');
 const html=fs.readFileSync(htmlPath,'utf8');
 const dataMatch=html.match(/<script id="wol-data" type="application\/json">([\s\S]*?)<\/script>/);
 assert.ok(dataMatch,'checklist must embed its machine-readable dataset');
@@ -159,7 +159,9 @@ assert.ok(html.includes('<article class="arcana-card"'),'entries must render as 
 assert.ok(html.includes('about-large-files-on-github')&&html.includes('github-pages-limits'),'page must retain GitHub media-limit references');
 
 const indexHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
-assert.ok(indexHtml.includes('href="wizard-of-legend-arcana-checklist.html"'),'the root launcher must link to the standalone checklist');
+assert.ok(indexHtml.includes('href="archive/index.html"'),'the root launcher must route research tooling through Archive');
+const archiveHtml=fs.readFileSync(path.join(root,'archive','index.html'),'utf8');
+assert.ok(archiveHtml.includes('../tools/wizard-of-legend-arcana-checklist.html'),'Archive must link directly to the active Arcana research tool');
 
 const videoPath=path.join(root,data.video.src);
 const video=fs.readFileSync(videoPath);

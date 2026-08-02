@@ -53,10 +53,9 @@ export function installEnemyLabWorkingAbilityPool({
   catalog=ARENA_ABILITY_CATALOG,
   families=ARENA_ABILITY_FAMILIES,
   storage=globalThis.localStorage,
-  hostWindow=null,
+  hostWindow=globalThis,
 }={}){
-  let targetWindow=hostWindow;
-  try{targetWindow=targetWindow||(globalThis.parent&&globalThis.parent!==globalThis?globalThis.parent:globalThis);}catch{targetWindow=globalThis;}
+  const targetWindow=hostWindow||globalThis;
   let document;
   try{document=targetWindow?.document;}catch{return{installed:false,reason:'cross-origin'};}
   if(!document||!Array.isArray(catalog)||!catalog.length)return{installed:false,reason:'missing-enemy-lab'};

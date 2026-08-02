@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const TAU=Math.PI*2;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -125,11 +126,10 @@ export function defaultHeroicLeapCarryEligible(enemy){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+  try{const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;const params=new URLSearchParams(globalThis.location?.search||'');return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');}catch{return false;}
 }
 function currentVisualMode(){
-  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('capture')!=='1')return'style';const capture=window.__abilityCapture?.snapshot?.()||{},stage=capture.stage||capture.renderMode||params.get('stage')||params.get('renderMode')||'style';return normalizeFusionLeapVisualMode(stage);}catch{return'style';}
+  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('capture')!=='1')return'style';const capture=getArenaCaptureOptions()||{},stage=capture.stage||capture.renderMode||params.get('stage')||params.get('renderMode')||'style';return normalizeFusionLeapVisualMode(stage);}catch{return'style';}
 }
 function playerFrame(getPlayer){const player=getPlayer?.()||{},forward=normalizeDirection({x:player.forwardX,z:player.forwardZ});return{x:Number(player.x)||0,z:Number(player.z)||0,forward};}
 function aliveEnemies(system){return(system?.enemies||[]).filter(enemy=>enemy&&Number(enemy.hp)>0);}

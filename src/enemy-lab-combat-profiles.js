@@ -52,8 +52,7 @@ export function installEnemyLabCombatProfiles({
   storage=globalThis.localStorage,
   hostWindow=globalThis,
 }={}){
-  let targetWindow=hostWindow;
-  try{targetWindow=targetWindow||(globalThis.parent&&globalThis.parent!==globalThis?globalThis.parent:globalThis);}catch{targetWindow=globalThis;}
+  const targetWindow=hostWindow||globalThis;
   let document;
   try{document=targetWindow?.document;}catch{return{installed:false,reason:'cross-origin'};}
   if(!document)return{installed:false,reason:'missing-document'};
