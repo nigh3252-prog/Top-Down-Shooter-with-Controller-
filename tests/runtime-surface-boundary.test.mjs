@@ -49,6 +49,7 @@ assert.match(runtime,/stanceGate3Runtime\?\.destroy\?\.\(\)[\s\S]*stanceGate2Run
 assert.doesNotMatch(`${runtime}\n${weaponBalance}`,/__stance2Gate|bootStanceRuntimes|window\.__arena\b/);
 assert.match(lab,/menuButton\.style\.display='none'/);
 assert.match(lab,/data\.controlGroups\|\|\[\]/);
+assert.match(lab,/control\.kind==='button'\?bridge\?\.invokeControl\?\.\(control\.id\):bridge\?\.setControl/);
 assert.doesNotMatch(lab,/function renderTools\(\)[\s\S]*?FULLSCREEN/);
 assert.doesNotMatch(shellCss,/data-arena-mode="enemy-lab" #topBar/);
 assert.match(shellCss,/data-arena-mode="enemy-lab"\]\s*#menuBtn/);
