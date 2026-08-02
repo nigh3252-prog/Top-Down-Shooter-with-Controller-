@@ -3,6 +3,7 @@
 // same deterministic behavior in original, FLARE, Hades, and combined rooms.
 
 import {ARCANA_TWEAKS_EVENT,clampArcanaSize,readArcanaTweaks} from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions } from './arena-runtime-context.js';
 
 export const WIZARD_ALLIED_ARCANA_SEMANTIC_EVENT='wizard-allied-arcana-semantic';
 const TAU=Math.PI*2;
@@ -49,7 +50,7 @@ const sweptCircleFraction=(point,start,end,radius)=>{
 };
 const normalizeVisualMode=value=>{const mode=String(value||'').toLowerCase();return mode==='contract'||mode==='proxy'||mode==='motion'?'contract':mode==='source'||mode==='reference'?'source':'style';};
 function activeVisualMode(){
-  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('capture')!=='1')return'style';return normalizeVisualMode(window.__abilityCapture?.snapshot?.()?.stage||params.get('stage')||params.get('renderMode')||'style');}catch{return'style';}
+  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('capture')!=='1')return'style';return normalizeVisualMode(getArenaCaptureOptions()?.stage||params.get('stage')||params.get('renderMode')||'style');}catch{return'style';}
 }
 function firstWallFraction(start,end,walls=[]){
   const rx=end.x-start.x,rz=end.z-start.z;let best=1;

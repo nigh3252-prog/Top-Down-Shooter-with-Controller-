@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -136,8 +137,7 @@ export function safeAdvanceDistance(frame,distance,walls=[],clearance=.52){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(location.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+  try{const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;const params=new URLSearchParams(location.search||'');return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(location.pathname||'');}catch{return false;}
 }
 function isAbilityCaptureRuntime(){
   if(typeof window==='undefined')return false;
@@ -152,7 +152,7 @@ export function normalizeWizardVisualMode(stage='style'){
 function currentWizardVisualMode(){
   if(!isAbilityCaptureRuntime())return'style';
   let stage='style';
-  try{stage=window.__abilityCapture?.snapshot?.().stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
+  try{stage=getArenaCaptureOptions()?.stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
   return normalizeWizardVisualMode(stage);
 }
 function normalize2(x,z){const length=Math.hypot(x,z)||1;return{x:x/length,z:z/length};}

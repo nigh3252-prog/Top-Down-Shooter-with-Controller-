@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { provideArenaRuntime } from '../src/arena-runtime-context.js';
 import { createStanceDeck } from '../src/stance-deck.js';
 import {
   claimArcanaTileDecoration,
@@ -251,6 +252,7 @@ globalThis.window={
   __arena:{arena:{stamina}},
   dispatchEvent:event=>events.push(event),
 };
+provideArenaRuntime({config:{mode:'arena',enemyLab:false},arena:{stamina}});
 const stance={id:'S-ARCANA-TEST',name:'TEST STANCE',type:'stance',chain:['horizontal4','vertical8','horizontal5']};
 const card=WIZARD_ARCANA_CARDS[0];
 const deck=createStanceDeck({rng:()=>0});

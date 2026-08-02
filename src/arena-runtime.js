@@ -22,15 +22,19 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './room-encounters.js';
 import { createRoomTransitionController } from './room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './ability-capture.js';
-import { installMazeRuntimeControls } from './maze-runtime-settings.js';
+import { getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
 import { installRoadieRun } from './roadie-run.js';
+import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
+import { resolveArenaTheme } from './arena-theme-registry.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
-import { clearArenaRuntime, provideArenaCaptureController, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
+import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
 
 export function createArenaRuntime({ config = {}, controlRegistry = createArenaControlRegistry() } = {}) {
-  const runtimeConfig = Object.freeze({ mode:'arena', ...config });
+  const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
+  const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   document.documentElement.dataset.arenaMode = runtimeConfig.mode;
+  document.documentElement.dataset.arenaTheme = arenaTheme.id;
   provideArenaRuntimeConfig(runtimeConfig);
   const runtimeListeners=new Set();
   const emitRuntime=event=>{for(const listener of [...runtimeListeners])listener(event);};
@@ -91,8 +95,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d191b);
-scene.fog = new THREE.Fog(0x0d191b, 34, 78);
+scene.background = new THREE.Color(arenaTheme.worldStyle.palette.background);
+scene.fog = new THREE.Fog(arenaTheme.worldStyle.palette.fog, arenaTheme.worldStyle.fogNear, arenaTheme.worldStyle.fogFar);
 const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .5, 220);
 
 scene.add(new THREE.AmbientLight(0xd8ecff, .5));
@@ -118,7 +122,7 @@ const worldRoot = new THREE.Group(); scene.add(worldRoot);
 const dungeon = createHexMaze({ seed:MAZE_SEED, layout:runtimeConfig.layout, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
 if(!dungeon.validation.valid) throw new Error(`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}`);
 let activeRoomId = dungeon.startRoomId;
-let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7 });
+let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7, theme:arenaTheme });
 worldRoot.add(mazeWorld.group);
 const startPoint = axialToWorld(0, 0, HEX_SIZE);
 
@@ -131,7 +135,6 @@ const CombatAudio = installCombatAudioDirector({ controls:{} , settings:StoneSet
 // Hidden tuning panel: backtick key or ?tune=1. Master knob at 0 ≈ the old game.
 const HitFeel = installHitFeel({ THREE, scene, camera, settings:StoneSettings, audio:CombatAudio });
 const CAPTURE_HIT_FEEL_MASTER=HitFeel.tuning.master;
-HitFeel.buildTuningPanel();
 
 /* ---------- stone wanderer + player combat ---------- */
 const StoneWanderer = installStoneWanderer({ THREE });
@@ -200,7 +203,7 @@ function applySwingFeel(s){
 }
 
 const PC = installPlayerCombat({
-  THREE, scene,
+  THREE, scene, controlRegistry,
   get WEAPONS(){ return WEAPONS; },
   get WEAPON_ORDER(){ return WEAPON_ORDER; },
   materials: StoneWanderer.materials,
@@ -380,7 +383,7 @@ function loadActiveRoom(roomId){
   activeRoomId = roomId;
   mazeWorld = createMazeWorld({
     THREE, maze:dungeon, roomId, hexSize:HEX_SIZE, wallHeight:3.2,
-    wallThickness:.34, doorWidth:7, openedDoorEdges:encounterState?.openedDoorEdges,
+    wallThickness:.34, doorWidth:7, openedDoorEdges:encounterState?.openedDoorEdges, theme:arenaTheme,
   });
   worldRoot.add(mazeWorld.group);
   positionRoomLighting(mazeWorld.center);
@@ -1576,13 +1579,19 @@ function teleportArcanaPlayer(desired={}){
   actorPos.set(validation.end.x,validation.end.z);actorRoot.position.set(validation.end.x,0,validation.end.z);
   return validation;
 }
-let running=false,destroyed=false,frameRequest=0;
+let running=false,destroyed=false,frameRequest=0,lastStateEmit=0;
+function emitRuntimeState(now=performance.now()){
+  if(now-lastStateEmit<200)return;
+  lastStateEmit=now;
+  emitRuntime({type:'state',snapshot:runtimeHandle.getSnapshot()});
+}
 function frame(){
   if(!running||destroyed)return;
   frameRequest=requestAnimationFrame(frame);
   const rawDt = Math.min(clock.getDelta(), .05);
   advanceArenaSimulation(rawDt);
   renderArena();
+  emitRuntimeState();
 }
 
 /* ---------- deterministic ability capture ---------- */
@@ -1610,7 +1619,7 @@ function captureRuntimes(){
   };
 }
 function resetCaptureRuntimes(config={}){
-  window.__ARCANA_CAPTURE_CONFIG__={...config,capture:true};
+  provideArenaCaptureOptions({...config,capture:true});
   const runtimes=captureRuntimes();
   for(const runtime of Object.values(runtimes)){
     runtime?.reset?.();
@@ -1768,7 +1777,7 @@ function setCaptureMove(value={}){
 }
 function castCaptureCard(card,captureConfig={}){
   if(!card?.effectId||!PC.cardEffectDispatcher)return false;
-  window.__ARCANA_CAPTURE_CONFIG__={...captureConfig,capture:true};
+  provideArenaCaptureOptions({...captureConfig,capture:true});
   const context={card,capture:true,captureStage:captureConfig.stage,renderMode:captureConfig.renderMode,effects:captureConfig.effects,input:captureConfig.input,action:captureConfig.action};
   if(!PC.cardEffectDispatcher.canPlay(card,context))return false;
   return PC.cardEffectDispatcher.play(card,context)!==false;
@@ -1842,7 +1851,10 @@ function registerRuntimeControls(){
     {id:`feel.value.${descriptor.k}`,kind:'range',label:descriptor.label,min:descriptor.min,max:descriptor.max,step:(descriptor.max-descriptor.min)/60,get:()=>FEEL[selKey][descriptor.k],set:value=>{FEEL[selKey][descriptor.k]=Number(value);return true;}},
   );
   controlRegistry.register({id:'feel',label:'FEEL',source},{id:'feel.test',kind:'button',label:'TEST THIS TIER',invoke:()=>beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3)});
+  for(const descriptor of HitFeel.controlDescriptors())controlRegistry.register({id:'hitfeel',label:'HIT FEEL',source},descriptor);
   controlRegistry.register({id:'actions',label:'ACTIONS',source},{id:'actions.reset',kind:'button',label:'RESET FIGHT',invoke:()=>respawn()});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source},{id:'maze.cell-size',kind:'select',label:'CELL SIZE',get:()=>getMazeRuntimeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeCellSize(value),true)});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source},{id:'maze.room-size',kind:'select',label:'CELLS PER ROOM',get:()=>getMazeRuntimeSettings().roomSize.id,options:()=>MAZE_ROOM_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeRoomSize(value),true)});
   controlRegistry.subscribe(event=>emitRuntime(event));
 }
 
@@ -1864,11 +1876,14 @@ function stopRuntime(){if(!running)return false;running=false;if(frameRequest)ca
 function destroyRuntime(){if(destroyed)return false;stopRuntime();destroyed=true;renderer.dispose?.();clearArenaRuntime(runtimeHandle);emitRuntime({type:'lifecycle',destroyed:true});return true;}
 
 let captureController=null;
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0});
+const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups()});
 const runtimeHandle={
   config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
-  getSnapshot:()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0}),
+  getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
+  setCellSize:id=>setMazeRuntimeCellSize(id),resetFight:()=>respawn(),
   getControlGroups:()=>controlRegistry.getControlGroups(),setControl:(id,value)=>controlRegistry.setControl(id,value),invokeControl:(id,...args)=>controlRegistry.invokeControl(id,...args),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
@@ -1876,8 +1891,8 @@ const runtimeHandle={
   lightDown,heavyDown,attackDown,attackUp,triggerDodge,cycleWeapon,cycleStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };
 provideArenaRuntime(runtimeHandle);
-installMazeRuntimeControls();
 registerRuntimeControls();
+installStanceGate2Runtime({arenaHandle:runtimeHandle,windowRef:window});
 if(!runtimeConfig.enemyLab)installRoadieRun();
 
 /* ---------- boot ---------- */

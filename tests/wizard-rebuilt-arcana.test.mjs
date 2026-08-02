@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { provideArenaCaptureOptions } from '../src/arena-runtime-context.js';
 import {
   DRAGON_ARC_PLAYER_DIAMETER,
   DRAGON_ARC_SPEC,
@@ -296,15 +297,15 @@ for(const mode of['proxy','source']){
 }
 location.search=productionSearch;
 
-let interactiveMode='proxy';window.__abilityCapture={snapshot:()=>({renderMode:interactiveMode})};location.search='?enemyLab=1&capture=1&renderMode=proxy';
+let interactiveMode='proxy';const setInteractiveMode=mode=>{interactiveMode=mode;provideArenaCaptureOptions({renderMode:mode});};setInteractiveMode('proxy');location.search='?enemyLab=1&capture=1&renderMode=proxy';
 const interactiveScene=new Group(),interactiveRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:interactiveScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
 assert.equal(interactiveRuntime.cast({arcanaId:'HOMING-FLARES'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='homingFlares').renderMode,'proxy');
-interactiveMode='source';interactiveRuntime.reset();assert.equal(interactiveRuntime.snapshot().renderMode,'source','capture reset must adopt the Enemy Lab stage button without reloading the arena');
+setInteractiveMode('source');interactiveRuntime.reset();assert.equal(interactiveRuntime.snapshot().renderMode,'source','capture reset must adopt the Enemy Lab stage button without reloading the arena');
 assert.equal(interactiveRuntime.cast({arcanaId:'WHIRLING-TORNADO'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='whirlingTornado').renderMode,'source');
-interactiveMode='style';interactiveRuntime.reset();assert.equal(interactiveRuntime.cast({arcanaId:'WATER-PRISON'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='waterPrison').renderMode,'style');
+setInteractiveMode('style');interactiveRuntime.reset();assert.equal(interactiveRuntime.cast({arcanaId:'WATER-PRISON'}),true);assert.equal(interactiveRuntime.snapshot().effects.find(effect=>effect.type==='waterPrison').renderMode,'style');
 interactiveRuntime.dispose();assert.equal(interactiveScene.children.length,0);
 
-location.search='?enemyLab=1';interactiveMode='proxy';const hardGatedScene=new Group(),hardGatedRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:hardGatedScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
+location.search='?enemyLab=1';setInteractiveMode('proxy');const hardGatedScene=new Group(),hardGatedRuntime=installWizardRebuiltArcanaRuntime({THREE,scene:hardGatedScene,getPlayer:()=>player,getEnemySystem:()=>system,getMazeSegments:()=>[]});
 assert.equal(hardGatedRuntime.cast({arcanaId:'HOMING-FLARES'}),true);assert.equal(hardGatedRuntime.snapshot().effects.find(effect=>effect.type==='homingFlares').renderMode,'style','capture UI state must never expose proxy rendering in production');
-hardGatedRuntime.dispose();delete window.__abilityCapture;location.search=productionSearch;
+hardGatedRuntime.dispose();provideArenaCaptureOptions(null);location.search=productionSearch;
 console.log('wizard rebuilt arcana runtime tests passed');

@@ -1,5 +1,6 @@
 import { listCards } from './card-registry.js';
 import { guardPoseFor } from './guard-poses.js';
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
 
 const STANCE_CARDS = listCards({family:'stance'});
@@ -391,21 +392,22 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
       PC.selectCombatWeapon=original.selectCombatWeapon;
       PC.startCombatAttack=original.startCombatAttack;
       delete PC.combatState.stance2Gate2;
-      if(windowRef?.__stance2Gate2Runtime===api)delete windowRef.__stance2Gate2Runtime;
+      if(installedStanceGate2Runtime===api)installedStanceGate2Runtime=null;
     },
   };
   return api;
 }
 
-export function installStanceGate2Runtime({windowRef=globalThis.window,maxAttempts=240,pollMs=50}={}){
-  if(!windowRef)return{installed:false,reason:'missing-window'};
-  if(windowRef.__stance2Gate2Runtime?.installed)return windowRef.__stance2Gate2Runtime;
+let installedStanceGate2Runtime=null;
+
+export function installStanceGate2Runtime({arenaHandle=getArenaRuntime(),windowRef=globalThis.window,maxAttempts=240,pollMs=50}={}){
+  if(installedStanceGate2Runtime?.installed)return installedStanceGate2Runtime;
   let attempts=0;
   const attach=()=>{
-    const handle=windowRef.__arena;
+    const handle=arenaHandle||getArenaRuntime();
     if(handle?.PC&&handle?.arena){
       const runtime=createStanceGate2Runtime({arenaHandle:handle,windowRef});
-      windowRef.__stance2Gate2Runtime=runtime;
+      installedStanceGate2Runtime=runtime;
       return runtime;
     }
     if(attempts++<maxAttempts)windowRef.setTimeout?.(attach,pollMs);

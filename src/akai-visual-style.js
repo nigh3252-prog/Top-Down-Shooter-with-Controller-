@@ -364,7 +364,6 @@ function styleSceneWhenAttached(world){
 
 export function applyAkaiMazeStyle({ THREE, maze, roomId = null, hexSize = 20, world } = {}){
   if(!THREE || !maze || !world?.group) return world;
-  installAkaiInterfaceStyle();
   styleBaseWorld(THREE, world);
 
   const room = roomId === null ? null : maze.rooms.find(candidate => candidate.id === roomId);
