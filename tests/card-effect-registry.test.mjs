@@ -8,10 +8,13 @@ import {
   listCards,
 } from '../src/card-registry.js';
 import {
+  ARCANA_EFFECT_DEFINITIONS,
   EFFECT_DEFINITIONS,
   EFFECT_IDS,
   EFFECT_REGISTRY,
+  RUNTIME_HANDLER_IDS,
   createEffectDispatcher,
+  createRuntimeHandlerTable,
 } from '../src/effect-registry.js';
 import { STANCE_CARDS } from '../src/stance-cards.js';
 import { BING_BONG_CARD, BLOOD_SLASH_CARD } from '../src/combat-modifier-cards.js';
@@ -32,6 +35,10 @@ assert.equal(listCards({family:'stance'}).length,30);
 assert.equal(listCards({family:'special-stance'}).length,1);
 assert.equal(listCards({family:'non-stance'}).length,2);
 assert.equal(listCards({family:'arcana'}).length,46);
+const effectCards=[...listCards({family:'non-stance'}),...listCards({family:'arcana'})];
+assert.equal(effectCards.length,48,'the canonical non-stance inventory is Pilebunker, Blood Slash, and 46 Arcana');
+assert.ok(effectCards.every(card=>card.effectId),'every canonical non-stance card must own an effectId');
+assert.equal(ARCANA_EFFECT_DEFINITIONS.length,46);
 for(const entry of CARD_REGISTRY_ENTRIES){
   assert.equal(CARD_REGISTRY.get(entry.id),entry.card);
   assert.equal(Object.isFrozen(entry),true);
@@ -48,7 +55,15 @@ assert.throws(()=>STANCE_CARDS.push(STANCE_CARDS[0]),TypeError);
 assert.equal(POW_BUNKER_CARD.playEvent,'powbunker:play');
 assert.equal(BLOOD_SLASH_CARD.playEvent,'bloodslash:play');
 assert.equal(BING_BONG_CARD.effectId,'bingBong');
-assert.deepEqual(EFFECT_IDS,['bloodSlash','bingBong']);
+assert.equal(EFFECT_DEFINITIONS.length,49,'Bing Bong plus 48 non-stance effects must be registered');
+assert.equal(EFFECT_IDS.length,EFFECT_DEFINITIONS.length);
+assert.equal(RUNTIME_HANDLER_IDS.length,14);
+for(const definition of EFFECT_DEFINITIONS){
+  assert.equal(Object.isFrozen(definition),true);
+  assert.equal(typeof definition.effectId,'string');
+  assert.equal(typeof definition.runtimeHandlerId,'string');
+  assert.equal(EFFECT_REGISTRY.get(definition.effectId),definition);
+}
 assert.equal(new Set(EFFECT_DEFINITIONS.map(definition=>definition.effectId)).size,EFFECT_DEFINITIONS.length);
 assert.deepEqual(EFFECT_REGISTRY.list().map(definition=>definition.effectId),EFFECT_IDS);
 assert.throws(()=>EFFECT_REGISTRY.require('missing'),/Unknown effect definition/);
@@ -66,6 +81,40 @@ assert.equal(dispatcher.canPlay(BLOOD_SLASH_CARD,{slot:0,allow:true}),true);
 assert.equal(dispatcher.canPlay(BLOOD_SLASH_CARD,{slot:0,allow:false}),false);
 assert.equal(dispatcher.has('bloodSlash'),true);
 assert.equal(dispatcher.has('missing'),false);
+
+const productionCalls=[];
+const effectIdsByRuntime=new Map(RUNTIME_HANDLER_IDS.map(runtimeHandlerId=>[
+  runtimeHandlerId,
+  new Set(EFFECT_DEFINITIONS.filter(definition=>definition.runtimeHandlerId===runtimeHandlerId).map(definition=>definition.effectId)),
+]));
+const productionHandlers=Object.fromEntries(RUNTIME_HANDLER_IDS.map(runtimeHandlerId=>[runtimeHandlerId,{
+  canPlay(card){const accepted=effectIdsByRuntime.get(runtimeHandlerId).has(card.effectId);if(accepted)productionCalls.push(['canPlay',runtimeHandlerId,card.effectId]);return accepted;},
+  play(card){const accepted=effectIdsByRuntime.get(runtimeHandlerId).has(card.effectId);if(accepted)productionCalls.push(['play',runtimeHandlerId,card.effectId]);return accepted;},
+}]));
+const productionTable=createRuntimeHandlerTable(productionHandlers);
+const productionDispatcher=createEffectDispatcher({runtimeHandlers:productionTable});
+assert.equal(productionTable.size,14,'the deterministic runtime table must contain every runtime handler');
+assert.equal(productionDispatcher.handlers.size,14,'dispatcher construction must preserve a readonly runtime table');
+assert.equal(productionDispatcher.list().length,49);
+assert.ok(productionDispatcher.list().every(entry=>entry.handler===productionTable.get(entry.runtimeHandlerId)),'each effect must resolve to exactly one table handler');
+productionCalls.length=0;
+assert.equal(productionDispatcher.canPlay(POW_BUNKER_CARD,{slot:0}),true);
+assert.equal(productionDispatcher.play(POW_BUNKER_CARD,{slot:0}),true);
+assert.deepEqual(productionCalls,[['canPlay','pilebunker','pilebunker'],['play','pilebunker','pilebunker']],'a production-shaped dispatcher must call one injected handler exactly once per method');
+const cardsByEffectId=new Map(CARD_DEFINITIONS.filter(card=>card.effectId).map(card=>[card.effectId,card]));
+for(const definition of EFFECT_DEFINITIONS){
+  const card=cardsByEffectId.get(definition.effectId);
+  assert.ok(card,`${definition.effectId} must have a card reference`);
+  productionCalls.length=0;
+  assert.equal(productionDispatcher.canPlay(card),true,`${definition.effectId} canPlay must reach its mapped handler`);
+  assert.equal(productionDispatcher.play(card),true,`${definition.effectId} play must reach its mapped handler`);
+  assert.deepEqual(productionCalls,[
+    ['canPlay',definition.runtimeHandlerId,definition.effectId],
+    ['play',definition.runtimeHandlerId,definition.effectId],
+  ],`${definition.effectId} must resolve to exactly one runtime handler`);
+}
+assert.equal(productionDispatcher.canPlay({effectId:'missing'}),false,'unknown effects must fail closed');
+assert.equal(productionDispatcher.play({effectId:'missing'}),false,'unknown effects must not broadcast or fan out');
 
 const stamina={v:42,pending:6,recoverDelayT:.12};
 const events=[];

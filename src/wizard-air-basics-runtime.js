@@ -188,7 +188,7 @@ function makeImpact(THREE,scene,x,y,z,size=.6){
 
 export function installWizardAirBasicsRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[]}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier};
 
   function currentSize(){return clampArcanaSize(state.sizeMultiplier);}
@@ -318,15 +318,20 @@ export function installWizardAirBasicsRuntime({THREE,scene,getPlayer,getEnemySys
     if(k>=1)remove(effect);
   }
 
+  function canPlay(card){return card?.arcanaId==='AIR-SPINNER'||card?.arcanaId==='PERFORATING-JET';}
+  function play(card,context={}){
+    if(!canPlay(card))return false;
+    if(card.arcanaId==='AIR-SPINNER')startAirSpinner();else startPerforatingJet();
+    return true;
+  }
+
   const onPlay=event=>{
-    const id=event?.detail?.card?.arcanaId;
-    if(id==='AIR-SPINNER')startAirSpinner();
-    else if(id==='PERFORATING-JET')startPerforatingJet();
+    play(event?.detail?.card,event?.detail||{});
   };
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   return{
-    state,reset,
+    state,canPlay,play,reset,
     update(dt,now=0){
       const frame=Math.max(0,Number(dt)||0),system=getEnemySystem?.(),time=Number(now)||0;
       for(const effect of[...state.effects]){

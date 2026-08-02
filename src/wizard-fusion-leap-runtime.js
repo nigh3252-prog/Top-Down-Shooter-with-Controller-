@@ -208,7 +208,7 @@ export function installWizardFusionLeapRuntime({
 }={}){
   const initial=readArcanaTweaks(),inertState={effects:[],resources:emptyResources(),sizeMultiplier:initial.sizeMultiplier};
   const empty=()=>({simulationTime:0,lastCast:null,visualMode:'style',activeLeap:null,invulnerability:{active:false,count:0,tokens:[]},resources:cloneResources(inertState.resources),effects:[],semanticEvents:[]});
-  if(!THREE||!scene||!enabled)return{state:inertState,cast(){return false;},canCast(){return false;},update(){},snapshot:empty,cleanup(){},reset(){},dispose(){},get busy(){return false;}};
+  if(!THREE||!scene||!enabled)return{state:inertState,cast(){return false;},canCast(){return false;},canPlay(){return false;},play(){return false;},update(){},snapshot:empty,cleanup(){},reset(){},dispose(){},get busy(){return false;}};
 
   const state={elapsed:0,lastCast:null,visualMode:'style',sizeMultiplier:initial.sizeMultiplier,effects:[],semanticEvents:[],semanticSerial:0,castSerials:new Map(),resources:emptyResources(),activeLeap:null};
   const invulnerability=createReferenceCountedLease((active,detail)=>setPlayerInvulnerable?.(active,{source:'wizardArcana',arcanaId:HEROIC_LEAP_SPEC.id,...detail}));
@@ -270,6 +270,8 @@ export function installWizardFusionLeapRuntime({
     state.activeLeap=action;semantic('heroic-leap-rush-started',{arcanaId:id,stableId:castStable,actionStableId:stableId,origin:{...resolution.origin},requested:{...resolution.requested},endpoint:{...resolution.resolved},direction:{...direction},blocked:resolution.blocked,carryCandidateId:action.carryTargetId,cooldown:HEROIC_LEAP_SPEC.cooldown});return true;
   }
   function cast(card,detail={}){const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'');if(!canCast(id))return false;if(id===FLAME_FUSION_SPEC.id)return castFlameFusion(detail);if(id===HEROIC_LEAP_SPEC.id)return castHeroicLeap(detail);return false;}
+  function canPlay(card,context={}){return canCast(card?.arcanaId||card,context);}
+  function play(card,context={}){return canPlay(card,context)?cast(card,context):false;}
 
   function planProjectile(effect,dt){
     const remaining=Math.max(0,effect.spec.range-effect.distance),requested=Math.min(effect.spec.speed*dt,remaining),start={...effect.position},end={x:start.x+effect.direction.x*requested,z:start.z+effect.direction.z*requested},system=getEnemySystem?.();let block=null;
@@ -358,7 +360,7 @@ export function installWizardFusionLeapRuntime({
     resolveFlameProjectiles(frame);
     for(const effect of[...state.effects]){if(!state.effects.includes(effect))continue;if(effect.type==='fusionBurn')updateBurn(effect,frame);else if(effect.type==='heroicLeapAction')updateHeroicAction(effect,frame);else if(effect.type==='heroicVortex')updateVortex(effect,frame);else if(effect.type==='fusionLeapTransient')updateTransient(effect,frame);}
   }
-  const onPlay=event=>cast(event?.detail?.card,event?.detail||{}),onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{}),onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
-  return{state,cast,canCast,update,postEnemyUpdate,snapshot,cleanup,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);cleanup();},get busy(){return !!state.activeLeap;}};
+  return{state,cast,canCast,canPlay,play,update,postEnemyUpdate,snapshot,cleanup,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);cleanup();},get busy(){return !!state.activeLeap;}};
 }
