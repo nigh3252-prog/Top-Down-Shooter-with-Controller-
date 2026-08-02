@@ -6,6 +6,7 @@ function makeHarness({attackAfter=0}={}){
   const combatState={weapon:'longsword',attack:null,attackKey:'vertical5',pending:null,pendingGroup:null,readyLock:0};
   const arena={
     stamina,stance:{id:'S26'},deadT:-1,
+    swing:{staminaSpent:0},
     chain:{stage:'idle',inputLockT:0,lightLockT:0,comboDeadline:0,finisherDeadline:0,activeSlot:0,pendingSlot:-1,pendingStage:null,pendingExpiresAt:0,pendingInput:null},
     dodge:{t:-1},
   };
@@ -13,7 +14,7 @@ function makeHarness({attackAfter=0}={}){
   const move={x:0,z:0};
   const PC={
     combatState,
-    startCombatAttack(){combatState.attack={key:'vertical5'};stamina.v=attackAfter;},
+    startCombatAttack(){combatState.attack={key:'vertical5'};stamina.v=attackAfter;arena.swing.staminaSpent=10-attackAfter;},
     updateCombat(){},
   };
   const deck={
@@ -43,6 +44,7 @@ function makeHarness({attackAfter=0}={}){
   const h=makeHarness({attackAfter:2});
   h.PC.startCombatAttack('vertical5','vertical');
   assert.equal(h.stamina.v,0,'a remainder smaller than the cheapest available attack should collapse to zero');
+  assert.equal(h.arena.swing.staminaSpent,10,'the collapsed remainder should join the refundable swing spend');
   assert.equal(h.runtime.snapshot().phase,'open','the unusable remainder should open Exhaustion Catch');
   h.runtime.destroy();
 }
