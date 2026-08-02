@@ -92,6 +92,8 @@ Gate 4 makes reaching zero stamina an active stance-transition test rather than 
 ### Exhaustion Catch
 
 - Spending the final available stamina opens a **0.72-second** catch window.
+- When a landed attack leaves less stamina than the cheapest move in the active stance/weapon pairing, that unusable remainder is folded into the swing and treated as zero. This prevents Exhaustion Catch frequency from depending on whether costs divide evenly into 100.
+- The folded remainder joins the swing's refundable spend, so a whiff restores it rather than silently deleting stamina.
 - Playing a true stance card during the window succeeds, changes stance through the ordinary card path, and restores stamina through the existing full-refill rule.
 - Ability and modifier cards do not count as a catch.
 - A successful catch clears outstanding post-swing movement recovery so the transition reads as clean continuation.
