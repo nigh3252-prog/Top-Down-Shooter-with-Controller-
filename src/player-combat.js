@@ -9,6 +9,7 @@ import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
 import { installDashJetPanel } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
+import { createEffectDispatcher } from './effect-registry.js';
 import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
 import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.js';
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
@@ -93,6 +94,10 @@ export function installPlayerCombat(api){
     getStance:()=>window.__arena?.arena?.stance||null,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
+  const cardEffectDispatcher=createEffectDispatcher({handlers:{
+    bloodSlash:{canPlay:()=>true,play:()=>combatEffectRuntime.playBloodSlash()},
+    bingBong:{canPlay:()=>true,play:()=>true},
+  }});
   const wizardArcanaDamageScaler=installWizardArcanaDamageScaler({getEnemySystem:getArenaEnemySystem});
   const wizardArcanaRuntime=installArenaArcanaRuntime(()=>installWizardArcanaRuntime({
     THREE,scene:api.scene,
@@ -280,6 +285,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
+  Object.defineProperty(PC,'cardEffectDispatcher',{value:cardEffectDispatcher,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaDamageScaler',{value:wizardArcanaDamageScaler,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardRebuiltArcanaRuntime',{value:wizardRebuiltArcanaRuntime,enumerable:true});

@@ -1,3 +1,5 @@
+import { readonlyMap } from './card-definition.js';
+
 const makeCard=({
   id,name,icon,element,category,analysisOrder,sourceClip,description,summary,rows,chain,
   styleTags=[],manualSequence=null,uiColor,uiBorder,uiBackground,
@@ -107,4 +109,4 @@ export const WIZARD_ARCHETYPE_SAMPLER_CARDS=Object.freeze([
   }),
 ]);
 
-export const WIZARD_ARCHETYPE_SAMPLER_BY_ID=new Map(WIZARD_ARCHETYPE_SAMPLER_CARDS.map(card=>[card.arcanaId,card]));
+export const WIZARD_ARCHETYPE_SAMPLER_BY_ID=readonlyMap(WIZARD_ARCHETYPE_SAMPLER_CARDS.map(card=>[card.arcanaId,card]));

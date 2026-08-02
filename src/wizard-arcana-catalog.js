@@ -1,8 +1,6 @@
-import { WIZARD_ARCANA_CARDS, isWizardArcanaCard } from './wizard-arcana-cards.js';
-import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
-import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
-import { WIZARD_NEXT_TWENTY_CARDS } from './wizard-next-twenty-cards.js';
-import { WIZARD_ARCHETYPE_SAMPLER_CARDS } from './wizard-archetype-sampler-cards.js';
+import { listCards } from './card-registry.js';
+import { readonlyMap } from './card-definition.js';
+import { isWizardArcanaCard } from './wizard-arcana-cards.js';
 
 const SOURCE_ORDER=Object.freeze({
   'FLAME-STRIKE':1,
@@ -80,23 +78,15 @@ export function wizardArcanaShowcaseStart(cardOrId){
   return SHOWCASE_START[id]??Number.POSITIVE_INFINITY;
 }
 
-const combined=[
-  ...WIZARD_ARCANA_CARDS,
-  ...WIZARD_AIR_BASIC_CARDS,
-  ...WIZARD_NEXT_SOURCE_CARDS,
-  ...WIZARD_NEXT_TWENTY_CARDS,
-  ...WIZARD_ARCHETYPE_SAMPLER_CARDS,
-];
-
-export const WIZARD_ARCANA_CATALOG=Object.freeze(combined.slice().sort((left,right)=>{
+export const WIZARD_ARCANA_CATALOG=Object.freeze(listCards({family:'arcana'}).slice().sort((left,right)=>{
   const showcase=wizardArcanaShowcaseStart(left)-wizardArcanaShowcaseStart(right);
   if(Number.isFinite(showcase)&&showcase!==0)return showcase;
   const analysis=wizardArcanaSourceOrder(left)-wizardArcanaSourceOrder(right);
   return Number.isFinite(analysis)&&analysis!==0?analysis:left.id.localeCompare(right.id);
 }));
 
-export const WIZARD_ARCANA_CATALOG_BY_ID=new Map(WIZARD_ARCANA_CATALOG.map(card=>[card.id,card]));
-export const WIZARD_ARCANA_CATALOG_BY_ARCANA_ID=new Map(WIZARD_ARCANA_CATALOG.map(card=>[card.arcanaId,card]));
+export const WIZARD_ARCANA_CATALOG_BY_ID=readonlyMap(WIZARD_ARCANA_CATALOG.map(card=>[card.id,card]));
+export const WIZARD_ARCANA_CATALOG_BY_ARCANA_ID=readonlyMap(WIZARD_ARCANA_CATALOG.map(card=>[card.arcanaId,card]));
 
 export function wizardArcanaCardById(value){
   const id=String(value||'').trim().toUpperCase();
