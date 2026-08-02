@@ -1,3 +1,5 @@
+import { readonlyMap } from './card-definition.js';
+
 const CONTINUOUS_DASH=Object.freeze({kind:'continuous',profile:'basic'});
 const TELEPORT_DASH=Object.freeze({kind:'teleport',profile:'basic-direction-distance'});
 
@@ -345,4 +347,4 @@ export const WIZARD_NEXT_TWENTY_CARDS=Object.freeze([
   }),
 ]);
 
-export const WIZARD_NEXT_TWENTY_BY_ID=new Map(WIZARD_NEXT_TWENTY_CARDS.map(card=>[card.id,card]));
+export const WIZARD_NEXT_TWENTY_BY_ID=readonlyMap(WIZARD_NEXT_TWENTY_CARDS.map(card=>[card.id,card]));

@@ -1,3 +1,5 @@
+import { readonlyMap } from './card-definition.js';
+
 const makeArcana = ({
   id,
   name,
@@ -194,7 +196,7 @@ export const WIZARD_ARCANA_CARDS = Object.freeze([
   }),
 ]);
 
-export const WIZARD_ARCANA_BY_ID = new Map(WIZARD_ARCANA_CARDS.map(card=>[card.id,card]));
+export const WIZARD_ARCANA_BY_ID = readonlyMap(WIZARD_ARCANA_CARDS.map(card=>[card.id,card]));
 
 export function isWizardArcanaCard(card){
   return card?.sourceGame==='Wizard of Legend'&&typeof card?.arcanaId==='string';

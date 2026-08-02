@@ -1,3 +1,5 @@
+import { readonlyMap } from './card-definition.js';
+
 const makeCard=({id,name,icon,element,styleTags,description,summary,rows,chain,manualSequence=null,uiColor,uiBorder,uiBackground})=>Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
@@ -112,4 +114,4 @@ export const WIZARD_NEXT_SOURCE_CARDS=Object.freeze([
   }),
 ]);
 
-export const WIZARD_NEXT_SOURCE_BY_ID=new Map(WIZARD_NEXT_SOURCE_CARDS.map(card=>[card.id,card]));
+export const WIZARD_NEXT_SOURCE_BY_ID=readonlyMap(WIZARD_NEXT_SOURCE_CARDS.map(card=>[card.id,card]));

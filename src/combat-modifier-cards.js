@@ -5,6 +5,9 @@ export const BLOOD_SLASH_CARD = Object.freeze({
   type:'modifier',
   effectId:'bloodSlash',
   name:'BLOOD SLASH',
+  icon:'BS',
+  description:'Gain three Blood Slash charges. Horizontal attacks spend them to widen the strike and store movement bleed.',
+  playEvent:'bloodslash:play',
   // Preview-only horizontal glyphs. Playing the card preserves the active stance.
   chain:Object.freeze(['horizontal6','horizontal4','horizontal5']),
 });
