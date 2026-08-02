@@ -61,6 +61,8 @@ async function bootStanceRuntimes(){
     gate2.installStanceGate2Runtime({windowRef:window});
     const gate3=await import('./stance-gate3-payoffs.js');
     gate3.installStanceGate3Runtime({windowRef:window});
+    const gate4=await import('./stance-gate4-exhaustion.js');
+    gate4.installStanceGate4Runtime({windowRef:window});
   }catch(error){
     console.warn('[stance-2] runtime did not install',error);
   }
