@@ -53,9 +53,19 @@ function currentSnapshot(document){
   const movement=resolveStanceMovementProfile({stance,weapon,weaponId});
   const liveGate2=runtime?.combatState?.stance2Gate2||null;
   const liveGate3=runtime?.combatState?.stance2Gate3||null;
+  const liveGate4=runtime?.combatState?.stance2Gate4||null;
   const effectiveChain=liveGate2?.effectiveChain||gate2.effectiveChain||[];
   const attackLabels=effectiveChain.map(key=>runtime?.PC?.ATTACKS?.[key]?.label||key);
-  return{runtime,stance,weaponId,weapon,compatibility,gate2,gate3,movement,liveGate2,liveGate3,effectiveChain,attackLabels};
+  return{runtime,stance,weaponId,weapon,compatibility,gate2,gate3,movement,liveGate2,liveGate3,liveGate4,effectiveChain,attackLabels};
+}
+
+function catchDescription(catchState){
+  if(!catchState)return['GATE 4 · WAITING','Exhaustion Catch runtime has not attached yet.',''];
+  if(catchState.phase==='open')return['GATE 4 · PLAY STANCE',`${catchState.remaining.toFixed(2)} sec remain in the Exhaustion Catch window.`,'catch'];
+  if(catchState.phase==='success')return['GATE 4 · CLEAN CATCH','The stance transition succeeded and post-swing movement recovery was cleared.','catch'];
+  if(catchState.phase==='missed')return['GATE 4 · MISSED','The committed attack must finish before the exhaustion stumble begins.','catchFail'];
+  if(catchState.phase==='failed')return['GATE 4 · EXHAUSTED',`${catchState.remaining.toFixed(2)} sec attack lock remain · movement ${Math.round(catchState.movementMultiplier*100)}%.`,'catchFail'];
+  return['GATE 4 · READY','Spend the final stamina, then play a true stance card within 0.72 seconds. Whiff refunds cancel the catch.',''];
 }
 
 export function installEnemyLabStanceCompatibility({document=globalThis.document}={}){
@@ -79,6 +89,8 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     [data-stance-compatibility-root] .statusCard[data-tone="pilot"]{border-color:#ba8cff;background:rgba(102,62,156,.24)}
     [data-stance-compatibility-root] .statusCard[data-tone="payoff"]{border-color:#71d8ef;background:rgba(43,117,139,.22)}
     [data-stance-compatibility-root] .statusCard[data-tone="movement"]{border-color:#9ad487;background:rgba(72,125,59,.22)}
+    [data-stance-compatibility-root] .statusCard[data-tone="catch"]{border-color:#f0c06a;background:rgba(144,101,36,.24)}
+    [data-stance-compatibility-root] .statusCard[data-tone="catchFail"]{border-color:#ef786f;background:rgba(145,54,49,.24)}
     [data-stance-compatibility-root] .stanceMatrix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
     [data-stance-compatibility-root] .stanceClassGroup{border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px;background:rgba(0,0,0,.13)}
     [data-stance-compatibility-root] .stanceClassGroup b{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.08em}
@@ -96,7 +108,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     const snapshot=currentSnapshot(document);
     const title=button.querySelector('b');if(!title)return;
     if(snapshot.compatibility.tier==='unknown')title.textContent='STANCE 2.0';
-    else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.gate3.active?' · G3':snapshot.gate2.active?' · G2':''}`;
+    else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.liveGate4?' · G4':snapshot.gate3.active?' · G3':snapshot.gate2.active?' · G2':''}`;
   }
   function ensureCategory(){
     if(categoryButton()){syncCategoryLabel();return;}
@@ -121,15 +133,18 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     const live3=String(snapshot.liveGate3?.payoffId||'');
     const movementId=String(snapshot.liveGate3?.movementProfileId||snapshot.movement.profile?.id||'');
     const recoveryKey=Number(snapshot.liveGate3?.recoveryRemaining||0).toFixed(1);
-    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,live2,live3,movementId,recoveryKey].join('|');
+    const catchKey=`${snapshot.liveGate4?.phase||'none'}:${Number(snapshot.liveGate4?.remaining||0).toFixed(1)}`;
+    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,live2,live3,movementId,recoveryKey,catchKey].join('|');
     if(!force&&key===lastKey)return;
     lastKey=key;
     syncCategoryLabel();
-    if(hint)hint.textContent=snapshot.gate3.active
-      ?'Gate 3 full-expression payoff and movement commitment are live for this matched pilot pairing.'
-      :snapshot.gate2.active
-        ?'Gate 2 expression and its stance/weapon movement profile are live. Adapted and unusable pairs do not receive the matched-class Gate 3 payoff.'
-        :'This pairing remains a Gate 1 diagnostic outside the current pilot.';
+    if(hint)hint.textContent=snapshot.liveGate4
+      ?'Gate 4 Exhaustion Catch is live. Spend the final stamina and play a true stance card during the gold timing window.'
+      :snapshot.gate3.active
+        ?'Gate 3 full-expression payoff and movement commitment are live for this matched pilot pairing.'
+        :snapshot.gate2.active
+          ?'Gate 2 expression and its stance/weapon movement profile are live.'
+          :'This pairing remains a Gate 1 diagnostic outside the current pilot.';
     const oldTop=values.scrollTop;
     const root=document.createElement('div');
     root.className='valueList';
@@ -139,21 +154,12 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       root.appendChild(makeStatus(document,'WAITING FOR COMBAT ARENA','Start the arena so the active stance and weapon can be inspected.'));
     }else{
       const preferred=snapshot.compatibility.preferredWeapon?'PREFERRED WEAPON':'OFF-STYLE WEAPON';
-      root.appendChild(makeStatus(
-        document,snapshot.compatibility.label,
-        `${cleanName(snapshot.stance?.name)||stanceId} · ${snapshot.compatibility.stanceClass} stance with ${snapshot.weapon?.label||snapshot.weaponId} · ${snapshot.compatibility.weaponClass} weapon · ${preferred}`,
-        snapshot.compatibility.tier,
-      ));
+      root.appendChild(makeStatus(document,snapshot.compatibility.label,`${cleanName(snapshot.stance?.name)||stanceId} · ${snapshot.compatibility.stanceClass} stance with ${snapshot.weapon?.label||snapshot.weaponId} · ${snapshot.compatibility.weaponClass} weapon · ${preferred}`,snapshot.compatibility.tier));
     }
 
     if(snapshot.gate2.active){
       const live=snapshot.liveGate2;
-      root.appendChild(makeStatus(
-        document,
-        live?.label||snapshot.gate2.profile?.label||'GATE 2 PILOT ACTIVE',
-        `${snapshot.attackLabels.join(' → ')} · grip ${live?.gripMode||snapshot.gate2.profile?.gripMode||'normal'}${live?.failed?' · damaging hit zones disabled':''}`,
-        'pilot',
-      ));
+      root.appendChild(makeStatus(document,live?.label||snapshot.gate2.profile?.label||'GATE 2 PILOT ACTIVE',`${snapshot.attackLabels.join(' → ')} · grip ${live?.gripMode||snapshot.gate2.profile?.gripMode||'normal'}${live?.failed?' · damaging hit zones disabled':''}`,'pilot'));
       const consequence=snapshot.compatibility.tier==='full'
         ?'Full expression uses the stance-authored chain with stance-dominant timing.'
         :snapshot.compatibility.tier==='adapted'
@@ -163,38 +169,22 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
 
       const movement=snapshot.movement.profile;
       const recovery=Number(snapshot.liveGate3?.recoveryRemaining||0);
-      const recoveryText=movement?.recoveryDuration>0
-        ?` · recovery ${Number(movement.recoveryDuration).toFixed(2)} sec${recovery>0?` · ${recovery.toFixed(2)} sec remaining`:''}`
-        :'';
-      root.appendChild(makeStatus(
-        document,
-        `MOVEMENT · ${snapshot.liveGate3?.movementLabel||movement?.label||'PENDING'}`,
-        `${snapshot.liveGate3?.movementSummary||movement?.summary||'Movement profile is waiting for the runtime.'}${recoveryText}`,
-        'movement',
-      ));
+      const recoveryText=movement?.recoveryDuration>0?` · recovery ${Number(movement.recoveryDuration).toFixed(2)} sec${recovery>0?` · ${recovery.toFixed(2)} sec remaining`:''}`:'';
+      root.appendChild(makeStatus(document,`MOVEMENT · ${snapshot.liveGate3?.movementLabel||movement?.label||'PENDING'}`,`${snapshot.liveGate3?.movementSummary||movement?.summary||'Movement profile is waiting for the runtime.'}${recoveryText}`,'movement'));
     }else{
-      root.appendChild(makeStatus(
-        document,'OUTSIDE GATE 2 PILOT',
-        `Gate 2 currently covers ${GATE2_STANCE_IDS.join(', ')} crossed with ${GATE2_WEAPON_IDS.join(', ')}. This combination still uses existing combat behavior.`,
-      ));
+      root.appendChild(makeStatus(document,'OUTSIDE GATE 2 PILOT',`Gate 2 currently covers ${GATE2_STANCE_IDS.join(', ')} crossed with ${GATE2_WEAPON_IDS.join(', ')}. This combination still uses existing combat behavior.`));
     }
 
     if(snapshot.gate3.active){
       const live=snapshot.liveGate3;
-      root.appendChild(makeStatus(
-        document,
-        live?.label||snapshot.gate3.payoff?.label||'GATE 3 PAYOFF ACTIVE',
-        live?.summary||snapshot.gate3.payoff?.summary||'',
-        'payoff',
-      ));
+      root.appendChild(makeStatus(document,live?.label||snapshot.gate3.payoff?.label||'GATE 3 PAYOFF ACTIVE',live?.summary||snapshot.gate3.payoff?.summary||'','payoff'));
     }else if(snapshot.gate2.active){
-      root.appendChild(makeStatus(
-        document,'NO FULL-EXPRESSION PAYOFF',
-        `This ${snapshot.compatibility.label.toLowerCase()} pairing keeps its Gate 2 behavior and movement profile, but matched-class confirmation and breaking privileges remain locked. Cleave mode: ${snapshot.liveGate3?.cleaveMode||'pending runtime'}.`,
-      ));
+      root.appendChild(makeStatus(document,'NO FULL-EXPRESSION PAYOFF',`This ${snapshot.compatibility.label.toLowerCase()} pairing keeps its Gate 2 behavior and movement profile, but matched-class confirmation and breaking privileges remain locked. Cleave mode: ${snapshot.liveGate3?.cleaveMode||'pending runtime'}.`));
     }
 
-    root.appendChild(makeStatus(document,'GATE 3 PILOT PAYOFFS','Rat Step + dagger: movement freedom. Long Blade Form + longsword: larger confirmed follow-up window. Hammerfall + greatsword: doubled stagger, minimum stun, and unrestricted cleave.'));
+    const [catchTitle,catchBody,catchTone]=catchDescription(snapshot.liveGate4);
+    root.appendChild(makeStatus(document,catchTitle,catchBody,catchTone));
+    root.appendChild(makeStatus(document,'GATE 4 PROTOTYPE','0.72 sec catch window · whiff refunds cancel · missed timing waits for attack completion · 3.0 sec attack lock · dodge and cards remain available · stamina capacity stays at 100 for this timing pass.'));
 
     const matrix=document.createElement('div');matrix.className='stanceMatrix';
     const cells=[
