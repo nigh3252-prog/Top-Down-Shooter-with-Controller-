@@ -1,0 +1,58 @@
+export const STANCE_DEFENSE_PROFILES=Object.freeze({
+  S24:Object.freeze({
+    id:'rat-step-existing-dodge',
+    stanceId:'S24',
+    label:'BUILT-IN DODGE',
+    kind:'existing-dodge',
+    summary:'Rat Step uses the current Combat Arena dodge exactly as authored.',
+  }),
+  S26:Object.freeze({
+    id:'long-blade-parry',
+    stanceId:'S26',
+    label:'SWORD PARRY',
+    kind:'parry',
+    parryWindow:.22,
+    missRecovery:.32,
+    successFlash:.34,
+    summary:'Tap defense for a short sword-parry window. A miss creates brief recovery.',
+  }),
+  S01:Object.freeze({
+    id:'hammerfall-kite-shield',
+    stanceId:'S01',
+    label:'KITE SHIELD',
+    kind:'shield',
+    blockArcDegrees:120,
+    guardMoveMultiplier:.55,
+    guardCounterWindow:.8,
+    minimumBlockCost:8,
+    staminaPerDamage:1.5,
+    summary:'Tap to toggle the kite shield between the left side and frontal guard.',
+  }),
+});
+
+export function resolveStanceDefenseProfile(stance){
+  const stanceId=String(stance?.id||stance||'');
+  return STANCE_DEFENSE_PROFILES[stanceId]||null;
+}
+
+export function usesCustomDefense(profileOrStance){
+  const profile=profileOrStance?.kind?profileOrStance:resolveStanceDefenseProfile(profileOrStance);
+  return profile?.kind==='parry'||profile?.kind==='shield';
+}
+
+export function shieldBlockCost(damage,profile=STANCE_DEFENSE_PROFILES.S01){
+  const amount=Math.max(0,Number(damage)||0);
+  return Math.max(Number(profile?.minimumBlockCost)||0,amount*(Number(profile?.staminaPerDamage)||1));
+}
+
+export function isFrontalShieldHit({incomingDir,forward,arcDegrees=120}={}){
+  const ix=Number(incomingDir?.x),iz=Number(incomingDir?.z);
+  const fx=Number(forward?.x),fz=Number(forward?.z);
+  if(!Number.isFinite(ix)||!Number.isFinite(iz)||!Number.isFinite(fx)||!Number.isFinite(fz))return false;
+  const il=Math.hypot(ix,iz),fl=Math.hypot(fx,fz);
+  if(il<1e-6||fl<1e-6)return false;
+  const towardSource={x:-ix/il,z:-iz/il};
+  const facing={x:fx/fl,z:fz/fl};
+  const threshold=Math.cos((Math.max(1,Math.min(359,Number(arcDegrees)||120))*Math.PI/180)/2);
+  return facing.x*towardSource.x+facing.z*towardSource.z>=threshold;
+}
