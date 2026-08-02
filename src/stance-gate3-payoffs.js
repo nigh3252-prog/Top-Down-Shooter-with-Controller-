@@ -1,4 +1,9 @@
 import { resolveGate2PilotProfile } from './stance-gate2-runtime.js';
+import {
+  movementMultiplierDuringAttack,
+  postSwingMovementMultiplier,
+  resolveStanceMovementProfile,
+} from './stance-movement-profiles.js';
 
 const pairKey=(stanceId,weaponId)=>`${stanceId}:${weaponId}`;
 const freezePayoff=payoff=>Object.freeze({...payoff});
@@ -9,9 +14,8 @@ export const GATE3_FULL_PAYOFFS=Object.freeze({
     stanceClass:'Light',
     weaponClass:'Light',
     label:'MOBILE EXPRESSION',
-    movementFloor:.92,
     cleaveMode:'full-light',
-    summary:'Normal attacks retain at least 92% movement speed; only the fully charged finisher may cleave.',
+    summary:'Normal attacks remain mobile with no post-swing movement penalty; only the fully charged finisher may cleave.',
   }),
   [pairKey('S26','longsword')]:freezePayoff({
     id:'medium-confirmed-form',
@@ -65,7 +69,7 @@ function clearWeaponGate3State(weapon){
   delete weapon.stance2CurrentAttackGroup;
 }
 
-export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.window}={}){
+export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.window,basePlayerSpeed=8.5}={}){
   const handle=arenaHandle;
   const PC=handle?.PC;
   const arena=handle?.arena;
@@ -81,6 +85,36 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
   let attackSerial=0;
   let lastExtendedSerial=-1;
   let lastSnapshot=null;
+  let lastActorPosition=readActorPosition();
+  const movementRecovery={active:false,profile:null,elapsed:0};
+
+  function readActorPosition(){
+    const actorPos=handle?.actorPos;
+    if(!actorPos)return null;
+    const x=Number(actorPos.x),z=Number(actorPos.y??actorPos.z);
+    return Number.isFinite(x)&&Number.isFinite(z)?{x,z}:null;
+  }
+  function writeActorPosition(position){
+    const actorPos=handle?.actorPos;
+    if(!actorPos||!position)return;
+    actorPos.x=position.x;
+    if(Number.isFinite(Number(actorPos.y)))actorPos.y=position.z;
+    else actorPos.z=position.z;
+  }
+  function clearMovementRecovery(){
+    movementRecovery.active=false;
+    movementRecovery.profile=null;
+    movementRecovery.elapsed=0;
+  }
+  function beginMovementRecovery(profile){
+    if(!profile||profile.recoveryDuration<=0||profile.recoveryMode==='authored-failure'){
+      clearMovementRecovery();
+      return;
+    }
+    movementRecovery.active=true;
+    movementRecovery.profile=profile;
+    movementRecovery.elapsed=0;
+  }
 
   function current(){
     const stance=arena.stance||null;
@@ -88,8 +122,9 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
     const weapon=PC.currentWeapon?.()||null;
     const gate2=resolveGate2PilotProfile({stance,weapon,weaponId});
     const full=resolveGate3FullPayoff({stance,weapon,weaponId});
+    const movement=resolveStanceMovementProfile({stance,weapon,weaponId});
     const cleaveMode=cleaveModeForGate3Expression({stance,weapon,weaponId});
-    return{stance,weaponId,weapon,gate2,full,cleaveMode};
+    return{stance,weaponId,weapon,gate2,full,movement,cleaveMode};
   }
 
   function apply(){
@@ -103,6 +138,8 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
       clearWeaponGate3State(modifiedWeapon);
       modifiedWeapon=null;
     }
+    if(movementRecovery.active&&movementRecovery.profile?.id!==resolved.movement.profile?.id)clearMovementRecovery();
+    const recoveryDuration=Number(movementRecovery.profile?.recoveryDuration)||0;
     lastSnapshot=Object.freeze({
       active:resolved.full.active,
       stanceId:resolved.gate2.stanceId,
@@ -112,15 +149,46 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
       label:resolved.full.payoff?.label||'NO FULL-EXPRESSION PAYOFF',
       summary:resolved.full.payoff?.summary||'This pilot pairing keeps its Gate 2 expression but does not receive a matched-class Gate 3 payoff.',
       cleaveMode:resolved.cleaveMode,
-      movementFloor:resolved.full.payoff?.movementFloor??null,
       comboWindowBonus:resolved.full.payoff?.comboWindowBonus??null,
       staggerMult:resolved.full.payoff?.staggerMult??null,
+      movementProfileId:resolved.movement.profile?.id||null,
+      movementLabel:resolved.movement.profile?.label||null,
+      movementSummary:resolved.movement.profile?.summary||null,
+      recoveryMode:resolved.movement.profile?.recoveryMode||null,
+      recoveryDuration:resolved.movement.profile?.recoveryDuration??null,
+      recoveryRemaining:movementRecovery.active?Math.max(0,recoveryDuration-movementRecovery.elapsed):0,
     });
     PC.combatState.stance2Gate3=lastSnapshot;
     return resolved;
   }
 
+  function applyPostSwingMovement(dt,resolved){
+    if(!movementRecovery.active||PC.combatState.attack||arena.dodge?.t>=0)return;
+    const profile=movementRecovery.profile;
+    const multiplier=postSwingMovementMultiplier(profile,movementRecovery.elapsed);
+    const currentPosition=readActorPosition();
+    const input=handle?.arenaMoveInput?.()||null;
+    const inputX=Number(input?.x)||0,inputZ=Number(input?.z)||0;
+    const magnitude=Math.min(1,Math.hypot(inputX,inputZ));
+    if(currentPosition&&lastActorPosition&&magnitude>.001&&multiplier<.999){
+      const nx=inputX/magnitude,nz=inputZ/magnitude;
+      const deltaX=currentPosition.x-lastActorPosition.x;
+      const deltaZ=currentPosition.z-lastActorPosition.z;
+      const along=Math.max(0,deltaX*nx+deltaZ*nz);
+      const intended=Math.max(0,Number(basePlayerSpeed)||0)*Math.max(0,dt)*magnitude;
+      const reduction=Math.min(along,intended*(1-multiplier));
+      if(reduction>0){
+        currentPosition.x-=nx*reduction;
+        currentPosition.z-=nz*reduction;
+        writeActorPosition(currentPosition);
+      }
+    }
+    movementRecovery.elapsed+=Math.max(0,dt);
+    if(movementRecovery.elapsed>=Number(profile.recoveryDuration)||!resolved.movement.active)clearMovementRecovery();
+  }
+
   PC.startCombatAttack=function(...args){
+    clearMovementRecovery();
     apply();
     attackSerial++;
     return original.startCombatAttack.apply(this,args);
@@ -129,8 +197,12 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
   PC.combatMovePenalty=function(...args){
     const resolved=apply();
     const base=original.combatMovePenalty.apply(this,args);
-    const floor=resolved.full.active?Number(resolved.full.payoff.movementFloor):NaN;
-    return Number.isFinite(floor)?Math.max(base,floor):base;
+    const multiplier=movementMultiplierDuringAttack(
+      resolved.movement.profile,
+      PC.combatState.attack,
+      PC.combatState.t,
+    );
+    return multiplier===null?base:multiplier;
   };
 
   PC.getWeaponHitZones=function(...args){
@@ -152,7 +224,10 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
   };
 
   PC.updateCombat=function(...args){
+    const dt=Math.max(0,Number(args[0])||0);
     const before=apply();
+    if(arena.dodge?.t>=0)clearMovementRecovery();
+    applyPostSwingMovement(dt,before);
     const beforeAttack=PC.combatState.attack;
     const beforeSlot=Number(arena.chain?.activeSlot);
     const serial=attackSerial;
@@ -169,6 +244,8 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
         PC.combatState.stance2Gate3=lastSnapshot;
       }
     }
+    if(completed)beginMovementRecovery(before.movement.profile);
+    lastActorPosition=readActorPosition();
     apply();
     return result;
   };
@@ -179,7 +256,9 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
     apply,
     resolve:current,
     snapshot:()=>lastSnapshot,
+    clearMovementRecovery,
     destroy(){
+      clearMovementRecovery();
       clearWeaponGate3State(modifiedWeapon);
       modifiedWeapon=null;
       PC.updateCombat=original.updateCombat;
