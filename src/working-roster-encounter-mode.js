@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { ARENA_ENEMY_CATALOG } from './arena-enemy-catalog.js';
 import { readWorkingRoster } from './enemy-lab-working-roster.js';
 import { ALL_ENEMIES_BUDGET_ID, WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
@@ -126,7 +127,7 @@ export function installRosterSpawnTelegraphSupport(system,{
     if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
       return{x:Number(player.x),z:Number(player.z)};
     }
-    const actor=globalThis.__arena?.actorPos;
+    const actor=getArenaRuntime()?.actorPos;
     if(Number.isFinite(Number(actor?.x))){
       const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
       if(Number.isFinite(z))return{x:Number(actor.x),z};
