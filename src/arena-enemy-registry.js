@@ -6,6 +6,22 @@ import { installNativeHadesRosterCadence } from './hades-native-roster-cadence.j
 import { installWorkingRosterEncounterMode } from './working-roster-encounter-mode.js';
 import { installWorkingRosterSameSystemMode } from './working-roster-same-system-mode.js';
 
+export {
+  ARENA_ENEMY_FAMILIES,
+  ARENA_ENEMY_IDS,
+  ARENA_ENEMY_REGISTRY,
+  ARENA_ENEMY_STATUSES,
+  getArenaEnemy,
+  getArenaEnemyBySpawnKind,
+  getEnemy,
+  listArenaEnemies,
+  listEnemies,
+  normalizeArenaEnemyStatus,
+  normalizeArenaStatus,
+  requireArenaEnemy,
+  requireEnemy,
+} from './arena-enemy-content-registry.js';
+
 const registry = {
   enemies: null,
   source: null,

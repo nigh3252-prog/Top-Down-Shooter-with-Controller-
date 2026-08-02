@@ -32,8 +32,11 @@ export function writeWorkingRoster(storage,ids,catalog=[]){
 
 const statusLabel=status=>({
   'lab-only':'LAB ONLY',
+  lab:'LAB ONLY',
   candidate:'CANDIDATE',
   'arena-ready':'ARENA READY',
+  arena:'ARENA READY',
+  disabled:'DISABLED',
 }[status]||'CANDIDATE');
 
 function makeChoice(document,{label,sub='',meta='',active=false,className='',onClick}){

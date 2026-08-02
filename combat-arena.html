@@ -267,7 +267,7 @@ import { getWeaponDamageMultiplier } from './src/combat-balance.js';
 import { staminaCostForWeapon, weaponAllowsCleave } from './src/weapon-balance.js';
 import { createArenaEnemySystem } from './src/arena-enemies.js';
 import { DIRECTOR_MODES } from './src/combat-director.js';
-import { FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
+import { ARENA_ENEMY_OPTIONS } from './src/arena-enemy-catalog.js';
 import { installCombatAudioDirector } from './src/combat-audio.js';
 import { installHitFeel } from './src/hit-feel.js';
 import { StoneSettings } from './src/settings.js';
@@ -1453,7 +1453,7 @@ const spawnSelect=document.getElementById('spawnSelect');
 [
   { id:'mixed', label:'Mixed Pure Strains' },
   { id:'goblins', label:'Goblins Only' },
-  ...FUSION_ENEMY_OPTIONS
+  ...ARENA_ENEMY_OPTIONS
 ].forEach(({id,label})=>{
   const option=document.createElement('option'); option.value=id; option.textContent=label; spawnSelect.appendChild(option);
 });
