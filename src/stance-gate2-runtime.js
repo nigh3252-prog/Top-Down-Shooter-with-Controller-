@@ -400,19 +400,10 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
 
 let installedStanceGate2Runtime=null;
 
-export function installStanceGate2Runtime({arenaHandle=getArenaRuntime(),windowRef=globalThis.window,maxAttempts=240,pollMs=50}={}){
+export function installStanceGate2Runtime({arenaHandle=getArenaRuntime()}={}){
   if(installedStanceGate2Runtime?.installed)return installedStanceGate2Runtime;
-  let attempts=0;
-  const attach=()=>{
-    const handle=arenaHandle||getArenaRuntime();
-    if(handle?.PC&&handle?.arena){
-      const runtime=createStanceGate2Runtime({arenaHandle:handle,windowRef});
-      installedStanceGate2Runtime=runtime;
-      return runtime;
-    }
-    if(attempts++<maxAttempts)windowRef.setTimeout?.(attach,pollMs);
-    return null;
-  };
-  attach();
-  return{installed:false,pending:true};
+  const handle=arenaHandle||getArenaRuntime();
+  if(!handle?.PC||!handle?.arena)return{installed:false,reason:'missing-arena-runtime'};
+  installedStanceGate2Runtime=createStanceGate2Runtime({arenaHandle:handle});
+  return installedStanceGate2Runtime;
 }

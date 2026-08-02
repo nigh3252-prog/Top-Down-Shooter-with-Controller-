@@ -6,6 +6,7 @@ import {
   GATE3_FULL_PAYOFFS,
   cleaveModeForGate3Expression,
   createStanceGate3Runtime,
+  installStanceGate3Runtime,
   resolveGate3FullPayoff,
 } from '../src/stance-gate3-payoffs.js';
 
@@ -62,7 +63,7 @@ function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],ac
     updateCombat(){return updateCombat({PC,combatState,arena});},
   };
   const runtime=createStanceGate3Runtime({arenaHandle:{PC,combatState,arena},windowRef:{}});
-  return{PC,combatState,arena,runtime};
+  return{PC,combatState,arena,runtime,handle:{PC,combatState,arena}};
 }
 
 {
@@ -119,6 +120,22 @@ function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],ac
   assert.equal(Object.hasOwn(STONE_WEAPONS.greatsword,'stance2CleaveMode'),false,'leaving the pilot should restore the modified weapon');
   runtime.destroy();
   assert.equal(combatState.stance2Gate3,undefined);
+}
+
+{
+  assert.deepEqual(
+    installStanceGate3Runtime({arenaHandle:null,gate2Runtime:{installed:true}}),
+    {installed:false,reason:'missing-arena-runtime'},
+  );
+  const {runtime,handle}=makeHarness({stanceId:'S24',weaponId:'dagger'});
+  runtime.destroy();
+  assert.deepEqual(
+    installStanceGate3Runtime({arenaHandle:handle,gate2Runtime:null}),
+    {installed:false,reason:'missing-gate2-runtime'},
+  );
+  const installedRuntime=installStanceGate3Runtime({arenaHandle:handle,gate2Runtime:{installed:true}});
+  assert.equal(installedRuntime.installed,true,'the explicit installer returns the ready Gate 3 runtime');
+  installedRuntime.destroy();
 }
 
 console.log('stance gate 3 payoff tests passed');

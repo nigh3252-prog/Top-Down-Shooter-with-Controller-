@@ -7,6 +7,7 @@ import {
   GATE2_STANCE_IDS,
   GATE2_WEAPON_IDS,
   createStanceGate2Runtime,
+  installStanceGate2Runtime,
   resolveGate2PilotProfile,
 } from '../src/stance-gate2-runtime.js';
 
@@ -117,4 +118,9 @@ assert.equal(combatState.stance2Gate2,undefined);
 for(const key of ['weight','windup','follow','recovery']){
   assert.equal(combatState.tune[key],STONE_WEAPONS.dagger.tune[key],`destroy should restore dagger ${key} tuning`);
 }
+const missingInstall=installStanceGate2Runtime({arenaHandle:null});
+assert.deepEqual(missingInstall,{installed:false,reason:'missing-arena-runtime'});
+const installedRuntime=installStanceGate2Runtime({arenaHandle:handle});
+assert.equal(installedRuntime.installed,true,'the explicit installer returns the ready Gate 2 runtime');
+installedRuntime.destroy();
 console.log('stance gate 2 runtime tests passed');
