@@ -47,7 +47,7 @@ Gate 3 gives each matched class a distinct rule payoff rather than one universal
 
 ### Light + Light — Mobile Expression
 
-Rat Step + dagger retains at least 92% movement speed during normal attacks. The dagger remains focused and may cleave only with its fully charged finisher.
+Rat Step + dagger remains fully mobile during normal attacks and has no post-swing movement penalty. The dagger remains focused and may cleave only with its fully charged finisher.
 
 ### Medium + Medium — Confirmed Form
 
@@ -56,6 +56,26 @@ Long Blade Form + longsword gains 0.35 seconds on the Light 1 follow-up window a
 ### Heavy + Heavy — Breaking Form
 
 Hammerfall + greatsword doubles weapon-zone stagger, establishes minimum stun thresholds, and allows all attacks to cleave. The fully charged finisher uses the stronger stun floor.
+
+### Nine-pair movement commitment
+
+Weapon weight establishes how much momentum must be recovered. Stance affinity determines how cleanly the character manages that momentum. Movement profiles affect both the active swing and the brief period after it ends.
+
+| Pair | Active swing | Post-swing recovery |
+| --- | --- | --- |
+| Rat Step + dagger | Mobile | None |
+| Rat Step + longsword | Walk | 0.22 sec settling recovery |
+| Rat Step + greatsword | Failure animation | Authored failure recovery only |
+| Long Blade Form + dagger | Mobile preparation, committed contact | 0.18 sec settling recovery |
+| Long Blade Form + longsword | Controlled walk | 0.25 sec modest recovery |
+| Long Blade Form + greatsword | Slow adjustment, planted contact | 0.42 sec recovery; first 0.12 sec fully stopped |
+| Hammerfall + dagger | Failure animation | Authored failure recovery only |
+| Hammerfall + longsword | Planted contact | 0.32 sec recovery; first 0.10 sec fully stopped |
+| Hammerfall + greatsword | Slow setup, complete plant | 0.50 sec recovery; first 0.18 sec fully stopped |
+
+After the fully stopped portion, planted recoveries smoothly accelerate back to full movement rather than switching instantly. Failure pairs do not receive an additional generic movement lock on top of their authored failure animation.
+
+Dodge-cancel timing is intentionally unchanged in this movement pass. It should be tuned after the movement and recovery profiles are evaluated so the two variables can be judged separately.
 
 ### Adapted cleave restrictions
 
