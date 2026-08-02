@@ -50,6 +50,11 @@ export function installEnemyLabSectionUI({
     const item=group(data,id);
     return item?renderControlGroup(item):status(`${id.toUpperCase()} UNAVAILABLE`,'This Lab control group is not available yet.');
   };
+  const groupsForSection=(data,sectionId)=>((data.controlGroups||[]).map(item=>({
+    ...item,
+    controls:(item.controls||[]).filter(control=>String(control.placement?.section||'').toLowerCase()===sectionId),
+  })).filter(item=>item.controls.length));
+  const renderSectionGroups=(data,sectionId)=>list(...groupsForSection(data,sectionId).map(item=>renderControlGroup(item)));
   const selectSection=id=>sectionRegistry.select(id);
 
   function encounterModes(){
@@ -76,6 +81,11 @@ export function installEnemyLabSectionUI({
 
   function renderEncounterModePanel(){
     const data=snapshot(),roster=runtime.enemySystem?.getWorkingRosterEncounterStatus?.()||{ids:[]};
+    if(state.encounterMode===WORKING_ROSTER_HADES_ID&&!roster.ids?.length){
+      const fallback=runtime.selectEncounterMode?.(WORKING_ROSTER_HADES_ID);
+      state.encounterMode=fallback?.mode||ALL_ENEMIES_BUDGET_ID;save();
+      setMessage?.(fallback?.warning||'Working roster was cleared; falling back to All · Budgeted Encounter.');
+    }
     const root=document.createElement('div');root.className='encounterModePanel';
     const heading=document.createElement('div');heading.className='row';
     const title=document.createElement('b');title.textContent='ENCOUNTER SOURCE';heading.appendChild(title);root.appendChild(heading);
@@ -130,28 +140,18 @@ export function installEnemyLabSectionUI({
   function renderEnemies(){
     const root=document.createElement('div');root.className='labSectionContent';
     root.append(panel(document,'FOCAL ENEMY','The direct Lab composition uses this selected enemy.',list(...renderType().childNodes, ...renderEnemy().childNodes)));
+    const tuning=renderSectionGroups(snapshot(),'enemies');if(tuning.childNodes.length)root.append(panel(document,'CONTEXTUAL TUNING','Enemy-specific settings appear beside the roster they affect.',tuning));
     return root;
   }
-
-  function renderProfilesSlot(){
-    const root=document.createElement('div');root.className='labProfileBar';root.dataset.profileBarSlot='1';
-    const title=document.createElement('b');title.textContent='PROFILE BAR SLOT';
-    const detail=document.createElement('span');detail.textContent='Reserved for profile-task actions and activation state.';
-    root.append(title,detail);
-    document.dispatchEvent(new CustomEvent('enemy-lab:profile-bar-ready',{detail:{sectionRegistry}}));
-    return root;
-  }
-
-  sectionRegistry.registerSlot({id:'profile-bar-slot',sectionId:'profiles',slot:'profile-bar',order:0,render:renderProfilesSlot});
 
   const coreViews=[
     {id:'core-encounter',sectionId:'encounter',label:'ENCOUNTER',order:0,render:renderEncounter},
     {id:'core-enemies',sectionId:'enemies',label:'FOCAL ENEMY',order:0,render:renderEnemies},
-    {id:'core-loadout',sectionId:'loadout',label:'ACTIVE LOADOUT',order:0,render:()=>panel(document,'ACTIVE LOADOUT','Weapon and stance controls update the same arena runtime.',renderGroup(snapshot(),'loadout'))},
-    {id:'core-combat',sectionId:'combat',label:'COMBAT BEHAVIOR',order:0,render:()=>{const data=snapshot();return panel(document,'COMBAT BEHAVIOR','Director, combo timing, and simulation tuning share one behavior workspace.',list(renderGroup(data,'director'),renderGroup(data,'combat'),renderGroup(data,'simulation')));}},
-    {id:'core-visuals',sectionId:'visuals',label:'VISUAL STYLE',order:0,render:()=>panel(document,'VISUAL STYLE','Theme changes remain scoped to the Lab runtime.',renderGroup(snapshot(),'visuals'))},
+    {id:'core-loadout',sectionId:'loadout',label:'ACTIVE LOADOUT',order:0,render:()=>panel(document,'ACTIVE LOADOUT','Weapon, stance, input, deck, and ability tuning share one player workspace.',renderSectionGroups(snapshot(),'loadout'))},
+    {id:'core-combat',sectionId:'combat',label:'COMBAT BEHAVIOR',order:0,render:()=>panel(document,'COMBAT BEHAVIOR','Director and global encounter tuning share one behavior workspace.',renderSectionGroups(snapshot(),'combat'))},
+    {id:'core-visuals',sectionId:'visuals',label:'VISUAL STYLE',order:0,render:()=>panel(document,'VISUAL STYLE','Theme and maze settings are saved as presentation settings.',renderSectionGroups(snapshot(),'visuals'))},
     {id:'core-capture',sectionId:'capture',label:'ARCANA CAPTURE',order:0,render:renderCapture},
-    {id:'core-diagnostics',sectionId:'diagnostics',label:'RUNTIME DIAGNOSTICS',order:0,render:()=>{const data=snapshot();return panel(document,'RUNTIME DIAGNOSTICS','Feel, hit response, and stance diagnostics stay available without becoming setup controls.',list(renderGroup(data,'feel'),renderGroup(data,'hitfeel')));}},
+    {id:'core-diagnostics',sectionId:'diagnostics',label:'RUNTIME DIAGNOSTICS',order:0,render:()=>panel(document,'RUNTIME DIAGNOSTICS','Feel, hit response, and stance diagnostics remain grouped together.',renderSectionGroups(snapshot(),'diagnostics'))},
     {id:'core-profiles',sectionId:'profiles',label:'PROFILE MANAGEMENT',order:0,render:()=>{
       const root=document.createElement('div');root.className='labProfileSection';
       for(const slot of sectionRegistry.getSlots('profiles'))root.append(slot.render({document,runtime,sectionRegistry,state}));
@@ -164,7 +164,7 @@ export function installEnemyLabSectionUI({
     const oldTop=categoriesEl.scrollTop,oldLeft=categoriesEl.scrollLeft;
     const sections=sectionRegistry.sections({controlGroups:data.controlGroups||[]});
     if(!sections.some(section=>section.id===state.category))state.category='encounter';
-    categoriesEl.replaceChildren(...sections.map(section=>choice({label:section.label,sub:'',active:state.category===section.id,className:section.className,onClick:()=>{state.category=section.id;save();renderAll({preserveCategoryScroll:true});}})));
+    categoriesEl.replaceChildren(...sections.map(section=>{const button=choice({label:section.label,sub:'',active:state.category===section.id,className:section.className,onClick:()=>{state.category=section.id;save();renderAll({preserveCategoryScroll:true});}});button.dataset.enemyLabSection=section.id;return button;}));
     requestAnimationFrame(()=>{categoriesEl.scrollTop=oldTop;categoriesEl.scrollLeft=oldLeft;});
   }
 

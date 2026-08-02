@@ -320,7 +320,10 @@ export function applyCombatProfileStorage(storage=globalThis.localStorage,profil
     if(!storedArcana||Number(storedArcana.sizeMultiplier)!==Number(normalized.arcanaSize))throw new CombatProfileStorageError('Arcana profile settings were not retained',{key:ARCANA_TWEAKS_KEY});
     writeStorageValue(storage,STORAGE_KEYS.spawnMultiplier,normalized.spawnMultiplier);
     writeStorageValue(storage,STORAGE_KEYS.introduction,normalized.introduction);
-    writeStorageValue(storage,STORAGE_KEYS.spawnKind,JSON.stringify(WORKING_ROSTER_HADES_ID));
+    const encounterMode=normalized.encounterMode==='lab-direct'
+      ?String(normalized.workspace?.settings?.['scenario.encounterId']||normalized.enemyId||'mixed')
+      :normalized.encounterMode;
+    writeStorageValue(storage,STORAGE_KEYS.spawnKind,JSON.stringify(encounterMode));
     writeStorageValue(storage,STORAGE_KEYS.directorMode,JSON.stringify(normalized.directorMode));
     writeStorageValue(storage,STORAGE_KEYS.profilePressure,JSON.stringify(normalized.pressureBudget));
     writeStorageValue(storage,STORAGE_KEYS.profileAggression,JSON.stringify(normalized.aggression));
@@ -423,7 +426,10 @@ export function applyCombatProfileToArena(api,profile,{
   const normalized=setActiveCombatProfile(storage,profile,{...options,eventTarget});
   setHadesEncounterSpawnMultiplier(normalized.spawnMultiplier);
   setHadesEncounterDifficultyRamp(normalized.introduction);
-  api.enemySystem.setSpawnKind?.(WORKING_ROSTER_HADES_ID);
+  const encounterMode=normalized.encounterMode==='lab-direct'
+    ?String(normalized.workspace?.settings?.['scenario.encounterId']||normalized.enemyId||'mixed')
+    :normalized.encounterMode;
+  api.enemySystem.setSpawnKind?.(encounterMode);
   api.enemySystem.setPressureBudget?.(normalized.pressureBudget);
   api.enemySystem.setAggression?.(normalized.aggression);
   api.enemySystem.setSpeedScale?.(normalized.enemySpeed);
@@ -435,7 +441,7 @@ export function applyCombatProfileToArena(api,profile,{
   api.enemySystem.setCycleOnWaveClear?.(cycling);
   if(!cycling)api.enemySystem.setDirectorMode?.(normalized.directorMode);
   const spawnSelect=document?.getElementById?.('spawnSelect');
-  if(spawnSelect)spawnSelect.value=WORKING_ROSTER_HADES_ID;
+  if(spawnSelect)spawnSelect.value=encounterMode;
   const countSelect=document?.getElementById?.('hadesSpawnMultiplierSelect');
   if(countSelect)countSelect.value=String(normalized.spawnMultiplier);
   const introSelect=document?.getElementById?.('hadesDifficultyRampSelect');

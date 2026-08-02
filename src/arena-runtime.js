@@ -358,6 +358,20 @@ function cycleWeapon(dir=1){
   respawn();   // weapon swap = full scene reset
   announce(WEAPONS[next].label, .9);
 }
+function selectWeapon(id,{reset=true}={}){
+  const next=normalizeStoneWeaponId(id);
+  if(!WEAPON_ORDER.includes(next))return false;
+  PC.selectCombatWeapon(next);
+  StoneSettings.set('arena.weapon',next);
+  ensureStanceMatchesWeapon();
+  if(reset)respawn();
+  return true;
+}
+function selectStance(id){
+  const pool=stancePoolForWeapon(),index=pool.findIndex(stance=>stance.id===String(id||''));
+  if(index<0)return false;
+  setStance(index);return true;
+}
 
 /* ---------- maze navigation + room encounters ---------- */
 const encounterRandom = createSeededRandom(`${MAZE_SEED}:encounters`);
@@ -1788,48 +1802,53 @@ function captureInitialOptions(){
 
 function registerRuntimeControls(){
   const source='arena-runtime';
-  for(const option of ARENA_VISUAL_STYLE_OPTIONS)controlRegistry.register(
-    {id:'visuals',label:'VISUALS',source},
-    {
-      id:`visuals.${option.id}`,
-      kind:'button',
-      label:option.label,
-      active:()=>arenaTheme.id===option.id,
-      invoke:()=>selectArenaThemeFromMenu(option.id),
-    },
+  controlRegistry.register(
+    {id:'visuals',label:'VISUALS',source,placement:{section:'visuals'}},
+    {id:'visuals.theme',kind:'select',label:'VISUAL STYLE',get:()=>arenaTheme.id,options:()=>ARENA_VISUAL_STYLE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:selectArenaThemeFromMenu,
+      profile:{path:'presentation.theme',scope:'profile',default:'neutral',requiresReload:true,migrationId:'arena-theme-v1',adapter:{apply:value=>{try{globalThis.localStorage?.setItem?.('arena.theme',String(value));return true;}catch{return false;}}}},
+      placement:{section:'visuals',subsection:'Theme',order:0,accessibleLabel:'Visuals / Visual style'}},
   );
-  for(const mode of [...DIRECTOR_MODES,{id:CYCLE_MODE_ID,label:'Cycle All'}])controlRegistry.register(
-    {id:'director',label:'ENCOUNTER DIRECTOR',source},
-    {id:`director.${mode.id}`,kind:'button',label:mode.label,active:()=>((arena.cycleMode?CYCLE_MODE_ID:enemySystem.director.getMode())===mode.id),invoke:()=>setMode(mode.id)},
+  controlRegistry.register(
+    {id:'director',label:'ENCOUNTER DIRECTOR',source,placement:{section:'combat'},profile:{scope:'profile'}},
+    {id:'director.mode',kind:'select',label:'DIRECTOR MODE',get:()=>arena.cycleMode?CYCLE_MODE_ID:enemySystem.director.getMode(),options:()=>[...DIRECTOR_MODES,{id:CYCLE_MODE_ID,label:'Cycle All'}].map(mode=>({value:mode.id,label:mode.label})),set:value=>(setMode(value),true),
+      profile:{path:'combat.directorMode',scope:'profile',migrationId:'director-mode-v3',adapter:{apply:value=>(setMode(value,{reset:false}),true)}},placement:{section:'combat',subsection:'Director',order:0,accessibleLabel:'Combat behavior / Director mode'}},
   );
-  controlRegistry.register({id:'loadout',label:'LOADOUT',source},{id:'loadout.weapon',kind:'button',label:'WEAPON',invoke:()=>cycleWeapon()});
-  controlRegistry.register({id:'loadout',label:'LOADOUT',source},{id:'loadout.stance',kind:'button',label:'STANCE',invoke:()=>cycleStance()});
-  for(const mode of COMBAT_INPUT_MODES)controlRegistry.register(
-    {id:'combat',label:'COMBO TIMING',source},
-    {id:`combat.${mode.id}`,kind:'button',label:mode.label,note:mode.note,active:()=>arena.combatInputMode===mode.id,invoke:()=>setCombatInputMode(mode.id)},
+  controlRegistry.register(
+    {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
+    {id:'loadout.weapon',kind:'select',label:'WEAPON',get:()=>combatState.weapon,options:()=>WEAPON_ORDER.map(value=>({value,label:WEAPONS[value]?.label||value})),set:value=>selectWeapon(value),profile:{path:'player.weapon',scope:'profile',migrationId:'player-weapon-v1',adapter:{apply:value=>selectWeapon(value,{reset:false})}},placement:{section:'loadout',subsection:'Player',order:0,accessibleLabel:'Player loadout / Weapon'}},
   );
-  controlRegistry.register({id:'simulation',label:'SIM',source},{
-    id:'simulation.spawn-kind',kind:'select',label:'ENEMY TYPE',get:()=>enemySystem.spawnKind,
+  controlRegistry.register(
+    {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
+    {id:'loadout.stance',kind:'select',label:'STANCE',get:()=>arena.stance?.id||'',options:()=>stancePoolForWeapon().map(stance=>({value:stance.id,label:stance.name||stance.id})),set:selectStance,profile:{path:'player.stance',scope:'profile',migrationId:'player-stance-v1'},placement:{section:'loadout',subsection:'Player',order:10,accessibleLabel:'Player loadout / Stance'}},
+  );
+  controlRegistry.register(
+    {id:'combat',label:'COMBO TIMING',source,placement:{section:'loadout'},profile:{scope:'profile'}},
+    {id:'combat.input-mode',kind:'select',label:'COMBAT INPUT',get:()=>arena.combatInputMode,options:()=>COMBAT_INPUT_MODES.map(mode=>({value:mode.id,label:mode.label})),set:value=>(setCombatInputMode(value),true),profile:{path:'player.combatInputMode',scope:'profile',migrationId:'combat-input-v1',adapter:{apply:value=>(setCombatInputMode(value,{reset:false}),true)}},placement:{section:'loadout',subsection:'Player',order:20,accessibleLabel:'Player loadout / Combat input mode'}},
+  );
+  controlRegistry.register({id:'simulation',label:'ENCOUNTER TUNING',source,placement:{section:'combat'},profile:{scope:'profile'}},{
+    id:'simulation.spawn-kind',kind:'select',label:'ENCOUNTER SOURCE',get:()=>selectedEncounterMode===LAB_DIRECT_ENCOUNTER_MODE?enemySystem.spawnKind:selectedEncounterMode,
     options:()=>SPAWN_OPTIONS.map(option=>({value:option.id,label:option.label})),
     set:value=>{const selection=PLANNED_ENCOUNTER_MODE_IDS.has(String(value||''))?selectEncounterMode(value):{ok:true,mode:LAB_DIRECT_ENCOUNTER_MODE};if(!selection.ok)return false;if(selection.mode===LAB_DIRECT_ENCOUNTER_MODE){enemySystem.setSpawnKind(value);selectedEncounterMode=LAB_DIRECT_ENCOUNTER_MODE;encounterModeWarning='';}StoneSettings.set('arena.spawnKind',enemySystem.spawnKind);respawn();return true;},
+    profile:{path:'scenario.encounterId',scope:'profile',migrationId:'encounter-source-v3',adapter:{apply:value=>{const selection=PLANNED_ENCOUNTER_MODE_IDS.has(String(value))?selectEncounterMode(value):{ok:true};if(!selection.ok)return false;if(!PLANNED_ENCOUNTER_MODE_IDS.has(String(value))){enemySystem.setSpawnKind(value);selectedEncounterMode=LAB_DIRECT_ENCOUNTER_MODE;}StoneSettings.set('arena.spawnKind',enemySystem.spawnKind);return true;}}},placement:{section:'encounter',subsection:'Source',order:0,accessibleLabel:'Encounter / Encounter source'},
   });
   DIR_SLIDERS.forEach((descriptor,index)=>controlRegistry.register(
-    {id:'simulation',label:'SIM',source},
-    {id:`simulation.tuning.${index}`,kind:'range',label:descriptor.label,min:descriptor.min,max:descriptor.max,step:descriptor.step,get:descriptor.get,set:value=>{descriptor.set(Number(value));return true;}},
+    {id:'simulation',label:'ENCOUNTER TUNING',source,placement:{section:'combat'},profile:{scope:'profile'}},
+    {id:`simulation.tuning.${index}`,kind:'range',label:descriptor.label,min:descriptor.min,max:descriptor.max,step:descriptor.step,get:descriptor.get,set:value=>{descriptor.set(Number(value));return true;},profile:{path:`combat.${['waveSize','pressure','aggression','enemySpeed','enemyHealth','enemySize','idleRange'][index]}`,scope:'profile',migrationId:`combat-tuning-${index}`},placement:{section:'combat',subsection:'Global tuning',order:index,accessibleLabel:`Combat behavior / ${descriptor.label}`}},
   ));
   for(const key of FEEL_KEY_ORDER)controlRegistry.register(
-    {id:'feel',label:'FEEL',source},
-    {id:`feel.key.${key}`,kind:'button',label:key,active:()=>selKey===key,invoke:()=>{selKey=key;return true;}},
+    {id:'feel',label:'FEEL',source,placement:{section:'diagnostics'}},
+    {id:`feel.key.${key}`,kind:'button',label:key,active:()=>selKey===key,invoke:()=>{selKey=key;return true;},profile:{scope:'ephemeral',exclusion:'UI-only selector; combat.feel adapter stores every tier.'},placement:{section:'diagnostics',subsection:'Feel',order:FEEL_KEY_ORDER.indexOf(key),accessibleLabel:`Diagnostics / Feel tier ${key}`}},
   );
   for(const descriptor of FEEL_PARAMS)controlRegistry.register(
-    {id:'feel',label:'FEEL',source},
-    {id:`feel.value.${descriptor.k}`,kind:'range',label:descriptor.label,min:descriptor.min,max:descriptor.max,step:(descriptor.max-descriptor.min)/60,get:()=>FEEL[selKey][descriptor.k],set:value=>{FEEL[selKey][descriptor.k]=Number(value);return true;}},
+    {id:'feel',label:'FEEL',source,placement:{section:'diagnostics'}},
+    {id:`feel.value.${descriptor.k}`,kind:'range',label:descriptor.label,min:descriptor.min,max:descriptor.max,step:(descriptor.max-descriptor.min)/60,get:()=>FEEL[selKey][descriptor.k],set:value=>{FEEL[selKey][descriptor.k]=Number(value);return true;},profile:{scope:'ephemeral',exclusion:'Dynamic editor view; combat.feel adapter stores all tier values.'},placement:{section:'diagnostics',subsection:'Feel',order:20+FEEL_PARAMS.indexOf(descriptor),accessibleLabel:`Diagnostics / Feel / ${descriptor.label}`}},
   );
-  controlRegistry.register({id:'feel',label:'FEEL',source},{id:'feel.test',kind:'button',label:'TEST THIS TIER',invoke:()=>beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3)});
-  for(const descriptor of HitFeel.controlDescriptors())controlRegistry.register({id:'hitfeel',label:'HIT FEEL',source},descriptor);
-  controlRegistry.register({id:'actions',label:'ACTIONS',source},{id:'actions.reset',kind:'button',label:'RESET FIGHT',invoke:()=>respawn()});
-  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source},{id:'maze.cell-size',kind:'select',label:'CELL SIZE',get:()=>getMazeRuntimeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeCellSize(value),true)});
-  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source},{id:'maze.room-size',kind:'select',label:'CELLS PER ROOM',get:()=>getMazeRuntimeSettings().roomSize.id,options:()=>MAZE_ROOM_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeRoomSize(value),true)});
+  controlRegistry.registerProfileAdapter({id:'combat-feel',path:'combat.feel',label:'All Feel tiers',section:'diagnostics',snapshot:()=>JSON.parse(JSON.stringify(FEEL)),validate:value=>value&&FEEL_KEY_ORDER.every(key=>value[key]&&FEEL_PARAMS.every(param=>Number.isFinite(Number(value[key][param.k])))),apply:value=>{for(const key of FEEL_KEY_ORDER)for(const param of FEEL_PARAMS)FEEL[key][param.k]=Number(value[key][param.k]);return true;}});
+  controlRegistry.register({id:'feel',label:'FEEL',source},{id:'feel.test',kind:'button',label:'TEST THIS TIER',invoke:()=>beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3),profile:{scope:'ephemeral',exclusion:'Action button.'},placement:{section:'diagnostics',subsection:'Feel',order:99,accessibleLabel:'Diagnostics / Test Feel tier'}});
+  for(const descriptor of HitFeel.controlDescriptors())controlRegistry.register({id:'hitfeel',label:'HIT FEEL',source,placement:{section:'diagnostics'},profile:{scope:'profile'}},{...descriptor,profile:{path:`combat.hitFeel.${descriptor.id.split('.').at(-1)}`,scope:'profile',migrationId:`hit-feel-${descriptor.id}`},placement:{section:'diagnostics',subsection:'Hit Feel',order:0,accessibleLabel:`Diagnostics / Hit Feel / ${descriptor.label}`}});
+  controlRegistry.register({id:'actions',label:'ACTIONS',source},{id:'actions.reset',kind:'button',label:'RESET FIGHT',invoke:()=>respawn(),profile:{scope:'ephemeral',exclusion:'Action button.'},placement:{section:'encounter',subsection:'Actions',order:99,accessibleLabel:'Encounter / Reset fight'}});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.cell-size',kind:'select',label:'CELL SIZE',get:()=>getMazeRuntimeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeCellSize(value),true),profile:{path:'presentation.maze.cellSize',scope:'profile',requiresReload:true,migrationId:'maze-cell-v1',adapter:{apply:value=>(setMazeRuntimeCellSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Maze geometry',order:10,accessibleLabel:'Visuals / Maze cell size'}});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.room-size',kind:'select',label:'CELLS PER ROOM',get:()=>getMazeRuntimeSettings().roomSize.id,options:()=>MAZE_ROOM_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeRoomSize(value),true),profile:{path:'presentation.maze.roomSize',scope:'profile',requiresReload:true,migrationId:'maze-room-v1',adapter:{apply:value=>(setMazeRuntimeRoomSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Maze geometry',order:20,accessibleLabel:'Visuals / Maze room size'}});
   controlRegistry.subscribe(event=>emitRuntime(event));
 }
 
@@ -1864,12 +1883,13 @@ let captureController=null;
 const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
-  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,
+  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
   setCellSize:id=>setMazeRuntimeCellSize(id),resetFight:()=>respawn(),
   getControlGroups:()=>controlRegistry.getControlGroups(),setControl:(id,value)=>controlRegistry.setControl(id,value),invokeControl:(id,...args)=>controlRegistry.invokeControl(id,...args),
+  snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
   selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,

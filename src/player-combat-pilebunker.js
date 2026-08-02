@@ -50,7 +50,10 @@ export function installPlayerCombat(api){
   const applyGameDefaults=needsPilebunkerGameDefaults();
   const ability=createPowBunkerAbility({THREE,scene:api.scene});
   if(applyGameDefaults){ability.setSize(.300);ability.setArmHeight(3);ability.setWeaponMode('right');}
-  for(const descriptor of ability.controlDescriptors())api.controlRegistry?.register?.({id:'pilebunker',label:'PILEBUNKER',source:'player-combat'},descriptor);
+  for(const descriptor of ability.controlDescriptors())api.controlRegistry?.register?.(
+    {id:'pilebunker',label:'PILEBUNKER',source:'player-combat',placement:{section:'loadout',subsection:'Pilebunker'},profile:{scope:'profile',pathPrefix:'ability.pilebunker'}},
+    {...descriptor,profile:{path:`ability.pilebunker.${descriptor.id.split('.').slice(1).join('.')}`,scope:'profile',migrationId:`pilebunker-${descriptor.id}`},placement:{section:'loadout',subsection:'Pilebunker',order:0,accessibleLabel:`Player loadout / Pilebunker / ${descriptor.label}`}},
+  );
   installArenaEnemyRegistryProbe();
 
   const original={attach:PC.attachCombatToActiveModel,update:PC.updateCombat,start:PC.startCombatAttack,trigger:PC.triggerCombatAttack,zones:PC.getWeaponHitZones,movePenalty:PC.combatMovePenalty};
@@ -119,7 +122,10 @@ export function installPlayerCombat(api){
 
   const combatEffect=createPilebunkerCombatEffect({THREE,scene:api.scene,getEnemies:getArenaEnemies,getPlayer:getPlayerTransform,hitEnemy:hitArenaEnemy});
   if(applyGameDefaults){for(const [key,value] of Object.entries(PILEBUNKER_EFFECT_MAX))combatEffect.setTuning(key,value);markPilebunkerGameDefaultsApplied();}
-  for(const descriptor of combatEffect.controlDescriptors())api.controlRegistry?.register?.({id:'pilebunker',label:'PILEBUNKER',source:'player-combat'},descriptor);
+  for(const descriptor of combatEffect.controlDescriptors())api.controlRegistry?.register?.(
+    {id:'pilebunker',label:'PILEBUNKER',source:'player-combat',placement:{section:'loadout',subsection:'Pilebunker'},profile:{scope:'profile',pathPrefix:'ability.pilebunker'}},
+    {...descriptor,profile:{path:`ability.pilebunker.${descriptor.id.split('.').slice(1).join('.')}`,scope:'profile',migrationId:`pilebunker-${descriptor.id}`},placement:{section:'loadout',subsection:'Pilebunker effect',order:0,accessibleLabel:`Player loadout / Pilebunker / ${descriptor.label}`}},
+  );
 
   /* guided Pilebunker aim: movement-stick direction, retained when centred */
   const guidedAim={active:false,yaw:0,lastRoot:new THREE.Vector3(),currentRoot:new THREE.Vector3(),keys:new Set()};

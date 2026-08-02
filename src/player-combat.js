@@ -51,7 +51,10 @@ export function installPlayerCombat(api){
       return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
     },
   });
-  for(const descriptor of createDashJetControlDescriptors(dashMagicJet))api.controlRegistry?.register?.({id:'dash-jet',label:'DASH JET',source:'player-combat'},descriptor);
+  for(const descriptor of createDashJetControlDescriptors(dashMagicJet))api.controlRegistry?.register?.(
+    {id:'dash-jet',label:'DASH JET',source:'player-combat',placement:{section:'loadout',subsection:'Dash Jet'},profile:{scope:'profile',pathPrefix:'ability.dashJet'}},
+    {...descriptor,profile:descriptor.kind==='button'?{scope:'ephemeral',exclusion:'Reset action; tuned values are stored individually.'}:{path:`ability.dashJet.${descriptor.id.split('.').at(-1)}`,scope:'profile',migrationId:`dash-jet-${descriptor.id}`},placement:{section:'loadout',subsection:'Dash Jet',order:0,accessibleLabel:`Player loadout / Dash Jet / ${descriptor.label}`}},
+  );
 
   // Arcana were authored and validated through the embedded Enemy Lab. Every
   // runtime family now initializes under that same context in the full Combat

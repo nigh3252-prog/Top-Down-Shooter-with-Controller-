@@ -48,6 +48,27 @@ assert.deepEqual(profile.extensions.customFutureField,{enabled:true});
 assert.ok(profile.warnings.includes('UNKNOWN_PROFILE_FIELD:customFutureField'));
 assert.equal(profile.workspace.settings['scenario.pressureBudget'],2.5);
 
+const fullWorkspaceProfile=normalizeCombatProfile({
+  format:'enemy-lab-profile',schemaVersion:3,version:3,id:'full-workspace',name:'Full Workspace',partial:false,
+  workspace:{
+    settings:{
+      'player.weapon':'swordShield','player.stance':'S01-LONG-GUARD','player.combatInputMode':'release-chain','player.arcana':{sizeMultiplier:2,damageMultiplier:3},
+      'combat.directorMode':'battleCircle','combat.waveSize':7,'combat.antelope.chargeSpeed':1.4,'combat.feel':{WIMPY:{windup:.5}},
+      'ability.dashJet.palette':'ember','ability.pilebunker.size':.3,'presentation.theme':'akai','presentation.maze.cellSize':'large',
+      'scenario.configuration':{family:'FLARE',enemyId:'flareGoblinScamp',encounterMode:'all-enemies-budget',mode:'wave',packCount:4,threat:'high',partnerId:'grunt',seed:'profile-seed'},
+      'capture.configuration':{arcanaId:'DRAGON-ARC',aim:'left',layout:'stationary',rngSeed:'99',stage:'style',effects:true,renderMode:'style'},
+    },
+    scenario:{family:'FLARE',enemyId:'flareGoblinScamp',encounterMode:'all-enemies-budget',mode:'wave',packCount:4,threat:'high',partnerId:'grunt',seed:'profile-seed',chamber:{layout:'arena'}},
+    content:{enemyIds:[enemyId],abilityIds:[abilityId],deckCardIds:[abilityId]},
+    capture:{arcanaId:'DRAGON-ARC',aim:'left',layout:'stationary',rngSeed:'99',stage:'style',effects:true,renderMode:'style'},
+  },
+},{now:150});
+assert.equal(fullWorkspaceProfile.partial,false);
+for(const path of ['player.weapon','combat.directorMode','ability.dashJet.palette','ability.pilebunker.size','presentation.theme','scenario.configuration','capture.configuration'])assert.ok(Object.hasOwn(fullWorkspaceProfile.workspace.settings,path),`${path} must round-trip`);
+assert.equal(fullWorkspaceProfile.workspace.scenario.encounterMode,'all-enemies-budget');
+assert.equal(fullWorkspaceProfile.workspace.capture.aim,'left');
+assert.deepEqual(fullWorkspaceProfile.workspace.content.deckCardIds,[abilityId]);
+
 const legacy={
   version:2,id:'legacy',name:'Legacy',enemyIds:[enemyId,'removed.enemy'],abilityIds:[abilityId,'removed.card'],
   pressureBudget:3,unknownLegacyField:'preserve me',
@@ -62,6 +83,7 @@ assert.equal(diagnostics.profiles[0].partial,true);
 assert.equal(diagnostics.profiles[0].extensions.unknownLegacyField,'preserve me');
 assert.ok(diagnostics.warnings.some(warning=>warning.includes('PARTIAL_PROFILE_SOURCE_VERSION:2')));
 assert.deepEqual(readCombatProfiles(storage,{enemyCatalog:ARENA_ENEMY_CATALOG,abilityCatalog:ARENA_ABILITY_CATALOG,now:200})[0].workspace.content.missingEnemyIds,['removed.enemy']);
+assert.equal(diagnostics.profiles[0].encounterMode,'all-enemies-budget','v2 empty-roster profiles migrate to All instead of presenting Roster');
 
 const oneJson=exportCombatProfile(profile,{pretty:false});
 const onePreview=previewCombatProfileImport(oneJson,{existingProfiles:[profile],collision:'copy',now:300});

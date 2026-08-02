@@ -36,6 +36,11 @@ registry.register({id:'visuals',label:'VISUALS',source:'test'}, {
 registry.register({id:'actions',label:'ACTIONS',source:'test'}, {
   id:'actions.reset',kind:'button',label:'Reset',invoke:()=>true,
 });
+let compound={ids:['one','two']};
+registry.registerProfileAdapter({
+  id:'compound-roster',path:'content.rosterIds',label:'Roster',section:'enemies',
+  snapshot:()=>compound,validate:value=>Array.isArray(value?.ids)||'ROSTER_REQUIRED',apply:value=>(compound=value,true),
+});
 
 const amountSnapshot=registry.getControl('simulation.amount');
 assert.deepEqual(amountSnapshot.placement,{
@@ -53,7 +58,7 @@ assert.equal(typeof contracts.find(contract=>contract.id==='simulation.amount').
 assert.equal(contracts.find(contract=>contract.id==='presentation.tone').profile.adapter.id,'tone-adapter');
 
 const snapshot=snapshotProfileSettings(registry);
-assert.deepEqual(snapshot.settings,{'simulation.amount':2,'presentation.tone':'SOFT'});
+assert.deepEqual(snapshot.settings,{'simulation.amount':2,'presentation.tone':'SOFT','content.rosterIds':{ids:['one','two']}});
 assert.ok(!Object.hasOwn(snapshot.settings,'visual.theme'));
 assert.ok(!Object.hasOwn(snapshot.settings,'actions.reset'));
 
@@ -90,11 +95,12 @@ assert.equal(first,1,'a failed staged apply rolls back earlier controls');
 
 const audit=auditProfileCoverage(registry);
 assert.equal(audit.ok,true);
-assert.equal(audit.totalControls,6);
+assert.equal(audit.totalControls,7);
 assert.equal(audit.ephemeralControls,1);
 assert.equal(audit.globalControls,1);
 assert.ok(audit.reloadRequired.includes('simulation.amount'));
 assert.deepEqual(audit.actionOverrides,[]);
+assert.ok(audit.coveredPaths.includes('content.rosterIds'));
 
 const directApply=applyProfileSettings(registry,{'simulation.amount':3});
 assert.equal(directApply.ok,true);

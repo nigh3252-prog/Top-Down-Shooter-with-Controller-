@@ -83,20 +83,24 @@ function descriptorNormalize(descriptor){
 function profileFor(control,group,order){
   const {descriptor,kind}=control;
   const supplied=isRecord(descriptor.profile)?descriptor.profile:{};
+  const groupProfile=isRecord(group.profile)?group.profile:{};
   const explicit=hasOwn(descriptor,'profile')||hasOwn(descriptor,'profilePath')||hasOwn(descriptor,'profileScope')||
     hasOwn(descriptor,'profileDefault')||hasOwn(descriptor,'profileDefaultValue')||hasOwn(descriptor,'profileNormalize')||
     hasOwn(descriptor,'profileNormalizer')||hasOwn(descriptor,'profileRequiresReload')||hasOwn(descriptor,'profileReload')||
-    hasOwn(descriptor,'profileMigrationId')||hasOwn(descriptor,'profileAdapter');
-  const path=String(supplied.path??descriptor.profilePath??descriptor.id).trim()||String(descriptor.id);
-  const scopeCandidate=supplied.scope??descriptor.profileScope;
+    hasOwn(descriptor,'profileMigrationId')||hasOwn(descriptor,'profileAdapter')||Object.keys(groupProfile).length>0;
+  const groupPrefix=String(groupProfile.pathPrefix||'').trim();
+  const defaultPath=groupPrefix?`${groupPrefix}.${String(descriptor.id).split('.').at(-1)}`:descriptor.id;
+  const path=String(supplied.path??descriptor.profilePath??defaultPath).trim()||String(descriptor.id);
+  const scopeCandidate=supplied.scope??descriptor.profileScope??groupProfile.scope;
   const scope=PROFILE_SCOPE_SET.has(String(scopeCandidate))?String(scopeCandidate):scopeFor(group,descriptor,kind);
   const normalizer=typeof supplied.normalizer==='function'?supplied.normalizer:normalizeFunctionFor(control,supplied);
   let defaultValue;
   try{defaultValue=normalizer(defaultFor(control,supplied));}catch{defaultValue=defaultFor(control,supplied);}
   const adapter=supplied.adapter??descriptor.profileAdapter??null;
   const adapterId=String(supplied.adapterId??descriptor.profileAdapterId??adapter?.id??'');
-  const requiresReload=Boolean(supplied.requiresReload??supplied.reloadRequired??supplied.reload??descriptor.profileRequiresReload??descriptor.profileReload??descriptor.reloadRequired);
-  const migrationId=String(supplied.migrationId??descriptor.profileMigrationId??`control:${path}`);
+  const requiresReload=Boolean(supplied.requiresReload??supplied.reloadRequired??supplied.reload??descriptor.profileRequiresReload??descriptor.profileReload??descriptor.reloadRequired??groupProfile.requiresReload);
+  const migrationId=String(supplied.migrationId??descriptor.profileMigrationId??groupProfile.migrationId??`control:${path}`);
+  const exclusion=String(supplied.exclusion??descriptor.profileExclusion??groupProfile.exclusion??'').trim();
   return{
     path,
     scope,
@@ -107,12 +111,14 @@ function profileFor(control,group,order){
     adapter,
     adapterId,
     explicit,
+    exclusion,
     placement:placementFor(group,descriptor,order),
   };
 }
 
 function readDescriptorValue(control){
   const descriptor=control.descriptor;
+  if(control.kind==='check')return resolve(descriptor.get??descriptor.checked??descriptor.value);
   return resolve(descriptor.get??descriptor.value);
 }
 
@@ -160,6 +166,7 @@ function profileSnapshot(profile){
     migrationId:profile.migrationId,
     adapterId:profile.adapterId,
     explicit:profile.explicit,
+    exclusion:profile.exclusion,
     placement:profile.placement,
     hasNormalizer:typeof profile.normalizer==='function',
     hasAdapter:Boolean(profile.adapter),
@@ -331,8 +338,9 @@ export function auditProfileCoverage(registry,options={}){
   const globalRecords=records.filter(record=>record.profile.scope==='global');
   const ephemeralRecords=records.filter(record=>record.profile.scope==='ephemeral');
   const inferredMetadata=records.filter(record=>record.profile.scope!=='ephemeral'&&!record.profile.explicit).map(record=>record.id);
+  const undocumentedExclusions=records.filter(record=>record.profile.scope==='ephemeral'&&record.kind!=='button'&&!record.profile.exclusion).map(record=>record.id);
   const missingSnapshotAdapter=records.filter(record=>record.profile.scope!=='ephemeral'&&
-    typeof record.descriptor.get!=='function'&&record.descriptor.value===undefined&&
+    typeof record.descriptor.get!=='function'&&typeof record.descriptor.checked!=='function'&&record.descriptor.value===undefined&&record.descriptor.checked===undefined&&
     typeof record.profile.adapter?.read!=='function'&&typeof record.profile.adapter?.snapshot!=='function'&&
     typeof record.profile.adapter?.get!=='function').map(record=>record.profile.path);
   const missingApplyAdapter=records.filter(record=>record.profile.scope!=='ephemeral'&&
@@ -342,11 +350,12 @@ export function auditProfileCoverage(registry,options={}){
   const warnings=[];
   duplicatePaths.forEach(path=>warnings.push(`DUPLICATE_PROFILE_PATH:${path}`));
   inferredMetadata.forEach(id=>warnings.push(`INFERRED_PROFILE_METADATA:${id}`));
+  undocumentedExclusions.forEach(id=>warnings.push(`UNDOCUMENTED_PROFILE_EXCLUSION:${id}`));
   missingSnapshotAdapter.forEach(path=>warnings.push(`MISSING_PROFILE_SNAPSHOT:${path}`));
   missingApplyAdapter.forEach(path=>warnings.push(`MISSING_PROFILE_APPLY:${path}`));
   actionOverrides.forEach(id=>warnings.push(`ACTION_NOT_EPHEMERAL:${id}`));
   return Object.freeze({
-    ok:duplicatePaths.length===0&&actionOverrides.length===0&&missingSnapshotAdapter.length===0&&missingApplyAdapter.length===0,
+    ok:duplicatePaths.length===0&&actionOverrides.length===0&&missingSnapshotAdapter.length===0&&missingApplyAdapter.length===0&&inferredMetadata.length===0&&undocumentedExclusions.length===0,
     totalControls:records.length,
     profileControls:profileRecordsOnly.length,
     globalControls:globalRecords.length,
@@ -354,6 +363,7 @@ export function auditProfileCoverage(registry,options={}){
     coveredPaths:Object.freeze([...byPath.keys()]),
     duplicatePaths:Object.freeze(duplicatePaths),
     inferredMetadata:Object.freeze(inferredMetadata),
+    undocumentedExclusions:Object.freeze(undocumentedExclusions),
     missingSnapshotAdapter:Object.freeze(missingSnapshotAdapter),
     missingApplyAdapter:Object.freeze(missingApplyAdapter),
     actionOverrides:Object.freeze(actionOverrides),
@@ -364,7 +374,7 @@ export function auditProfileCoverage(registry,options={}){
 }
 
 export function createArenaControlRegistry(){
-  const groups=new Map(),controls=new Map(),listeners=new Set();
+  const groups=new Map(),controls=new Map(),profileAdapters=new Map(),listeners=new Set();
   const emit=event=>{for(const listener of [...listeners])listener(event);};
   const ensureGroup=group=>{
     const id=String(group.id);
@@ -406,18 +416,40 @@ export function createArenaControlRegistry(){
     const result=control.descriptor.invoke(...args);
     emit({type:'invoke',controlId:control.id,groupId:control.groupId,args,snapshot:snapshotControl(control)});return result??true;
   }
+  function registerProfileAdapter(definition={}){
+    const id=String(definition.id||definition.path||'').trim();
+    const path=String(definition.path||id).trim();
+    if(!id||!path)throw new Error('Profile adapters require stable id and path values');
+    if(profileAdapters.has(id)||[...profileAdapters.values()].some(record=>record.profile.path===path))throw new Error(`Duplicate profile adapter: ${id}`);
+    const scope=PROFILE_SCOPE_SET.has(String(definition.scope))?String(definition.scope):'profile';
+    const adapter=Object.freeze({
+      snapshot:definition.snapshot,
+      validate:definition.validate,
+      apply:definition.apply,
+    });
+    const profile={
+      path,scope,defaultValue:deepCloneDefault(definition.default),normalizer:typeof definition.normalizer==='function'?definition.normalizer:value=>value,
+      requiresReload:Boolean(definition.requiresReload),migrationId:String(definition.migrationId||`adapter:${path}`),adapter,
+      adapterId:id,explicit:true,exclusion:String(definition.exclusion||''),
+      placement:Object.freeze({section:String(definition.section||'PROFILES'),subsection:String(definition.subsection||''),order:Number(definition.order)||0,label:String(definition.label||id),accessibleLabel:String(definition.accessibleLabel||definition.label||id),fullAccessibleLabel:String(definition.accessibleLabel||definition.label||id),explicit:true}),
+    };
+    const record={id,kind:'adapter',groupId:'profile-adapters',descriptor:{id,kind:'adapter',label:String(definition.label||id)},profile};
+    profileAdapters.set(id,record);emit({type:'profile-adapter-register',adapterId:id,path});
+    return()=>{const removed=profileAdapters.delete(id);if(removed)emit({type:'profile-adapter-remove',adapterId:id,path});return removed;};
+  }
+  const profileRecordSnapshots=()=>Object.freeze([...controls.values(),...profileAdapters.values()].map(control=>Object.freeze({
+    id:control.id,kind:control.kind,groupId:control.groupId,descriptor:control.descriptor,profile:control.profile,
+    readValue:()=>readProfileValue(control),applyValue:(value,context)=>applyRecord(control,value,context),
+  })));
   const api={
-    register,setControl,invokeControl,getControlGroups,
+    register,registerProfileAdapter,setControl,invokeControl,getControlGroups,
     getControl:id=>controls.has(String(id))?snapshotControl(controls.get(String(id))):null,
     getProfileContracts:()=>Object.freeze([...controls.values()].map(control=>Object.freeze({
       id:control.id,kind:control.kind,groupId:control.groupId,descriptor:Object.freeze({
         label:String(control.descriptor.label||control.id),note:String(control.descriptor.note||''),
       }),placement:control.profile.placement,profile:profileContractSnapshot(control.profile),
     }))),
-    getProfileControlRecords:()=>Object.freeze([...controls.values()].map(control=>Object.freeze({
-      id:control.id,kind:control.kind,groupId:control.groupId,descriptor:control.descriptor,profile:control.profile,
-      readValue:()=>readProfileValue(control),applyValue:(value,context)=>applyRecord(control,value,context),
-    }))),
+    getProfileControlRecords:profileRecordSnapshots,
     snapshotProfileSettings:options=>snapshotProfileSettings(api,options),
     validateProfileSettings:(input,options)=>validateProfileSettings(api,input,options),
     applyProfileSettings:(input,options)=>applyProfileSettings(api,input,options),
@@ -425,4 +457,9 @@ export function createArenaControlRegistry(){
     subscribe(listener){if(typeof listener!=='function')return()=>{};listeners.add(listener);return()=>listeners.delete(listener);},
   };
   return Object.freeze(api);
+}
+
+function deepCloneDefault(value){
+  if(value===undefined)return undefined;
+  try{return JSON.parse(JSON.stringify(value));}catch{return value;}
 }

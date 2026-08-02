@@ -29,6 +29,8 @@ const KNOWN_TOP_LEVEL_KEYS=new Set([
   'catalogVersion','source',
 ]);
 const KNOWN_WORKSPACE_KEYS=new Set(['version','settings','content','scenario','capture','extensions','catalogVersion']);
+const KNOWN_SCENARIO_KEYS=new Set(['version','family','enemyId','focalEnemyId','source','encounterMode','encounterId','mode','packCount','soloCount','waveCount','threat','partnerId','introduction','seed','chamber','layout','extensions']);
+const KNOWN_CAPTURE_KEYS=new Set(['version','ability','arcanaId','aim','layout','dummy','rngSeed','stage','effects','renderMode','extensions']);
 const KNOWN_CONTENT_KEYS=new Set([
   'version','catalogVersion','enemyIds','rosterIds','abilityIds','abilityPoolIds','deckCardIds','currentDeckIds',
   'missingEnemyIds','missingAbilityIds','missingDeckCardIds','unknownEnemyIds','unknownAbilityIds','extensions',
@@ -101,39 +103,67 @@ function normalizeWorkspace(raw,options={},warnings=[]){
 
   const paths=ENEMY_LAB_PROFILE_SETTING_PATHS;
   const settings={...settingsSource};
-  settings[paths.spawnMultiplier]=new Set([1,2,5,10]).has(Number(readSetting(settingsSource,source,paths.spawnMultiplier,'spawnMultiplier',1)))
-    ?Number(readSetting(settingsSource,source,paths.spawnMultiplier,'spawnMultiplier',1)):1;
-  const introduction=String(readSetting(settingsSource,source,paths.introduction,'introduction','slow')).toLowerCase();
+  const cadence=isRecord(settingsSource['scenario.hadesCadence'])?settingsSource['scenario.hadesCadence']:{};
+  const arcana=isRecord(settingsSource['player.arcana'])?settingsSource['player.arcana']:{};
+  const modern=(path,fallback)=>Object.prototype.hasOwnProperty.call(settingsSource,path)?settingsSource[path]:fallback;
+  settings[paths.spawnMultiplier]=new Set([1,2,5,10]).has(Number(readSetting(settingsSource,source,paths.spawnMultiplier,'spawnMultiplier',cadence.spawnMultiplier??1)))
+    ?Number(readSetting(settingsSource,source,paths.spawnMultiplier,'spawnMultiplier',cadence.spawnMultiplier??1)):1;
+  const introduction=String(readSetting(settingsSource,source,paths.introduction,'introduction',cadence.introduction??'slow')).toLowerCase();
   settings[paths.introduction]=new Set(['slow','medium','high']).has(introduction)?introduction:'slow';
-  settings[paths.pressureBudget]=round(readSetting(settingsSource,source,paths.pressureBudget,'pressureBudget',3),3,.5,4);
-  settings[paths.aggression]=round(readSetting(settingsSource,source,paths.aggression,'aggression',1),1,.25,3);
-  settings[paths.enemySpeed]=round(readSetting(settingsSource,source,paths.enemySpeed,'enemySpeed',.5),.5,.25,1.5);
-  settings[paths.enemyHealth]=round(readSetting(settingsSource,source,paths.enemyHealth,'enemyHealth',2.5),2.5,.25,5);
-  settings[paths.enemySize]=round(readSetting(settingsSource,source,paths.enemySize,'enemySize',1.5),1.5,1,3.5);
-  settings[paths.idleRange]=round(readSetting(settingsSource,source,paths.idleRange,'idleRange',3),3,1,6);
-  settings[paths.directorMode]=String(readSetting(settingsSource,source,paths.directorMode,'directorMode','pressureBudget')||'pressureBudget');
+  settings[paths.pressureBudget]=round(readSetting(settingsSource,source,paths.pressureBudget,'pressureBudget',modern('combat.pressure',3)),3,.5,4);
+  settings[paths.aggression]=round(readSetting(settingsSource,source,paths.aggression,'aggression',modern('combat.aggression',1)),1,.25,3);
+  settings[paths.enemySpeed]=round(readSetting(settingsSource,source,paths.enemySpeed,'enemySpeed',modern('combat.enemySpeed',.5)),.5,.25,1.5);
+  settings[paths.enemyHealth]=round(readSetting(settingsSource,source,paths.enemyHealth,'enemyHealth',modern('combat.enemyHealth',2.5)),2.5,.25,5);
+  settings[paths.enemySize]=round(readSetting(settingsSource,source,paths.enemySize,'enemySize',modern('combat.enemySize',1.5)),1.5,1,3.5);
+  settings[paths.idleRange]=round(readSetting(settingsSource,source,paths.idleRange,'idleRange',modern('combat.idleRange',3)),3,1,6);
+  settings[paths.directorMode]=String(readSetting(settingsSource,source,paths.directorMode,'directorMode',modern('combat.directorMode','pressureBudget'))||'pressureBudget');
   settings[paths.arcanaSize]=round(readSetting(
-    settingsSource,source,paths.arcanaSize,'arcanaSize',options.arcanaSizeFallback??1,
+    settingsSource,source,paths.arcanaSize,'arcanaSize',arcana.sizeMultiplier??options.arcanaSizeFallback??1,
   ),options.arcanaSizeFallback??1,1,5);
   if(options.directorModeIds instanceof Set&&!options.directorModeIds.has(settings[paths.directorMode])){
     settings[paths.directorMode]=String(options.directorModeDefault||'pressureBudget');
   }
 
-  const capture=workspaceSource.capture??source.capture??null;
+  const captureSource=isRecord(workspaceSource.capture)?workspaceSource.capture:(isRecord(source.capture)?source.capture:{});
+  const requestedEncounterMode=String(source.encounterMode??scenarioSource.encounterMode??scenarioSource.encounterId??options.encounterModeDefault??'all-enemies-budget');
+  const sourceVersion=Math.max(0,Math.round(finite(source.schemaVersion??source.version,1)));
+  const encounterMode=sourceVersion<3&&!enemyIds.length&&requestedEncounterMode==='working-roster-hades'?'all-enemies-budget':requestedEncounterMode;
+  if(encounterMode!==requestedEncounterMode)warnings.push('EMPTY_ROSTER_MODE_NORMALIZED_TO_ALL');
   const scenario={
     version:1,
     family:String(source.family??scenarioSource.family??'GOBLINS'),
-    enemyId:String(source.enemyId??scenarioSource.enemyId??'grunt'),
+    enemyId:String(source.enemyId??scenarioSource.enemyId??scenarioSource.focalEnemyId??'grunt'),
+    focalEnemyId:String(source.enemyId??scenarioSource.focalEnemyId??scenarioSource.enemyId??'grunt'),
+    source:String(scenarioSource.source??(encounterMode==='lab-direct'?'direct':'planned')),
+    encounterMode,
+    encounterId:String(scenarioSource.encounterId??encounterMode),
     mode:String(source.mode??scenarioSource.mode??'solo'),
     packCount:Math.max(1,Math.min(99,Math.round(finite(source.packCount??scenarioSource.packCount,3)))),
+    soloCount:Math.max(1,Math.min(99,Math.round(finite(scenarioSource.soloCount,1)))),
+    waveCount:Math.max(1,Math.min(99,Math.round(finite(scenarioSource.waveCount,1)))),
     threat:String(source.threat??scenarioSource.threat??'standard'),
     partnerId:String(source.partnerId??scenarioSource.partnerId??''),
+    introduction:String(source.introduction??scenarioSource.introduction??settings[ENEMY_LAB_PROFILE_SETTING_PATHS.introduction]??'slow'),
     seed:String(source.seed??scenarioSource.seed??''),
-    layout:String(source.layout??scenarioSource.layout??''),
+    chamber:copyRecord(scenarioSource.chamber),
+    layout:String(source.layout??scenarioSource.layout??scenarioSource.chamber?.layout??''),
     extensions:{
       ...copyRecord(scenarioSource.extensions),
-      ...collectUnknown(scenarioSource,new Set(['version','family','enemyId','mode','packCount','threat','partnerId','seed','layout','extensions'])),
+      ...collectUnknown(scenarioSource,KNOWN_SCENARIO_KEYS),
     },
+  };
+  const capture={
+    version:1,
+    ability:String(captureSource.ability??captureSource.arcanaId??'DRAGON-ARC'),
+    arcanaId:String(captureSource.arcanaId??captureSource.ability??'DRAGON-ARC'),
+    aim:String(captureSource.aim??'right'),
+    layout:String(captureSource.layout??captureSource.dummy??'none'),
+    dummy:String(captureSource.dummy??captureSource.layout??'none'),
+    rngSeed:String(captureSource.rngSeed??4401),
+    stage:String(captureSource.stage??'motion'),
+    effects:captureSource.effects!==false,
+    renderMode:String(captureSource.renderMode??'proxy'),
+    extensions:{...copyRecord(captureSource.extensions),...collectUnknown(captureSource,KNOWN_CAPTURE_KEYS)},
   };
   const contentExtensions={
     ...copyRecord(contentSource.extensions),
@@ -165,7 +195,7 @@ function normalizeWorkspace(raw,options={},warnings=[]){
       missingDeckCardIds,
       extensions:contentExtensions,
     },
-    capture:isRecord(capture)?deepClone(capture):null,
+    capture,
     extensions:workspaceExtensions,
   };
 }
@@ -227,7 +257,7 @@ export function normalizeEnemyLabProfile(profile={},options={}){
     idleRange:settings[paths.idleRange],
     arcanaSize:settings[paths.arcanaSize],
     directorMode:settings[paths.directorMode],
-    encounterMode:String(raw.encounterMode||options.encounterModeDefault||'workingRosterHades'),
+    encounterMode:workspace.scenario.encounterMode,
     cadence:String(raw.cadence||'native-hades'),
   };
   if(sourceVersion<ENEMY_LAB_PROFILE_SCHEMA_VERSION)canonical.warnings.push(`PARTIAL_PROFILE_SOURCE_VERSION:${sourceVersion}`);

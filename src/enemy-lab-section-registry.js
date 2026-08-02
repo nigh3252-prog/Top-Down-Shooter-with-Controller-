@@ -21,11 +21,11 @@ export const ENEMY_LAB_SECTION_DEFINITIONS=Object.freeze([
 ]);
 
 export const ENEMY_LAB_CONTROL_GROUPS=Object.freeze({
-  encounter:Object.freeze([]),
-  enemies:Object.freeze([]),
-  loadout:Object.freeze(['loadout']),
+  encounter:Object.freeze(['actions']),
+  enemies:Object.freeze(['antelope']),
+  loadout:Object.freeze(['loadout','combat','dash-jet','pilebunker']),
   combat:Object.freeze(['director','combat','simulation']),
-  visuals:Object.freeze(['visuals']),
+  visuals:Object.freeze(['visuals','maze']),
   capture:Object.freeze([]),
   diagnostics:Object.freeze(['feel','hitfeel']),
   profiles:Object.freeze([]),

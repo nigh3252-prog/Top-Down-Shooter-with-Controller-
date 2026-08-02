@@ -350,7 +350,7 @@ export function createArenaEnemySystem(options = {}){
 
   const controlRegistry = options.controlRegistry;
   controlRegistry?.register?.(
-    { id:'antelope', label:'ANTELOPE', source:'arena-enemies-antelope' },
+    { id:'antelope', label:'ANTELOPE', source:'arena-enemies-antelope', placement:{section:'enemies',subsection:'Antelope'}, profile:{scope:'profile',pathPrefix:'combat.antelope'} },
     {
       id:'antelope.charge-speed',
       kind:'range',
@@ -360,6 +360,8 @@ export function createArenaEnemySystem(options = {}){
       step:CHARGE_SPEED_STEP,
       get:()=>antelopeChargeSpeedScale,
       set:value=>{ system.setAntelopeChargeSpeedScale(value); return true; },
+      profile:{path:'combat.antelope.chargeSpeed',scope:'profile',migrationId:'antelope-charge-speed-v1'},
+      placement:{section:'enemies',subsection:'Antelope tuning',order:0,accessibleLabel:'Enemies / Antelope charge run speed'},
     },
   );
   return system;

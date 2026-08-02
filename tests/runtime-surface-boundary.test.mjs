@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
 const read=path=>readFileSync(join(root,path),'utf8');
-const arena=read('combat-arena.html'),lab=read('enemy-lab.html'),runtime=read('src/arena-runtime.js'),renderer=read('src/hex-maze-renderer.js'),shell=read('src/arena-shell.js'),antelope=read('src/arena-enemies-antelope.js'),weaponBalance=read('src/weapon-balance.js'),shellCss=read('src/arena-shell.css');
+const arena=read('combat-arena.html'),lab=read('enemy-lab.html'),runtime=read('src/arena-runtime.js'),renderer=read('src/hex-maze-renderer.js'),shell=read('src/arena-shell.js'),antelope=read('src/arena-enemies-antelope.js'),weaponBalance=read('src/weapon-balance.js'),shellCss=read('src/arena-shell.css'),sectionUi=read('src/enemy-lab-section-ui.js');
 const playerCombat=read('src/player-combat.js'),pilebunker=read('src/player-combat-pilebunker.js');
 const rootPages=readdirSync(root,{withFileTypes:true}).filter(entry=>entry.isFile()&&extname(entry.name)==='.html').map(entry=>entry.name).sort();
 assert.deepEqual(rootPages,['combat-arena.html','enemy-lab.html','index.html']);
@@ -35,11 +35,13 @@ assert.doesNotMatch(shell,/ENCOUNTER DIRECTOR|COMBO TIMING|<[^>]+>SIM<|<[^>]+>FE
 assert.match(runtime,/selectArenaTheme\(id,\{storage,location\}\)/);
 assert.match(runtime,/createArenaEnemySystem\(\{\s*THREE, worldRoot, controlRegistry/);
 assert.match(runtime,/\{id:'visuals',label:'VISUALS',source/);
-assert.match(runtime,/id:`visuals\.\$\{option\.id\}`/);
-assert.match(runtime,/invoke:\(\)=>selectArenaThemeFromMenu\(option\.id\)/);
+assert.match(runtime,/id:'visuals\.theme',kind:'select',label:'VISUAL STYLE'/);
+assert.match(runtime,/set:selectArenaThemeFromMenu/);
 for(const id of ['neutral','original','akai'])assert.match(runtime,new RegExp(`\\{id:'${id}',label:'${id.toUpperCase()}'\\}`));
 assert.match(runtime,/loadout\.weapon/);
 assert.match(runtime,/loadout\.stance/);
+assert.match(runtime,/id:'director\.mode',kind:'select'/);
+assert.match(runtime,/id:'combat\.input-mode',kind:'select'/);
 assert.match(runtime,/if\(e\.key==='x'\) cycleWeapon\(\)/);
 assert.match(runtime,/weaponPrev.*cycleWeapon\(-1\)/);
 assert.match(runtime,/installRoadieRun\(\)/);
@@ -48,7 +50,7 @@ assert.match(runtime,/if\(!ABILITY_CAPTURE_MODE\)[\s\S]*installStanceGate2Runtim
 assert.match(runtime,/stanceGate3Runtime\?\.destroy\?\.\(\)[\s\S]*stanceGate2Runtime\?\.destroy\?\.\(\)/);
 assert.doesNotMatch(`${runtime}\n${weaponBalance}`,/__stance2Gate|bootStanceRuntimes|window\.__arena\b/);
 assert.match(lab,/menuButton\.style\.display='none'/);
-assert.match(lab,/data\.controlGroups\|\|\[\]/);
+assert.match(sectionUi,/data\.controlGroups\|\|\[\]/);
 assert.match(lab,/control\.kind==='button'\?bridge\?\.invokeControl\?\.\(control\.id\):bridge\?\.setControl/);
 assert.doesNotMatch(lab,/function renderTools\(\)[\s\S]*?FULLSCREEN/);
 assert.doesNotMatch(shellCss,/data-arena-mode="enemy-lab" #topBar/);

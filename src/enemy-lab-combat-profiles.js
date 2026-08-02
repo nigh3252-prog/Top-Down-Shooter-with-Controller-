@@ -1,262 +1,253 @@
 import {
+  ACTIVE_COMBAT_PROFILE_STORAGE_KEY,
   deleteCombatProfile,
-  readActiveCombatProfile,
-  readCombatProfileDraft,
+  exportCombatProfile,
+  exportCombatProfiles,
+  importCombatProfiles,
+  previewCombatProfileImport,
   readCombatProfiles,
   saveCombatProfile,
-  setActiveCombatProfile,
+  writeCombatProfiles,
 } from './combat-profile.js';
-import { DIRECTOR_MODES } from './combat-director.js';
+import { createEnemyLabWorkspace, validateEnemyLabProfile } from './enemy-lab-profile-schema.js';
+import { readArcanaTweaks, writeArcanaTweaks } from './wizard-arcana-settings.js';
+import {
+  getHadesEncounterDifficultyRamp,
+  getHadesEncounterSpawnMultiplier,
+  setHadesEncounterDifficultyRamp,
+  setHadesEncounterSpawnMultiplier,
+} from './hades-encounter-tuning.js';
 
-function makeChoice(document,{label,sub='',meta='',active=false,className='',onClick}){
-  const button=document.createElement('button');
-  button.className=`choice${active?' on':''}${className?` ${className}`:''}`;
-  const title=document.createElement('b');title.textContent=label;button.appendChild(title);
-  if(sub){const detail=document.createElement('span');detail.textContent=sub;button.appendChild(detail);}
-  if(meta){const footer=document.createElement('em');footer.textContent=meta;button.appendChild(footer);}
-  button.addEventListener('click',onClick);
-  return button;
+const DECK_STORAGE_KEY='enemyLab.deck.v1';
+const SETTINGS_STORAGE_KEY='enemyLab.settings.v3';
+const PLANNED_MODES=new Set(['all-enemies-budget','working-roster-hades','flare-level-1','hades-tartarus']);
+const DIRECT_MODES=new Set(['lab-direct']);
+const DIRECT_TEST_MODES=new Set(['solo','pack','wave']);
+const THREAT_LEVELS=new Set(['low','standard','high']);
+const CAPTURE_AIMS=new Set(['right','down','left','up']);
+const CAPTURE_LAYOUTS=new Set(['none','stationary','source-line']);
+const CAPTURE_STAGES=new Set(['contract','source','style','motion']);
+const CAPTURE_RENDER_MODES=new Set(['proxy','source','style']);
+
+const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
+const stable=value=>JSON.stringify(value,Object.keys(value||{}).sort());
+const cleanName=value=>String(value||'').trim().replace(/\s+/g,' ').slice(0,64);
+const uniqueStrings=value=>[...new Set((Array.isArray(value)?value:[]).map(item=>String(item||'').trim()).filter(Boolean))];
+const orderedStrings=value=>(Array.isArray(value)?value:[]).map(item=>String(item||'').trim()).filter(Boolean);
+const activeRecord=storage=>{try{return JSON.parse(storage?.getItem?.(ACTIVE_COMBAT_PROFILE_STORAGE_KEY)||'null');}catch{return null;}};
+
+function storageSnapshot(storage){
+  const result=new Map();
+  try{for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key!==null)result.set(key,storage.getItem(key));}}catch{}
+  return result;
 }
 
-function makeStatus(document,title,body){
-  const card=document.createElement('div');card.className='statusCard';card.dataset.combatProfileStatus='1';
+function restoreStorage(storage,snapshot){
+  try{
+    const keys=[];for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key!==null)keys.push(key);}
+    for(const key of keys)if(!snapshot.has(key))storage.removeItem(key);
+    for(const [key,value] of snapshot)storage.setItem(key,value);
+  }catch{}
+}
+
+function setStoredJson(storage,key,value){
+  storage.setItem(key,JSON.stringify(value));
+  if(storage.getItem(key)!==JSON.stringify(value))throw new Error(`Storage did not retain ${key}.`);
+}
+
+function profileId(){
+  const cryptoId=globalThis.crypto?.randomUUID?.();
+  return cryptoId?`profile-${cryptoId}`:`profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
+}
+
+function downloadJson(document,text,name){
+  const blob=new Blob([text],{type:'application/json'}),url=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+
+function button(document,label,onClick,{className='',disabled=false}={}){
+  const element=document.createElement('button');element.type='button';element.className=`miniBtn${className?` ${className}`:''}`;element.textContent=label;element.disabled=disabled;element.addEventListener('click',onClick);return element;
+}
+
+function statusCard(document,title,detail){
+  const root=document.createElement('div');root.className='statusCard';
   const heading=document.createElement('b');heading.textContent=title;
-  const detail=document.createElement('span');detail.textContent=body;
-  card.append(heading,detail);return card;
+  const body=document.createElement('span');body.textContent=detail;root.append(heading,body);return root;
 }
 
-function makeField(document,label,control){
-  const wrapper=document.createElement('label');wrapper.className='profileField';
-  const title=document.createElement('span');title.textContent=label;
-  wrapper.append(title,control);return wrapper;
+function normalizeScenario(value,current={}){
+  const source=value&&typeof value==='object'?value:{};
+  const encounterMode=String(source.encounterMode||source.encounterId||current.encounterMode||'lab-direct');
+  if(!DIRECT_MODES.has(encounterMode)&&!PLANNED_MODES.has(encounterMode))throw new Error(`Unsupported encounter mode: ${encounterMode}`);
+  const mode=String(source.mode||current.mode||'solo');if(!DIRECT_TEST_MODES.has(mode))throw new Error(`Unsupported direct test mode: ${mode}`);
+  const threat=String(source.threat||current.threat||'standard');if(!THREAT_LEVELS.has(threat))throw new Error(`Unsupported threat level: ${threat}`);
+  return{
+    family:String(source.family||current.family||'GOBLINS'),enemyId:String(source.enemyId||source.focalEnemyId||current.enemyId||'grunt'),
+    focalEnemyId:String(source.focalEnemyId||source.enemyId||current.enemyId||'grunt'),source:encounterMode==='lab-direct'?'direct':'planned',encounterMode,encounterId:String(source.encounterId||encounterMode),
+    mode,packCount:Math.max(1,Math.min(99,Math.round(Number(source.packCount??current.packCount??3)||3))),
+    soloCount:Math.max(1,Math.min(99,Math.round(Number(source.soloCount??1)||1))),waveCount:Math.max(1,Math.min(99,Math.round(Number(source.waveCount??1)||1))),
+    threat,partnerId:String(source.partnerId??current.partnerId??''),introduction:String(source.introduction||getHadesEncounterDifficultyRamp()),
+    seed:String(source.seed??current.seed??''),chamber:clone(source.chamber||current.chamber||{}),layout:String(source.layout??current.layout??''),
+  };
 }
 
-function optionSelect(document,values,current){
-  const select=document.createElement('select');
-  for(const value of values){
-    const option=document.createElement('option');
-    option.value=String(value.value);option.textContent=value.label;option.selected=String(value.value)===String(current);
-    select.appendChild(option);
-  }
-  return select;
+function normalizeCapture(value,current={}){
+  const source=value&&typeof value==='object'?value:{};
+  const aim=String(source.aim||current.aim||'right'),layout=String(source.layout||source.dummy||current.dummy||'none');
+  const stage=String(source.stage||current.stage||'motion'),renderMode=String(source.renderMode||current.renderMode||'proxy');
+  if(!CAPTURE_AIMS.has(aim)||!CAPTURE_LAYOUTS.has(layout)||!CAPTURE_STAGES.has(stage)||!CAPTURE_RENDER_MODES.has(renderMode))throw new Error('Unsupported capture configuration.');
+  return{ability:String(source.ability||source.arcanaId||current.arcanaId||'DRAGON-ARC'),arcanaId:String(source.arcanaId||source.ability||current.arcanaId||'DRAGON-ARC'),aim,layout,dummy:layout,rngSeed:String(source.rngSeed??current.rngSeed??4401),stage,effects:source.effects!==false,renderMode};
 }
 
-function rangeField(document,draft,key,label,{min,max,step,suffix=''}){
-  const input=document.createElement('input');input.type='range';input.min=String(min);input.max=String(max);input.step=String(step);input.value=String(draft[key]);
-  const value=document.createElement('strong');value.className='profileRangeValue';value.textContent=`${draft[key]}${suffix}`;
-  input.addEventListener('input',()=>{draft[key]=Number(input.value);value.textContent=`${input.value}${suffix}`;});
-  const wrap=document.createElement('div');wrap.append(input,value);return makeField(document,label,wrap);
+function snapshotWorkspace(runtime,state,captureState,resources){
+  const profileSnapshot=runtime.snapshotProfileSettings?.({includeGlobal:true})||{settings:{},warnings:[]};
+  const scenario=normalizeScenario(state,state),capture=normalizeCapture(captureState,captureState);
+  const enemyIds=uniqueStrings(resources.workingRoster?.getIds?.()||[]);
+  const abilityIds=uniqueStrings(resources.workingAbilityPool?.getIds?.()||[]);
+  const deckCardIds=orderedStrings(globalThis.__enemyLabDeckEditor?.cardIds||runtime.deck?.pool?.map(card=>card?.id)||[]);
+  return createEnemyLabWorkspace({workspace:{
+    version:1,settings:profileSnapshot.settings,scenario,capture,
+    content:{enemyIds,rosterIds:enemyIds,abilityIds,abilityPoolIds:abilityIds,deckCardIds,currentDeckIds:deckCardIds},
+  }});
+}
+
+function registerWorkspaceAdapters({runtime,state,captureState,resources,saveWorkspace,storage,hostWindow}){
+  runtime.registerProfileAdapter?.({id:'lab-scenario',path:'scenario.configuration',label:'Lab scenario',section:'encounter',requiresReload:true,
+    snapshot:()=>normalizeScenario(state,state),validate:value=>{try{normalizeScenario(value,state);return true;}catch(error){return String(error.message);}},
+    apply:value=>{const normalized=normalizeScenario(value,state);Object.assign(state,normalized);setHadesEncounterDifficultyRamp(normalized.introduction);saveWorkspace?.();return true;}});
+  runtime.registerProfileAdapter?.({id:'lab-roster',path:'content.rosterIds',label:'Working enemy roster',section:'enemies',requiresReload:true,
+    snapshot:()=>uniqueStrings(resources.workingRoster?.getIds?.()||[]),validate:value=>Array.isArray(value)||'Roster must be an array.',apply:value=>{resources.workingRoster?.setIds?.(uniqueStrings(value));return true;}});
+  runtime.registerProfileAdapter?.({id:'lab-ability-pool',path:'content.abilityPoolIds',label:'Working Ability Pool',section:'loadout',requiresReload:true,
+    snapshot:()=>uniqueStrings(resources.workingAbilityPool?.getIds?.()||[]),validate:value=>Array.isArray(value)||'Ability Pool must be an array.',apply:value=>{resources.workingAbilityPool?.setIds?.(uniqueStrings(value));return true;}});
+  runtime.registerProfileAdapter?.({id:'lab-current-deck',path:'content.currentDeckIds',label:'Ordered current deck',section:'loadout',requiresReload:true,
+    snapshot:()=>orderedStrings(hostWindow.__enemyLabDeckEditor?.cardIds||runtime.deck?.pool?.map(card=>card?.id)||[]),validate:value=>Array.isArray(value)&&value.length>0||'Current Deck must contain at least one card.',
+    apply:value=>{const ids=orderedStrings(value);if(hostWindow.__enemyLabDeckEditor?.setIds)return hostWindow.__enemyLabDeckEditor.setIds(ids)!==false;setStoredJson(storage,DECK_STORAGE_KEY,{cardIds:ids});return true;}});
+  runtime.registerProfileAdapter?.({id:'lab-capture',path:'capture.configuration',label:'Capture setup',section:'capture',requiresReload:true,
+    snapshot:()=>normalizeCapture(captureState,captureState),validate:value=>{try{normalizeCapture(value,captureState);return true;}catch(error){return String(error.message);}},apply:value=>{Object.assign(captureState,normalizeCapture(value,captureState));saveWorkspace?.();return true;}});
+  runtime.registerProfileAdapter?.({id:'lab-arcana',path:'player.arcana',label:'Arcana size and damage',section:'loadout',snapshot:()=>readArcanaTweaks(storage),
+    validate:value=>value&&Number.isFinite(Number(value.sizeMultiplier))&&Number.isFinite(Number(value.damageMultiplier))||'Arcana tuning is invalid.',apply:value=>(writeArcanaTweaks(value,{storage,eventTarget:hostWindow}),true)});
+  runtime.registerProfileAdapter?.({id:'lab-hades-cadence',path:'scenario.hadesCadence',label:'Hades encounter cadence',section:'encounter',
+    snapshot:()=>({spawnMultiplier:getHadesEncounterSpawnMultiplier(),introduction:getHadesEncounterDifficultyRamp()}),validate:value=>value&&[1,2,5,10].includes(Number(value.spawnMultiplier))&&['slow','medium','high'].includes(String(value.introduction))||'Hades cadence is invalid.',apply:value=>(setHadesEncounterSpawnMultiplier(value.spawnMultiplier),setHadesEncounterDifficultyRamp(value.introduction),true)});
 }
 
 export function installEnemyLabCombatProfiles({
-  storage=globalThis.localStorage,
-  hostWindow=globalThis,
-  sectionRegistry=null,
+  storage=globalThis.localStorage,hostWindow=globalThis,sectionRegistry=null,runtime=null,state=null,captureState=null,resources={},saveWorkspace=null,setMessage=null,
 }={}){
-  const targetWindow=hostWindow||globalThis;
-  let document;
-  try{document=targetWindow?.document;}catch{return{installed:false,reason:'cross-origin'};}
-  if(!document)return{installed:false,reason:'missing-document'};
-  const page=new URL(document.location?.href||'http://localhost/enemy-lab.html');
-  if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
-  const useRegistry=!!sectionRegistry;
-  const categories=useRegistry?null:document.getElementById('labCategories');
-  const values=useRegistry?null:document.getElementById('labValues');
-  const hint=useRegistry?null:document.getElementById('categoryHint');
-  if(!useRegistry&&(!categories||!values))return{installed:false,reason:'missing-controls'};
-  if(document.documentElement.dataset.enemyLabCombatProfiles==='1')return targetWindow.__enemyLabCombatProfiles||{installed:true};
+  const document=hostWindow?.document;
+  if(!document||!runtime||!state||!captureState||!sectionRegistry)return{installed:false,reason:'missing-context'};
+  if(hostWindow.__enemyLabCombatProfiles?.installed)return hostWindow.__enemyLabCombatProfiles;
   document.documentElement.dataset.enemyLabCombatProfiles='1';
+  registerWorkspaceAdapters({runtime,state,captureState,resources,saveWorkspace,storage,hostWindow});
 
-  const style=document.createElement('style');
-  style.textContent=`
-    #labCategories .choice.profileCategory{border-color:#4c7d9b;color:#b9e4ff;background:rgba(42,92,122,.24)}
-    #labCategories .choice.profileCategory.on{border-color:#b9e4ff;color:#fff;background:rgba(50,119,157,.40);box-shadow:inset 0 0 0 1px rgba(185,228,255,.24)}
-    [data-combat-profiles-root] .profileEditor{display:flex;flex-direction:column;gap:8px;padding:9px;border:1px solid rgba(76,125,155,.72);border-radius:8px;background:rgba(9,28,38,.72)}
-    [data-combat-profiles-root] .profileGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    [data-combat-profiles-root] .profileField{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--muted);font-size:8px;letter-spacing:.07em}
-    [data-combat-profiles-root] .profileField input,[data-combat-profiles-root] .profileField select{width:100%;box-sizing:border-box;font-family:inherit;color:var(--text);background:#122426;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:10px}
-    [data-combat-profiles-root] .profileField input[type=range]{padding:0;height:28px}
-    [data-combat-profiles-root] .profileRangeValue{color:var(--gold);font-size:10px}
-    [data-combat-profiles-root] .profileActions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-    [data-combat-profiles-root] .profilePoolActions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-    [data-combat-profiles-root] .profilePoolActions .choice{min-height:58px}
-    [data-combat-profiles-root] .profileCard{padding:9px;border:1px solid rgba(49,80,77,.72);border-radius:8px;background:rgba(16,38,40,.58)}
-    [data-combat-profiles-root] .profileCard.active{border-color:#b9e4ff;background:rgba(50,119,157,.15)}
-    [data-combat-profiles-root] .profileCard h3{margin:0 0 4px;color:var(--text);font-size:11px}
-    [data-combat-profiles-root] .profileCard p{margin:0 0 7px;color:var(--muted);font-size:8px;line-height:1.45}
-    [data-combat-profiles-root] .profileCard .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
-    @media(max-width:560px){[data-combat-profiles-root] .profileGrid,[data-combat-profiles-root] .profilePoolActions{grid-template-columns:1fr}}
-  `;
-  document.head.appendChild(style);
+  let profiles=readCombatProfiles(storage),selectedId=activeRecord(storage)?.id||profiles[0]?.id||'',dirty=false,lastSaved='',pendingImport=null,importButton=null;
+  const bar=document.getElementById('labProfileBar'),selector=document.getElementById('profileSelect'),nameInput=document.getElementById('profileName'),dirtyNode=document.getElementById('profileDirty'),barStatus=document.getElementById('profileBarStatus');
+  const report=(message,error=false)=>{if(barStatus){barStatus.textContent=message;barStatus.classList.toggle('error',error);}setMessage?.(error?message:'');};
+  const selected=()=>profiles.find(profile=>profile.id===selectedId)||null;
+  const currentWorkspace=()=>snapshotWorkspace(runtime,state,captureState,resources);
+  const signature=workspace=>JSON.stringify(workspace);
+  const applicableSettings=profile=>({
+    ...(profile.workspace?.settings||{}),
+    'scenario.configuration':profile.workspace?.scenario,
+    'content.rosterIds':profile.workspace?.content?.rosterIds||profile.workspace?.content?.enemyIds||[],
+    'content.abilityPoolIds':profile.workspace?.content?.abilityPoolIds||profile.workspace?.content?.abilityIds||[],
+    ...(profile.workspace?.content?.currentDeckIds?.length?{'content.currentDeckIds':profile.workspace.content.currentDeckIds}:{}),
+    ...(!profile.partial&&profile.workspace?.capture?{'capture.configuration':profile.workspace.capture}:{}),
+  });
+  const refreshDirty=()=>{const profile=selected();dirty=!!profile&&(signature(currentWorkspace())!==signature(profile.workspace)||cleanName(nameInput?.value)!==profile.name);if(dirtyNode){dirtyNode.textContent=dirty?'UNSAVED':'SAVED';dirtyNode.classList.toggle('dirty',dirty);}return dirty;};
+  const refreshSelector=()=>{profiles=readCombatProfiles(storage);const current=selector?.value||selectedId;if(selector){selector.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent=profiles.length?'Choose profile…':'No saved profiles';selector.appendChild(empty);for(const profile of profiles){const option=document.createElement('option');option.value=profile.id;option.textContent=profile.name;selector.appendChild(option);}selector.value=profiles.some(profile=>profile.id===current)?current:'';}selectedId=profiles.some(profile=>profile.id===current)?current:'';if(nameInput)nameInput.value=selected()?.name||nameInput.value;refreshDirty();sectionRegistry.invalidate('profiles');};
 
-  let profiles=readCombatProfiles(storage);
-  let editingId=null;
-  let draft=readCombatProfileDraft(storage);
-  let profileOpen=false;
-  let renderQueued=false;
-  let name='';
-
-  function categoryButton(){return categories.querySelector('[data-combat-profiles-category="1"]');}
-  function syncCategoryLabel(){
-    if(useRegistry)return;
-    const button=categoryButton();if(!button)return;
-    const title=button.querySelector('b');if(title)title.textContent=profiles.length?`PROFILES · ${profiles.length}`:'PROFILES';
-  }
-  function refreshProfiles(){if(useRegistry){sectionRegistry.invalidate('profiles');return;}renderProfiles();}
-  function queueRender(){if(useRegistry)return;if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;if(profileOpen)renderProfiles();});}
-  function activateProfiles(){
-    profileOpen=true;
-    if(useRegistry){sectionRegistry.select('profiles');sectionRegistry.invalidate('profiles');return;}
-    for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.combatProfilesCategory==='1');
-    renderProfiles();
-  }
-  function ensureCategory(){
-    if(categoryButton()){syncCategoryLabel();return;}
-    const button=makeChoice(document,{label:profiles.length?`PROFILES · ${profiles.length}`:'PROFILES',className:'profileCategory',onClick:event=>{event.preventDefault();event.stopPropagation();activateProfiles();}});
-    button.dataset.combatProfilesCategory='1';categories.appendChild(button);if(profileOpen)button.classList.add('on');
-  }
-  function syncDevelopmentPools(profile){
-    targetWindow.__enemyLabWorkingRoster?.setIds?.(profile.enemyIds);
-    targetWindow.__enemyLabWorkingAbilityPool?.setIds?.(profile.abilityIds);
-  }
-  function activateSavedProfile(profile){
-    const active=setActiveCombatProfile(storage,profile,{eventTarget:targetWindow});
-    syncDevelopmentPools(active);
-    draft=readCombatProfileDraft(storage);
-    name=active.name;
-    editingId=active.id;
-    return active;
-  }
-  function applyToLab(profile){return activateSavedProfile(profile);}
-  function openArena(profile){
-    const active=activateSavedProfile(profile);
-    const destination=new URL('./combat-arena.html',document.location.href);destination.search='';
-    setTimeout(()=>document.location.assign(destination),0);
-    return{profile:active,destination:String(destination)};
-  }
-  function saveCurrent(){
-    const current=readCombatProfileDraft(storage);
-    const saved=saveCombatProfile(storage,{
-      id:editingId||undefined,
-      name,
-      ...current,
-      spawnMultiplier:draft.spawnMultiplier,
-      introduction:draft.introduction,
-      pressureBudget:draft.pressureBudget,
-      aggression:draft.aggression,
-      enemySpeed:draft.enemySpeed,
-      enemyHealth:draft.enemyHealth,
-      enemySize:draft.enemySize,
-      idleRange:draft.idleRange,
-      arcanaSize:draft.arcanaSize,
-      directorMode:draft.directorMode,
-    });
-    const active=activateSavedProfile(saved);
-    profiles=readCombatProfiles(storage);syncCategoryLabel();return active;
-  }
-  function newDraft(){editingId=null;name='';draft=readCombatProfileDraft(storage);}
-  function openRosterEditor(){profileOpen=false;if(useRegistry){sectionRegistry.select('enemies');return;}targetWindow.__enemyLabWorkingRoster?.open?.();}
-  function openAbilityEditor(){profileOpen=false;if(useRegistry){sectionRegistry.select('profiles');sectionRegistry.invalidate('profiles');return;}targetWindow.__enemyLabWorkingAbilityPool?.open?.();}
-
-  function renderProfiles(){
-    if(!profileOpen&&!useRegistry)return null;
-    const oldTop=values?.scrollTop||0,oldLeft=values?.scrollLeft||0;
-    profiles=readCombatProfiles(storage);
-    const active=readActiveCombatProfile(storage);
-    const current=readCombatProfileDraft(storage);
-    if(hint)hint.textContent='Choose the roster and Ability Pool here, then save a repeatable combat environment with Hades spawning, Arcana size, director behavior, and enemy tuning.';
-    const root=document.createElement('div');root.className='valueList';root.dataset.combatProfilesRoot='1';
-    root.appendChild(makeStatus(document,'COMBAT PROFILES',`${profiles.length} saved. The current draft contains ${current.enemyIds.length} enemies, ${current.abilityIds.length} abilities, and Arcana size ${current.arcanaSize}×.`));
-
-    const poolActions=document.createElement('div');poolActions.className='profilePoolActions';
-    poolActions.append(
-      makeChoice(document,{
-        label:`EDIT ENEMY ROSTER · ${current.enemyIds.length}`,
-        sub:'Choose exactly which enemies this profile can compose',
-        meta:'OPENS ROSTER',
-        onClick:openRosterEditor,
-      }),
-      makeChoice(document,{
-        label:`EDIT ABILITY POOL · ${current.abilityIds.length}`,
-        sub:'Choose starter extras and room-reward availability',
-        meta:'OPENS ABILITY POOL',
-        onClick:openAbilityEditor,
-      }),
-    );
-    root.appendChild(poolActions);
-
-    const editor=document.createElement('div');editor.className='profileEditor';
-    const grid=document.createElement('div');grid.className='profileGrid';
-    const nameInput=document.createElement('input');nameInput.type='text';nameInput.maxLength=48;nameInput.placeholder='Example: Crowded Arcana Test';nameInput.value=name;
-    nameInput.addEventListener('input',()=>{name=nameInput.value;});
-    grid.appendChild(makeField(document,'PROFILE NAME',nameInput));
-
-    const countSelect=optionSelect(document,[1,2,5,10].map(value=>({value,label:value===1?'1× · Default':`${value}× Enemies`})),draft.spawnMultiplier);
-    countSelect.addEventListener('change',()=>{draft.spawnMultiplier=Number(countSelect.value);});
-    grid.appendChild(makeField(document,'ENEMY COUNT',countSelect));
-
-    const introSelect=optionSelect(document,[
-      {value:'slow',label:'Gradual'},
-      {value:'medium',label:'Faster'},
-      {value:'high',label:'Fast'},
-    ],draft.introduction);
-    introSelect.addEventListener('change',()=>{draft.introduction=introSelect.value;});
-    grid.appendChild(makeField(document,'ENEMY INTRODUCTION',introSelect));
-
-    const directorSelect=optionSelect(document,[...DIRECTOR_MODES.map(mode=>({value:mode.id,label:mode.label})),{value:'cycle',label:'Cycle All'}],draft.directorMode);
-    directorSelect.addEventListener('change',()=>{draft.directorMode=directorSelect.value;});
-    grid.appendChild(makeField(document,'COMBAT DIRECTOR',directorSelect));
-
-    grid.appendChild(rangeField(document,draft,'pressureBudget','PRESSURE BUDGET',{min:.5,max:4,step:.25}));
-    grid.appendChild(rangeField(document,draft,'aggression','AGGRESSION',{min:.25,max:3,step:.05}));
-    grid.appendChild(rangeField(document,draft,'enemySpeed','ENEMY SPEED',{min:.25,max:1.5,step:.05}));
-    grid.appendChild(rangeField(document,draft,'enemyHealth','ENEMY HEALTH',{min:.25,max:5,step:.05}));
-    grid.appendChild(rangeField(document,draft,'enemySize','ENEMY SIZE',{min:1,max:3.5,step:.1}));
-    grid.appendChild(rangeField(document,draft,'idleRange','IDLE RANGE',{min:1,max:6,step:.25}));
-    grid.appendChild(rangeField(document,draft,'arcanaSize','ARCANA SIZE',{min:1,max:5,step:.25,suffix:'×'}));
-    editor.appendChild(grid);
-
-    const actions=document.createElement('div');actions.className='profileActions';
-    const saveButton=document.createElement('button');saveButton.className='miniBtn';saveButton.textContent=editingId?'UPDATE & ACTIVATE':'SAVE & ACTIVATE';
-    saveButton.addEventListener('click',()=>{if(!name.trim()){nameInput.focus();return;}saveCurrent();refreshProfiles();});
-    const newButton=document.createElement('button');newButton.className='miniBtn';newButton.textContent='NEW PROFILE';newButton.addEventListener('click',()=>{newDraft();refreshProfiles();});
-    actions.append(saveButton,newButton);editor.appendChild(actions);root.appendChild(editor);
-
-    if(!profiles.length)root.appendChild(makeStatus(document,'NO SAVED PROFILES','Choose a roster and Ability Pool, enter a name, then save and activate the current environment.'));
-    for(const profile of profiles){
-      const card=document.createElement('div');card.className=`profileCard${active?.id===profile.id?' active':''}`;
-      const title=document.createElement('h3');title.textContent=profile.name;
-      const summary=document.createElement('p');
-      summary.textContent=`${profile.enemyIds.length} enemies · ${profile.abilityIds.length} abilities · Arcana ${profile.arcanaSize}× · ${profile.spawnMultiplier}× enemies · ${profile.introduction} intro · pressure ${profile.pressureBudget} · aggression ${profile.aggression} · speed ${profile.enemySpeed} · health ${profile.enemyHealth} · size ${profile.enemySize} · range ${profile.idleRange} · ${profile.directorMode}${active?.id===profile.id?' · ACTIVE':''}`;
-      const row=document.createElement('div');row.className='row';
-      const load=document.createElement('button');load.className='miniBtn';load.textContent='LOAD & ACTIVATE';load.addEventListener('click',()=>{applyToLab(profile);refreshProfiles();});
-      const open=document.createElement('button');open.className='miniBtn';open.textContent='OPEN ARENA';open.addEventListener('click',()=>openArena(profile));
-      const remove=document.createElement('button');remove.className='miniBtn';remove.textContent='DELETE';remove.addEventListener('click',()=>{profiles=deleteCombatProfile(storage,profile.id);if(editingId===profile.id)newDraft();syncCategoryLabel();refreshProfiles();});
-      row.append(load,open,remove);card.append(title,summary,row);root.appendChild(card);
-    }
-    if(useRegistry)return root;
-    values.replaceChildren(root);
-    requestAnimationFrame(()=>{values.scrollTop=oldTop;values.scrollLeft=oldLeft;});
+  function validateForLoad(profile){
+    const schema=validateEnemyLabProfile(profile);if(!schema.ok)return{ok:false,errors:schema.errors,warnings:schema.warnings};
+    const values=applicableSettings(profile);
+    const registry=runtime.validateProfileSettings?.(values,{includeGlobal:true})||{ok:true,settings:values,errors:[],warnings:[]};
+    return{ok:registry.ok,errors:registry.errors||[],warnings:[...(schema.warnings||[]),...(registry.warnings||[])]};
   }
 
-  if(useRegistry){
-    profileOpen=true;
-    sectionRegistry.registerView({id:'combat-profiles',sectionId:'profiles',label:'SAVED PROFILES',description:'Save, activate, and open repeatable Lab environments.',order:10,render:()=>renderProfiles({mount:false})});
-  }else{
-    categories.addEventListener('click',event=>{
-      const button=event.target.closest?.('.choice');if(!button||button.dataset.combatProfilesCategory==='1')return;profileOpen=false;
-    },true);
-    ensureCategory();
+  function applyProfile(profile,{reload=true,destination=null}={}){
+    const validation=validateForLoad(profile);if(!validation.ok){report(`Profile not loaded: ${validation.errors.join(', ')}`,true);return{ok:false,...validation};}
+    const before=storageSnapshot(storage);
+    try{
+      const applied=runtime.applyProfileSettings?.(applicableSettings(profile),{includeGlobal:true,profileLoad:true});
+      if(applied&&!applied.ok)throw new Error(applied.failed?.map(item=>`${item.path}: ${item.error}`).join(', ')||'Profile settings could not be applied.');
+      setStoredJson(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,profile);
+      selectedId=profile.id;lastSaved=signature(profile.workspace);dirty=false;report(validation.warnings.length?`Loaded with warnings: ${validation.warnings.join(', ')}`:`Loaded ${profile.name}.`);
+      if(destination)hostWindow.location.assign(destination);else if(reload)hostWindow.location.reload();
+      return{ok:true,profile,warnings:validation.warnings};
+    }catch(error){restoreStorage(storage,before);report(`Profile not loaded: ${error.message}`,true);return{ok:false,errors:[String(error.message)]};}
   }
 
-  const api={
-    installed:true,
-    getProfiles:()=>readCombatProfiles(storage),
-    save:profile=>{const saved=activateSavedProfile(saveCombatProfile(storage,profile));profiles=readCombatProfiles(storage);syncCategoryLabel();if(profileOpen)refreshProfiles();return saved;},
-    load:profile=>applyToLab(profile),
-    openProfile:profile=>openArena(profile),
-    remove:id=>{profiles=deleteCombatProfile(storage,id);syncCategoryLabel();if(profileOpen)refreshProfiles();return profiles;},
-    open:activateProfiles,
-  };
-  targetWindow.__enemyLabCombatProfiles=api;globalThis.__enemyLabCombatProfiles=api;return api;
+  function saveWorkspaceProfile({asNew=false,name=null}={}){
+    const existing=asNew?null:selected(),requested=cleanName(name??nameInput?.value??existing?.name);
+    if(!requested){report('Enter a profile name first.',true);nameInput?.focus?.();return null;}
+    const workspace=currentWorkspace();
+    try{
+      const saved=saveCombatProfile(storage,{...(existing||{}),id:asNew||!existing?profileId():existing.id,name:requested,workspace,encounterMode:workspace.scenario.encounterMode,partial:false});
+      setStoredJson(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,saved);selectedId=saved.id;lastSaved=signature(saved.workspace);dirty=false;report(`Saved ${saved.name}.`);refreshSelector();return saved;
+    }catch(error){report(`Profile was not saved: ${error.message}`,true);return null;}
+  }
+
+  function removeSelected(){
+    const profile=selected();if(!profile)return report('Choose a profile first.',true);
+    try{deleteCombatProfile(storage,profile.id);if(activeRecord(storage)?.id===profile.id)storage.removeItem(ACTIVE_COMBAT_PROFILE_STORAGE_KEY);selectedId='';report(`Deleted ${profile.name}.`);refreshSelector();}catch(error){report(`Profile was not deleted: ${error.message}`,true);}
+  }
+
+  function renameSelected(){
+    const profile=selected();if(!profile)return report('Choose a profile first.',true);
+    const name=cleanName(nameInput?.value);if(!name){report('Enter the new name in the profile name field.',true);nameInput?.focus?.();return;}
+    try{const saved=saveCombatProfile(storage,{...profile,name});selectedId=saved.id;report(`Renamed to ${saved.name}.`);refreshSelector();}catch(error){report(`Profile was not renamed: ${error.message}`,true);}
+  }
+
+  function exportSelection(all=false){
+    const profile=selected();if(!all&&!profile)return report('Choose a profile first.',true);
+    const json=all?exportCombatProfiles(profiles):exportCombatProfile(profile);downloadJson(document,json,all?'enemy-lab-profiles-v3.json':`${profile.id}.json`);report(all?'Exported profile library.':`Exported ${profile.name}.`);
+  }
+
+  function importFile(file,collision){
+    const reader=new FileReader();reader.addEventListener('load',()=>{
+      const text=String(reader.result||''),preview=previewCombatProfileImport(text,{existingProfiles:profiles,collision});
+      if(!preview.ok){report(`Import rejected: ${preview.errors.join(', ')}`,true);return;}
+      pendingImport={text,collision,preview};if(importButton)importButton.textContent='CONFIRM IMPORT';
+      report(`${preview.count} profile${preview.count===1?'':'s'} valid${preview.collisions.length?` · ${preview.collisions.length} collision${preview.collisions.length===1?'':'s'} will ${collision==='replace'?'replace':'import as copies'}`:''}. Press Confirm Import to finish.`);
+    });reader.readAsText(file);
+  }
+
+  function commitImport(){
+    if(!pendingImport)return false;
+    try{const result=importCombatProfiles(pendingImport.text,{existingProfiles:profiles,collision:pendingImport.collision});if(!result.ok)throw new Error(result.errors.join(', '));writeCombatProfiles(storage,result.profiles);report(`Imported ${result.imported.length+result.replaced.length} profile${result.imported.length+result.replaced.length===1?'':'s'}.`);pendingImport=null;if(importButton)importButton.textContent='IMPORT JSON';refreshSelector();return true;}catch(error){report(`Import failed: ${error.message}`,true);return false;}
+  }
+
+  function renderManagement(){
+    const root=document.createElement('div');root.className='labSectionContent';root.dataset.profileManagement='1';
+    const audit=runtime.auditProfileCoverage?.()||{ok:false,warnings:['Profile audit unavailable.']};
+    root.append(statusCard(document,audit.ok?'PROFILE COVERAGE COMPLETE':'PROFILE COVERAGE NEEDS ATTENTION',audit.ok?`${audit.profileControls} settings plus compound resources are covered.`:audit.warnings.join(' · ')));
+    const actions=document.createElement('div');actions.className='profileManagementActions';
+    actions.append(button(document,'RENAME',renameSelected),button(document,'DELETE',removeSelected,{className:'danger'}),button(document,'OPEN ARENA',()=>{const profile=selected();if(!profile)return report('Choose a profile first.',true);const destination=new URL('./combat-arena.html',document.location.href);destination.search='';applyProfile(profile,{reload:false,destination});}),button(document,'EXPORT ONE',()=>exportSelection(false)),button(document,'EXPORT ALL',()=>exportSelection(true)));
+    const collision=document.createElement('select');collision.setAttribute('aria-label','Profile import collision handling');for(const [value,label] of [['copy','IMPORT COPY'],['replace','REPLACE']]){const option=document.createElement('option');option.value=value;option.textContent=label;collision.appendChild(option);}
+    const input=document.createElement('input');input.type='file';input.accept='application/json,.json';input.hidden=true;input.addEventListener('change',()=>{const file=input.files?.[0];if(file)importFile(file,collision.value);input.value='';});
+    importButton=button(document,pendingImport?'CONFIRM IMPORT':'IMPORT JSON',()=>pendingImport?commitImport():input.click());actions.append(collision,importButton,input);root.append(actions);
+    for(const profile of profiles)root.append(statusCard(document,`${profile.name}${profile.id===activeRecord(storage)?.id?' · ACTIVE':''}`,`${profile.workspace.content.enemyIds.length} enemies · ${profile.workspace.content.deckCardIds.length} deck cards · ${profile.encounterMode}${profile.partial?' · migrated partial profile':''}`));
+    return root;
+  }
+
+  sectionRegistry.registerView({id:'portable-profiles',sectionId:'profiles',label:'PORTABLE PROFILES',description:'Save, import, export, rename, and delete complete Lab workspaces.',order:0,render:renderManagement});
+  if(bar&&selector){
+    bar.hidden=false;selector.addEventListener('change',()=>{selectedId=selector.value;if(nameInput)nameInput.value=selected()?.name||'';refreshDirty();report(selected()?'Selected. Press Load to apply it.':'No profile selected.');});
+    nameInput?.addEventListener('input',refreshDirty);
+    document.getElementById('profileLoad')?.addEventListener('click',()=>{const profile=selected();if(!profile)return report('Choose a profile first.',true);applyProfile(profile);});
+    document.getElementById('profileSave')?.addEventListener('click',()=>saveWorkspaceProfile({asNew:!selected()}));
+    document.getElementById('profileSaveAs')?.addEventListener('click',()=>saveWorkspaceProfile({asNew:true}));
+  }
+  runtime.subscribe?.(event=>{if(event.type==='change'||event.type==='profile-adapter-register')refreshDirty();});
+  hostWindow.addEventListener?.('enemy-lab:workspace-change',refreshDirty);
+  hostWindow.setInterval?.(refreshDirty,1000);
+  let bootError='';
+  const api={installed:true,getProfiles:()=>profiles.slice(),get selectedId(){return selectedId;},get dirty(){return dirty;},get bootError(){return bootError;},snapshot:currentWorkspace,validate:validateForLoad,load:applyProfile,save:saveWorkspaceProfile,remove:removeSelected,rename:renameSelected,refresh:refreshSelector};
+  hostWindow.__enemyLabCombatProfiles=api;
+  try{
+    const active=activeRecord(storage),activeProfile=active&&profiles.find(profile=>profile.id===active.id);
+    if(activeProfile){selectedId=activeProfile.id;const validation=validateForLoad(activeProfile);if(validation.ok)runtime.applyProfileSettings?.(applicableSettings(activeProfile),{includeGlobal:true,profileBoot:true});}
+    refreshSelector();lastSaved=selected()?signature(selected().workspace):'';refreshDirty();
+  }catch(error){bootError=String(error?.message||error);report(`Profiles need attention: ${bootError}`,true);}
+  return api;
 }

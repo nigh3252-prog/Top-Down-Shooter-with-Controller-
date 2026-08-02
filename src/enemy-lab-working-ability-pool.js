@@ -92,7 +92,7 @@ export function installEnemyLabWorkingAbilityPool({
     const button=categoryButton();if(!button)return;
     const title=button.querySelector('b');if(title)title.textContent=selectedIds.length?`ABILITY POOL · ${selectedIds.length}`:'ABILITY POOL';
   }
-  function refreshPool(){if(useRegistry){sectionRegistry.invalidate('profiles');return;}renderPool();}
+  function refreshPool(){if(useRegistry){sectionRegistry.invalidate('loadout');return;}renderPool();}
   function queueRender(){
     if(useRegistry)return;
     if(renderQueued)return;
@@ -101,7 +101,7 @@ export function installEnemyLabWorkingAbilityPool({
   }
   function activatePool(){
     poolOpen=true;
-    if(useRegistry){sectionRegistry.select('profiles');sectionRegistry.invalidate('profiles');return;}
+    if(useRegistry){sectionRegistry.select('loadout');sectionRegistry.invalidate('loadout');return;}
     for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.workingAbilityPoolCategory==='1');
     renderPool();
   }
@@ -118,7 +118,7 @@ export function installEnemyLabWorkingAbilityPool({
   }
   function renderPool(){
     if(!poolOpen)return;
-    const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
+    const oldTop=values?.scrollTop||0,oldLeft=values?.scrollLeft||0;
     if(hint)hint.textContent='Choose which cards may appear in future Combat Arena run setup and room rewards. Current Deck remains a separate immediate test deck.';
     const root=document.createElement('div');root.className='valueList';root.dataset.workingAbilityPoolRoot='1';
     root.appendChild(makeStatus(document,'WORKING ABILITY POOL',`${selectedIds.length} of ${catalog.length} cards selected. This controls future availability; it does not replace the Current Deck yet.`));
@@ -165,7 +165,7 @@ export function installEnemyLabWorkingAbilityPool({
 
   if(useRegistry){
     poolOpen=true;
-    sectionRegistry.registerView({id:'working-ability-pool',sectionId:'profiles',label:'WORKING ABILITY POOL',description:'Saved ability IDs used by future profile/run setup.',order:20,render:()=>renderPool({mount:false})});
+    sectionRegistry.registerView({id:'working-ability-pool',sectionId:'loadout',label:'WORKING ABILITY POOL',description:'Saved ability IDs used by future profile/run setup.',order:30,render:()=>renderPool({mount:false})});
   }else{
     categories.addEventListener('click',event=>{
       const button=event.target.closest?.('.choice');
