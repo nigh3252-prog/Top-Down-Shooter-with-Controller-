@@ -1,4 +1,5 @@
 import { getCard, listCards } from './card-registry.js';
+import { getArenaRuntime } from './arena-runtime-context.js';
 
 const POW_BUNKER_CARD = getCard('A01-PILEBUNKER');
 const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
@@ -99,9 +100,7 @@ function readJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)|
 function sameIds(a,b){return a.length===b.length&&a.every((id,index)=>id===b[index]);}
 
 export function installEnemyLabDeckEditor(deck){
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+  const parentWindow=window,parentDocument=document;
 
   const catalog=fullEnemyLabCatalog();
   const byId=new Map(catalog.map(card=>[card.id,card]));
@@ -131,7 +130,7 @@ export function installEnemyLabDeckEditor(deck){
     const message=parentDocument.getElementById('message');
     if(message)message.textContent=text;
   }
-  function arenaRuntime(){return window.__arena||null;}
+  function arenaRuntime(){return getArenaRuntime();}
   function applySelected({announce=true,shuffle=true}={}){
     const cards=selectedCards();
     if(!cards.length||!hasStance(cards)){

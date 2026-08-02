@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { resolveCircleMovement } from './hex-maze-navigation.js';
 import {
   BASIC_DASH,
@@ -88,7 +89,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
   }
 
   function arenaHandle(){
-    const handle = globalThis.window?.__arena || globalThis.__arena;
+    const handle = getArenaRuntime();
     return handle?.arena && handle?.actorPos ? handle : null;
   }
 

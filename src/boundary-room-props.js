@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { createSeededRandom } from './hex-maze.js';
 import { axialToWorld, resolveCircleMovement } from './hex-maze-navigation.js';
 import { districtForRoom } from './boundary-districts.js';
@@ -157,7 +158,7 @@ function installPhysics(world, knockables, blockerSegments, random){
   world.getCollisionSegments = () => [...baseCollision(), ...blockerSegments];
   let previousActor = null;
   return dt => {
-    const actorPos = globalThis.__arena?.actorPos;
+    const actorPos = getArenaRuntime()?.actorPos;
     if(!actorPos) return;
     const actor = { x:actorPos.x, z:actorPos.y };
     const actorDelta = previousActor ? { x:actor.x - previousActor.x, z:actor.z - previousActor.z } : { x:0, z:0 };

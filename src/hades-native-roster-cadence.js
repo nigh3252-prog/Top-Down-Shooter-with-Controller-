@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { getArenaEnemyBySpawnKind } from './arena-enemy-content-registry.js';
 import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
 
@@ -53,7 +54,7 @@ function installNativeHadesCadenceOnSystem(system,{
     if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
       return{x:Number(player.x),z:Number(player.z)};
     }
-    const actor=globalThis.__arena?.actorPos;
+    const actor=getArenaRuntime()?.actorPos;
     if(Number.isFinite(Number(actor?.x))){
       const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
       if(Number.isFinite(z))return{x:Number(actor.x),z};

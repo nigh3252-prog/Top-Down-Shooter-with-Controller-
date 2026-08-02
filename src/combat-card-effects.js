@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { guardPoseFor } from './guard-poses.js';
 
@@ -167,9 +168,9 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
     coreTrail:null,coreTrailColor:null,expandedTrail:null,
   };
 
-  function currentStance(){return getStance?.()||globalThis.window?.__arena?.arena?.stance||null;}
-  function currentSwing(){return globalThis.window?.__arena?.arena?.swing||null;}
-  function currentWalls(){return getMazeSegments?.()||globalThis.window?.__arena?.mazeWorld?.getCollisionSegments?.()||[];}
+  function currentStance(){return getStance?.()||getArenaRuntime()?.arena?.stance||null;}
+  function currentSwing(){return getArenaRuntime()?.arena?.swing||null;}
+  function currentWalls(){return getMazeSegments?.()||getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[];}
   function activeExecution(){
     const ex=state.execution;
     return!!ex&&!!PC.combatState.attack&&PC.combatState.attackKey===ex.attackKey&&PC.combatState.attackGroup===ex.group;
