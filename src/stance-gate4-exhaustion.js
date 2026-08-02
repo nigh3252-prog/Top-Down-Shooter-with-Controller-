@@ -1,6 +1,9 @@
 import { cardRestoresStamina } from './stance-deck.js';
 import { createExhaustionCatchEngine } from './exhaustion-catch.js';
 
+const BASE_STAMINA_COSTS=Object.freeze({horizontal:18,vertical:14,stab:10,default:14});
+const CLASS_STAMINA_MULTIPLIER=Object.freeze({Light:.5,Medium:1,Heavy:1.5});
+
 function installHud(document){
   if(!document)return()=>{};
   const stamina=document.getElementById('stWrap');
@@ -67,8 +70,23 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
   function currentIdentity(){
     return{attackKey:String(PC.combatState.attackKey||''),weaponId:String(PC.combatState.weapon||''),stanceId:String(arena.stance?.id||'')};
   }
+  function minimumUsableAttackCost(){
+    const weapon=PC.currentWeapon?.()||null;
+    const multiplier=CLASS_STAMINA_MULTIPLIER[weapon?.staminaClass]??1;
+    const chain=Array.isArray(arena.stance?.chain)?arena.stance.chain:[];
+    const costs=chain.map(key=>{
+      const group=PC.ATTACKS?.[key]?.group||'default';
+      return (BASE_STAMINA_COSTS[group]??BASE_STAMINA_COSTS.default)*multiplier;
+    }).filter(Number.isFinite);
+    return costs.length?Math.min(...costs):BASE_STAMINA_COSTS.stab*multiplier;
+  }
   function observeStamina(source='attack'){
-    const current=Number(arena.stamina.v)||0;
+    let current=Number(arena.stamina.v)||0;
+    const spent=current<lastStamina-engine.config.epsilon;
+    if(spent&&current>engine.config.epsilon){
+      const minimum=minimumUsableAttackCost();
+      if(current<minimum-engine.config.epsilon){arena.stamina.v=0;current=0;}
+    }
     const event=engine.trigger({before:lastStamina,after:current,source,...currentIdentity()});
     lastStamina=current;
     return event;
