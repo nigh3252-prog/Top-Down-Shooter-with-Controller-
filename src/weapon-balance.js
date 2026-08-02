@@ -26,7 +26,17 @@ export function getWeaponStaminaMultiplier(weaponDef) {
 export function staminaCostForWeapon(baseCost, weaponDef) {
   const base = Number(baseCost);
   if (!Number.isFinite(base)) throw new Error(`[weapon-balance] Invalid base stamina cost: ${JSON.stringify(baseCost)}`);
-  return base * getWeaponStaminaMultiplier(weaponDef);
+  const actualCost=base*getWeaponStaminaMultiplier(weaponDef);
+  const quoteHook=typeof globalThis.__STANCE_SPEND_QUOTE__==='function'?globalThis.__STANCE_SPEND_QUOTE__:null;
+  if(!quoteHook)return actualCost;
+  try{
+    const quote=quoteHook({cost:actualCost,baseCost:base,weaponDef});
+    const quoted=Number(quote?.quotedCost);
+    return Number.isFinite(quoted)&&quoted>=0?quoted:actualCost;
+  }catch(error){
+    console.warn('[weapon-balance] stance spend quote failed',error);
+    return actualCost;
+  }
 }
 
 export function weaponAllowsCleave({ weaponDef, attackSlot = -1, maxCharge = false } = {}) {
@@ -61,6 +71,10 @@ async function bootStanceRuntimes(){
     gate2.installStanceGate2Runtime({windowRef:window});
     const gate3=await import('./stance-gate3-payoffs.js');
     gate3.installStanceGate3Runtime({windowRef:window});
+    const gate4=await import('./stance-gate4-exhaustion.js');
+    gate4.installStanceGate4Runtime({windowRef:window});
+    const ringSize=await import('./stance-gate4-ring-size.js');
+    ringSize.installStanceGate4RingSize({windowRef:window});
   }catch(error){
     console.warn('[stance-2] runtime did not install',error);
   }

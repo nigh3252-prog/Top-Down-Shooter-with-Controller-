@@ -41,7 +41,7 @@ One-class mismatches receive alternate compact moves, modified grip, shortened e
 
 Two-class mismatches use authored failed-use animations, create no damaging weapon hit zones, cannot charge their heavy input, and retain meaningful recovery.
 
-## Gate 3 — EXPERIMENTAL PILOT
+## Gate 3 — CURRENT PILOT
 
 Gate 3 gives each matched class a distinct rule payoff rather than one universal damage bonus.
 
@@ -85,13 +85,74 @@ Adapted pairings do not inherit the matched class's full privilege:
 - Adapted Medium and Heavy weapons cleave only on a fully charged finisher.
 - Unusable pairings never cleave.
 
-These values and exact rules are prototype tuning, not final balance.
+## Gate 4 — EXPERIMENTAL PILOT
 
-## Deferred gates
+Gate 4 makes reaching the end of a stamina cycle an active stance-transition test rather than passive waiting.
 
-### Gate 4
+### Terminology
 
-Exhaustion Catch, stance-transition timing, stumble/exhaustion failure, and final stamina-capacity tuning.
+- **Overdraw:** beginning one final stance-derived action when its stamina cost is greater than the positive stamina remaining.
+- **Stance Catch:** the timing window opened when the final reserve reaches zero.
+- **Exhaustion:** the stumble and attack lock caused by missing the Stance Catch.
+
+This intentionally resembles a shooter reload loop: the final action is allowed, the game clearly signals that the current stance is empty, and the player manually changes stance to reload.
+
+### Overdraw spending
+
+- Any positive stamina reserve can fund one final stance-derived attack, even when the attack costs more than remains.
+- Example: 20 stamina may begin a 50-stamina stance attack. The live stamina value spends the real 20 and becomes zero; the missing 30 is recorded as Overdraw metadata rather than negative stamina.
+- Starting from exactly zero remains disallowed, preventing repeated free actions.
+- Stance-derived charged-attack spending uses the same policy.
+- Ability and modifier cards do not receive Overdraw.
+- The shared policy already defines a `stance-defense` source for future stance-provided blocks, parries, and dodges when those costs are implemented.
+- A second Overdraw cannot begin while Stance Catch or Exhaustion is already active.
+
+### Stance Catch
+
+- Reaching zero through a stance spend opens the Catch window.
+- Playing a true stance card during the window succeeds, changes stance through the ordinary card path, and restores stamina through the existing full-refill rule.
+- Ability and modifier cards do not count as a Catch.
+- A successful Catch clears outstanding post-swing movement recovery so the transition reads as clean continuation.
+- A whiff cancels the Catch and refunds only stamina the player actually possessed and spent. Virtual Overdraw is never added to the refund bank.
+
+### Character-level cue
+
+- The player receives a brief white-gold opening flash when Stance Catch begins.
+- A white-gold **Catch Ring** appears around the player's feet and drains clockwise with the remaining window.
+- A clean Catch turns the ring green and flashes once.
+- A miss turns it red before the Exhaustion state begins.
+- The existing stamina-bar timer remains as secondary information, but the character-level ring is the primary combat read.
+
+### Catch-window tuning
+
+The live test control is located at:
+
+**MENU → STANCE 2.0 → STANCE CATCH WINDOW**
+
+- Whole-number range: **×1 through ×10**
+- Base duration: **0.72 seconds**
+- Browser default for this playtest: **×2**, or **1.44 seconds**
+- Maximum: **×10**, or **7.20 seconds**
+- The setting persists between sessions.
+- Changing the slider during an open Catch preserves the percentage of the window already elapsed.
+
+### Missed timing
+
+- When the Catch window expires, the miss waits for the committed attack to finish before applying the stumble.
+- Failure creates a **3.0-second attack lock**.
+- The first **0.35 seconds** are a pronounced stumble at sharply reduced movement.
+- Movement then accelerates smoothly back toward full speed over the remaining lock duration.
+- Dodge remains available and is not slowed by the stumble curve.
+- Stance cards remain playable, allowing stamina recovery, but a late card does not erase the already-missed timing penalty.
+- Dodging does not cancel the attack lock; the Gate 4 runtime reapplies its owned lock after the ordinary dodge chain reset.
+
+### Current stamina scope
+
+The prototype retains the current 100-point stamina capacity and current weapon-class costs. Capacity should be tuned only after the Catch timing and failure severity are judged in play. This avoids changing both the frequency and the consequence of exhaustion in the same pass.
+
+There is still no ordinary passive stamina regeneration.
+
+## Deferred gate
 
 ### Gate 5
 
@@ -99,4 +160,4 @@ Stance-specific defensive actions and full rollout across all 30 stances and the
 
 ## Follow-up animation work
 
-GitHub issue #111 tracks a later polish pass for sword failure animations. The goal is stronger top-down silhouettes and exaggerated readable misuse, potentially informed by Smash Bros.-style animation language. It does not block Gate 3.
+GitHub issue #111 tracks a later polish pass for sword failure animations. The goal is stronger top-down silhouettes and exaggerated readable misuse, potentially informed by Smash Bros.-style animation language.
