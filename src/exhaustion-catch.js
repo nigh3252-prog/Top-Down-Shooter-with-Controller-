@@ -48,7 +48,7 @@ export function createExhaustionCatchEngine(options={}){
   function trigger({before,after,source='attack',attackKey='',weaponId='',stanceId=''}={}){
     const from=Number(before),to=Number(after);
     if(!Number.isFinite(from)||!Number.isFinite(to)||from<=config.epsilon||to>config.epsilon)return null;
-    if(state.phase==='open'||state.phase==='missed'||state.phase==='failed')return null;
+    if(state.phase!=='idle')return null;
     serial++;
     setState({phase:'open',remaining:config.windowDuration,elapsed:0,serial,trigger:{source,attackKey,weaponId,stanceId}});
     return emit('opened',{serial});
