@@ -298,6 +298,8 @@ export function installWizardAlliedArcanaRuntime({
     else spawnMentis(origin,direction,spec,stableId);
     setCooldown(spec);semantic('cast-accepted',{arcanaId:id,stableId,cooldown:spec.cooldown});return true;
   }
+  function canPlay(card,context={}){return canCast(card?.arcanaId||card,context);}
+  function play(card,context={}){return canPlay(card,context)?cast(card,context):false;}
 
   function spawnAgentShot(agent,target){
     const origin={x:agent.x,z:agent.z},direction=normalize(target.x-origin.x,target.z-origin.z);
@@ -396,7 +398,7 @@ export function installWizardAlliedArcanaRuntime({
     system()?.releaseCharmedEnemy?.();faction()?.releaseCharm?.();
     cooldowns.clear();castCounters.clear();semanticEvents.length=0;time=0;state.renderMode=activeVisualMode();
   }
-  const onPlay=event=>cast(event?.detail?.card||event?.detail);
+  const onPlay=event=>play(event?.detail?.card||event?.detail,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   if(typeof window!=='undefined'){
     window.addEventListener?.('wizard-arcana:play',onPlay);
@@ -420,5 +422,5 @@ export function installWizardAlliedArcanaRuntime({
     };
   }
 
-  return{cast,canCast,update,reset,dispose,snapshot,state,effects,cooldowns,specs:WIZARD_ALLIED_ARCANA_SPECS};
+  return{cast,canCast,canPlay,play,update,reset,dispose,snapshot,state,effects,cooldowns,specs:WIZARD_ALLIED_ARCANA_SPECS};
 }

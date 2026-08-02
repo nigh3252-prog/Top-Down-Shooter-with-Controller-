@@ -2,6 +2,7 @@
 export const POW_BUNKER_CARD = Object.freeze({
   id: 'A01-PILEBUNKER',
   type: 'ability',
+  effectId:'pilebunker',
   name: 'PILEBUNKER',
   icon:'PB',
   description:'Drive the pilebunker forward and detonate its impact field.',

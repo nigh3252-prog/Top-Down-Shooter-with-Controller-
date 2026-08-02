@@ -9,7 +9,7 @@ import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
 import { installDashJetPanel } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
-import { createEffectDispatcher } from './effect-registry.js';
+import { createEffectDispatcher, createRuntimeHandlerTable } from './effect-registry.js';
 import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
 import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.js';
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
@@ -94,10 +94,6 @@ export function installPlayerCombat(api){
     getStance:()=>window.__arena?.arena?.stance||null,
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   });
-  const cardEffectDispatcher=createEffectDispatcher({handlers:{
-    bloodSlash:{canPlay:()=>true,play:()=>combatEffectRuntime.playBloodSlash()},
-    bingBong:{canPlay:()=>true,play:()=>true},
-  }});
   const wizardArcanaDamageScaler=installWizardArcanaDamageScaler({getEnemySystem:getArenaEnemySystem});
   const wizardArcanaRuntime=installArenaArcanaRuntime(()=>installWizardArcanaRuntime({
     THREE,scene:api.scene,
@@ -202,19 +198,46 @@ export function installPlayerCombat(api){
     getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
   }));
 
-  const previousAbilityCanPlay=window.__ABILITY_CARD_CAN_PLAY__;
-  const fusionLeapIds=new Set(['FLAME-FUSION','HEROIC-LEAP']);
-  const alliedArcanaIds=new Set(['RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM']);
-  const arcaneTypeIds=new Set(['CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION']);
-  window.__ABILITY_CARD_CAN_PLAY__=card=>{
-    const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();
-    if(wizardFusionLeapRuntime.busy)return false;
+  function arcanaIdFor(card){return String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();}
+  function canPlayArcanaCard(card){
+    const id=arcanaIdFor(card);
+    if(!id||wizardFusionLeapRuntime.busy)return false;
     if(wizardArcaneTypesRuntime.state?.ballCharge&&id!=='BALL-LIGHTNING')return false;
-    if(fusionLeapIds.has(id))return wizardFusionLeapRuntime.canCast(card);
-    if(alliedArcanaIds.has(id))return wizardAlliedArcanaRuntime.canCast(id);
-    if(arcaneTypeIds.has(id))return wizardArcaneTypesRuntime.canCast(card);
-    return typeof previousAbilityCanPlay==='function'?previousAbilityCanPlay(card):true;
-  };
+    return true;
+  }
+  // The local Pilebunker layer owns the exact guided-aim startup; this wrapper
+  // deliberately fails closed until that layer exposes its direct card API.
+  function canPlayPilebunker(){
+    return typeof PC.canPlayPilebunker==='function'&&PC.canPlayPilebunker()===true;
+  }
+  function playPilebunker(card,context={}){
+    try{if(!enemyRegistryBridge.sync({required:true}))return false;}catch{return false;}
+    return typeof PC.playPilebunker==='function'&&PC.playPilebunker(card,context)===true;
+  }
+  function makeArcanaHandler(runtime){
+    return{
+      canPlay(card,context={}){return canPlayArcanaCard(card)&&runtime?.canPlay?.(card,context)===true;},
+      play(card,context={}){return canPlayArcanaCard(card)&&runtime?.play?.(card,context)===true;},
+    };
+  }
+  const pilebunkerCardRuntime=Object.freeze({canPlay:canPlayPilebunker,play:playPilebunker});
+  const runtimeHandlerTable=createRuntimeHandlerTable({
+    pilebunker:pilebunkerCardRuntime,
+    bloodSlash:{canPlay:()=>true,play:()=>combatEffectRuntime.playBloodSlash()},
+    bingBong:{canPlay:()=>true,play:()=>true},
+    wizardArcana:makeArcanaHandler(wizardArcanaRuntime),
+    wizardFlameStrike:makeArcanaHandler(wizardFlameStrikeRuntime),
+    wizardWindSlash:makeArcanaHandler(wizardWindSlashRuntime),
+    wizardRebuiltArcana:makeArcanaHandler(wizardRebuiltArcanaRuntime),
+    wizardAirBasics:makeArcanaHandler(wizardAirBasicsRuntime),
+    wizardNextSource:makeArcanaHandler(wizardNextSourceRuntime),
+    wizardNextTwentyBasics:makeArcanaHandler(wizardNextTwentyBasicsRuntime),
+    wizardNextTwentyDash:makeArcanaHandler(wizardNextTwentyDashRuntime),
+    wizardFusionLeap:makeArcanaHandler(wizardFusionLeapRuntime),
+    wizardAlliedArcana:makeArcanaHandler(wizardAlliedArcanaRuntime),
+    wizardArcaneTypes:makeArcanaHandler(wizardArcaneTypesRuntime),
+  });
+  const cardEffectDispatcher=createEffectDispatcher({runtimeHandlers:runtimeHandlerTable});
 
   function releaseArcanaInput(detail={}){
     return wizardArcaneTypesRuntime.releaseBallLightning?.({...detail,phase:'release'})||false;
@@ -253,11 +276,6 @@ export function installPlayerCombat(api){
     return{preservedResources:!!preserved};
   }
 
-  // Update syncing normally establishes the bridge before the player can use a
-  // card. The required play-time check prevents a visual-only Pilebunker if the
-  // arena registry ever changes or fails to initialize in a future merge.
-  window.addEventListener('powbunker:play',()=>enemyRegistryBridge.sync({required:true}));
-
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
@@ -284,7 +302,9 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'basicDashRuntime',{value:basicDashRuntime,enumerable:true});
   Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
+  Object.defineProperty(PC,'pilebunkerCardRuntime',{value:pilebunkerCardRuntime,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
+  Object.defineProperty(PC,'runtimeHandlerTable',{value:runtimeHandlerTable,enumerable:true});
   Object.defineProperty(PC,'cardEffectDispatcher',{value:cardEffectDispatcher,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaDamageScaler',{value:wizardArcanaDamageScaler,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});

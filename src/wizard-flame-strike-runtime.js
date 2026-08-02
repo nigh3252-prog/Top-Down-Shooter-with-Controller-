@@ -108,7 +108,7 @@ function makeChargeVisual(THREE,scene){
 
 export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemySystem}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier,pointerHeld:[false,false],activeCombos:[]};
 
   function add(effect){state.effects.push(effect);return effect;}
@@ -154,6 +154,8 @@ export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemyS
     const combo={type:'flameStrikeCombo',age:0,nextBeat:0,slot:heldSlot(),charging:false,chargeAge:0,chargeMesh:null,life:.86};
     state.activeCombos.push(combo);add(combo);
   }
+  function canPlay(card){return card?.arcanaId==='FLAME-STRIKE';}
+  function play(card,context={}){if(!canPlay(card))return false;startCombo();return true;}
 
   function updateCombo(effect,dt){
     effect.age+=dt;
@@ -192,14 +194,14 @@ export function installWizardFlameStrikeRuntime({THREE,scene,getPlayer,getEnemyS
   const onPointerDown=event=>{const slot=cardSlotFromTarget(event.target);if(slot>=0)state.pointerHeld[slot]=true;};
   const onPointerEnd=event=>{const slot=cardSlotFromTarget(event.target);if(slot>=0)state.pointerHeld[slot]=false;else state.pointerHeld.fill(false);};
   const onBlur=()=>state.pointerHeld.fill(false);
-  const onPlay=event=>{if(event?.detail?.card?.arcanaId==='FLAME-STRIKE')startCombo();};
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   document.addEventListener('pointerdown',onPointerDown,true);
   window.addEventListener('pointerup',onPointerEnd,true);window.addEventListener('pointercancel',onPointerEnd,true);window.addEventListener('blur',onBlur);
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
 
   return{
-    state,reset,
+    state,canPlay,play,reset,
     update(dt,now=0){for(const effect of[...state.effects]){if(effect.type==='flameStrikeCombo')updateCombo(effect,Math.max(0,dt));else if(effect.type==='flameStrikeBurst')updateBurst(effect,Math.max(0,dt),Number(now)||0);}},
     dispose(){document.removeEventListener('pointerdown',onPointerDown,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerEnd,true);window.removeEventListener('blur',onBlur);window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();},
   };
