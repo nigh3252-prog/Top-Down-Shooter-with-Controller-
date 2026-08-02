@@ -42,18 +42,23 @@ cleaveWeapon.stance2CleaveMode='failed';
 assert.equal(weaponAllowsCleave({weaponDef:cleaveWeapon,attackSlot:2,maxCharge:true}),false);
 
 function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],activeSlot=0,updateCombat=()=>{}}){
-  const combatState={weapon:weaponId,attack,attackGroup:'vertical',hitIds:new Set(hitIds)};
+  const combatState={weapon:weaponId,attack,attackGroup:'vertical',t:0,hitIds:new Set(hitIds)};
   const arena={
     stance:stanceById(stanceId),
     chain:{activeSlot,stage:attack?'hit1':'idle',comboDeadline:0},
     swing:{maxChargeCleave:false,stun:.2},
+    dodge:{t:-1},
   };
   const PC={
     combatState,
     currentWeapon:()=>STONE_WEAPONS[combatState.weapon],
     combatMovePenalty(){return movePenalty;},
     getWeaponHitZones(){return[{damage:30,stagger:1,from:{y:0},to:{y:1}}];},
-    startCombatAttack(key,group){combatState.attack={key};combatState.attackGroup=group;},
+    startCombatAttack(key,group){
+      combatState.attack={key,phases:[{t1:.2}],contactAt:.3,total:.7};
+      combatState.attackGroup=group;
+      combatState.t=.1;
+    },
     updateCombat(){return updateCombat({PC,combatState,arena});},
   };
   const runtime=createStanceGate3Runtime({arenaHandle:{PC,combatState,arena},windowRef:{}});
@@ -63,14 +68,16 @@ function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],ac
 {
   const {PC,combatState,arena,runtime}=makeHarness({stanceId:'S24',weaponId:'dagger'});
   assert.equal(runtime.snapshot().payoffId,'light-mobile-expression');
-  assert.equal(PC.combatMovePenalty(),.92,'full Light alignment should preserve movement');
+  PC.startCombatAttack('vertical10','vertical');
+  assert.equal(PC.combatMovePenalty(),1,'full Light alignment should remain fully mobile during normal attacks');
   assert.equal(STONE_WEAPONS.dagger.stance2CleaveMode,'full-light');
 
+  combatState.attack=null;
   combatState.weapon='longsword';
   arena.stance=stanceById('S24');
   runtime.apply();
   assert.equal(runtime.snapshot().active,false);
-  assert.equal(PC.combatMovePenalty(),.55,'adapted pair should not receive the Light movement payoff');
+  assert.equal(PC.combatMovePenalty(),.55,'outside an active swing the original movement value remains untouched');
   assert.equal(STONE_WEAPONS.longsword.stance2CleaveMode,'adapted-medium');
   assert.equal(Object.hasOwn(STONE_WEAPONS.dagger,'stance2CleaveMode'),false,'switching weapons should restore the prior weapon definition');
   runtime.destroy();
