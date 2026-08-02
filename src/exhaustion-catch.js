@@ -22,7 +22,7 @@ export function exhaustionFailureMovementMultiplier({elapsed=0,duration=3,stumbl
 }
 
 export function createExhaustionCatchEngine(options={}){
-  const config=Object.freeze({...EXHAUSTION_CATCH_DEFAULTS,...options});
+  const config={...EXHAUSTION_CATCH_DEFAULTS,...options};
   let serial=0;
   let state={phase:'idle',remaining:0,elapsed:0,trigger:null,serial};
   const events=[];
@@ -40,17 +40,37 @@ export function createExhaustionCatchEngine(options={}){
       failureLockDuration:config.failureLockDuration,
       failureStumbleDuration:config.failureStumbleDuration,
       movementMultiplier:state.phase==='failed'?exhaustionFailureMovementMultiplier({elapsed:state.elapsed,duration:config.failureLockDuration,stumbleDuration:config.failureStumbleDuration}):1,
-      attacksBlocked:state.phase==='missed'||state.phase==='failed',
+      attacksBlocked:state.phase==='open'||state.phase==='missed'||state.phase==='failed',
       catchOpen:state.phase==='open',
     });
   }
   function drainEvents(){return events.splice(0,events.length);}
-  function trigger({before,after,source='attack',attackKey='',weaponId='',stanceId=''}={}){
+  function trigger({
+    before,
+    after,
+    source='attack',
+    attackKey='',
+    weaponId='',
+    stanceId='',
+    requestedCost=0,
+    actualSpent=0,
+    overdrawAmount=0,
+    overdraw=false,
+  }={}){
     const from=Number(before),to=Number(after);
     if(!Number.isFinite(from)||!Number.isFinite(to)||from<=config.epsilon||to>config.epsilon)return null;
     if(state.phase!=='idle')return null;
     serial++;
-    setState({phase:'open',remaining:config.windowDuration,elapsed:0,serial,trigger:{source,attackKey,weaponId,stanceId}});
+    setState({
+      phase:'open',remaining:config.windowDuration,elapsed:0,serial,
+      trigger:{
+        source,attackKey,weaponId,stanceId,
+        requestedCost:Math.max(0,Number(requestedCost)||0),
+        actualSpent:Math.max(0,Number(actualSpent)||0),
+        overdrawAmount:Math.max(0,Number(overdrawAmount)||0),
+        overdraw:overdraw===true,
+      },
+    });
     return emit('opened',{serial});
   }
   function playStance({cardId='',stanceId=''}={}){
@@ -89,6 +109,16 @@ export function createExhaustionCatchEngine(options={}){
     }
     return snapshot();
   }
+  function setWindowDuration(duration){
+    const next=Math.max(.05,Number(duration)||EXHAUSTION_CATCH_DEFAULTS.windowDuration);
+    const previous=Math.max(.05,Number(config.windowDuration)||EXHAUSTION_CATCH_DEFAULTS.windowDuration);
+    if(state.phase==='open'){
+      const fraction=clamp01(state.remaining/previous);
+      state={...state,remaining:next*fraction,elapsed:next*(1-fraction)};
+    }
+    config.windowDuration=next;
+    return snapshot();
+  }
   function reset(reason='reset'){
     const previous=state.phase;
     state={phase:'idle',remaining:0,elapsed:0,trigger:null,serial};
@@ -96,5 +126,8 @@ export function createExhaustionCatchEngine(options={}){
     return Object.freeze({reason,previous,snapshot:snapshot()});
   }
 
-  return Object.freeze({config,snapshot,drainEvents,trigger,playStance,cancel,beginFailure,update,reset});
+  return Object.freeze({
+    get config(){return Object.freeze({...config});},
+    snapshot,drainEvents,trigger,playStance,cancel,beginFailure,update,setWindowDuration,reset,
+  });
 }
