@@ -73,6 +73,8 @@ async function bootStanceRuntimes(){
     gate3.installStanceGate3Runtime({windowRef:window});
     const gate4=await import('./stance-gate4-exhaustion.js');
     gate4.installStanceGate4Runtime({windowRef:window});
+    const ringSize=await import('./stance-gate4-ring-size.js');
+    ringSize.installStanceGate4RingSize({windowRef:window});
   }catch(error){
     console.warn('[stance-2] runtime did not install',error);
   }
