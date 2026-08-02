@@ -1,5 +1,12 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { axialToWorld, buildMazeEdges, hexCorners } from './hex-maze-navigation.js';
 import { createMazeForest } from './maze-forest.js';
+import {
+  CLASSIC_WALL_HEIGHT,
+  CLASSIC_WALL_THICKNESS,
+  classicBarrierEdges,
+  createClassicBarrierGroup,
+} from './arena-classic-walls.js';
 
 function roomColor(id, alpha = 1){
   const hue = (id * 67 + 195) % 360;
@@ -145,7 +152,7 @@ function insetDoorTargetTowardRoom(maze, roomId, door, hexSize, inset = .7){
 
 export function createMazeWorld({
   THREE, maze, roomId = null, hexSize = 2.6, wallHeight = 1.8,
-  wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(),
+  wallThickness = .18, doorWidth = 6.4, openedDoorEdges = new Set(), worldStyle = null,
 } = {}){
   if(!THREE || !maze) throw new Error('createMazeWorld requires THREE and a maze.');
   const room = roomId === null ? null : maze.rooms.find(candidate => candidate.id === roomId);
@@ -164,20 +171,59 @@ export function createMazeWorld({
     floor.position.set(center.x, -.06, center.z); floor.rotation.y = Math.PI / 6; floor.receiveShadow = true; group.add(floor);
   }
 
+  const barrierStyle = worldStyle?.barrierStyle === 'classic' ? 'classic' : 'forest';
+  const barrierWallHeight = barrierStyle === 'classic' ? CLASSIC_WALL_HEIGHT : wallHeight;
+  const barrierWallThickness = barrierStyle === 'classic' ? CLASSIC_WALL_THICKNESS : wallThickness;
   const sealedDoorMaterial = new THREE.MeshStandardMaterial({ color:0x6e4a25, emissive:0x351407, roughness:.76 });
   const breakableDoorMaterial = new THREE.MeshStandardMaterial({ color:0xe8a04c, emissive:0x6e2f0b, emissiveIntensity:1.35, roughness:.58 });
   const allEdges = buildMazeEdges(maze, { hexSize });
   const runtimeEdges = allEdges.filter(edge => activeCellKeys.has(edge.cellA) || (edge.cellB && activeCellKeys.has(edge.cellB)));
-  const forestEdges = runtimeEdges.filter(candidate => !candidate.open && !candidate.door);
+  const forestEdges = barrierStyle === 'forest'
+    ? runtimeEdges.filter(candidate => !candidate.open && !candidate.door)
+    : [];
+  const classicEdges = barrierStyle === 'classic'
+    ? classicBarrierEdges(maze, { roomId, hexSize })
+    : [];
+  const classicBarrier = barrierStyle === 'classic'
+    ? createClassicBarrierGroup({
+      THREE,
+      edges:classicEdges,
+      wallHeight:barrierWallHeight,
+      wallThickness:barrierWallThickness,
+    })
+    : null;
+  if(classicBarrier) group.add(classicBarrier.group);
   const doorMeshes = new Map();
   const doorTargets = new Map();
   const doorSplits = new Map();
-  const doorHeight = wallHeight * 1.84;
+  const classicDoorWings = [];
+  const doorHeight = barrierWallHeight * 1.84;
   for(const edge of runtimeEdges.filter(candidate => candidate.door)){
     const split = splitDoorEdge(edge, doorWidth);
     doorSplits.set(edge.edge, split);
-    forestEdges.push(...split.wings);
-    const mesh = makeWallMesh(THREE, split.door, sealedDoorMaterial, doorHeight, wallThickness * 1.7);
+    if(barrierStyle === 'forest') forestEdges.push(...split.wings);
+    else {
+      classicDoorWings.push(...split.wings);
+      for(const wing of split.wings){
+        const wingMesh = makeWallMesh(
+          THREE,
+          wing,
+          classicBarrier.material,
+          barrierWallHeight,
+          barrierWallThickness,
+        );
+        wingMesh.userData.edge = wing;
+        wingMesh.userData.barrierStyle = 'classic';
+        classicBarrier.group.add(wingMesh);
+      }
+    }
+    const mesh = makeWallMesh(
+      THREE,
+      split.door,
+      sealedDoorMaterial,
+      doorHeight,
+      barrierWallThickness * 1.7,
+    );
     mesh.userData.edge = split.door;
     mesh.userData.baseY = mesh.position.y;
     mesh.userData.openProgress = 0;
@@ -189,8 +235,11 @@ export function createMazeWorld({
     group.add(mesh);
   }
 
-  const forest = createMazeForest({ THREE, maze, roomId, wallEdges:forestEdges, hexSize, wallHeight });
-  group.add(forest.group);
+  const forest = barrierStyle === 'forest'
+    ? createMazeForest({ THREE, maze, roomId, wallEdges:forestEdges, hexSize, wallHeight })
+    : null;
+  if(forest) group.add(forest.group);
+  group.userData.barrierStyle = barrierStyle;
 
   let sealedRoomIds = new Set();
   let openedEdges = new Set(openedDoorEdges || []);
@@ -245,15 +294,17 @@ export function createMazeWorld({
       mesh.position.y = mesh.userData.baseY - eased * mesh.userData.doorHeight;
       if(p >= 1){ mesh.visible = false; mesh.userData.state = 'open'; }
     }
-    const actorPos = globalThis.__arena?.actorPos;
-    if(actorPos){
+    const actorPos = forest ? getArenaRuntime()?.actorPos : null;
+    if(actorPos && forest?.updateCutaways){
       const player = { x:actorPos.x, z:actorPos.y };
       forest.updateCutaways(dt, player);
     }
   };
   const getCollisionSegments = () => {
     if(collisionSegments) return collisionSegments;
-    const segments = [...forest.collisionSegments];
+    const segments = barrierStyle === 'forest'
+      ? [...forest.collisionSegments]
+      : [...classicEdges, ...classicDoorWings];
     for(const edge of runtimeEdges){
       if(!edge.door) continue;
       const split = doorSplits.get(edge.edge) || splitDoorEdge(edge, doorWidth);

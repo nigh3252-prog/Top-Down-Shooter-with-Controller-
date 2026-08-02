@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { getWeaponDamageMultiplier } from './combat-balance.js';
 import { guardPoseFor } from './guard-poses.js';
 
@@ -167,9 +168,9 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
     coreTrail:null,coreTrailColor:null,expandedTrail:null,
   };
 
-  function currentStance(){return getStance?.()||globalThis.window?.__arena?.arena?.stance||null;}
-  function currentSwing(){return globalThis.window?.__arena?.arena?.swing||null;}
-  function currentWalls(){return getMazeSegments?.()||globalThis.window?.__arena?.mazeWorld?.getCollisionSegments?.()||[];}
+  function currentStance(){return getStance?.()||getArenaRuntime()?.arena?.stance||null;}
+  function currentSwing(){return getArenaRuntime()?.arena?.swing||null;}
+  function currentWalls(){return getMazeSegments?.()||getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[];}
   function activeExecution(){
     const ex=state.execution;
     return!!ex&&!!PC.combatState.attack&&PC.combatState.attackKey===ex.attackKey&&PC.combatState.attackGroup===ex.group;
@@ -393,6 +394,12 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
   }
   function syncBingBongReadyPose(){const stance=currentStance();if(!stance||stance.id===state.lastStanceId)return;state.lastStanceId=stance.id;if(stance.id===BING_BONG_STANCE_ID||stance.effectId==='bingBong')PC.setReadyPose?.(guardPoseFor(stance));}
 
+  function playBloodSlash(){
+    state.charges=BLOOD_SLASH_MAX_CHARGES;syncBadge();styleCoreTrail();
+    if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function'&&typeof CustomEvent==='function')window.dispatchEvent(new CustomEvent('bloodslash:charged',{detail:{charges:state.charges}}));
+    return true;
+  }
+
   function clearStatuses(){for(const entry of state.bleeds.values())disposeBleed(entry);state.bleeds.clear();for(const wave of state.shockwaves){if(wave.mesh?.parent)wave.mesh.parent.remove(wave.mesh);wave.mesh?.geometry?.dispose?.();wave.mesh?.material?.dispose?.();}state.shockwaves.length=0;for(const entry of state.stunVisuals.values())clearStunVisual(entry);state.stunVisuals.clear();}
   function resetEffects(){endExecution();state.charges=0;clearStatuses();syncBadge();styleCoreTrail();}
 
@@ -401,13 +408,12 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
   hookBag.onAttackComplete=function effectRuntimeAttackComplete(...args){endExecution();return originalAttackComplete?.(...args);};
 
   if(typeof window!=='undefined'){
-    window.addEventListener('bloodslash:play',()=>{state.charges=BLOOD_SLASH_MAX_CHARGES;syncBadge();styleCoreTrail();window.dispatchEvent(new CustomEvent('bloodslash:charged',{detail:{charges:state.charges}}));});
     window.__COMBAT_EFFECT_RUNTIME__=state;
   }
   findCoreTrail();makeExpandedTrail();syncBadge();styleCoreTrail();
 
   return{
-    state,reset:resetEffects,isBloodSlashEmpowered,
+    state,reset:resetEffects,isBloodSlashEmpowered,playBloodSlash,
     update(dt,now=0){
       patchEnemySystem();syncBingBongReadyPose();
       if(state.execution&&!activeExecution())endExecution();

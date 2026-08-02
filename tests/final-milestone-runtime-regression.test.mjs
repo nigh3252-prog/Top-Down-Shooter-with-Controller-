@@ -5,7 +5,7 @@ const playerCombat=await readFile(new URL('../src/player-combat.js',import.meta.
 const runDraft=await readFile(new URL('../src/run-draft.js',import.meta.url),'utf8');
 const profilesUi=await readFile(new URL('../src/enemy-lab-combat-profiles.js',import.meta.url),'utf8');
 
-assert.match(playerCombat,/function installArenaArcanaRuntime\(factory\)/,'full Combat Arena must provide the authored Enemy Lab Arcana runtime context');
+assert.match(playerCombat,/const installArenaArcanaRuntime=factory=>factory\(\)/,'the shared runtime must install every authored Arcana family without URL patching');
 for(const installer of [
   'installWizardArcanaRuntime',
   'installWizardRebuiltArcanaRuntime',
@@ -25,7 +25,7 @@ for(const installer of [
     `${installer} must run in the full Combat Arena instead of returning an Enemy-Lab-only no-op`,
   );
 }
-assert.match(playerCombat,/finally\{history\.replaceState\(history\.state,'',original\);\}/,'the temporary runtime context must restore the real Combat Arena URL');
+assert.doesNotMatch(playerCombat,/history\.replaceState|searchParams\.set\('enemyLab'/,'Arcana installation must use explicit runtime context rather than mutating the URL');
 
 const chooseOffer=runDraft.slice(runDraft.indexOf('function chooseOffer'),runDraft.indexOf('function renderOffers'));
 const firstApply=chooseOffer.indexOf('applyActiveCombatProfileToArena(api)');

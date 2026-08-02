@@ -1,9 +1,13 @@
+import { readonlyMap } from './card-definition.js';
+import { arcanaEffectId } from './effect-registry.js';
+
 const makeCard=({
   id,name,icon,element,category,analysisOrder,sourceClip,description,summary,rows,chain,
   styleTags=[],manualSequence=null,uiColor,uiBorder,uiBackground,
 })=>Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
+  effectId:arcanaEffectId(id),
   sourceGame:'Wizard of Legend',
   type:'ability',
   category,
@@ -107,4 +111,4 @@ export const WIZARD_ARCHETYPE_SAMPLER_CARDS=Object.freeze([
   }),
 ]);
 
-export const WIZARD_ARCHETYPE_SAMPLER_BY_ID=new Map(WIZARD_ARCHETYPE_SAMPLER_CARDS.map(card=>[card.arcanaId,card]));
+export const WIZARD_ARCHETYPE_SAMPLER_BY_ID=readonlyMap(WIZARD_ARCHETYPE_SAMPLER_CARDS.map(card=>[card.arcanaId,card]));

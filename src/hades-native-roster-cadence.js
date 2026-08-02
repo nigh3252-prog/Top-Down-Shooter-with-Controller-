@@ -1,8 +1,8 @@
-import { ARENA_ENEMY_CATALOG } from './arena-enemy-catalog.js';
+import { getArenaRuntime } from './arena-runtime-context.js';
+import { getArenaEnemyBySpawnKind } from './arena-enemy-content-registry.js';
 import { WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-const catalogByKind=new Map(ARENA_ENEMY_CATALOG.map(enemy=>[String(enemy.spawnKind||enemy.id),enemy]));
 
 // These are the exact fallback values used by the native Hades runtime whenever
 // its encounter planner is disabled by the mixed-system router.
@@ -16,7 +16,7 @@ export function createNativeHadesCadencePlan(plannedCount=1){
 }
 
 function enemyDefinition(enemy){
-  const catalog=catalogByKind.get(String(enemy?.kind||enemy?.spawnKind||''));
+  const catalog=getArenaEnemyBySpawnKind(String(enemy?.kind||enemy?.spawnKind||''));
   return{
     activeWeight:Math.max(.1,Number(enemy?.def?.activeWeight)||Number(catalog?.activeWeight)||1),
     maxActive:Math.max(1,Math.round(Number(enemy?.def?.maxActive)||Number(catalog?.maxCount)||8)),
@@ -54,7 +54,7 @@ function installNativeHadesCadenceOnSystem(system,{
     if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
       return{x:Number(player.x),z:Number(player.z)};
     }
-    const actor=globalThis.__arena?.actorPos;
+    const actor=getArenaRuntime()?.actorPos;
     if(Number.isFinite(Number(actor?.x))){
       const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
       if(Number.isFinite(z))return{x:Number(actor.x),z};

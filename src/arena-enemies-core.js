@@ -10,19 +10,21 @@ import {
 } from './arena-enemies-guard.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 import { createFlareArenaEnemySystem } from './flare-arena-enemies.js';
-import { isFlareSpawnKind } from './flare-enemies.js';
 import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
-import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
+import { HADES_TARTARUS_POOL_ID } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 import { setHadesNativeModeActive } from './hades-encounter-tuning.js';
 import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-base.js';
 import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
+import { getArenaEnemyBySpawnKind, listArenaEnemies } from './arena-enemy-content-registry.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES).filter(id=>id!==LUGARU_DUELIST_ID));
+const ORIGINAL_GOBLIN_IDS=new Set(
+  listArenaEnemies({family:'GOBLINS'}).map(enemy=>enemy.id).filter(id=>id!==LUGARU_DUELIST_ID),
+);
 
 export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){
   const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
@@ -97,7 +99,12 @@ export function createArenaEnemySystem(options={}){
   for(const system of [flare,hades]){system.clearRoomRuntime();system.group.visible=false;}
 
   const all=method=>(...args)=>{for(const system of systems)system[method]?.(...args);};
-  const systemForKind=kind=>isHadesSpawnKind(kind)?['hades',hades]:isFlareSpawnKind(kind)?['flare',flare]:['original',original];
+  const systemForKind=kind=>{
+    const record=getArenaEnemyBySpawnKind(kind);
+    if(kind===HADES_TARTARUS_POOL_ID||record?.system==='hades')return['hades',hades];
+    if(record?.system==='flare')return['flare',flare];
+    return['original',original];
+  };
   const combinedSystems=()=>[...participatingKeys].map(key=>systemsByKey[key]);
   const visibleSystems=()=>combinedMode?combinedSystems():[active];
   const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;
@@ -455,6 +462,5 @@ export function createArenaEnemySystem(options={}){
     factionService,originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);
-  globalThis.__enemyLabEnemySystem=api;
   return api;
 }

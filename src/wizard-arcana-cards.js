@@ -1,3 +1,6 @@
+import { readonlyMap } from './card-definition.js';
+import { arcanaEffectId } from './effect-registry.js';
+
 const makeArcana = ({
   id,
   name,
@@ -14,6 +17,7 @@ const makeArcana = ({
 }) => Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
+  effectId:arcanaEffectId(id),
   sourceGame:'Wizard of Legend',
   type:'ability',
   name,
@@ -194,7 +198,7 @@ export const WIZARD_ARCANA_CARDS = Object.freeze([
   }),
 ]);
 
-export const WIZARD_ARCANA_BY_ID = new Map(WIZARD_ARCANA_CARDS.map(card=>[card.id,card]));
+export const WIZARD_ARCANA_BY_ID = readonlyMap(WIZARD_ARCANA_CARDS.map(card=>[card.id,card]));
 
 export function isWizardArcanaCard(card){
   return card?.sourceGame==='Wizard of Legend'&&typeof card?.arcanaId==='string';

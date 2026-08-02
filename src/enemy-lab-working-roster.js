@@ -32,8 +32,11 @@ export function writeWorkingRoster(storage,ids,catalog=[]){
 
 const statusLabel=status=>({
   'lab-only':'LAB ONLY',
+  lab:'LAB ONLY',
   candidate:'CANDIDATE',
   'arena-ready':'ARENA READY',
+  arena:'ARENA READY',
+  disabled:'DISABLED',
 }[status]||'CANDIDATE');
 
 function makeChoice(document,{label,sub='',meta='',active=false,className='',onClick}){
@@ -53,7 +56,7 @@ function makeStatus(document,title,body){
   card.append(heading,detail);return card;
 }
 
-export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=globalThis.localStorage,document=globalThis.document}={}){
+export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=globalThis.localStorage,document=globalThis.document,runtime=null}={}){
   if(!document||!Array.isArray(catalog)||!catalog.length)return{installed:false,reason:'missing-enemy-lab'};
   const page=new URL(document.location?.href||globalThis.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
@@ -95,12 +98,7 @@ export function installEnemyLabWorkingRoster({catalog=[],families=[],storage=glo
   function startHadesStyleEncounter(){
     if(!rosterIds.length)return{ok:false,error:'Select at least one enemy first.'};
     try{storage?.setItem?.(ARENA_SPAWN_SETTING_KEY,JSON.stringify(WORKING_ROSTER_HADES_ID));}catch{}
-    const frame=document.getElementById('arenaFrame'),frameWindow=frame?.contentWindow,frameDocument=frame?.contentDocument;
-    const select=frameDocument?.getElementById('spawnSelect');
-    if(select?.querySelector(`option[value="${WORKING_ROSTER_HADES_ID}"]`)){
-      select.value=WORKING_ROSTER_HADES_ID;
-      select.dispatchEvent(new frameWindow.Event('change',{bubbles:true}));
-    }else frameWindow?.__enemyLabEnemySystem?.setSpawnKind?.(WORKING_ROSTER_HADES_ID);
+    runtime?.enemySystem?.setSpawnKind?.(WORKING_ROSTER_HADES_ID);
     const destination=new URL('./combat-arena.html',document.location.href);
     destination.search='';
     setTimeout(()=>document.location.assign(destination),0);

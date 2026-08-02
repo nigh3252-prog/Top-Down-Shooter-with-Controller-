@@ -1,7 +1,7 @@
 # Wizard of Legend source-note archive
 
 These files preserve the two research passes that fed the standalone
-[`wizard-of-legend-arcana-checklist.html`](../../wizard-of-legend-arcana-checklist.html).
+[`wizard-of-legend-arcana-checklist.html`](../../tools/wizard-of-legend-arcana-checklist.html).
 
 The checklist is the canonical working reference. The Markdown in
 `source-notes/` is retained as historical evidence:
