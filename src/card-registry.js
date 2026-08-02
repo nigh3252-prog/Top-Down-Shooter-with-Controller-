@@ -30,6 +30,7 @@ for(const contribution of CONTRIBUTIONS){
     const id=String(card?.id||'').trim();
     if(!id)throw new Error(`Card definition in ${contribution.family} is missing an id`);
     if(entriesById.has(id))throw new Error(`Duplicate card definition: ${id}`);
+    if((card.type==='ability'||card.type==='modifier')&&!card.effectId)throw new Error(`Non-stance card ${id} is missing an effectId`);
     if(card.effectId&&!getEffectDefinition(card.effectId))throw new Error(`Card ${id} references unknown effect: ${card.effectId}`);
     const entry=Object.freeze({id,family:contribution.family,card});
     entries.push(entry);entriesById.set(id,entry);

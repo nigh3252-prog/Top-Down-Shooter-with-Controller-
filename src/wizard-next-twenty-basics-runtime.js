@@ -346,7 +346,7 @@ export function installWizardNextTwentyBasicsRuntime({
 }={}){
   const initial=readArcanaTweaks();
   const emptySnapshot=()=>({simulationTime:0,castSerial:0,lastCast:null,visualMode:'style',movementLocked:false,facingLocked:false,effects:[],semanticEvents:[]});
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},cast(){return false;},snapshot:emptySnapshot,update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},cast(){return false;},snapshot:emptySnapshot,update(){},reset(){},dispose(){}};
 
   const state={
     effects:[],sizeMultiplier:initial.sizeMultiplier,elapsed:0,castSerial:0,lastCast:null,
@@ -479,6 +479,9 @@ export function installWizardNextTwentyBasicsRuntime({
     if(casted){state.castSerial++;state.lastCast=id;}
     return casted;
   }
+  const canPlayIds=new Set(['ICE-DAGGER','RIP-TIDE','AQUA-ARC','CHAOS-CRUSHER']);
+  function canPlay(card){return canPlayIds.has(card?.arcanaId);}
+  function play(card,context={}){return canPlay(card)?cast(card,context):false;}
 
   function updateCombo(effect,dt,emitter){
     effect.age+=dt;
@@ -529,11 +532,11 @@ export function installWizardNextTwentyBasicsRuntime({
   }
   function snapshot(){return{simulationTime:state.elapsed,castSerial:state.castSerial,lastCast:state.lastCast,visualMode:state.visualMode,movementLocked:state.movementLocks.size>0,movementLocks:[...state.movementLocks],facingLocked:state.facingLocks.size>0,facingLocks:[...state.facingLocks.keys()],effects:state.effects.map(effectSnapshot),semanticEvents:state.semanticEvents.map(event=>({...event}))};}
 
-  const onPlay=event=>cast(event?.detail?.card);
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   return{
-    state,cast,snapshot,reset,
+    state,cast,canPlay,play,snapshot,reset,
     update(dt,now=0){
       const frame=Math.max(0,Number(dt)||0),time=Number(now)||0;state.elapsed+=frame;
       for(const effect of[...state.effects]){

@@ -1,4 +1,5 @@
 import { readonlyMap } from './card-definition.js';
+import { arcanaEffectId } from './effect-registry.js';
 
 const makeCard=({
   id,name,icon,element,category,analysisOrder,sourceClip,description,summary,rows,chain,
@@ -6,6 +7,7 @@ const makeCard=({
 })=>Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
+  effectId:arcanaEffectId(id),
   sourceGame:'Wizard of Legend',
   type:'ability',
   category,

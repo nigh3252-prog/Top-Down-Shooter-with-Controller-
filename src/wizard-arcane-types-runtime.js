@@ -795,6 +795,8 @@ export function installWizardArcaneTypesRuntime({
     if (id === ARCANE_INTERVENTION_SPEC.id) return castIntervention(detail);
     return false;
   }
+  function canPlay(card,context={}){return canCast(card,context);}
+  function play(card,context={}){return canPlay(card,context)?cast(card,context):false;}
 
   function hitCycloneLeg(effect, start, end, phase) {
     const system = getEnemySystem?.(), ledger = phase === 'outbound' ? effect.outboundHits : effect.returnHits;
@@ -1188,7 +1190,7 @@ export function installWizardArcaneTypesRuntime({
     void now;
   }
 
-  const onPlay = event => cast(event?.detail?.card || event?.detail?.arcanaId || event?.detail?.id, event?.detail || {});
+  const onPlay = event => play(event?.detail?.card || event?.detail?.arcanaId || event?.detail?.id, event?.detail || {});
   const onTweaks = event => { state.sizeMultiplier = clampArcanaSize(event?.detail?.sizeMultiplier); };
   eventTarget?.addEventListener?.('wizard-arcana:play', onPlay);
   eventTarget?.addEventListener?.(ARCANA_TWEAKS_EVENT, onTweaks);
@@ -1197,6 +1199,8 @@ export function installWizardArcaneTypesRuntime({
     state,
     cast,
     canCast,
+    canPlay,
+    play,
     beginBallLightning,
     releaseBallLightning,
     interruptBallLightning,
