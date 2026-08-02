@@ -89,9 +89,11 @@ export function rosterSpawnFlowSettings(plan,systemKey,fallbackCount=1){
   const groups=Array.isArray(plan?.groups)?plan.groups:[];
   const group=groups.find(entry=>entry?.system===systemKey);
   const plannedCount=clamp(Math.round(Number(group?.count)||Number(fallbackCount)||1),1,20);
+  const activeWeightCap=Math.max(2.5,plannedCount*.65);
   return {
     plannedCount,
-    activeWeightCap:Math.max(2.5,plannedCount*.65),
+    // Keep the published cadence value stable across JS floating-point forms.
+    activeWeightCap:Number(activeWeightCap.toFixed(2)),
     simultaneousTelegraphs:Math.min(2,plannedCount),
     spawnDelay:clamp(Number(plan?.spawnDelay)||.72,.35,1.5),
   };

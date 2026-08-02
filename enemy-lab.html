@@ -89,11 +89,7 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
   <nav id="labCategories"></nav><div id="message"></div>
 </aside>
 <script type="module">
-import { ARENA_ENEMY_ARCHETYPES } from './src/arena-enemies.js';
-import { FUSION_ARCHETYPES, FUSION_ENEMY_OPTIONS } from './src/fusion-enemies.js';
-import { FLARE_ENEMY_ARCHETYPES, FLARE_ENEMY_OPTIONS } from './src/flare-enemies.js';
-import { HADES_ENEMY_ARCHETYPES, HADES_ENEMY_OPTIONS } from './src/hades-enemies.js';
-import { COMBINED_ENCOUNTER_GROUPS } from './src/combined-encounter-director.js';
+import { ARENA_ENEMY_CATALOG, ARENA_ENEMY_FAMILIES } from './src/arena-enemy-catalog.js';
 import { ABILITY_CAPTURE_CARD_SUMMARIES, ABILITY_CAPTURE_CHECKPOINTS, normalizeCaptureArcanaId, normalizeCaptureAim, normalizeCaptureDummy } from './src/ability-capture.js';
 
 const $=id=>document.getElementById(id);
@@ -104,13 +100,8 @@ const pageParams=new URLSearchParams(location.search),capturePage=pageParams.get
 document.body.classList.toggle('cleanCapture',cleanCapture);
 const storeKey='enemyLab.settings.v3';
 const saved=(()=>{try{return JSON.parse(localStorage.getItem(storeKey)||localStorage.getItem('enemyLab.settings.v2')||localStorage.getItem('enemyLab.settings.v1')||'{}')}catch{return{}}})();
-const combinedByKind=new Map(COMBINED_ENCOUNTER_GROUPS.map(group=>[group.spawnKind,group]));
-const labelsFrom=options=>new Map(options.map(option=>[option.id,option.label.replace(/^FLARE · |^HADES · /,'')]));
-const fusionLabels=labelsFrom(FUSION_ENEMY_OPTIONS),flareLabels=labelsFrom(FLARE_ENEMY_OPTIONS),hadesLabels=labelsFrom(HADES_ENEMY_OPTIONS);
-const originalMeta={grunt:{label:'Goblin Grunt',role:'frontliner',tags:['frontline'],encounterCost:5,maxCount:4},dagger:{label:'Goblin Dagger',role:'flanker',tags:['mobile','close'],encounterCost:5,maxCount:4},mace:{label:'Goblin Mace',role:'anchor',tags:['frontline','anchor'],encounterCost:10,maxCount:4},rock:{label:'Goblin Rock Thrower',role:'ranged support',tags:['ranged','support'],encounterCost:6,maxCount:4},captain:{label:'Goblin Captain',role:'elite anchor',tags:['frontline','anchor','elite'],encounterCost:15,maxCount:4}};
-function entry(id,label,family,system,data={}){const combined=combinedByKind.get(id)||{};return {id,label,family,system,role:data.role||combined.label||'enemy',tags:[...(data.pairingTags||data.categories||combined.tags||[])],avoidTags:[...(data.avoidPairTags||combined.avoidTags||[])],encounterCost:data.encounterCost||combined.encounterCost||8,maxCount:data.maxActive||combined.maxCount||8,needsPartner:!!(data.needsPartner||combined.needsPartner)};}
-const catalog=[...Object.keys(ARENA_ENEMY_ARCHETYPES).map(id=>entry(id,originalMeta[id]?.label||id,'GOBLINS','original',{...ARENA_ENEMY_ARCHETYPES[id],...originalMeta[id]})),...Object.entries(FUSION_ARCHETYPES).map(([id,data])=>entry(id,fusionLabels.get(id)||id,'FUSION','original',data)),...Object.entries(FLARE_ENEMY_ARCHETYPES).map(([id,data])=>entry(id,flareLabels.get(id)||data.label||id,'FLARE','flare',data)),...Object.entries(HADES_ENEMY_ARCHETYPES).map(([id,data])=>entry(id,hadesLabels.get(id)||data.label||id,'HADES','hades',data))];
-const familyOrder=['GOBLINS','FUSION','FLARE','HADES'];
+const catalog=ARENA_ENEMY_CATALOG;
+const familyOrder=[...ARENA_ENEMY_FAMILIES];
 const fixedCategories=[['test','TEST','Start, clear, or repeat the configured test.','testCategory'],['capture','ARCANA CAPTURE','Directly cast Wizard Arcana in a deterministic fixed-step chamber.','captureCategory'],['type','TYPE','Choose the enemy family.',''],['enemy','ENEMY','Choose the exact focal enemy.',''],['spawn','SPAWN','Configure solo, pack, or paired-wave spawning.',''],['room','ROOM','Configure the test chamber.','']];
 const legacyCategoryMap={player:'controls:panel-loadout',combat:'controls:panel-combatTiming',director:'controls:panel-director',tuning:'controls:panel-sim',feel:'controls:panel-keyframe'};
 const restoredCategory=legacyCategoryMap[saved.category]||saved.category||'test';

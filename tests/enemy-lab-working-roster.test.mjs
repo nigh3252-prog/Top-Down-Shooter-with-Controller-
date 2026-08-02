@@ -16,7 +16,7 @@ const catalogIds=ARENA_ENEMY_CATALOG.map(enemy=>enemy.id);
 assert.equal(ARENA_ENEMY_CATALOG.length,29);
 assert.deepEqual(ARENA_ENEMY_FAMILIES,['GOBLINS','FUSION','FLARE','HADES']);
 assert.equal(new Set(catalogIds).size,catalogIds.length);
-assert.equal(ARENA_ENEMY_CATALOG.find(enemy=>enemy.id==='lion')?.arenaStatus,'lab-only');
+assert.equal(ARENA_ENEMY_CATALOG.find(enemy=>enemy.id==='lion')?.arenaStatus,'lab');
 assert.ok(ARENA_ENEMY_CATALOG.every(enemy=>enemy.arenaStatus!=='arena-ready'),'no enemy should be approved automatically');
 
 assert.deepEqual(normalizeWorkingRosterIds([],ARENA_ENEMY_CATALOG),[]);
