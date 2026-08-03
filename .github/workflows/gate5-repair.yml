@@ -1,0 +1,43 @@
+name: Apply Gate 5 defense repair
+
+on:
+  push:
+    branches:
+      - agent/stance-2-gate-5-pilot
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply guarded repair
+        shell: bash
+        run: |
+          node .gate5-repair/apply-gate5-fix.mjs --repo="$GITHUB_WORKSPACE"
+          npm run test:combat
+
+      - name: Commit tested repair and clean temporary files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -r .gate5-repair .github/workflows/gate5-repair.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Fix Gate 5 defense input and damage pipeline"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
