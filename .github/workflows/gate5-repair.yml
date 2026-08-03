@@ -6,9 +6,11 @@ on:
       - agent/stance-2-gate-5-pilot
   pull_request:
     branches:
-      - main
+      - automation/gate5-repair-base
     types:
       - edited
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -33,6 +35,7 @@ jobs:
       - name: Apply guarded repair
         shell: bash
         run: |
+          node .gate5-repair/normalize-branch-format.mjs
           node .gate5-repair/apply-gate5-fix.mjs --repo="$GITHUB_WORKSPACE"
           npm run test:combat
 
