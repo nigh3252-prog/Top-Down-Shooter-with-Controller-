@@ -13,6 +13,7 @@ const rosterMode=read('src/working-roster-encounter-mode.js');
 const profiles=read('src/enemy-lab-combat-profiles.js');
 const setupWorkflow=read('src/enemy-lab-setup-workflow.js');
 const featureSources=['src/enemy-lab-working-roster.js','src/enemy-lab-working-ability-pool.js','src/enemy-lab-combat-profiles.js','src/enemy-lab-stance-compatibility.js','src/enemy-lab-deck-editor.js','src/enemy-lab-deck-editor-refinements.js'].map(read);
+const registeredViewSource=[sectionUi,...featureSources].join('\n');
 
 const ordered=['ENCOUNTER','ENEMIES / ROSTER','PLAYER LOADOUT','COMBAT BEHAVIOR','VISUALS','CAPTURE','DIAGNOSTICS','PROFILES'];
 let previous=-1;
@@ -29,9 +30,19 @@ assert.match(runtime,/selectEncounterMode/);
 assert.match(runtime,/startPlannedLabEncounter/);
 assert.match(rosterMode,/Working roster was cleared; falling back/);
 for(const source of featureSources)assert.doesNotMatch(source,/new MutationObserver\(/,'supported Lab feature modules must not repair categories through MutationObserver');
-assert.match(lab,/width:min\(64vw,720px\)/,'landscape Lab dock must fit compact widths');
-assert.match(lab,/minmax\(108px,132px\)/,'landscape category rail must use the compact eight-section width');
-assert.match(lab,/id="labProfileBar"/,'the profile bar stays in the dock outside section rendering');
+assert.match(lab,/data-enemy-lab-inspector="vertical"/,'the Lab uses the Gate 1 vertical inspector shell');
+assert.match(lab,/width:min\(90vw,760px\)/,'landscape Lab dock must leave room for a readable vertical rail');
+assert.match(lab,/minmax\(96px,116px\)/,'landscape category rail must use the compact vertical rail width');
+assert.match(lab,/id="labControlStaging" hidden/,'live profile and workflow controls must park outside the pinned shell grid');
+assert.match(lab,/data-lab-scroll-owner="detail"/);
+assert.match(lab,/data-lab-scroll-owner="navigation"/);
+assert.doesNotMatch(lab,/id="dockTitle"/,'the thin header has no permanent Enemy Lab title');
+assert.doesNotMatch(lab,/valueScrollGutter|valueScrollThumb/,'the inspector does not retain a third shell scroll control');
+assert.match(sectionUi,/appendProfilesChrome/);
+assert.match(sectionUi,/selectWorkspace\?\.\('test'\)/);
+for(const id of ['core-encounter','core-enemies','core-loadout','core-combat','core-visuals','core-capture','core-diagnostics','core-profiles','portable-profiles','working-roster','working-ability-pool','deck-editor','arcana-tweaks','stance-compatibility']){
+  assert.match(registeredViewSource,new RegExp(`id:'${id}'`),`registered view ${id} must survive the shell migration`);
+}
 for(const mode of ['test','setup','standard','history'])assert.match(lab,new RegExp(`data-workspace-mode="${mode}"`));
 assert.match(lab,/installEnemyLabSetupWorkflow/);
 assert.match(setupWorkflow,/LOCK AS ARENA STANDARD/);

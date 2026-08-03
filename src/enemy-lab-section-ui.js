@@ -2,6 +2,7 @@ import {
   ALL_ENEMIES_BUDGET_ID,
   WORKING_ROSTER_HADES_ID,
 } from './encounter-pools.js';
+import { createEnemyLabSectionScrollMemory } from './enemy-lab-inspector-shell.js';
 
 const LAB_DIRECT_ENCOUNTER_MODE='lab-direct';
 const PLANNED_MODE_IDS=new Set([ALL_ENEMIES_BUDGET_ID,WORKING_ROSTER_HADES_ID,'flare-level-1','hades-tartarus']);
@@ -42,10 +43,16 @@ export function installEnemyLabSectionUI({
   clearTest,
   setMessage,
   renderWorkspace=()=>null,
+  selectWorkspace=()=>{},
 }={}){
   if(!document||!runtime||!sectionRegistry)return null;
 
   const snapshot=()=>runtime.snapshot?.()||runtime.getLabSnapshot?.()||{controlGroups:[]};
+  // These are the original live nodes. Keeping their references lets the
+  // renderer park and reparent them without losing existing listeners or IDs.
+  const workflowBar=document.getElementById('labWorkflowBar');
+  const profileBar=document.getElementById('labProfileBar');
+  const controlParkingHost=document.getElementById('labControlStaging');
   const group=(data,id)=>data.controlGroups?.find(item=>item.id===id)||null;
   const renderGroup=(data,id)=>{
     const item=group(data,id);
@@ -56,7 +63,20 @@ export function installEnemyLabSectionUI({
     controls:(item.controls||[]).filter(control=>String(control.placement?.section||'').toLowerCase()===sectionId&&control.placement?.workspace!=='setup'),
   })).filter(item=>item.controls.length));
   const renderSectionGroups=(data,sectionId)=>list(...groupsForSection(data,sectionId).map(item=>renderControlGroup(item)));
-  const selectSection=id=>sectionRegistry.select(id);
+  const sectionScrollMemory=createEnemyLabSectionScrollMemory({sectionIds:sectionRegistry.sectionIds});
+  const viewContentCache=new Map();
+  let renderedSectionId='';
+  const rememberRenderedSection=()=>{
+    if(renderedSectionId)sectionScrollMemory.remember(renderedSectionId,values?.scrollTop||0);
+  };
+  const selectSection=id=>{
+    const definition=sectionRegistry.getDefinition(id);
+    if(!definition)return{ok:false,reason:`Unknown Enemy Lab section: ${id}`};
+    if(definition.id!=='profiles'&&state.workspaceMode&&state.workspaceMode!=='test')selectWorkspace?.('test');
+    rememberRenderedSection();
+    if(state.category!==definition.id){state.category=definition.id;save();}
+    return sectionRegistry.select(definition.id);
+  };
 
   function encounterModes(){
     const data=snapshot(),simulation=group(data,'simulation');
@@ -161,50 +181,91 @@ export function installEnemyLabSectionUI({
   ];
   for(const view of coreViews)sectionRegistry.registerView(view);
 
+  function appendProfilesChrome(root,{includeProfileBar=false}={}){
+    if(workflowBar&&!workflowBar.hidden)root.append(workflowBar);
+    if(includeProfileBar&&profileBar&&!profileBar.hidden)root.append(profileBar);
+  }
+
+  function parkProfilesChrome(){
+    if(!controlParkingHost)return;
+    if(workflowBar)controlParkingHost.append(workflowBar);
+    if(profileBar)controlParkingHost.append(profileBar);
+  }
+
+  function appendRegisteredView(root,view,context){
+    const next=view.render(context);
+    if(next)viewContentCache.set(view.id,next);
+    const content=next||viewContentCache.get(view.id);
+    if(content)root.append(content);
+  }
+
   function renderCategories(data=snapshot()){
-    const oldTop=categoriesEl.scrollTop,oldLeft=categoriesEl.scrollLeft;
-    if(state.workspaceMode&&state.workspaceMode!=='test'){categoriesEl.hidden=true;categoriesEl.replaceChildren();return;}
-    categoriesEl.hidden=false;
+    const oldTop=categoriesEl.scrollTop;
     const sections=sectionRegistry.sections({controlGroups:data.controlGroups||[]});
     if(!sections.some(section=>section.id===state.category))state.category='encounter';
-    categoriesEl.replaceChildren(...sections.map(section=>{const button=choice({label:section.label,sub:'',active:state.category===section.id,className:section.className,onClick:()=>{state.category=section.id;save();renderAll({preserveCategoryScroll:true});}});button.dataset.enemyLabSection=section.id;return button;}));
-    requestAnimationFrame(()=>{categoriesEl.scrollTop=oldTop;categoriesEl.scrollLeft=oldLeft;});
+    categoriesEl.hidden=false;
+    categoriesEl.replaceChildren(...sections.map(section=>{
+      const button=choice({label:section.label,sub:'',active:state.category===section.id,className:section.className,onClick:()=>selectSection(section.id)});
+      button.dataset.enemyLabSection=section.id;
+      button.setAttribute('aria-current',state.category===section.id?'page':'false');
+      button.setAttribute('aria-controls','labValues');
+      return button;
+    }));
+    requestAnimationFrame(()=>{categoriesEl.scrollTop=oldTop;});
   }
 
   function renderValues({preserveScroll=false}={}){
-    const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
-    if(state.workspaceMode&&state.workspaceMode!=='test'){
-      const content=renderWorkspace(state.workspaceMode);
-      categoryHint.textContent=state.workspaceMode==='setup'?'Review what will transfer to Combat Arena.':state.workspaceMode==='standard'?'The immutable setup Combat Arena currently uses.':'Previous locked standards.';
-      values.replaceChildren(content||status('WORKSPACE LOADING','The setup workflow is initializing.'));
-      requestAnimationFrame(()=>{values.scrollTop=preserveScroll?oldTop:0;values.scrollLeft=preserveScroll?oldLeft:0;});return;
-    }
+    if(preserveScroll)rememberRenderedSection();
+    const previousSectionId=renderedSectionId;
+    parkProfilesChrome();
     const data=snapshot(),definition=sectionRegistry.getDefinition(state.category);
     if(!definition){state.category='encounter';save();return renderValues({preserveScroll});}
     categoryHint.textContent=definition.description;
     const root=document.createElement('div');root.className='labSectionRoot';root.dataset.sectionId=definition.id;
-    const views=sectionRegistry.getViews(definition.id);
-    for(const view of views){
-      const content=view.render({document,runtime,sectionRegistry,state,data,catalog,familyOrder});
-      if(content)root.append(content);
+    if(definition.id==='profiles'){
+      appendProfilesChrome(root,{includeProfileBar:state.workspaceMode==='test'});
+      if(state.workspaceMode&&state.workspaceMode!=='test'){
+        root.append(renderWorkspace(state.workspaceMode)||status('WORKSPACE LOADING','The setup workflow is initializing.'));
+      }else{
+        for(const view of sectionRegistry.getViews(definition.id)){
+          appendRegisteredView(root,view,{document,runtime,sectionRegistry,state,data,catalog,familyOrder});
+        }
+      }
+    }else{
+      for(const view of sectionRegistry.getViews(definition.id)){
+        appendRegisteredView(root,view,{document,runtime,sectionRegistry,state,data,catalog,familyOrder});
+      }
     }
     if(!root.childNodes.length)root.append(status('SECTION LOADING','This section is waiting for its controls to register.'));
+    const targetScrollTop=previousSectionId===definition.id&&!preserveScroll?0:sectionScrollMemory.restore(definition.id);
     values.replaceChildren(root);
-    requestAnimationFrame(()=>{if(preserveScroll){values.scrollTop=oldTop;values.scrollLeft=oldLeft;}else{values.scrollTop=0;values.scrollLeft=0;}});
+    renderedSectionId=definition.id;
+    sectionScrollMemory.activate(definition.id);
+    values.scrollTop=targetScrollTop;
+    requestAnimationFrame(()=>{
+      if(renderedSectionId===definition.id)values.scrollTop=targetScrollTop;
+    });
   }
 
   function renderAll({preserveCategoryScroll=false,preserveValueScroll=false}={}){
-    const catTop=categoriesEl.scrollTop,catLeft=categoriesEl.scrollLeft;
-    document.body.classList.toggle('labProfilesVisible',(!state.workspaceMode||state.workspaceMode==='test')&&state.category==='profiles');
+    const categoryTop=categoriesEl.scrollTop;
     renderCategories(snapshot());renderValues({preserveScroll:preserveValueScroll});
-    if(preserveCategoryScroll)requestAnimationFrame(()=>{categoriesEl.scrollTop=catTop;categoriesEl.scrollLeft=catLeft;});
+    if(preserveCategoryScroll)requestAnimationFrame(()=>{categoriesEl.scrollTop=categoryTop;});
   }
 
+  if(sectionRegistry.activeSection!==state.category)sectionRegistry.select(state.category);
   const unsubscribe=sectionRegistry.subscribe(event=>{
+    if(event.type==='remove'&&event.viewId)viewContentCache.delete(event.viewId);
+    if(event.type==='select'&&event.sectionId!==state.category){
+      rememberRenderedSection();
+      state.category=event.sectionId;
+      save();
+      if(event.sectionId!=='profiles'&&state.workspaceMode&&state.workspaceMode!=='test')selectWorkspace?.('test');
+    }
     if(['register','remove','slot-register','slot-remove','select','invalidate'].includes(event.type)){
       renderAll({preserveCategoryScroll:true,preserveValueScroll:true});
     }
   });
   renderAll();
-  return{renderCategories,renderValues,renderAll,destroy:unsubscribe};
+  return{renderCategories,renderValues,renderAll,get activeSection(){return sectionScrollMemory.activeSection;},getSectionScrollPositions:()=>sectionScrollMemory.snapshot(),destroy:unsubscribe};
 }

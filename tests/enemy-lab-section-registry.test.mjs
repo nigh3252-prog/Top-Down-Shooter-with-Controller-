@@ -19,10 +19,15 @@ registry.registerView({id:'late-view',sectionId:'combat',label:'Late',order:20,r
 registry.registerView({id:'early-view',sectionId:'combat',label:'Early',order:10,render:()=>null});
 assert.deepEqual(registry.getViews('combat').map(view=>view.id),['early-view','late-view']);
 assert.throws(()=>registry.registerView({id:'late-view',sectionId:'combat',render:()=>null}),/Duplicate/);
+const viewIdsBeforeSelection=registry.getViews('combat').map(view=>view.id);
 assert.deepEqual(registry.select('profiles'),{ok:true,sectionId:'profiles'});
+assert.deepEqual(registry.getViews('combat').map(view=>view.id),viewIdsBeforeSelection,'section selection cannot rebuild or remove unrelated views');
 assert.equal(registry.select('tools').ok,false);
 registry.registerSlot({id:'profile-bar',sectionId:'profiles',slot:'profile-bar',render:()=>null});
+const slotIdsBeforeSelection=registry.getSlots('profiles').map(slot=>slot.id);
+registry.select('encounter');
+assert.deepEqual(registry.getSlots('profiles').map(slot=>slot.id),slotIdsBeforeSelection,'section selection cannot rebuild or remove registered slots');
 registry.invalidate('profiles');
 registry.dispatch({type:'profile-bar-action',action:'activate'});
-assert.deepEqual(events,['register','register','select','slot-register','invalidate','profile-bar-action']);
+assert.deepEqual(events,['register','register','select','slot-register','select','invalidate','profile-bar-action']);
 console.log('Enemy Lab section registry: ok');
