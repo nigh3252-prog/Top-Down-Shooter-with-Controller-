@@ -996,7 +996,16 @@ function triggerDodge(){
   arena.invulnT = Math.max(arena.invulnT, DODGE_IFRAMES);
   CombatAudio.playTest('swingLight');
 }
-
+function defenseDown(source='input'){
+  const result = window.__stance2Gate5Runtime?.defenseDown?.(source);
+  if(result?.handled) return result;
+  triggerDodge();
+  return { handled:true, delegated:true, source };
+}
+function defenseUp(source='input'){
+  const result = window.__stance2Gate5Runtime?.defenseUp?.(source);
+  return result || { handled:false, delegated:true, source };
+}
 /* ---------- hits: swept weapon zones vs enemies ---------- */
 const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
 const effects = [];
@@ -1234,7 +1243,7 @@ addEventListener('keydown', e=>{
   keys[e.key.toLowerCase()] = true;
   if(e.key==='j') lightDown();
   if(e.key==='l') heavyDown();
-  if(e.key==='k') triggerDodge();
+  if(e.key==='k') defenseDown('keyboard');
   if(e.key==='q') playCard(0);
   if(e.key==='e') playCard(1);
   if(e.key==='r') startDeckShuffle();
@@ -1246,6 +1255,7 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>{
   keys[e.key.toLowerCase()] = false;
   if(e.key==='l') heavyUp();
+  if(e.key==='k') defenseUp('keyboard');
   if(e.key.toLowerCase()==='q') PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
   if(e.key.toLowerCase()==='e') PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
 });
@@ -1317,7 +1327,8 @@ function pollPad(){
   if(light && !padPrev.light) lightDown();
   if(heavy && !padPrev.heavy) heavyDown();
   if(!heavy && padPrev.heavy) heavyUp();
-  if(dge && !padPrev.dge) triggerDodge();
+  if(dge && !padPrev.dge) defenseDown('gamepad');
+  if(!dge && padPrev.dge) defenseUp('gamepad');
   if(shuffle && !padPrev.shuffle) startDeckShuffle();
   if(lb && !padPrev.lb) playCard(0);
   if(rb && !padPrev.rb) playCard(1);
@@ -2068,7 +2079,7 @@ updateModePanel();
 window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
-  lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
+  lightDown, heavyDown, attackDown, attackUp, defenseDown, defenseUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
   playCard, startDeckShuffle };
 
 if(ABILITY_CAPTURE_MODE){

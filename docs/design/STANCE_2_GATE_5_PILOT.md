@@ -45,9 +45,13 @@ Drafting or owning Hammerfall makes a basic kite shield visible on the character
 - The attack is automatically set to full charge; the player does not need to hold Heavy.
 - Its normal charged stamina spending and Gate 4 Overdraw behavior remain intact.
 
+## Input routing
+
+Combat Arena owns the defense button edge. K and Cross / LT call one `defenseDown()` seam. Long Blade and Hammerfall consume that input; Rat Step and non-pilot stances fall through to the unchanged `triggerDodge()` implementation. Gate 5 does not add keyboard listeners, start a second gamepad loop, or manipulate the built-in dodge cooldown.
+
 ## Damage pipeline
 
-Gate 5 publishes a proxy through the branch-local enemy registry. The proxy composes stance defense before the existing Arcana damage interceptor instead of replacing it.
+The existing arena enemy-system object keeps a stable identity. It exposes a prioritized registered-interceptor API for stance defense while preserving `setPlayerDamageInterceptor()` as the legacy Arcana slot. No proxy is published through the enemy registry, and `damageEnemy()` is never repatched by Gate 5.
 
 Resolution order for this pilot:
 

@@ -8,13 +8,11 @@ import {
 import { installStanceDefenseDamagePipeline } from './stance-defense-damage-pipeline.js';
 import { installStanceGate5Visuals } from './stance-gate5-visuals.js';
 
-const DODGE_LOCK=Number.POSITIVE_INFINITY;
 const EPSILON=.001;
-
 export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.window,documentRef=globalThis.document,basePlayerSpeed=8.5}={}){
   const handle=arenaHandle,PC=handle?.PC,arena=handle?.arena,deck=handle?.deck,enemySystem=handle?.enemySystem;
   if(!PC?.combatState||!arena?.dodge||!enemySystem)throw new Error('[stance-gate5] missing Combat Arena handle');
-
+  if(typeof enemySystem.registerPlayerDamageInterceptor!=='function')throw new Error('[stance-gate5] missing composable player-damage interceptor API');
   const state={
     stanceId:'',profileId:null,guardRaised:false,guardCounterRemaining:0,
     parryRemaining:0,parryRecoveryRemaining:0,parrySuccessRemaining:0,
@@ -24,10 +22,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   const visuals=installStanceGate5Visuals({PC,windowRef,documentRef});
   let lastActorPosition=readActorPosition();
   let lastSnapshot=null;
-  let gamepadPrevious=false;
-  let animationFrame=0;
   let destroyed=false;
-
   function readActorPosition(){
     const position=handle.actorPos;if(!position)return null;
     const x=Number(position.x),z=Number(position.y??position.z);
@@ -58,14 +53,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   function syncStance(){
     const next=String(arena.stance?.id||'');
     if(next===state.stanceId)return;
-    if(arena.dodge.cool===DODGE_LOCK)arena.dodge.cool=0;
     state.stanceId=next;state.profileId=currentProfile()?.id||null;resetTransient('stance-change');
-  }
-  function enforceDefenseInputMode(){
-    const profile=currentProfile();
-    if(usesCustomDefense(profile)){
-      if(arena.dodge.t<0)arena.dodge.cool=DODGE_LOCK;
-    }else if(arena.dodge.cool===DODGE_LOCK)arena.dodge.cool=0;
   }
   function canStartDefense(){
     return arena.deadT<0&&!handle.roomTransition?.active&&!PC.combatState.attack;
@@ -92,8 +80,10 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     }
     return{handled:false,delegated:true,source};
   }
-  function defenseUp(source='input'){return{handled:usesCustomDefense(currentProfile()),source};}
-
+  function defenseUp(source='input'){
+    syncStance();
+    return{handled:usesCustomDefense(currentProfile()),source};
+  }
   function triggerCatchForDefense(decision,before){
     if(!decision?.opensCatch)return;
     const gate4=windowRef?.__stance2Gate4Runtime;
@@ -121,7 +111,6 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     const profile=currentProfile();
     const damage=Math.max(0,Number(hit.damage)||0);
     if(damage<=0)return{damage:0};
-
     if(profile?.kind==='parry'&&state.parryRemaining>0){
       state.parryRemaining=0;
       state.parryRecoveryRemaining=.14;
@@ -130,7 +119,6 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
       visuals.pulse('parry');publish();
       return{damage:0,outcome:'deflected'};
     }
-
     if(profile?.kind==='shield'&&state.guardRaised&&!PC.combatState.attack){
       const frontal=isFrontalShieldHit({incomingDir:hit.dir,forward:playerForward(),arcDegrees:profile.blockArcDegrees});
       if(!frontal){state.lastOutcome='guard-bypassed';publish();return{damage};}
@@ -147,9 +135,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     }
     return{damage};
   }
-
   const damagePipeline=installStanceDefenseDamagePipeline({system:enemySystem,interceptor:interceptDamage,priority:-100});
-
   function applyGuardMovement(dt){
     const profile=currentProfile();
     if(profile?.kind!=='shield'||!state.guardRaised||PC.combatState.attack||arena.dodge.t>=0)return;
@@ -187,7 +173,6 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     });
     PC.combatState.stance2Gate5=lastSnapshot;visuals.update(lastSnapshot,dt);return lastSnapshot;
   }
-
   PC.startCombatAttack=function(...args){
     syncStance();
     const profile=currentProfile();
@@ -203,40 +188,17 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   };
   PC.updateCombat=function(...args){
     const dt=Math.max(0,Number(args[0])||0);
-    syncStance();enforceDefenseInputMode();updateTimers(dt);applyGuardMovement(dt);
+    syncStance();updateTimers(dt);applyGuardMovement(dt);
     const result=original.updateCombat.apply(this,args);
-    enforceDefenseInputMode();lastActorPosition=readActorPosition();publish(dt);return result;
+    lastActorPosition=readActorPosition();publish(dt);return result;
   };
-
-  function keyDown(event){
-    if(event.repeat)return;
-    if(String(event.key||'').toLowerCase()==='k'&&usesCustomDefense(currentProfile()))defenseDown('keyboard');
-  }
-  function keyUp(event){if(String(event.key||'').toLowerCase()==='k'&&usesCustomDefense(currentProfile()))defenseUp('keyboard');}
-  windowRef?.addEventListener?.('keydown',keyDown,true);
-  windowRef?.addEventListener?.('keyup',keyUp,true);
-
-  function pollGamepad(){
-    if(destroyed)return;
-    let pressed=false;
-    try{
-      const pad=windowRef?.navigator?.getGamepads?.()?.[0];
-      pressed=!!(pad?.buttons?.[0]?.pressed||pad?.buttons?.[6]?.pressed||Number(pad?.buttons?.[0]?.value)>.35||Number(pad?.buttons?.[6]?.value)>.35);
-    }catch{}
-    if(pressed&&!gamepadPrevious&&usesCustomDefense(currentProfile()))defenseDown('gamepad');
-    if(!pressed&&gamepadPrevious&&usesCustomDefense(currentProfile()))defenseUp('gamepad');
-    gamepadPrevious=pressed;
-    animationFrame=windowRef?.requestAnimationFrame?.(pollGamepad)||0;
-  }
-  pollGamepad();syncStance();enforceDefenseInputMode();publish();
-
+  syncStance();publish();
   const api={
     installed:true,defenseDown,defenseUp,interceptDamage,snapshot:()=>lastSnapshot,
     setGuardRaised(value){if(currentProfile()?.kind!=='shield')return false;state.guardRaised=!!value;publish();return true;},
     destroy(){
-      destroyed=true;if(animationFrame)windowRef?.cancelAnimationFrame?.(animationFrame);
-      windowRef?.removeEventListener?.('keydown',keyDown,true);windowRef?.removeEventListener?.('keyup',keyUp,true);
-      if(arena.dodge.cool===DODGE_LOCK)arena.dodge.cool=0;
+      if(destroyed)return;
+      destroyed=true;
       PC.updateCombat=original.updateCombat;PC.startCombatAttack=original.startCombatAttack;
       damagePipeline.destroy?.();visuals.destroy();delete PC.combatState.stance2Gate5;
       if(windowRef?.__stance2Gate5Runtime===api)delete windowRef.__stance2Gate5Runtime;
@@ -244,7 +206,6 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   };
   return api;
 }
-
 export function installStanceGate5Runtime({windowRef=globalThis.window,maxAttempts=240,pollMs=50}={}){
   if(!windowRef)return{installed:false,reason:'missing-window'};
   if(windowRef.__stance2Gate5Runtime?.installed)return windowRef.__stance2Gate5Runtime;
