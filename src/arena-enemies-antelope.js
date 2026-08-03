@@ -52,7 +52,6 @@ const normalized = (x, z) => {
   const length = Math.hypot(x, z) || 1;
   return { x:x / length, z:z / length };
 };
-const formatMultiplier = value => `${Number(value).toFixed(2)}×`;
 
 export function createArenaEnemySystem(options = {}){
   const system = createBaseArenaEnemySystem(options);
@@ -349,70 +348,21 @@ export function createArenaEnemySystem(options = {}){
     get:()=>antelopeChargeSpeedScale,
   });
 
-  function installAntelopeTuningControl(){
-    if(typeof document === 'undefined') return;
-    const dirTab = document.getElementById('dirTab');
-    const resetButton = document.getElementById('resetBtn');
-    if(!dirTab || !resetButton || document.getElementById('antelopeTuningHeader')) return;
-
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.id = 'antelopeTuningHeader';
-    header.className = 'ptitle';
-
-    const body = document.createElement('div');
-    body.id = 'body-antelopeTuning';
-    body.className = 'sbody';
-
-    const row = document.createElement('div');
-    row.className = 'srow';
-    const label = document.createElement('div');
-    label.className = 'slabel';
-    label.textContent = 'CHARGE RUN SPEED ';
-    const value = document.createElement('span');
-    value.className = 'sval';
-    value.textContent = formatMultiplier(antelopeChargeSpeedScale);
-    label.appendChild(value);
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = CHARGE_SPEED_MIN;
-    slider.max = CHARGE_SPEED_MAX;
-    slider.step = CHARGE_SPEED_STEP;
-    slider.value = antelopeChargeSpeedScale;
-    slider.setAttribute('aria-label', 'Screaming Antelope charge run speed');
-    slider.addEventListener('input', ()=>{
-      const next = system.setAntelopeChargeSpeedScale(parseFloat(slider.value));
-      value.textContent = formatMultiplier(next);
-    });
-
-    const note = document.createElement('div');
-    note.className = 'ptitle';
-    note.style.marginTop = '-12px';
-    note.style.lineHeight = '1.4';
-    note.textContent = '1.00× = current speed · up to 10.00×';
-
-    row.appendChild(label);
-    row.appendChild(slider);
-    body.appendChild(row);
-    body.appendChild(note);
-    dirTab.insertBefore(header, resetButton);
-    dirTab.insertBefore(body, resetButton);
-
-    const sectionKey = 'arena.section.antelopeTuning';
-    let collapsed = !!StoneSettings.get(sectionKey, true);
-    const applyCollapsed = ()=>{
-      body.style.display = collapsed ? 'none' : 'block';
-      header.textContent = `${collapsed ? '▸' : '▾'} SCREAMING ANTELOPE`;
-    };
-    header.addEventListener('click', ()=>{
-      collapsed = !collapsed;
-      StoneSettings.set(sectionKey, collapsed);
-      applyCollapsed();
-    });
-    applyCollapsed();
-  }
-
-  installAntelopeTuningControl();
+  const controlRegistry = options.controlRegistry;
+  controlRegistry?.register?.(
+    { id:'antelope', label:'ANTELOPE', source:'arena-enemies-antelope', placement:{section:'enemies',subsection:'Antelope'}, profile:{scope:'profile',pathPrefix:'combat.antelope'} },
+    {
+      id:'antelope.charge-speed',
+      kind:'range',
+      label:'CHARGE RUN SPEED',
+      min:CHARGE_SPEED_MIN,
+      max:CHARGE_SPEED_MAX,
+      step:CHARGE_SPEED_STEP,
+      get:()=>antelopeChargeSpeedScale,
+      set:value=>{ system.setAntelopeChargeSpeedScale(value); return true; },
+      profile:{path:'combat.antelope.chargeSpeed',scope:'profile',migrationId:'antelope-charge-speed-v1'},
+      placement:{section:'enemies',subsection:'Antelope tuning',order:0,accessibleLabel:'Enemies / Antelope charge run speed'},
+    },
+  );
   return system;
 }

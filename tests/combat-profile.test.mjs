@@ -3,6 +3,7 @@ import { ARENA_ABILITY_CATALOG } from '../src/arena-ability-catalog.js';
 import { ARENA_ENEMY_CATALOG } from '../src/arena-enemy-catalog.js';
 import {
   ACTIVE_COMBAT_PROFILE_STORAGE_KEY,
+  COMBAT_PROFILE_VERSION,
   applyCombatProfileStorage,
   applyCombatProfileToArena,
   deleteCombatProfile,
@@ -35,8 +36,12 @@ const normalized=normalizeCombatProfile({
   arcanaSize:9,directorMode:'missing',createdAt:10,updatedAt:20,
 });
 assert.equal(normalized.name,'Crowded Arcana Test');
-assert.deepEqual(normalized.enemyIds,enemyIds);
-assert.deepEqual(normalized.abilityIds,abilityIds);
+assert.equal(COMBAT_PROFILE_VERSION,3);
+assert.deepEqual(normalized.enemyIds,[...enemyIds,'missing']);
+assert.deepEqual(normalized.abilityIds,[...abilityIds,'missing']);
+assert.deepEqual(normalized.workspace.content.missingEnemyIds,['missing']);
+assert.deepEqual(normalized.workspace.content.missingAbilityIds,['missing']);
+assert.equal(normalized.partial,true,'pre-v3 flat profiles are read as partial profiles');
 assert.equal(normalized.spawnMultiplier,1);
 assert.equal(normalized.introduction,'slow');
 assert.equal(normalized.pressureBudget,4);

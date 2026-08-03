@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { ARENA_ENEMY_CATALOG } from './arena-enemy-catalog.js';
 import { readWorkingRoster } from './enemy-lab-working-roster.js';
 import { ALL_ENEMIES_BUDGET_ID, WORKING_ROSTER_HADES_ID } from './encounter-pools.js';
@@ -89,9 +90,11 @@ export function rosterSpawnFlowSettings(plan,systemKey,fallbackCount=1){
   const groups=Array.isArray(plan?.groups)?plan.groups:[];
   const group=groups.find(entry=>entry?.system===systemKey);
   const plannedCount=clamp(Math.round(Number(group?.count)||Number(fallbackCount)||1),1,20);
+  const activeWeightCap=Math.max(2.5,plannedCount*.65);
   return {
     plannedCount,
-    activeWeightCap:Math.max(2.5,plannedCount*.65),
+    // Keep the published cadence value stable across JS floating-point forms.
+    activeWeightCap:Number(activeWeightCap.toFixed(2)),
     simultaneousTelegraphs:Math.min(2,plannedCount),
     spawnDelay:clamp(Number(plan?.spawnDelay)||.72,.35,1.5),
   };
@@ -124,7 +127,7 @@ export function installRosterSpawnTelegraphSupport(system,{
     if(Number.isFinite(Number(player?.x))&&Number.isFinite(Number(player?.z))){
       return{x:Number(player.x),z:Number(player.z)};
     }
-    const actor=globalThis.__arena?.actorPos;
+    const actor=getArenaRuntime()?.actorPos;
     if(Number.isFinite(Number(actor?.x))){
       const z=Number.isFinite(Number(actor?.z))?Number(actor.z):Number(actor?.y);
       if(Number.isFinite(z))return{x:Number(actor.x),z};
@@ -315,15 +318,27 @@ export function installWorkingRosterEncounterMode(source,{
   const spawnDescriptor=Object.getOwnPropertyDescriptor(source,'spawnKind');
   const baseSpawnKind=()=>spawnDescriptor?.get?.call(source)??ALL_ENEMIES_BUDGET_ID;
   let workingRosterMode=false;
+  let fallbackWarning='';
   const rosterIds=()=>readWorkingRoster(storage,catalog);
   const setRosterMode=value=>{
     workingRosterMode=!!value;
+    if(workingRosterMode)fallbackWarning='';
     source.originalSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.flareSystem?.setWorkingRosterSpawnTelegraphs?.(workingRosterMode);
     source.hadesSystem?.setTelegraphedSpawns?.(true);
     setHadesRosterModeActive(workingRosterMode);
     if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
     return workingRosterMode;
+  };
+
+  const fallbackEmptyRoster=()=>{
+    const ids=rosterIds();
+    if(workingRosterMode&&!ids.length){
+      setRosterMode(false);
+      baseSetSpawnKind(ALL_ENEMIES_BUDGET_ID);
+      fallbackWarning='Working roster was cleared; falling back to All · Budgeted Encounter.';
+    }
+    return ids;
   };
 
   setCombinedEncounterPlanResolver(({depth=1,random=Math.random}={})=>{
@@ -337,24 +352,28 @@ export function installWorkingRosterEncounterMode(source,{
     if(kind===WORKING_ROSTER_HADES_ID){
       const active=rosterIds().length>0;
       setRosterMode(active);
+      if(!active)fallbackWarning='Working roster is empty; falling back to All · Budgeted Encounter.';
       return baseSetSpawnKind(ALL_ENEMIES_BUDGET_ID);
     }
     setRosterMode(false);
+    fallbackWarning='';
     return baseSetSpawnKind(kind);
   };
   Object.defineProperty(source,'spawnKind',{
     configurable:true,
     enumerable:true,
-    get:()=>workingRosterMode?WORKING_ROSTER_HADES_ID:baseSpawnKind(),
+    get:()=>fallbackEmptyRoster().length&&workingRosterMode?WORKING_ROSTER_HADES_ID:baseSpawnKind(),
   });
   source.getWorkingRosterEncounterStatus=()=>({
-    active:workingRosterMode,
-    ids:rosterIds(),
+    active:workingRosterMode&&fallbackEmptyRoster().length>0,
+    ids:fallbackEmptyRoster(),
     fallbackMode:ALL_ENEMIES_BUDGET_ID,
+    warning:fallbackWarning,
     spawnTelegraphs:true,
     reinforcementFlow:true,
     previewBeforeModel:true,
   });
+  source.syncWorkingRosterEncounterMode=()=>source.getWorkingRosterEncounterStatus();
   source.__workingRosterEncounterMode=true;
   if(typeof setTimeout==='function')setTimeout(clarifyHadesStyleControls,0);
   return source;

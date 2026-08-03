@@ -69,7 +69,7 @@ function clearWeaponGate3State(weapon){
   delete weapon.stance2CurrentAttackGroup;
 }
 
-export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.window,basePlayerSpeed=8.5}={}){
+export function createStanceGate3Runtime({arenaHandle,basePlayerSpeed=8.5}={}){
   const handle=arenaHandle;
   const PC=handle?.PC;
   const arena=handle?.arena;
@@ -266,27 +266,18 @@ export function createStanceGate3Runtime({arenaHandle,windowRef=globalThis.windo
       PC.combatMovePenalty=original.combatMovePenalty;
       PC.startCombatAttack=original.startCombatAttack;
       delete PC.combatState.stance2Gate3;
-      if(windowRef?.__stance2Gate3Runtime===api)delete windowRef.__stance2Gate3Runtime;
+      if(installedStanceGate3Runtime===api)installedStanceGate3Runtime=null;
     },
   };
   return api;
 }
 
-export function installStanceGate3Runtime({windowRef=globalThis.window,maxAttempts=240,pollMs=50}={}){
-  if(!windowRef)return{installed:false,reason:'missing-window'};
-  if(windowRef.__stance2Gate3Runtime?.installed)return windowRef.__stance2Gate3Runtime;
-  let attempts=0;
-  const attach=()=>{
-    const handle=windowRef.__arena;
-    const gate2=windowRef.__stance2Gate2Runtime;
-    if(handle?.PC&&handle?.arena&&gate2?.installed){
-      const runtime=createStanceGate3Runtime({arenaHandle:handle,windowRef});
-      windowRef.__stance2Gate3Runtime=runtime;
-      return runtime;
-    }
-    if(attempts++<maxAttempts)windowRef.setTimeout?.(attach,pollMs);
-    return null;
-  };
-  attach();
-  return{installed:false,pending:true};
+let installedStanceGate3Runtime=null;
+
+export function installStanceGate3Runtime({arenaHandle,gate2Runtime}={}){
+  if(installedStanceGate3Runtime?.installed)return installedStanceGate3Runtime;
+  if(!arenaHandle?.PC||!arenaHandle?.arena)return{installed:false,reason:'missing-arena-runtime'};
+  if(!gate2Runtime?.installed)return{installed:false,reason:'missing-gate2-runtime'};
+  installedStanceGate3Runtime=createStanceGate3Runtime({arenaHandle});
+  return installedStanceGate3Runtime;
 }

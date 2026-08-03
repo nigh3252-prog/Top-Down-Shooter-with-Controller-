@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions } from './arena-runtime-context.js';
 import {
   AQUA_BEAM_SPEC,
   ARCANE_INTERVENTION_SPEC,
@@ -147,11 +148,11 @@ export function normalizeWizardArcaneTypesRenderMode(value = 'style') {
   return 'style';
 }
 
-function activeRenderMode(eventTarget = globalThis.window) {
+function activeRenderMode() {
   try {
     const params = new URLSearchParams(globalThis.location?.search || '');
     if (params.get('capture') !== '1') return 'style';
-    const capture = eventTarget?.__abilityCapture?.snapshot?.() || {};
+    const capture = getArenaCaptureOptions() || {};
     return normalizeWizardArcaneTypesRenderMode(capture.stage || capture.renderMode || params.get('stage') || params.get('renderMode') || 'style');
   } catch {
     return 'style';
@@ -795,6 +796,8 @@ export function installWizardArcaneTypesRuntime({
     if (id === ARCANE_INTERVENTION_SPEC.id) return castIntervention(detail);
     return false;
   }
+  function canPlay(card,context={}){return canCast(card,context);}
+  function play(card,context={}){return canPlay(card,context)?cast(card,context):false;}
 
   function hitCycloneLeg(effect, start, end, phase) {
     const system = getEnemySystem?.(), ledger = phase === 'outbound' ? effect.outboundHits : effect.returnHits;
@@ -1188,7 +1191,7 @@ export function installWizardArcaneTypesRuntime({
     void now;
   }
 
-  const onPlay = event => cast(event?.detail?.card || event?.detail?.arcanaId || event?.detail?.id, event?.detail || {});
+  const onPlay = event => play(event?.detail?.card || event?.detail?.arcanaId || event?.detail?.id, event?.detail || {});
   const onTweaks = event => { state.sizeMultiplier = clampArcanaSize(event?.detail?.sizeMultiplier); };
   eventTarget?.addEventListener?.('wizard-arcana:play', onPlay);
   eventTarget?.addEventListener?.(ARCANA_TWEAKS_EVENT, onTweaks);
@@ -1197,6 +1200,8 @@ export function installWizardArcaneTypesRuntime({
     state,
     cast,
     canCast,
+    canPlay,
+    play,
     beginBallLightning,
     releaseBallLightning,
     interruptBallLightning,

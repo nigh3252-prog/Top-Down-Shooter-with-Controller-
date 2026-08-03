@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Archive — Top-Down Game Prototypes</title>
+<style>
+:root{color-scheme:dark;--bg:#070b12;--panel:#111a28e8;--line:#ffffff1f;--text:#eff6ff;--muted:#a7b5c8;--blue:#8fc5ff;--violet:#d18aff;--gold:#f2cf7c;--green:#8be0b0}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 0,#263955 0,#111b2b 42%,var(--bg) 86%);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(1080px,100%);margin:auto;padding:clamp(16px,4vw,42px) max(14px,env(safe-area-inset-right)) 60px max(14px,env(safe-area-inset-left))}.hero,.catalog{display:grid;gap:16px}.hero{grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);align-items:stretch;margin-bottom:18px}.panel,.group{border:1px solid var(--line);border-radius:22px;background:linear-gradient(155deg,#17263ae8,#0b121de8);box-shadow:0 18px 60px #0006}.hero-main{padding:clamp(20px,4vw,38px)}.eyebrow{color:var(--gold);font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase}.hero h1{margin:.55rem 0 .8rem;font-size:clamp(2rem,6vw,4rem);line-height:.98}.hero p{margin:0;color:var(--muted);max-width:720px}.hero-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.hero-links a,.entry a{color:var(--text);text-decoration:none}.hero-links a{border:1px solid var(--line);border-radius:11px;padding:.6rem .75rem;background:#ffffff0b;font-weight:800}.hero-links a:hover,.entry a:hover{border-color:#9bd0ff88;color:#cce5ff}.status{padding:20px;display:grid;gap:10px;align-content:start}.status strong{font-size:1.2rem}.status span{color:var(--muted);font-size:.9rem}.status .pill{display:inline-flex;width:max-content;border:1px solid #8be0b044;border-radius:999px;padding:.35rem .55rem;color:var(--green);background:#8be0b010;font-size:.75rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.catalog{grid-template-columns:repeat(2,minmax(0,1fr))}.group{padding:18px}.group.wide{grid-column:1/-1}.group h2{margin:0 0 4px;font-size:1.2rem}.group>p{margin:0 0 14px;color:var(--muted);font-size:.9rem}.entries{display:grid;gap:9px}.entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid #ffffff16;border-radius:14px;background:#ffffff07}.entry strong{display:block;font-size:.96rem}.entry small{display:block;color:var(--muted);font-size:.8rem;margin-top:2px}.entry a{border:1px solid #ffffff22;border-radius:9px;padding:.45rem .6rem;background:#ffffff0a;font-size:.82rem;font-weight:800;white-space:nowrap}@media(max-width:760px){.hero,.catalog{grid-template-columns:1fr}.group.wide{grid-column:auto}.hero-main{padding:22px}.entry{grid-template-columns:1fr}.entry a{justify-self:start}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <section class="hero">
+    <div class="panel hero-main">
+      <div class="eyebrow">Reference catalog</div>
+      <h1>Archive</h1>
+      <p>Retired prototypes and research pages remain available as direct links for comparison, investigation, and future reuse. The supported launcher surfaces are kept separate from this catalog.</p>
+      <nav class="hero-links" aria-label="Primary navigation">
+        <a href="../index.html">← Launcher</a>
+        <a href="../combat-arena.html">Combat Arena</a>
+        <a href="../enemy-lab.html">Enemy Lab</a>
+      </nav>
+    </div>
+    <aside class="panel status">
+      <span class="pill">Reference only</span>
+      <strong>Direct pages, no iframe wrappers</strong>
+      <span>Some older experiments depend on historical module APIs or external CDNs. They are preserved for reference and are not part of the supported runtime contract.</span>
+    </aside>
+  </section>
+
+  <section class="catalog" aria-label="Archived pages">
+    <article class="group wide">
+      <h2>Active research tooling</h2>
+      <p>Research and capture surfaces that remain active, but are intentionally kept outside the supported root launcher.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Wizard of Legend Arcana Checklist</strong><small>Source-first Arcana analysis, bounded clips, persistent progress, and implementation tracking.</small></div><a href="../tools/wizard-of-legend-arcana-checklist.html">Open tool ↗</a></div>
+      </div>
+    </article>
+
+    <article class="group">
+      <h2>Combat &amp; weapon labs</h2>
+      <p>Retired combat feel, weapon, and input experiments.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Weapon Lab</strong><small>Stone Wanderer weapon, stance, audio, and combat-mode prototype.</small></div><a href="combat-labs/weapon-lab.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Punch Lab</strong><small>Procedural strike and hit-feel experiment.</small></div><a href="combat-labs/punch-lab.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Falcon Pilebunker Lab v2</strong><small>Windup, pneumatic retract, and impact presentation experiment.</small></div><a href="combat-labs/falcon-pilebunker-punch-lab-v2.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Fencer Hit Feel Lab v3</strong><small>Fencer motion and hit-response prototype.</small></div><a href="combat-labs/fencer_hit_feel_lab_v3.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Phone Melee Combat Director Lab v6</strong><small>Earlier phone-first wave pacing and combat director experiment.</small></div><a href="combat-labs/melee_combat_director_lab_v6.html">Open page ↗</a></div>
+      </div>
+    </article>
+
+    <article class="group">
+      <h2>Enemy &amp; rig labs</h2>
+      <p>Retired enemy viewers, bestiary experiments, and rig prototypes.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Carapace Stalker Viewer</strong><small>Orbit, pose, gait, and lunge presentation viewer.</small></div><a href="enemy-labs/carapace-stalker-viewer.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Fusion Lab v2</strong><small>Full bestiary rig and enemy presentation experiment.</small></div><a href="enemy-labs/fusion-lab-v2.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Mace Goblin Sandbox v2</strong><small>Mace goblin behavior and presentation sandbox.</small></div><a href="enemy-labs/mace-goblin-sandbox-v2.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Pot Goblin Viewer</strong><small>Pot goblin rig and pose viewer.</small></div><a href="enemy-labs/pot-goblin-viewer.html">Open page ↗</a></div>
+      </div>
+    </article>
+
+    <article class="group">
+      <h2>Rendering &amp; maze experiments</h2>
+      <p>Diagnostic and visual research that is no longer a supported root surface.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Hex Maze Lab</strong><small>Seeded maze carving, braiding, room segmentation, doors, and validation diagnostics.</small></div><a href="visual-experiments/hex-maze-lab.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Three.js Stylized Ground Fluid Demo v2</strong><small>Lifted-ground and fluid presentation experiment.</small></div><a href="visual-experiments/threejs_midair_lifted_ground_slice_v1.html">Open page ↗</a></div>
+      </div>
+    </article>
+
+    <article class="group">
+      <h2>Legacy game prototype</h2>
+      <p>The earlier top-down shooter is preserved as a standalone historical build.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Source Moves Prototype</strong><small>Original top-down shooter prototype.</small></div><a href="legacy-games/top-down-shooter.html">Open page ↗</a></div>
+      </div>
+    </article>
+
+    <article class="group wide">
+      <h2>Earlier Stone Wanderer references</h2>
+      <p>These pages were already retired into the archive and remain available as historical donor/reference material.</p>
+      <div class="entries">
+        <div class="entry"><div><strong>Stone Wanderer Stance Chain Lab + Audio wrapper</strong><small>Historical wrapper retained for reference; it depends on old patch-string APIs.</small></div><a href="stone-wanderer-stance-chain-lab-wrapper.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Stone Wanderer Stance Chain Lab core</strong><small>Raw core page used by the historical wrapper.</small></div><a href="stone-wanderer-stance-chain-lab-core.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Stone Wanderer individual move test</strong><small>Donor/reference for the move rating UI.</small></div><a href="stone-wanderer-individual-move-test.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Sound Foundry — Retro Beast Audio Lab</strong><small>Procedural audio recipe donor/reference.</small></div><a href="sound-foundry-retro-beasts.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Stone Lab audio test</strong><small>Historical audio hook test page.</small></div><a href="stone-lab-audio-test.html">Open page ↗</a></div>
+        <div class="entry"><div><strong>Wizard of Legend source notes</strong><small>Preserved research notes and source-first analysis references.</small></div><a href="wizard-of-legend/README.md">Read notes ↗</a></div>
+      </div>
+    </article>
+  </section>
+</main>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -109,13 +110,12 @@ const PALETTES=Object.freeze({
 });
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(globalThis.location?.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+  try{const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;const params=new URLSearchParams(globalThis.location?.search||'');return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');}catch{return false;}
 }
 function isCaptureRuntime(){try{return new URLSearchParams(globalThis.location?.search||'').get('capture')==='1';}catch{return false;}}
 function currentVisualMode(){
   if(!isCaptureRuntime())return'style';let stage='style';
-  try{stage=window.__abilityCapture?.snapshot?.().stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
+  try{stage=getArenaCaptureOptions()?.stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
   return normalizeWizardNextTwentyDashVisualMode(stage);
 }
 function playerFrame(getPlayer){const player=getPlayer?.()||{},forward=normalizeDashDirection({x:Number(player.forwardX)||0,z:Number(player.forwardZ)||1});return{x:Number(player.x)||0,z:Number(player.z)||0,forward,right:{x:forward.z,z:-forward.x}};}
@@ -299,7 +299,7 @@ export function installWizardNextTwentyDashRuntime({
   registerDecoy,unregisterDecoy,damagePlayer=()=>false,
 }={}){
   const initial=readArcanaTweaks(),inertState={effects:[],elapsed:0,sizeMultiplier:initial.sizeMultiplier,resources:makeResourceState(),semanticEvents:[]};
-  const inert={state:inertState,cast(){return false;},canCast(){return false;},update(){},postEnemyUpdate(){},applyPlayerStatus(){return false;},absorbPlayerDamage(amount){return{absorbed:0,remaining:Math.max(0,Number(amount)||0)};},strikeDecoy(){return false;},snapshot(){return{simulationTime:0,lastCast:null,activeDash:null,resources:cloneResources(inertState.resources),effects:[],semanticEvents:[]};},reset(){},dispose(){},get busy(){return false;}};
+  const inert={state:inertState,cast(){return false;},canCast(){return false;},canPlay(){return false;},play(){return false;},update(){},postEnemyUpdate(){},applyPlayerStatus(){return false;},absorbPlayerDamage(amount){return{absorbed:0,remaining:Math.max(0,Number(amount)||0)};},strikeDecoy(){return false;},snapshot(){return{simulationTime:0,lastCast:null,activeDash:null,resources:cloneResources(inertState.resources),effects:[],semanticEvents:[]};},reset(){},dispose(){},get busy(){return false;}};
   if(!THREE||!scene||!isEnemyLabRuntime())return inert;
 
   const state={effects:[],elapsed:0,sizeMultiplier:initial.sizeMultiplier,lastCast:null,castSerials:new Map(),statusSerials:new Map(),semanticSerial:0,semanticEvents:[],resources:makeResourceState(),activeDash:null,visualMode:'style',circuitNodes:[]};
@@ -377,6 +377,8 @@ export function installWizardNextTwentyDashRuntime({
     const payloadActive=consumePayload(id),stable=stableId(id),visualMode=currentVisualMode(),snap=normalizeMotionSnapshot(handle,frame,direction),effect=add({type:'dashMotion',arcanaId:id,stableId:stable,age:0,handle,spec:WIZARD_NEXT_TWENTY_DASH_SPECS[id],size:currentSize(),visualMode,payloadActive,origin:{...snap.start},position:{...snap.current},previous:{...snap.previous},direction:{...snap.direction},distance:snap.distance,blocked:snap.blocked,path:snap.path.map(point=>({...point})),complete:false});state.activeDash=effect;state.lastCast=id;state.visualMode=visualMode;
     semantic('dash-started',{arcanaId:id,stableId:stable,payloadActive,source:'arcana',grantIframes:false,applyDodgeCooldown:false,origin:{...effect.origin},direction:{...effect.direction},resource:{...state.resources[id]},visualMode});if(payloadActive)startImmediatePayload(effect);else semantic('payload-suppressed',{arcanaId:id,stableId:stable,reason:'resource-cooldown'});return true;
   }
+  function canPlay(card,context={}){return canCast(card?.arcanaId||card,context);}
+  function play(card,context={}){return canPlay(card,context)?cast(card,context):false;}
 
   function spawnCarrier({arcanaId,stable,element,position,direction,spec,lane=0,shape='orb',semanticKind='projectile'}){
     const size=currentSize(),visualMode=currentVisualMode(),mesh=makeProjectileVisual(THREE,scene,{name:`Wizard Arcana ${arcanaId} ${semanticKind}`,element,position,direction,radius:spec.radius*size,mode:visualMode,shape});
@@ -519,8 +521,8 @@ export function installWizardNextTwentyDashRuntime({
       else if(effect.type==='chaoticRift')updateChaoticRift(effect,frame);
     }
   }
-  const onPlay=event=>cast(event?.detail?.card,event?.detail||{}),onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{}),onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   const unregisterDamage=typeof registerPlayerDamageInterceptor==='function'?registerPlayerDamageInterceptor(absorbPlayerDamage):null;
-  return{state,cast,canCast,update,postEnemyUpdate,applyPlayerStatus,absorbPlayerDamage,strikeDecoy,snapshot,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);if(typeof unregisterDamage==='function')unregisterDamage();reset();},get busy(){return !!state.activeDash;}};
+  return{state,cast,canCast,canPlay,play,update,postEnemyUpdate,applyPlayerStatus,absorbPlayerDamage,strikeDecoy,snapshot,reset,dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);if(typeof unregisterDamage==='function')unregisterDamage();reset();},get busy(){return !!state.activeDash;}};
 }

@@ -1,7 +1,10 @@
-import { EXTRA_STANCE_CARDS, NON_STANCE_CARDS } from './ability-cards.js';
+import { listCards } from './card-registry.js';
 import { ARENA_ABILITY_CATALOG } from './arena-ability-catalog.js';
 import { readWorkingAbilityPool } from './enemy-lab-working-ability-pool.js';
-import { STANCE_CARDS } from './stance-cards.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
+const EXTRA_STANCE_CARDS = listCards({family:'special-stance'});
+const NON_STANCE_CARDS = listCards({family:'non-stance'});
 
 const isNonStance=card=>card?.type==='ability'||card?.type==='modifier';
 const LEGACY_STANCE_POOL=Object.freeze([...STANCE_CARDS,...EXTRA_STANCE_CARDS]);

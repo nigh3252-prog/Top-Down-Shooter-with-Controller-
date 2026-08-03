@@ -20,6 +20,9 @@ const PRESETS=Object.freeze({
   crowd:Object.freeze({label:'CROWD BREAKER',description:'Wide, aggressive suction and a much stronger secondary detonation for clearing packed encounters.',values:Object.freeze({pullRadius:10,pullStrength:19,compressionDistance:2.4,frontReach:10,primaryDamage:125,primaryStun:2,primaryHitRadius:4.2,secondaryDamage:65,secondaryRadius:8,secondaryKnock:18,secondaryStun:.4,eliteControl:.68,aimMoveMultiplier:.30})}),
   original:Object.freeze({label:'ORIGINAL PROTOTYPE',description:'The initial conservative tuning retained for comparison.',values:Object.freeze({pullRadius:7.5,pullStrength:13,compressionDistance:2.4,frontReach:7.5,primaryDamage:60,primaryStun:1.2,primaryHitRadius:3.2,secondaryDamage:18,secondaryRadius:5.5,secondaryKnock:11,secondaryStun:.08,eliteControl:.55,aimMoveMultiplier:.34})}),
 });
+const EFFECT_CONTROL_DEFS=Object.freeze([
+  ['pullRadius','PULL RADIUS',3,14,.1],['pullStrength','PULL STRENGTH',3,26,.25],['compressionDistance','COMPRESSION POINT',.5,5,.05],['frontReach','GUARANTEED FRONT REACH',3,14,.1],['primaryDamage','PRIMARY DAMAGE',20,260,5],['primaryStun','PRIMARY STUN',.1,5,.05],['primaryHitRadius','PRIMARY CATCH RADIUS',1.5,7,.1],['secondaryDamage','SECONDARY DAMAGE',1,120,2],['secondaryRadius','BLAST RADIUS',2,12,.1],['secondaryKnock','SECONDARY KNOCKBACK',2,26,.25],['secondaryStun','SECONDARY STUN',0,1.5,.05],['eliteControl','ELITE CONTROL MULTIPLIER',.2,1,.05],['aimMoveMultiplier','GUIDED MOVEMENT MULTIPLIER',.08,.60,.01],
+].map(Object.freeze));
 
 export function createPilebunkerCombatEffect({THREE,scene,getEnemies=()=>[],getPlayer=()=>({x:0,z:0,forwardX:0,forwardZ:1}),hitEnemy=null}={}){
   if(!THREE||!scene)throw new Error('[pilebunker-effect] THREE and scene are required.');
@@ -250,6 +253,12 @@ export function createPilebunkerCombatEffect({THREE,scene,getEnemies=()=>[],getP
   function setTuning(key,value){if(!(key in tuning))return;const number=Number(value);if(!Number.isFinite(number))return;tuning[key]=number;activePreset='custom';saveTuning();syncPanel();}
   function setSuctionStyle(value){suctionStyle=SUCTION_STYLES[value]?value:'orbits';hideSuction();saveTuning();syncPanel();return suctionStyle;}
   function setAimMode(value){aimMode=AIM_MODES[value]?value:'guided';state.primary=null;state.locked=false;saveTuning();syncPanel();return aimMode;}
+  function controlDescriptors(){return Object.freeze([
+    Object.freeze({id:'pilebunker.effect-preset',kind:'select',label:'EFFECT PRESET',get:()=>activePreset,options:()=>Object.entries(PRESETS).map(([value,preset])=>({value,label:preset.label})),set:value=>applyPreset(value)}),
+    Object.freeze({id:'pilebunker.suction-style',kind:'select',label:'SUCTION VISUAL',get:()=>suctionStyle,options:()=>Object.entries(SUCTION_STYLES).map(([value,label])=>({value,label})),set:value=>(setSuctionStyle(value),true)}),
+    Object.freeze({id:'pilebunker.aim-mode',kind:'select',label:'AIM DURING PILEBUNKER',get:()=>aimMode,options:()=>Object.entries(AIM_MODES).map(([value,label])=>({value,label})),set:value=>(setAimMode(value),true)}),
+    ...EFFECT_CONTROL_DEFS.map(([key,label,min,max,step])=>Object.freeze({id:`pilebunker.effect.${key}`,kind:'range',label,min,max,step,get:()=>tuning[key],set:value=>(setTuning(key,value),true)})),
+  ]);}
   function addSelect(wrap,labelText,values,current,onChange,aria){
     const row=document.createElement('div');row.className='srow';const label=document.createElement('div');label.className='slabel';label.textContent=labelText;
     const select=document.createElement('select');select.setAttribute('aria-label',aria);select.style.cssText='width:100%;padding:8px;border:1px solid rgba(232,160,76,.45);border-radius:6px;background:#102426;color:#f0d7b1;font:inherit;';
@@ -264,7 +273,7 @@ export function createPilebunkerCombatEffect({THREE,scene,getEnemies=()=>[],getP
     panelState.aimSelect=addSelect(wrap,'AIM DURING PILEBUNKER',AIM_MODES,aimMode,setAimMode,'Pilebunker aim mode');
     const description=document.createElement('div');description.className='ptitle';description.style.cssText='line-height:1.4;opacity:.82;margin:5px 0 9px;';wrap.appendChild(description);panelState.description=description;
     const details=document.createElement('details');details.id='pilebunkerAdvancedTuning';details.style.cssText='border-top:1px solid rgba(232,160,76,.20);padding-top:7px;';const summary=document.createElement('summary');summary.className='ptitle';summary.style.cssText='cursor:pointer;user-select:none;padding:7px 0;';summary.textContent='ADVANCED EFFECT TUNING';details.appendChild(summary);
-    const defs=[['pullRadius','PULL RADIUS',3,14,.1,1],['pullStrength','PULL STRENGTH',3,26,.25,2],['compressionDistance','COMPRESSION POINT',.5,5,.05,2],['frontReach','GUARANTEED FRONT REACH',3,14,.1,1],['primaryDamage','PRIMARY DAMAGE',20,260,5,0],['primaryStun','PRIMARY STUN',.1,5,.05,2],['primaryHitRadius','PRIMARY CATCH RADIUS',1.5,7,.1,1],['secondaryDamage','SECONDARY DAMAGE',1,120,2,0],['secondaryRadius','BLAST RADIUS',2,12,.1,1],['secondaryKnock','SECONDARY KNOCKBACK',2,26,.25,2],['secondaryStun','SECONDARY STUN',0,1.5,.05,2],['eliteControl','ELITE CONTROL MULTIPLIER',.2,1,.05,2],['aimMoveMultiplier','GUIDED MOVEMENT MULTIPLIER',.08,.60,.01,2]];
+    const defs=EFFECT_CONTROL_DEFS.map(([key,label,min,max,step])=>[key,label,min,max,step,step>=1?0:step>=.1?1:2]);
     for(const [key,label,min,max,step,digits] of defs){const row=document.createElement('div');row.className='srow';const lab=document.createElement('div');lab.className='slabel';const value=document.createElement('span');value.className='sval';lab.textContent=label+' ';lab.appendChild(value);const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.setAttribute('aria-label',label);input.addEventListener('input',()=>setTuning(key,input.value));panelState.inputs.set(key,{input,value,digits});row.append(lab,input);details.appendChild(row);}
     wrap.appendChild(details);body.appendChild(wrap);syncPanel();
   }
@@ -277,5 +286,5 @@ export function createPilebunkerCombatEffect({THREE,scene,getEnemies=()=>[],getP
     for(const line of burstLines){scene.remove(line.mesh);line.mesh.material.dispose();}burstGeometry.dispose();burstBaseMaterial.dispose();
   }
 
-  return{start,update,impact,finish,installPanel,dispose,setTuning,applyPreset,setSuctionStyle,setAimMode,tuning,state,presets:PRESETS,get activePreset(){return activePreset;},get suctionStyle(){return suctionStyle;},get aimMode(){return aimMode;},get primary(){return state.primary;}};
+  return{start,update,impact,finish,installPanel,dispose,setTuning,applyPreset,setSuctionStyle,setAimMode,controlDescriptors,tuning,state,presets:PRESETS,get activePreset(){return activePreset;},get suctionStyle(){return suctionStyle;},get aimMode(){return aimMode;},get primary(){return state.primary;}};
 }

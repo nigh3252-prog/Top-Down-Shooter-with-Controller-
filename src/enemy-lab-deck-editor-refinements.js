@@ -5,6 +5,7 @@ import {
   readArcanaTweaks,
   writeArcanaTweaks,
 } from './wizard-arcana-settings.js';
+import { getArenaRuntime } from './arena-runtime-context.js';
 
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
 function isWizardArcana(card){return card?.sourceGame==='Wizard of Legend'&&typeof card?.arcanaId==='string';}
@@ -25,10 +26,7 @@ export function wizardArcanaCards(catalog=[]){
 export function installEnemyLabDeckEditorRefinements(){
   if(typeof window==='undefined'||window.__enemyLabDeckEditorRefinementsInstalled)return;
   window.__enemyLabDeckEditorRefinementsInstalled=true;
-
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+  const parentWindow=window,parentDocument=document;
 
   const state={arcanaFamily:false,tweaksOpen:false,suppressCoreFamily:false};
   const styleId='enemyLabDeckEditorRefinementStyles';
@@ -211,18 +209,23 @@ export function installEnemyLabDeckEditorRefinements(){
     const heading=parentDocument.createElement('h3');heading.textContent=title;card.appendChild(heading);return card;
   }
 
-  function renderArcanaTweaks(){
-    const dock=parentDocument.getElementById('labDock'),values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
-    if(!dock||!values||!categories)return;
+  function renderArcanaTweaks({mount=true}={}){
+    const sectionRegistry=getArenaRuntime()?.sectionRegistry||null;
+    const dock=parentDocument.getElementById('labDock');
+    const values=sectionRegistry?null:parentDocument.getElementById('labValues');
+    const categories=sectionRegistry?null:parentDocument.getElementById('labCategories');
+    if(!dock||(!sectionRegistry&&(!values||!categories)))return null;
     const editor=window.__enemyLabDeckEditor;
-    if(editor?.activeView){
+    if(editor?.activeView&&!sectionRegistry){
       state.tweaksOpen=false;
       const baseCategory=categories.querySelector('.choice:not([data-deck-editor-category]):not([data-arcana-tweaks-category])');
       baseCategory?.click();
     }
     state.tweaksOpen=true;state.arcanaFamily=false;
-    dock.classList.add('deckEditorMode','arcanaTweaksMode');values.classList.add('deckEditorActive');
-    for(const choice of categories.querySelectorAll('.choice'))choice.classList.toggle('on',choice.hasAttribute('data-arcana-tweaks-category'));
+    if(!sectionRegistry){
+      dock.classList.add('deckEditorMode','arcanaTweaksMode');values.classList.add('deckEditorActive');
+      for(const choice of categories.querySelectorAll('.choice'))choice.classList.toggle('on',choice.hasAttribute('data-arcana-tweaks-category'));
+    }
     const hint=parentDocument.getElementById('categoryHint');if(hint)hint.textContent='Scale Wizard Arcana visuals and collision footprints for testing.';
 
     const root=parentDocument.createElement('div');root.className='arcanaTweaksRoot';
@@ -265,8 +268,11 @@ export function installEnemyLabDeckEditorRefinements(){
     summary.appendChild(rows);
     const use=makeTweaksCard('TESTING USE');const useText=parentDocument.createElement('p');useText.textContent='Use oversized effects to inspect targeting, overlap, crowd control, and mobile readability. Return to 1× when comparing source-like proportions.';use.appendChild(useText);
     sideStack.append(summary,use);side.appendChild(sideStack);
-    root.append(main,side);values.replaceChildren(root);values.scrollTop=0;values.scrollLeft=0;
+    root.append(main,side);
     sync(current.sizeMultiplier);
+    if(sectionRegistry||!mount)return root;
+    values.replaceChildren(root);values.scrollTop=0;values.scrollLeft=0;
+    return root;
   }
 
   function closeTweaks(){
@@ -295,11 +301,15 @@ export function installEnemyLabDeckEditorRefinements(){
 
   const finishInstall=(attempt=0)=>{
     const values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
+    const sectionRegistry=getArenaRuntime()?.sectionRegistry||null;
     if(!values||!categories||!window.__enemyLabDeckEditor){if(attempt<240)setTimeout(()=>finishInstall(attempt+1),40);return;}
-    ensureTweaksCategory(categories);
-
-    new MutationObserver(()=>{ensureTweaksCategory(categories);queueDecoration();}).observe(categories,{childList:true,subtree:true});
-    new MutationObserver(queueDecoration).observe(values,{childList:true,subtree:true});
+    if(sectionRegistry){
+      sectionRegistry.registerView({id:'arcana-tweaks',sectionId:'visuals',label:'ARCANA SCALE',description:'Tune Wizard Arcana visual and collision footprints.',order:20,render:()=>renderArcanaTweaks({mount:false})});
+      sectionRegistry.subscribe(event=>{if(event.sectionId==='loadout'&&(event.type==='invalidate'||event.type==='select'))queueDecoration();});
+      queueDecoration();
+    }else{
+      ensureTweaksCategory(categories);
+    }
 
     parentDocument.addEventListener('click',event=>{
       const tweaks=event.target.closest?.('[data-arcana-tweaks-category]');

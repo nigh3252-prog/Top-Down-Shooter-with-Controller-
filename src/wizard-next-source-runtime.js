@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -136,8 +137,7 @@ export function safeAdvanceDistance(frame,distance,walls=[],clearance=.52){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
-  try{const params=new URLSearchParams(location.search||'');if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));}catch{return false;}
+  try{const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;const params=new URLSearchParams(location.search||'');return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(location.pathname||'');}catch{return false;}
 }
 function isAbilityCaptureRuntime(){
   if(typeof window==='undefined')return false;
@@ -152,7 +152,7 @@ export function normalizeWizardVisualMode(stage='style'){
 function currentWizardVisualMode(){
   if(!isAbilityCaptureRuntime())return'style';
   let stage='style';
-  try{stage=window.__abilityCapture?.snapshot?.().stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
+  try{stage=getArenaCaptureOptions()?.stage||new URLSearchParams(globalThis.location?.search||'').get('stage')||'style';}catch{}
   return normalizeWizardVisualMode(stage);
 }
 function normalize2(x,z){const length=Math.hypot(x,z)||1;return{x:x/length,z:z/length};}
@@ -261,7 +261,7 @@ function makeBoltImpactVisual(THREE,scene,position,size,visualMode,finisher=fals
 
 export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],advancePlayer=()=>false}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},cast(){return false;},snapshot(){return{simulationTime:0,effects:[],semanticEvents:[],voltDiscCombo:{active:false,press:0,total:VOLT_DISC_COMBO.presses,remaining:0}};},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},cast(){return false;},snapshot(){return{simulationTime:0,effects:[],semanticEvents:[],voltDiscCombo:{active:false,press:0,total:VOLT_DISC_COMBO.presses,remaining:0}};},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier,elapsed:0,castSerial:0,lastCast:null,semanticSerial:0,semanticEvents:[],boltComboSerial:0,voltComboPress:0,voltComboRemaining:0,voltComboSerial:0,visualMode:'style'};
   const add=effect=>(state.effects.push(effect),effect);
   function remove(effect){if(effect.mesh)disposeObject(effect.mesh);for(const mesh of effect.meshes||[])disposeObject(mesh);for(const flash of effect.flashes||[])disposeObject(flash);const index=state.effects.indexOf(effect);if(index>=0)state.effects.splice(index,1);}
@@ -350,6 +350,9 @@ export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySy
     if(id==='EARTH-KNUCKLES')startCombo('earthCombo');else if(id==='BLADED-VINE')startCombo('vineCombo');else if(id==='STONE-SHOT')startCombo('stoneCombo');else if(id==='SPARK-CONTACT')startCombo('sparkCombo');else if(id==='BOLT-RAIL')startCombo('boltRailCombo');else if(id==='VOLT-DISC')casted=pressVoltDisc(detail);else casted=false;
     if(casted){state.castSerial++;state.lastCast=id;}return casted;
   }
+  const canPlayIds=new Set(['EARTH-KNUCKLES','BLADED-VINE','STONE-SHOT','SPARK-CONTACT','BOLT-RAIL','VOLT-DISC']);
+  function canPlay(card){return canPlayIds.has(card?.arcanaId);}
+  function play(card,context={}){return canPlay(card)?cast(card,context):false;}
   function effectSnapshot(effect){
     const value={type:effect.type,semanticKind:effect.semanticKind||'',visualMode:effect.visualMode||'',age:Number(effect.age)||0};
     for(const key of['arcanaId','stableId','comboStableId'])if(effect[key]!==undefined)value[key]=effect[key];
@@ -360,10 +363,10 @@ export function installWizardNextSourceRuntime({THREE,scene,getPlayer,getEnemySy
     if(typeof effect.finisherTriggered==='boolean')value.finisherTriggered=effect.finisherTriggered;if(typeof effect.harmless==='boolean')value.harmless=effect.harmless;return value;
   }
   function snapshot(){return{simulationTime:state.elapsed,castSerial:state.castSerial,lastCast:state.lastCast,visualMode:state.visualMode,voltDiscCombo:{active:state.voltComboPress>0&&state.voltComboRemaining>0,press:state.voltComboPress,total:VOLT_DISC_COMBO.presses,remaining:state.voltComboRemaining,serial:state.voltComboSerial},effects:state.effects.map(effectSnapshot),semanticEvents:state.semanticEvents.map(event=>({...event}))};}
-  const onPlay=event=>cast(event?.detail?.card,event?.detail||{});
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
-  return{state,cast,snapshot,reset,update(dt,now=0){
+  return{state,cast,canPlay,play,snapshot,reset,update(dt,now=0){
     const frame=Math.max(0,Number(dt)||0),time=Number(now)||0;state.elapsed+=frame;
     if(state.voltComboPress>0&&state.voltComboRemaining>0){state.voltComboRemaining=Math.max(0,state.voltComboRemaining-frame);if(state.voltComboRemaining<=0){const comboStableId=`VOLT-DISC:${String(state.voltComboSerial).padStart(4,'0')}`;semantic('volt-disc-combo-expired',{arcanaId:'VOLT-DISC',stableId:comboStableId,comboStableId,comboSerial:state.voltComboSerial,press:state.voltComboPress,total:VOLT_DISC_COMBO.presses});state.voltComboPress=0;}}
     for(const effect of[...state.effects]){if(effect.type==='earthCombo')updateCombo(effect,frame,EARTH_KNUCKLES_BEATS,emitEarthPunch);else if(effect.type==='vineCombo')updateCombo(effect,frame,BLADED_VINE_BEATS,emitVine);else if(effect.type==='stoneCombo')updateCombo(effect,frame,STONE_SHOT_BEATS,emitStone);else if(effect.type==='sparkCombo')updateCombo(effect,frame,SPARK_CONTACT_BEATS,emitSpark);else if(effect.type==='boltRailCombo')updateCombo(effect,frame,BOLT_RAIL_BEATS,emitBoltRail);else if(effect.type==='earthPunch')updateEarthPunch(effect,frame);else if(effect.type==='vineStrike')updateVine(effect,frame,time);else if(effect.type==='stoneProjectile')updateStone(effect,frame,time);else if(effect.type==='sparkStrike')updateSpark(effect,frame);else if(effect.type==='boltRailStrike')updateBoltRail(effect,frame);else if(effect.type==='voltDiscProjectile')updateVoltDisc(effect,frame,time);else if(effect.type==='lightningBurst'||effect.type==='voltDiscBurst')updateLightningBurst(effect,frame);else if(effect.type==='impactOnly')updateImpact(effect,frame);}

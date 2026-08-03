@@ -91,16 +91,6 @@ export function installHitFeel({ THREE, scene, camera, settings = null, audio = 
   let overlay = null;
   function ensureOverlay() {
     if (overlay || typeof document === 'undefined') return;
-    const style = document.createElement('style');
-    style.textContent = `
-      #hitFeelOverlay{position:fixed;inset:0;pointer-events:none;z-index:8;opacity:0;
-        background:
-          radial-gradient(circle at var(--ix,50%) var(--iy,50%), rgba(255,255,255,.92) 0%, rgba(255,213,29,.40) 7%, rgba(255,118,24,.22) 18%, transparent 44%),
-          radial-gradient(circle at center, transparent 46%, rgba(255,213,29,.08) 72%, rgba(255,118,24,.25) 100%);
-        mix-blend-mode:screen}
-      #hitFeelOverlay.flash{animation:hitFeelFlash 360ms steps(6,end)}
-      @keyframes hitFeelFlash{0%{opacity:var(--iop,.95)}100%{opacity:0}}`;
-    document.head.appendChild(style);
     overlay = document.createElement('div');
     overlay.id = 'hitFeelOverlay';
     document.body.appendChild(overlay);
@@ -489,6 +479,11 @@ export function installHitFeel({ THREE, scene, camera, settings = null, audio = 
     shockwave, slashBurst, sprayBlood, bloodSplat, bloodSmear, floater, overlayImpact,
     buildTuningPanel,
     togglePanel: () => buildTuningPanel(),
+    controlDescriptors: () => Object.freeze([
+      Object.freeze({id:'hitfeel.master',kind:'range',label:'Master Intensity',min:0,max:2,step:.01,get:()=>tuning.master,set:value=>(setTune('master',value),true)}),
+      ...Object.entries(SLIDER_DEFS).map(([key,[label,min,max,step]])=>Object.freeze({id:`hitfeel.${key}`,kind:'range',label,min,max,step,get:()=>tuning[key],set:value=>(setTune(key,value),true)})),
+      ...Object.entries(CHECK_DEFS).map(([key,label])=>Object.freeze({id:`hitfeel.${key}`,kind:'check',label,checked:()=>!!tuning[key],set:value=>(setTune(key,value?1:0),true)})),
+    ]),
     get jitter() { return shakeAmt * .23; },
     get camKick() { return camKick; },
     get zoomKick() { return zoomKick; },
@@ -496,6 +491,5 @@ export function installHitFeel({ THREE, scene, camera, settings = null, audio = 
     // introspection for tests
     get counts() { return { particles: particles.length, splats: splats.length, smears: smears.length, rings: rings.length, floaters: floaters.length }; },
   };
-  if (typeof window !== 'undefined') window.__hitFeel = api;
   return api;
 }

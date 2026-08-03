@@ -1,3 +1,4 @@
+import { getArenaRuntime } from './arena-runtime-context.js';
 import { classifyGuardAttack,computeGuardDamage } from './goblin-guard.js';
 import { LUGARU_COUNTER_RELEASE_WINDOW } from './lugaru-duelist-counter-release.js';
 
@@ -51,7 +52,7 @@ export function buildLugaruCounterAttack(attack,{perfect=false,punish=false}={})
 }
 
 function combatSnapshot(){
-  const runtime=globalThis.__arena,combat=runtime?.combatState,attack=combat?.attack;
+  const runtime=getArenaRuntime(),combat=runtime?.combatState,attack=combat?.attack;
   return{
     active:!!attack,attackRef:attack||null,attackKey:combat?.attackKey||'',
     attackGroup:combat?.attackGroup||'',attackLabel:attack?.label||'',weaponId:combat?.weapon||'',

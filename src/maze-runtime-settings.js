@@ -1,3 +1,5 @@
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
+
 export const MAZE_CELL_SIZE_OPTIONS = Object.freeze([
   Object.freeze({ id:'compact', label:'Compact · 12', value:12 }),
   Object.freeze({ id:'small', label:'Small · 16', value:16 }),
@@ -36,22 +38,14 @@ function optionById(options, id, fallbackId){
 }
 
 function isCombatArenaRuntime(){
-  return typeof document !== 'undefined' && /(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname || '');
+  const mode=getArenaRuntimeConfig()?.mode;
+  return mode?mode==='arena':typeof document !== 'undefined'&&/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');
 }
 
 function isEnemyLabRuntime(){
-  if(typeof document === 'undefined') return false;
-  try{
-    const params = new URLSearchParams(globalThis.location?.search || '');
-    if(String(params.get('layout') || '').trim().toLowerCase() === 'arena') return true;
-
-    const parent = globalThis.parent;
-    const isArenaFrame = parent && parent !== globalThis && globalThis.frameElement?.id === 'arenaFrame';
-    const parentPage = isArenaFrame ? parent.location.pathname.split('/').pop() : '';
-    return parentPage === 'enemy-lab.html';
-  }catch{
-    return false;
-  }
+  const config=getArenaRuntimeConfig();
+  if(config)return config.enemyLab===true;
+  try{return new URLSearchParams(globalThis.location?.search||'').get('enemyLab')==='1';}catch{return false;}
 }
 
 function requestedCellSizeId(){
@@ -81,11 +75,49 @@ function selectedCellSize(){
   );
 }
 
+export function getArenaMazeSettings(){
+  return{
+    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS,storageGet(CELL_SIZE_KEY),DEFAULT_CELL_SIZE_ID),
+    roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS,storageGet(ROOM_SIZE_KEY),DEFAULT_ROOM_SIZE_ID),
+  };
+}
+
+export function getLabChamberSettings(){
+  return{
+    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS,storageGet(LAB_CELL_SIZE_KEY),DEFAULT_LAB_CELL_SIZE_ID),
+  };
+}
+
 export function getMazeRuntimeSettings(){
   return {
     cellSize:selectedCellSize(),
     roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS, storageGet(ROOM_SIZE_KEY), DEFAULT_ROOM_SIZE_ID),
   };
+}
+
+export function setArenaMazeCellSize(id,{reload=false}={}){
+  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),DEFAULT_CELL_SIZE_ID);
+  storageSet(CELL_SIZE_KEY,option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
+}
+
+export function setLabChamberCellSize(id,{reload=true}={}){
+  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),DEFAULT_LAB_CELL_SIZE_ID);
+  storageSet(LAB_CELL_SIZE_KEY,option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
+}
+
+export function setMazeRuntimeCellSize(id,{reload=true}={}){
+  return isEnemyLabRuntime()?setLabChamberCellSize(id,{reload}):setArenaMazeCellSize(id,{reload});
+}
+
+export function setMazeRuntimeRoomSize(id,{reload=true}={}){
+  const option=optionById(MAZE_ROOM_SIZE_OPTIONS,String(id||''),DEFAULT_ROOM_SIZE_ID);
+  storageSet(ROOM_SIZE_KEY,option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
 }
 
 export function configuredHexSize(requestedHexSize){
@@ -180,16 +212,7 @@ export function installMazeRuntimeControls(){
   group.append(heading, cell.row, room.row, note);
   simBody.insertBefore(group, sliderRoot);
 
-  const reloadWith = (key, value) => {
-    storageSet(key, value);
-    globalThis.location?.reload?.();
-  };
-  cell.select.addEventListener('change', ()=>reloadWith(cellSizeStorageKey(), cell.select.value));
-  room.select.addEventListener('change', ()=>reloadWith(ROOM_SIZE_KEY, room.select.value));
+  cell.select.addEventListener('change', ()=>setMazeRuntimeCellSize(cell.select.value));
+  room.select.addEventListener('change', ()=>setMazeRuntimeRoomSize(room.select.value));
   return true;
-}
-
-if(typeof document !== 'undefined'){
-  queueMicrotask(()=>installMazeRuntimeControls());
-  if(isCombatArenaRuntime()) import('./roadie-run.js').catch(error=>console.error('Roadie run failed to load', error));
 }

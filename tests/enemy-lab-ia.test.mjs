@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root=dirname(dirname(fileURLToPath(import.meta.url)));
+const read=file=>readFileSync(join(root,file),'utf8');
+const lab=read('enemy-lab.html');
+const registry=read('src/enemy-lab-section-registry.js');
+const sectionUi=read('src/enemy-lab-section-ui.js');
+const runtime=read('src/arena-runtime.js');
+const rosterMode=read('src/working-roster-encounter-mode.js');
+const profiles=read('src/enemy-lab-combat-profiles.js');
+const setupWorkflow=read('src/enemy-lab-setup-workflow.js');
+const featureSources=['src/enemy-lab-working-roster.js','src/enemy-lab-working-ability-pool.js','src/enemy-lab-combat-profiles.js','src/enemy-lab-stance-compatibility.js','src/enemy-lab-deck-editor.js','src/enemy-lab-deck-editor-refinements.js'].map(read);
+
+const ordered=['ENCOUNTER','ENEMIES / ROSTER','PLAYER LOADOUT','COMBAT BEHAVIOR','VISUALS','CAPTURE','DIAGNOSTICS','PROFILES'];
+let previous=-1;
+for(const label of ordered){
+  const index=registry.indexOf(`label:'${label}'`);
+  assert.ok(index>previous,`${label} must remain in the declared order`);
+  previous=index;
+}
+assert.doesNotMatch(sectionUi,/TOOLS/,'the Lab section model must not expose a Tools category');
+assert.doesNotMatch(sectionUi,/CLOSE LAB/,'closing the Lab belongs to the shell action, not a section');
+assert.match(lab,/createEnemyLabSectionRegistry/);
+assert.match(lab,/startPlannedLabEncounter/);
+assert.match(runtime,/selectEncounterMode/);
+assert.match(runtime,/startPlannedLabEncounter/);
+assert.match(rosterMode,/Working roster was cleared; falling back/);
+for(const source of featureSources)assert.doesNotMatch(source,/new MutationObserver\(/,'supported Lab feature modules must not repair categories through MutationObserver');
+assert.match(lab,/width:min\(64vw,720px\)/,'landscape Lab dock must fit compact widths');
+assert.match(lab,/minmax\(108px,132px\)/,'landscape category rail must use the compact eight-section width');
+assert.match(lab,/id="labProfileBar"/,'the profile bar stays in the dock outside section rendering');
+for(const mode of ['test','setup','standard','history'])assert.match(lab,new RegExp(`data-workspace-mode="${mode}"`));
+assert.match(lab,/installEnemyLabSetupWorkflow/);
+assert.match(setupWorkflow,/LOCK AS ARENA STANDARD/);
+assert.match(setupWorkflow,/CONFIRM LOCK/);
+assert.match(setupWorkflow,/RESTORE COPY TO TEST/);
+assert.match(setupWorkflow,/PLAY ARENA · STANDARD/);
+assert.match(setupWorkflow,/const locked=standard\(\)/);
+assert.match(setupWorkflow,/const history=readArenaStandardHistory\(storage\)/);
+for(const id of ['profileSelect','profileLoad','profileSave','profileSaveAs'])assert.match(lab,new RegExp(`id="${id}"`));
+assert.match(profiles,/previewCombatProfileImport/);
+assert.match(profiles,/collision==='replace'/);
+assert.match(profiles,/runtime\.snapshotProfileSettings/);
+assert.match(profiles,/runtime\.applyProfileSettings/);
+assert.doesNotMatch(profiles,/MutationObserver|modeGrid|dirSliders/,'profile dirty tracking and apply must use typed controls and adapters');
+assert.doesNotMatch(profiles,/OPEN ARENA/,'named Lab profiles no longer act as an implicit Arena launch path');
+assert.doesNotMatch(lab,/PROFILE BAR SLOT|fixedCategories|function categoryDefs|function renderTools/);
+console.log('Enemy Lab IA and encounter boundaries: ok');
