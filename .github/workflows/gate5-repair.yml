@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - agent/stance-2-gate-5-pilot
+  pull_request:
+    branches:
+      - main
+    types:
+      - edited
 
 permissions:
   contents: write
