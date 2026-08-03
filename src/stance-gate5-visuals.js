@@ -1,8 +1,8 @@
 function shieldPose(THREE,name){
   const poses={
-    back:{position:new THREE.Vector3(0,1.72,-.72),rotation:new THREE.Euler(0,Math.PI,0)},
-    side:{position:new THREE.Vector3(-1.12,1.34,.04),rotation:new THREE.Euler(0,Math.PI/2,.08)},
-    guard:{position:new THREE.Vector3(-.16,1.52,1.05),rotation:new THREE.Euler(0,0,-.04)},
+    back:{position:new THREE.Vector3(0,1.52,-.52),rotation:new THREE.Euler(0,Math.PI,.04)},
+    side:{position:new THREE.Vector3(-.90,1.42,.12),rotation:new THREE.Euler(0,Math.PI/2,.08)},
+    guard:{position:new THREE.Vector3(-.42,1.48,1.30),rotation:new THREE.Euler(0,0,-.06)},
   };
   return poses[name]||poses.back;
 }
@@ -28,7 +28,7 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
       const rim=new THREE.LineSegments(rimGeometry,rimMaterial);
       const boss=new THREE.Mesh(new THREE.SphereGeometry(.19,12,8),new THREE.MeshStandardMaterial({color:0xb79a62,roughness:.42,metalness:.58,flatShading:true}));
       boss.scale.z=.36;boss.position.z=.12;
-      shield.add(board,rim,boss);shield.scale.setScalar(.9);shield.visible=false;root.add(shield);
+      shield.add(board,rim,boss);shield.scale.setScalar(1.8);shield.visible=false;root.add(shield);
 
       const parryMaterial=new THREE.MeshBasicMaterial({color:0xbcecff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
       const parry=new THREE.Mesh(new THREE.RingGeometry(.85,1.12,48),parryMaterial);parry.rotation.x=-Math.PI/2;parry.position.y=.14;parry.visible=false;root.add(parry);
@@ -39,7 +39,11 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
     }catch(error){console.warn('[stance-gate5] defense visuals did not install',error);}
   })();
 
-  function actorRoot(){return PC.combatLayer?.parent?.parent?.parent||PC.combatLayer?.parent?.parent||null;}
+  function actorRoot(){
+    const activeModel=PC.combatLayer?.parent||null;
+    // activeModel is parented to actorVisual, which owns the player's facing yaw.
+    return activeModel?.parent||activeModel;
+  }
   function ensureParent(){
     const parent=actorRoot();
     if(visual&&parent&&visual.root.parent!==parent){visual.root.parent?.remove(visual.root);parent.add(visual.root);}
@@ -56,7 +60,7 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
   function update(state,dt=0){
     lastState=state||lastState;if(!visual||!lastState)return;ensureParent();
     const shieldOwned=lastState.shieldOwned===true;
-    const hammerfall=lastState.stanceId==='S01';
+    const hammerfall=lastState.profileId==='hammerfall-shield'||lastState.stanceId==='S01';
     const attacking=lastState.attacking===true;
     const poseName=!hammerfall?'back':lastState.guardRaised&&!attacking?'guard':'side';
     const pose=shieldPose(visual.THREE,poseName);
