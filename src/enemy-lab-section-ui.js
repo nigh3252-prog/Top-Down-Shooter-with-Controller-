@@ -41,6 +41,7 @@ export function installEnemyLabSectionUI({
   startTest,
   clearTest,
   setMessage,
+  renderWorkspace=()=>null,
 }={}){
   if(!document||!runtime||!sectionRegistry)return null;
 
@@ -52,7 +53,7 @@ export function installEnemyLabSectionUI({
   };
   const groupsForSection=(data,sectionId)=>((data.controlGroups||[]).map(item=>({
     ...item,
-    controls:(item.controls||[]).filter(control=>String(control.placement?.section||'').toLowerCase()===sectionId),
+    controls:(item.controls||[]).filter(control=>String(control.placement?.section||'').toLowerCase()===sectionId&&control.placement?.workspace!=='setup'),
   })).filter(item=>item.controls.length));
   const renderSectionGroups=(data,sectionId)=>list(...groupsForSection(data,sectionId).map(item=>renderControlGroup(item)));
   const selectSection=id=>sectionRegistry.select(id);
@@ -162,6 +163,8 @@ export function installEnemyLabSectionUI({
 
   function renderCategories(data=snapshot()){
     const oldTop=categoriesEl.scrollTop,oldLeft=categoriesEl.scrollLeft;
+    if(state.workspaceMode&&state.workspaceMode!=='test'){categoriesEl.hidden=true;categoriesEl.replaceChildren();return;}
+    categoriesEl.hidden=false;
     const sections=sectionRegistry.sections({controlGroups:data.controlGroups||[]});
     if(!sections.some(section=>section.id===state.category))state.category='encounter';
     categoriesEl.replaceChildren(...sections.map(section=>{const button=choice({label:section.label,sub:'',active:state.category===section.id,className:section.className,onClick:()=>{state.category=section.id;save();renderAll({preserveCategoryScroll:true});}});button.dataset.enemyLabSection=section.id;return button;}));
@@ -170,6 +173,12 @@ export function installEnemyLabSectionUI({
 
   function renderValues({preserveScroll=false}={}){
     const oldTop=values.scrollTop,oldLeft=values.scrollLeft;
+    if(state.workspaceMode&&state.workspaceMode!=='test'){
+      const content=renderWorkspace(state.workspaceMode);
+      categoryHint.textContent=state.workspaceMode==='setup'?'Review what will transfer to Combat Arena.':state.workspaceMode==='standard'?'The immutable setup Combat Arena currently uses.':'Previous locked standards.';
+      values.replaceChildren(content||status('WORKSPACE LOADING','The setup workflow is initializing.'));
+      requestAnimationFrame(()=>{values.scrollTop=preserveScroll?oldTop:0;values.scrollLeft=preserveScroll?oldLeft:0;});return;
+    }
     const data=snapshot(),definition=sectionRegistry.getDefinition(state.category);
     if(!definition){state.category='encounter';save();return renderValues({preserveScroll});}
     categoryHint.textContent=definition.description;
@@ -186,6 +195,7 @@ export function installEnemyLabSectionUI({
 
   function renderAll({preserveCategoryScroll=false,preserveValueScroll=false}={}){
     const catTop=categoriesEl.scrollTop,catLeft=categoriesEl.scrollLeft;
+    document.body.classList.toggle('labProfilesVisible',(!state.workspaceMode||state.workspaceMode==='test')&&state.category==='profiles');
     renderCategories(snapshot());renderValues({preserveScroll:preserveValueScroll});
     if(preserveCategoryScroll)requestAnimationFrame(()=>{categoriesEl.scrollTop=catTop;categoriesEl.scrollLeft=catLeft;});
   }

@@ -113,21 +113,21 @@ function snapshotWorkspace(runtime,state,captureState,resources){
 }
 
 function registerWorkspaceAdapters({runtime,state,captureState,resources,saveWorkspace,storage,hostWindow}){
-  runtime.registerProfileAdapter?.({id:'lab-scenario',path:'scenario.configuration',label:'Lab scenario',section:'encounter',requiresReload:true,
+  runtime.registerProfileAdapter?.({id:'lab-scenario',path:'scenario.configuration',label:'Lab scenario',section:'encounter',target:'lab-only',requiresReload:true,
     snapshot:()=>normalizeScenario(state,state),validate:value=>{try{normalizeScenario(value,state);return true;}catch(error){return String(error.message);}},
     apply:value=>{const normalized=normalizeScenario(value,state);Object.assign(state,normalized);setHadesEncounterDifficultyRamp(normalized.introduction);saveWorkspace?.();return true;}});
-  runtime.registerProfileAdapter?.({id:'lab-roster',path:'content.rosterIds',label:'Working enemy roster',section:'enemies',requiresReload:true,
+  runtime.registerProfileAdapter?.({id:'lab-roster',path:'content.rosterIds',label:'Working enemy roster',section:'enemies',target:'arena',requiresReload:true,
     snapshot:()=>uniqueStrings(resources.workingRoster?.getIds?.()||[]),validate:value=>Array.isArray(value)||'Roster must be an array.',apply:value=>{resources.workingRoster?.setIds?.(uniqueStrings(value));return true;}});
-  runtime.registerProfileAdapter?.({id:'lab-ability-pool',path:'content.abilityPoolIds',label:'Working Ability Pool',section:'loadout',requiresReload:true,
+  runtime.registerProfileAdapter?.({id:'lab-ability-pool',path:'content.abilityPoolIds',label:'Working Ability Pool',section:'loadout',target:'arena',requiresReload:true,
     snapshot:()=>uniqueStrings(resources.workingAbilityPool?.getIds?.()||[]),validate:value=>Array.isArray(value)||'Ability Pool must be an array.',apply:value=>{resources.workingAbilityPool?.setIds?.(uniqueStrings(value));return true;}});
-  runtime.registerProfileAdapter?.({id:'lab-current-deck',path:'content.currentDeckIds',label:'Ordered current deck',section:'loadout',requiresReload:true,
+  runtime.registerProfileAdapter?.({id:'lab-current-deck',path:'content.currentDeckIds',label:'Ordered current deck',section:'loadout',target:'lab-only',requiresReload:true,
     snapshot:()=>orderedStrings(hostWindow.__enemyLabDeckEditor?.cardIds||runtime.deck?.pool?.map(card=>card?.id)||[]),validate:value=>Array.isArray(value)&&value.length>0||'Current Deck must contain at least one card.',
     apply:value=>{const ids=orderedStrings(value);if(hostWindow.__enemyLabDeckEditor?.setIds)return hostWindow.__enemyLabDeckEditor.setIds(ids)!==false;setStoredJson(storage,DECK_STORAGE_KEY,{cardIds:ids});return true;}});
-  runtime.registerProfileAdapter?.({id:'lab-capture',path:'capture.configuration',label:'Capture setup',section:'capture',requiresReload:true,
+  runtime.registerProfileAdapter?.({id:'lab-capture',path:'capture.configuration',label:'Capture setup',section:'capture',target:'lab-only',requiresReload:true,
     snapshot:()=>normalizeCapture(captureState,captureState),validate:value=>{try{normalizeCapture(value,captureState);return true;}catch(error){return String(error.message);}},apply:value=>{Object.assign(captureState,normalizeCapture(value,captureState));saveWorkspace?.();return true;}});
-  runtime.registerProfileAdapter?.({id:'lab-arcana',path:'player.arcana',label:'Arcana size and damage',section:'loadout',snapshot:()=>readArcanaTweaks(storage),
+  runtime.registerProfileAdapter?.({id:'lab-arcana',path:'player.arcana',label:'Arcana size and damage',section:'loadout',target:'arena',snapshot:()=>readArcanaTweaks(storage),
     validate:value=>value&&Number.isFinite(Number(value.sizeMultiplier))&&Number.isFinite(Number(value.damageMultiplier))||'Arcana tuning is invalid.',apply:value=>(writeArcanaTweaks(value,{storage,eventTarget:hostWindow}),true)});
-  runtime.registerProfileAdapter?.({id:'lab-hades-cadence',path:'scenario.hadesCadence',label:'Hades encounter cadence',section:'encounter',
+  runtime.registerProfileAdapter?.({id:'lab-hades-cadence',path:'scenario.hadesCadence',label:'Hades encounter cadence',section:'encounter',target:'arena',
     snapshot:()=>({spawnMultiplier:getHadesEncounterSpawnMultiplier(),introduction:getHadesEncounterDifficultyRamp()}),validate:value=>value&&[1,2,5,10].includes(Number(value.spawnMultiplier))&&['slow','medium','high'].includes(String(value.introduction))||'Hades cadence is invalid.',apply:value=>(setHadesEncounterSpawnMultiplier(value.spawnMultiplier),setHadesEncounterDifficultyRamp(value.introduction),true)});
 }
 
@@ -222,11 +222,11 @@ export function installEnemyLabCombatProfiles({
     const audit=runtime.auditProfileCoverage?.()||{ok:false,warnings:['Profile audit unavailable.']};
     root.append(statusCard(document,audit.ok?'PROFILE COVERAGE COMPLETE':'PROFILE COVERAGE NEEDS ATTENTION',audit.ok?`${audit.profileControls} settings plus compound resources are covered.`:audit.warnings.join(' · ')));
     const actions=document.createElement('div');actions.className='profileManagementActions';
-    actions.append(button(document,'RENAME',renameSelected),button(document,'DELETE',removeSelected,{className:'danger'}),button(document,'OPEN ARENA',()=>{const profile=selected();if(!profile)return report('Choose a profile first.',true);const destination=new URL('./combat-arena.html',document.location.href);destination.search='';applyProfile(profile,{reload:false,destination});}),button(document,'EXPORT ONE',()=>exportSelection(false)),button(document,'EXPORT ALL',()=>exportSelection(true)));
+    actions.append(button(document,'RENAME',renameSelected),button(document,'DELETE',removeSelected,{className:'danger'}),button(document,'EXPORT ONE',()=>exportSelection(false)),button(document,'EXPORT ALL',()=>exportSelection(true)));
     const collision=document.createElement('select');collision.setAttribute('aria-label','Profile import collision handling');for(const [value,label] of [['copy','IMPORT COPY'],['replace','REPLACE']]){const option=document.createElement('option');option.value=value;option.textContent=label;collision.appendChild(option);}
     const input=document.createElement('input');input.type='file';input.accept='application/json,.json';input.hidden=true;input.addEventListener('change',()=>{const file=input.files?.[0];if(file)importFile(file,collision.value);input.value='';});
     importButton=button(document,pendingImport?'CONFIRM IMPORT':'IMPORT JSON',()=>pendingImport?commitImport():input.click());actions.append(collision,importButton,input);root.append(actions);
-    for(const profile of profiles)root.append(statusCard(document,`${profile.name}${profile.id===activeRecord(storage)?.id?' · ACTIVE':''}`,`${profile.workspace.content.enemyIds.length} enemies · ${profile.workspace.content.deckCardIds.length} deck cards · ${profile.encounterMode}${profile.partial?' · migrated partial profile':''}`));
+    for(const profile of profiles)root.append(statusCard(document,`${profile.name}${profile.id===activeRecord(storage)?.id?' · LOADED IN LAB':''}`,`${profile.workspace.content.enemyIds.length} enemies · ${profile.workspace.content.deckCardIds.length} deck cards · ${profile.encounterMode}${profile.partial?' · migrated partial profile':''}`));
     return root;
   }
 

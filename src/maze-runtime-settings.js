@@ -75,6 +75,19 @@ function selectedCellSize(){
   );
 }
 
+export function getArenaMazeSettings(){
+  return{
+    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS,storageGet(CELL_SIZE_KEY),DEFAULT_CELL_SIZE_ID),
+    roomSize:optionById(MAZE_ROOM_SIZE_OPTIONS,storageGet(ROOM_SIZE_KEY),DEFAULT_ROOM_SIZE_ID),
+  };
+}
+
+export function getLabChamberSettings(){
+  return{
+    cellSize:optionById(MAZE_CELL_SIZE_OPTIONS,storageGet(LAB_CELL_SIZE_KEY),DEFAULT_LAB_CELL_SIZE_ID),
+  };
+}
+
 export function getMazeRuntimeSettings(){
   return {
     cellSize:selectedCellSize(),
@@ -82,11 +95,22 @@ export function getMazeRuntimeSettings(){
   };
 }
 
-export function setMazeRuntimeCellSize(id,{reload=true}={}){
-  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),defaultCellSizeId());
-  storageSet(cellSizeStorageKey(),option.id);
+export function setArenaMazeCellSize(id,{reload=false}={}){
+  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),DEFAULT_CELL_SIZE_ID);
+  storageSet(CELL_SIZE_KEY,option.id);
   if(reload)globalThis.location?.reload?.();
   return option;
+}
+
+export function setLabChamberCellSize(id,{reload=true}={}){
+  const option=optionById(MAZE_CELL_SIZE_OPTIONS,String(id||''),DEFAULT_LAB_CELL_SIZE_ID);
+  storageSet(LAB_CELL_SIZE_KEY,option.id);
+  if(reload)globalThis.location?.reload?.();
+  return option;
+}
+
+export function setMazeRuntimeCellSize(id,{reload=true}={}){
+  return isEnemyLabRuntime()?setLabChamberCellSize(id,{reload}):setArenaMazeCellSize(id,{reload});
 }
 
 export function setMazeRuntimeRoomSize(id,{reload=true}={}){

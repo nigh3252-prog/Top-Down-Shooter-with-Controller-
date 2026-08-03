@@ -11,6 +11,7 @@ const sectionUi=read('src/enemy-lab-section-ui.js');
 const runtime=read('src/arena-runtime.js');
 const rosterMode=read('src/working-roster-encounter-mode.js');
 const profiles=read('src/enemy-lab-combat-profiles.js');
+const setupWorkflow=read('src/enemy-lab-setup-workflow.js');
 const featureSources=['src/enemy-lab-working-roster.js','src/enemy-lab-working-ability-pool.js','src/enemy-lab-combat-profiles.js','src/enemy-lab-stance-compatibility.js','src/enemy-lab-deck-editor.js','src/enemy-lab-deck-editor-refinements.js'].map(read);
 
 const ordered=['ENCOUNTER','ENEMIES / ROSTER','PLAYER LOADOUT','COMBAT BEHAVIOR','VISUALS','CAPTURE','DIAGNOSTICS','PROFILES'];
@@ -31,11 +32,20 @@ for(const source of featureSources)assert.doesNotMatch(source,/new MutationObser
 assert.match(lab,/width:min\(64vw,720px\)/,'landscape Lab dock must fit compact widths');
 assert.match(lab,/minmax\(108px,132px\)/,'landscape category rail must use the compact eight-section width');
 assert.match(lab,/id="labProfileBar"/,'the profile bar stays in the dock outside section rendering');
+for(const mode of ['test','setup','standard','history'])assert.match(lab,new RegExp(`data-workspace-mode="${mode}"`));
+assert.match(lab,/installEnemyLabSetupWorkflow/);
+assert.match(setupWorkflow,/LOCK AS ARENA STANDARD/);
+assert.match(setupWorkflow,/CONFIRM LOCK/);
+assert.match(setupWorkflow,/RESTORE COPY TO TEST/);
+assert.match(setupWorkflow,/PLAY ARENA · STANDARD/);
+assert.match(setupWorkflow,/const locked=standard\(\)/);
+assert.match(setupWorkflow,/const history=readArenaStandardHistory\(storage\)/);
 for(const id of ['profileSelect','profileLoad','profileSave','profileSaveAs'])assert.match(lab,new RegExp(`id="${id}"`));
 assert.match(profiles,/previewCombatProfileImport/);
 assert.match(profiles,/collision==='replace'/);
 assert.match(profiles,/runtime\.snapshotProfileSettings/);
 assert.match(profiles,/runtime\.applyProfileSettings/);
 assert.doesNotMatch(profiles,/MutationObserver|modeGrid|dirSliders/,'profile dirty tracking and apply must use typed controls and adapters');
+assert.doesNotMatch(profiles,/OPEN ARENA/,'named Lab profiles no longer act as an implicit Arena launch path');
 assert.doesNotMatch(lab,/PROFILE BAR SLOT|fixedCategories|function categoryDefs|function renderTools/);
 console.log('Enemy Lab IA and encounter boundaries: ok');

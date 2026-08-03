@@ -45,14 +45,16 @@ registry.registerProfileAdapter({
 const amountSnapshot=registry.getControl('simulation.amount');
 assert.deepEqual(amountSnapshot.placement,{
   section:'SIM',subsection:'TUNING',order:4,label:'Amount',accessibleLabel:'Simulation tuning amount',
-  fullAccessibleLabel:'Simulation tuning amount',explicit:true,
+  fullAccessibleLabel:'Simulation tuning amount',workspace:'test',explicit:true,
 });
 assert.equal(amountSnapshot.profile.path,'simulation.amount');
 assert.equal(amountSnapshot.profile.scope,'profile');
 assert.equal(amountSnapshot.profile.default,1);
 assert.equal(amountSnapshot.profile.requiresReload,true);
 assert.equal(amountSnapshot.profile.migrationId,'phase2.5.amount');
+assert.equal(amountSnapshot.profile.target,'arena');
 assert.equal(registry.getControl('actions.reset').profile.scope,'ephemeral','actions are ephemeral by default');
+assert.equal(registry.getControl('actions.reset').profile.target,'action');
 const contracts=registry.getProfileContracts();
 assert.equal(typeof contracts.find(contract=>contract.id==='simulation.amount').profile.normalizer,'function');
 assert.equal(contracts.find(contract=>contract.id==='presentation.tone').profile.adapter.id,'tone-adapter');
@@ -61,6 +63,7 @@ const snapshot=snapshotProfileSettings(registry);
 assert.deepEqual(snapshot.settings,{'simulation.amount':2,'presentation.tone':'SOFT','content.rosterIds':{ids:['one','two']}});
 assert.ok(!Object.hasOwn(snapshot.settings,'visual.theme'));
 assert.ok(!Object.hasOwn(snapshot.settings,'actions.reset'));
+assert.equal(snapshot.controls.find(control=>control.path==='simulation.amount').target,'arena');
 
 const validation=validateProfileSettings(registry,{settings:{
   'simulation.amount':'6','presentation.tone':'warm','visual.theme':'akai','unknown.future':true,

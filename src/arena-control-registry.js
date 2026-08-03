@@ -1,8 +1,10 @@
 export const CONTROL_KINDS=Object.freeze(['button','check','range','select','text']);
 export const PROFILE_SCOPES=Object.freeze(['profile','global','ephemeral']);
+export const PROFILE_TARGETS=Object.freeze(['arena','shared','lab-only','action']);
 
 const CONTROL_KIND_SET=new Set(CONTROL_KINDS);
 const PROFILE_SCOPE_SET=new Set(PROFILE_SCOPES);
+const PROFILE_TARGET_SET=new Set(PROFILE_TARGETS);
 
 const resolve=value=>typeof value==='function'?value():value;
 const isRecord=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -23,6 +25,14 @@ const scopeFor=(group,descriptor,kind)=>{
   if(groupId==='visuals'||groupId==='combat'||groupId==='maze')return'global';
   return'profile';
 };
+const targetFor=(path,scope,control,supplied,groupProfile)=>{
+  const explicit=supplied.target??control.descriptor.profileTarget??groupProfile.target;
+  if(PROFILE_TARGET_SET.has(String(explicit)))return String(explicit);
+  const normalized=String(path||'').toLowerCase();
+  if(scope==='ephemeral')return control.kind==='button'?'action':'lab-only';
+  if(normalized.startsWith('capture.')||normalized.startsWith('lab.')||normalized==='scenario.configuration')return'lab-only';
+  return'arena';
+};
 const placementFor=(group,descriptor,order)=>{
   const supplied=isRecord(descriptor.placement)?descriptor.placement:{};
   const groupPlacement=isRecord(group.placement)?group.placement:{};
@@ -41,6 +51,7 @@ const placementFor=(group,descriptor,order)=>{
     label,
     accessibleLabel,
     fullAccessibleLabel:accessibleLabel,
+    workspace:String(supplied.workspace??descriptor.workspace??groupPlacement.workspace??'test'),
     explicit:Boolean(Object.keys(supplied).length||descriptor.accessibleLabel||descriptor.fullAccessibleLabel||descriptor.order),
   });
 };
@@ -101,6 +112,7 @@ function profileFor(control,group,order){
   const requiresReload=Boolean(supplied.requiresReload??supplied.reloadRequired??supplied.reload??descriptor.profileRequiresReload??descriptor.profileReload??descriptor.reloadRequired??groupProfile.requiresReload);
   const migrationId=String(supplied.migrationId??descriptor.profileMigrationId??groupProfile.migrationId??`control:${path}`);
   const exclusion=String(supplied.exclusion??descriptor.profileExclusion??groupProfile.exclusion??'').trim();
+  const target=targetFor(path,scope,control,supplied,groupProfile);
   return{
     path,
     scope,
@@ -112,6 +124,7 @@ function profileFor(control,group,order){
     adapterId,
     explicit,
     exclusion,
+    target,
     placement:placementFor(group,descriptor,order),
   };
 }
@@ -167,6 +180,7 @@ function profileSnapshot(profile){
     adapterId:profile.adapterId,
     explicit:profile.explicit,
     exclusion:profile.exclusion,
+    target:profile.target,
     placement:profile.placement,
     hasNormalizer:typeof profile.normalizer==='function',
     hasAdapter:Boolean(profile.adapter),
@@ -244,7 +258,7 @@ export function snapshotProfileSettings(registry,options={}){
       const result=validateRecordValue(record,readProfileValue(record));
       if(!result.ok){warnings.push(`UNSNAPSHOTTABLE:${record.profile.path}:${result.error}`);continue;}
       settings[record.profile.path]=result.value;
-      controls.push({id:record.id,path:record.profile.path,scope:record.profile.scope,value:result.value,requiresReload:record.profile.requiresReload});
+      controls.push({id:record.id,label:String(record.descriptor.label||record.id),path:record.profile.path,scope:record.profile.scope,target:record.profile.target,value:result.value,requiresReload:record.profile.requiresReload,placement:record.profile.placement});
     }catch(error){warnings.push(`UNSNAPSHOTTABLE:${record.profile.path}:${String(error?.message||error)}`);}
   }
   return Object.freeze({
@@ -389,6 +403,7 @@ export function createArenaControlRegistry(){
       order:Number(group.placement.order??0),
       label:String(group.placement.label??group.label??group.id),
       accessibleLabel:String(group.placement.accessibleLabel??group.placement.fullAccessibleLabel??group.label??group.id),
+      workspace:String(group.placement.workspace??'test'),
     }),
     controls:Object.freeze(group.controlIds.map(id=>snapshotControl(controls.get(id)))),
   })));
@@ -422,16 +437,18 @@ export function createArenaControlRegistry(){
     if(!id||!path)throw new Error('Profile adapters require stable id and path values');
     if(profileAdapters.has(id)||[...profileAdapters.values()].some(record=>record.profile.path===path))throw new Error(`Duplicate profile adapter: ${id}`);
     const scope=PROFILE_SCOPE_SET.has(String(definition.scope))?String(definition.scope):'profile';
+    const target=PROFILE_TARGET_SET.has(String(definition.target))?String(definition.target):
+      (scope==='ephemeral'?'lab-only':String(path).startsWith('capture.')||String(path).startsWith('lab.')||path==='scenario.configuration'?'lab-only':'arena');
     const adapter=Object.freeze({
       snapshot:definition.snapshot,
       validate:definition.validate,
       apply:definition.apply,
     });
     const profile={
-      path,scope,defaultValue:deepCloneDefault(definition.default),normalizer:typeof definition.normalizer==='function'?definition.normalizer:value=>value,
+      path,scope,target,defaultValue:deepCloneDefault(definition.default),normalizer:typeof definition.normalizer==='function'?definition.normalizer:value=>value,
       requiresReload:Boolean(definition.requiresReload),migrationId:String(definition.migrationId||`adapter:${path}`),adapter,
       adapterId:id,explicit:true,exclusion:String(definition.exclusion||''),
-      placement:Object.freeze({section:String(definition.section||'PROFILES'),subsection:String(definition.subsection||''),order:Number(definition.order)||0,label:String(definition.label||id),accessibleLabel:String(definition.accessibleLabel||definition.label||id),fullAccessibleLabel:String(definition.accessibleLabel||definition.label||id),explicit:true}),
+      placement:Object.freeze({section:String(definition.section||'PROFILES'),subsection:String(definition.subsection||''),order:Number(definition.order)||0,label:String(definition.label||id),accessibleLabel:String(definition.accessibleLabel||definition.label||id),fullAccessibleLabel:String(definition.accessibleLabel||definition.label||id),workspace:String(definition.workspace||'test'),explicit:true}),
     };
     const record={id,kind:'adapter',groupId:'profile-adapters',descriptor:{id,kind:'adapter',label:String(definition.label||id)},profile};
     profileAdapters.set(id,record);emit({type:'profile-adapter-register',adapterId:id,path});

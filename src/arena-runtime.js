@@ -23,12 +23,13 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './room-encounters.js';
 import { createRoomTransitionController } from './room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './ability-capture.js';
-import { getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
+import { getArenaMazeSettings, getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setArenaMazeCellSize, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
 import { installRoadieRun } from './roadie-run.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
 import { installStanceGate3Runtime } from './stance-gate3-payoffs.js';
 import { resolveArenaTheme } from './arena-theme-registry.js';
 import * as arenaThemeRegistry from './arena-theme-registry.js';
+import { readArenaStandardSetup } from './arena-standard-setup.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -1815,15 +1816,15 @@ function registerRuntimeControls(){
   );
   controlRegistry.register(
     {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
-    {id:'loadout.weapon',kind:'select',label:'WEAPON',get:()=>combatState.weapon,options:()=>WEAPON_ORDER.map(value=>({value,label:WEAPONS[value]?.label||value})),set:value=>selectWeapon(value),profile:{path:'player.weapon',scope:'profile',migrationId:'player-weapon-v1',adapter:{apply:value=>selectWeapon(value,{reset:false})}},placement:{section:'loadout',subsection:'Player',order:0,accessibleLabel:'Player loadout / Weapon'}},
+    {id:'loadout.weapon',kind:'select',label:'WEAPON',get:()=>combatState.weapon,options:()=>WEAPON_ORDER.map(value=>({value,label:WEAPONS[value]?.label||value})),set:value=>selectWeapon(value),profile:{path:'player.weapon',scope:'profile',target:'lab-only',migrationId:'player-weapon-v1',adapter:{apply:value=>selectWeapon(value,{reset:false})}},placement:{section:'loadout',subsection:'Player',order:0,accessibleLabel:'Player loadout / Weapon'}},
   );
   controlRegistry.register(
     {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
-    {id:'loadout.stance',kind:'select',label:'STANCE',get:()=>arena.stance?.id||'',options:()=>stancePoolForWeapon().map(stance=>({value:stance.id,label:stance.name||stance.id})),set:selectStance,profile:{path:'player.stance',scope:'profile',migrationId:'player-stance-v1'},placement:{section:'loadout',subsection:'Player',order:10,accessibleLabel:'Player loadout / Stance'}},
+    {id:'loadout.stance',kind:'select',label:'STANCE',get:()=>arena.stance?.id||'',options:()=>stancePoolForWeapon().map(stance=>({value:stance.id,label:stance.name||stance.id})),set:selectStance,profile:{path:'player.stance',scope:'profile',target:'lab-only',migrationId:'player-stance-v1'},placement:{section:'loadout',subsection:'Player',order:10,accessibleLabel:'Player loadout / Stance'}},
   );
   controlRegistry.register(
     {id:'combat',label:'COMBO TIMING',source,placement:{section:'loadout'},profile:{scope:'profile'}},
-    {id:'combat.input-mode',kind:'select',label:'COMBAT INPUT',get:()=>arena.combatInputMode,options:()=>COMBAT_INPUT_MODES.map(mode=>({value:mode.id,label:mode.label})),set:value=>(setCombatInputMode(value),true),profile:{path:'player.combatInputMode',scope:'profile',migrationId:'combat-input-v1',adapter:{apply:value=>(setCombatInputMode(value,{reset:false}),true)}},placement:{section:'loadout',subsection:'Player',order:20,accessibleLabel:'Player loadout / Combat input mode'}},
+    {id:'combat.input-mode',kind:'select',label:'COMBAT INPUT',get:()=>arena.combatInputMode,options:()=>COMBAT_INPUT_MODES.map(mode=>({value:mode.id,label:mode.label})),set:value=>(setCombatInputMode(value),true),profile:{path:'player.combatInputMode',scope:'profile',target:'shared',migrationId:'combat-input-v1',adapter:{apply:value=>(setCombatInputMode(value,{reset:false}),true)}},placement:{section:'loadout',subsection:'Player',order:20,accessibleLabel:'Player loadout / Combat input mode'}},
   );
   controlRegistry.register({id:'simulation',label:'ENCOUNTER TUNING',source,placement:{section:'combat'},profile:{scope:'profile'}},{
     id:'simulation.spawn-kind',kind:'select',label:'ENCOUNTER SOURCE',get:()=>selectedEncounterMode===LAB_DIRECT_ENCOUNTER_MODE?enemySystem.spawnKind:selectedEncounterMode,
@@ -1847,8 +1848,9 @@ function registerRuntimeControls(){
   controlRegistry.register({id:'feel',label:'FEEL',source},{id:'feel.test',kind:'button',label:'TEST THIS TIER',invoke:()=>beginTestSwing(FEEL_KEY_ORDER.indexOf(selKey)/3),profile:{scope:'ephemeral',exclusion:'Action button.'},placement:{section:'diagnostics',subsection:'Feel',order:99,accessibleLabel:'Diagnostics / Test Feel tier'}});
   for(const descriptor of HitFeel.controlDescriptors())controlRegistry.register({id:'hitfeel',label:'HIT FEEL',source,placement:{section:'diagnostics'},profile:{scope:'profile'}},{...descriptor,profile:{path:`combat.hitFeel.${descriptor.id.split('.').at(-1)}`,scope:'profile',migrationId:`hit-feel-${descriptor.id}`},placement:{section:'diagnostics',subsection:'Hit Feel',order:0,accessibleLabel:`Diagnostics / Hit Feel / ${descriptor.label}`}});
   controlRegistry.register({id:'actions',label:'ACTIONS',source},{id:'actions.reset',kind:'button',label:'RESET FIGHT',invoke:()=>respawn(),profile:{scope:'ephemeral',exclusion:'Action button.'},placement:{section:'encounter',subsection:'Actions',order:99,accessibleLabel:'Encounter / Reset fight'}});
-  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.cell-size',kind:'select',label:'CELL SIZE',get:()=>getMazeRuntimeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeCellSize(value),true),profile:{path:'presentation.maze.cellSize',scope:'profile',requiresReload:true,migrationId:'maze-cell-v1',adapter:{apply:value=>(setMazeRuntimeCellSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Maze geometry',order:10,accessibleLabel:'Visuals / Maze cell size'}});
-  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.room-size',kind:'select',label:'CELLS PER ROOM',get:()=>getMazeRuntimeSettings().roomSize.id,options:()=>MAZE_ROOM_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeRoomSize(value),true),profile:{path:'presentation.maze.roomSize',scope:'profile',requiresReload:true,migrationId:'maze-room-v1',adapter:{apply:value=>(setMazeRuntimeRoomSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Maze geometry',order:20,accessibleLabel:'Visuals / Maze room size'}});
+  if(runtimeConfig.enemyLab)controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.lab-cell-size',kind:'select',label:'LAB CHAMBER SIZE',get:()=>getMazeRuntimeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeCellSize(value),true),profile:{path:'lab.chamber.cellSize',scope:'profile',target:'lab-only',requiresReload:true,migrationId:'lab-chamber-cell-v1',adapter:{apply:value=>(setMazeRuntimeCellSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Lab fixture',order:10,accessibleLabel:'Test / Lab chamber size',workspace:'test'}});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.arena-cell-size',kind:'select',label:'ARENA CELL SIZE',get:()=>getArenaMazeSettings().cellSize.id,options:()=>MAZE_CELL_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setArenaMazeCellSize(value,{reload:false}),true),profile:{path:'presentation.maze.cellSize',scope:'profile',target:'arena',requiresReload:true,migrationId:'arena-maze-cell-v2',adapter:{apply:value=>(setArenaMazeCellSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Arena maze',order:20,accessibleLabel:'Setup / Arena maze cell size',workspace:'setup'}});
+  controlRegistry.register({id:'maze',label:'MAZE GEOMETRY',source,placement:{section:'visuals'},profile:{scope:'profile'}},{id:'maze.room-size',kind:'select',label:'ARENA CELLS PER ROOM',get:()=>getArenaMazeSettings().roomSize.id,options:()=>MAZE_ROOM_SIZE_OPTIONS.map(option=>({value:option.id,label:option.label})),set:value=>(setMazeRuntimeRoomSize(value,{reload:false}),true),profile:{path:'presentation.maze.roomSize',scope:'profile',target:'arena',requiresReload:true,migrationId:'maze-room-v1',adapter:{apply:value=>(setMazeRuntimeRoomSize(value,{reload:false}),true)}},placement:{section:'visuals',subsection:'Arena maze',order:30,accessibleLabel:'Setup / Arena maze room size',workspace:'setup'}});
   controlRegistry.subscribe(event=>emitRuntime(event));
 }
 
@@ -1912,6 +1914,13 @@ PC.selectCombatWeapon(savedArenaWeapon);
 if(!arena.stance) ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
+if(!runtimeConfig.enemyLab){
+  const standard=readArenaStandardSetup();
+  if(standard?.profile?.workspace?.settings){
+    const applied=controlRegistry.applyProfileSettings(standard.profile.workspace.settings,{includeGlobal:true});
+    if(!applied.ok)console.warn('Arena Standard settings were only partially applied.',applied.errors);
+  }
+}
 respawn();
 
 if(ABILITY_CAPTURE_MODE){

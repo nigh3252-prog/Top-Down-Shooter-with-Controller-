@@ -17,6 +17,9 @@ for(const [name,page] of [['Combat Arena',arena],['Enemy Lab',lab]]){
   assert.ok(boot>=0&&shell>boot,`${name} resolves theme before stylesheet paint`);
   for(const id of ['neutral','original','akai'])assert.match(page,new RegExp(`arena-theme-${id}\\.css`));
 }
+assert.ok(arena.indexOf('arena-standard-bootstrap.js')<arena.indexOf('dataset.arenaTheme'),'the Locked Standard must project boot settings before theme resolution');
+assert.match(arena,/id="arenaStandardBadge"/);
+assert.match(arena,/`STANDARD v\$\{standardVersion\}`/);
 
 const activeSource=[arena,lab,...readdirSync(join(root,'src')).filter(name=>name.endsWith('.js')).map(name=>read(`src/${name}`))].join('\n');
 assert.doesNotMatch(activeSource,/contentWindow|contentDocument|window\.parent|globalThis\.parent|frameElement/);
@@ -45,6 +48,10 @@ assert.match(runtime,/id:'combat\.input-mode',kind:'select'/);
 assert.match(runtime,/if\(e\.key==='x'\) cycleWeapon\(\)/);
 assert.match(runtime,/weaponPrev.*cycleWeapon\(-1\)/);
 assert.match(runtime,/installRoadieRun\(\)/);
+assert.match(runtime,/readArenaStandardSetup\(\)/);
+assert.match(runtime,/applyProfileSettings\(standard\.profile\.workspace\.settings,\{includeGlobal:true\}\)/);
+assert.match(runtime,/id:'maze\.lab-cell-size'[\s\S]*path:'lab\.chamber\.cellSize'[\s\S]*workspace:'test'/);
+assert.match(runtime,/id:'maze\.arena-cell-size'[\s\S]*path:'presentation\.maze\.cellSize'[\s\S]*workspace:'setup'/);
 assert.match(runtime,/installStanceGate3Runtime/);
 assert.match(runtime,/if\(!ABILITY_CAPTURE_MODE\)[\s\S]*installStanceGate2Runtime\(\{arenaHandle:runtimeHandle\}\)[\s\S]*installStanceGate3Runtime\(\{arenaHandle:runtimeHandle,gate2Runtime:stanceGate2Runtime\}\)/);
 assert.match(runtime,/stanceGate3Runtime\?\.destroy\?\.\(\)[\s\S]*stanceGate2Runtime\?\.destroy\?\.\(\)/);

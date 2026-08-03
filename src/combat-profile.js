@@ -35,6 +35,7 @@ import {
   previewEnemyLabProfileImport,
   validateEnemyLabProfile,
 } from './enemy-lab-profile-schema.js';
+import { readArenaStandardSetup } from './arena-standard-setup.js';
 
 export {
   ENEMY_LAB_PROFILE_EXPORT_FORMAT,
@@ -356,10 +357,12 @@ export function clearActiveCombatProfile(storage=globalThis.localStorage){
 }
 
 export function readActiveCombatProfile(storage=globalThis.localStorage,options={}){
-  const raw=jsonGet(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,null);
+  const standard=readArenaStandardSetup(storage);
+  const raw=standard?.profile||jsonGet(storage,ACTIVE_COMBAT_PROFILE_STORAGE_KEY,null);
   if(!raw)return null;
   const normalizedOptions=profileOptionsForStorage(storage,options);
   const profile=normalizeCombatProfile(raw,normalizedOptions);
+  if(standard)return profile;
   if(options.validateSelection===false)return profile;
   const draft=readCombatProfileDraft(storage,options);
   const availableEnemyIds=normalizeWorkingRosterIds(profile.enemyIds,options.enemyCatalog||ARENA_ENEMY_CATALOG);

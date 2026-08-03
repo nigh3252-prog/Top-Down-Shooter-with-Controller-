@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>HEX MAZE COMBAT — stone wanderer × encounter director</title>
+<script src="./src/arena-standard-bootstrap.js"></script>
 <script>
 (()=>{const ids=new Set(['neutral','original','akai']),aliases={base:'neutral',default:'neutral',none:'neutral','brown-green':'original','original-brown-green':'original','cyan-red':'akai','akai-cyan-red':'akai'};const valid=value=>{const id=String(value||'').trim().toLowerCase();return aliases[id]||ids.has(id)&&id||null};let saved=null;try{saved=localStorage.getItem('arena.theme')}catch{}const query=valid(new URLSearchParams(location.search).get('theme'));document.documentElement.dataset.arenaTheme=query||valid(saved)||'neutral'})();
 </script>
@@ -11,6 +12,7 @@
 <link rel="stylesheet" href="./src/arena-theme-original.css">
 <link rel="stylesheet" href="./src/arena-theme-akai.css">
 <link rel="stylesheet" href="./src/arena-shell.css">
+<style>#arenaStandardBadge{display:none;position:fixed;right:8px;bottom:8px;z-index:75;padding:5px 7px;border:1px solid #31504d;border-radius:6px;background:#071315dd;color:#7bcabd;font:8px/1.2 ui-monospace,monospace;letter-spacing:.08em;pointer-events:none}html[data-arena-standard-version] #arenaStandardBadge{display:block}</style>
 
 <script type="importmap">
 {
@@ -21,6 +23,7 @@
 </script>
 </head>
 <body>
+<div id="arenaStandardBadge" aria-label="Locked Arena Standard"></div>
 <script type="module">
 import { installArenaShell } from './src/arena-shell.js';
 import { runtimeConfigFromLocation } from './src/arena-runtime-config.js';
@@ -29,6 +32,8 @@ import { createArenaRuntime } from './src/arena-runtime.js';
 const config = runtimeConfigFromLocation(location, { mode:'arena' });
 installArenaShell({ mode:config.mode });
 createArenaRuntime({ config });
+const standardVersion=document.documentElement.dataset.arenaStandardVersion;
+if(standardVersion)document.getElementById('arenaStandardBadge').textContent=`STANDARD v${standardVersion}`;
 </script>
 </body>
 </html>
