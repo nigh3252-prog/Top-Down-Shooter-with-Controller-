@@ -30,9 +30,19 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
   }),
 });
 
+export function isHammerfallDefenseStance(stance){
+  const candidates=stance&&typeof stance==='object'
+    ?[stance.id,stance.stanceId,stance.cardId,stance.sourceId,stance.name,stance.label]
+    :[stance];
+  return candidates.some(value=>{
+    const token=String(value??'').trim();
+    return /^S01$/i.test(token)||/\bS01\b/i.test(token)||/\bhammerfall\b/i.test(token);
+  });
+}
 export function resolveStanceDefenseProfile(stance){
   const stanceId=String(stance?.id||stance||'');
-  return STANCE_DEFENSE_PROFILES[stanceId]||null;
+  return STANCE_DEFENSE_PROFILES[stanceId]
+    ||(isHammerfallDefenseStance(stance)?STANCE_DEFENSE_PROFILES.S01:null);
 }
 
 export function usesCustomDefense(profileOrStance){

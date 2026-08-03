@@ -259,6 +259,7 @@ import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { isHammerfallDefenseStance } from './src/stance-defense-profiles.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
@@ -980,6 +981,10 @@ function updateCharge(dt){
 
 /* ---------- dodge ---------- */
 function triggerDodge(){
+  // Hammerfall consumes the shared defense button. Gate 5's shield runtime
+  // handles the same press and toggles the kite shield; the legacy dodge path
+  // must not also fire.
+  if(isHammerfallDefenseStance(arena.stance))return;
   const d = arena.dodge;
   if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return;
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
