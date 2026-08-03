@@ -31,13 +31,14 @@ assert.match(runtime,/startPlannedLabEncounter/);
 assert.match(rosterMode,/Working roster was cleared; falling back/);
 for(const source of featureSources)assert.doesNotMatch(source,/new MutationObserver\(/,'supported Lab feature modules must not repair categories through MutationObserver');
 assert.match(lab,/data-enemy-lab-inspector="vertical"/,'the Lab uses the Gate 1 vertical inspector shell');
-assert.match(lab,/width:min\(90vw,760px\)/,'landscape Lab dock must leave room for a readable vertical rail');
-assert.match(lab,/minmax\(96px,116px\)/,'landscape category rail must use the compact vertical rail width');
+assert.match(lab,/width:min\(48vw,560px\)/,'landscape restores Main’s compact game-visible drawer width');
+assert.match(lab,/grid-template-columns:minmax\(230px,1fr\) 30px 92px/,'landscape uses Main’s detail, gutter, and compact navigation proportions');
 assert.match(lab,/id="labControlStaging" hidden/,'live profile and workflow controls must park outside the pinned shell grid');
 assert.match(lab,/data-lab-scroll-owner="detail"/);
 assert.match(lab,/data-lab-scroll-owner="navigation"/);
 assert.doesNotMatch(lab,/id="dockTitle"/,'the thin header has no permanent Enemy Lab title');
-assert.doesNotMatch(lab,/valueScrollGutter|valueScrollThumb/,'the inspector does not retain a third shell scroll control');
+assert.match(lab,/id="valueScrollGutter" role="scrollbar"/,'the compact drag gutter is restored as a detail-scroll controller');
+assert.equal((lab.match(/data-lab-scroll-owner=/g)||[]).length,2,'the gutter is not a third shell scroll owner');
 assert.match(sectionUi,/appendProfilesChrome/);
 assert.match(sectionUi,/selectWorkspace\?\.\('test'\)/);
 for(const id of ['core-encounter','core-enemies','core-loadout','core-combat','core-visuals','core-capture','core-diagnostics','core-profiles','portable-profiles','working-roster','working-ability-pool','deck-editor','arcana-tweaks','stance-compatibility']){

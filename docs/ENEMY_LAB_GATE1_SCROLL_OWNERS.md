@@ -9,9 +9,19 @@ portrait:
 | `#labCategories` | vertical | Persistent eight-section navigation rail. |
 | `#labValues` | vertical | Selected-section detail content and per-section scroll memory. |
 
-The old `#valueScrollGutter` drag controller is removed in Gate 1. Native touch,
-wheel, pointer, keyboard, and existing gamepad-accessible paths operate on the
-two declared owners without a third shell controller.
+`#valueScrollGutter` is a controller and visual representation of
+`#labValues`; it is not a third scroll owner. Its thumb size, thumb position,
+and `aria-valuenow` are derived from the detail pane. Pointer dragging writes
+only `#labValues.scrollTop`, and the gutter never maintains an independent
+scroll offset. Detail scrolling, section restoration, drawer opening, and
+resize observation keep the thumb synchronized. The gutter is visible in the
+compact three-column landscape shell and hidden in portrait, where Gate 1's
+vertical detail/rail layout remains unchanged.
+
+The exact Main landscape baseline is `width: min(48vw, 560px)` with columns
+`minmax(230px, 1fr) 30px 92px`. At phone widths up to 733px, only the detail
+column minimum relaxes to zero so the 30px controller and 92px navigation rail
+cannot create horizontal shell overflow.
 
 ## Retained compound-editor scrollers
 
@@ -26,6 +36,12 @@ positions. Gate 1 does not add another scrolling wrapper around them.
 | `.arcanaTweaksMain` | `src/enemy-lab-deck-editor-refinements.js` | Preserves the main Arcana scale/collision tuning workspace and its touch behavior. | Gate 3 — Arcana Tuning compound-editor migration. |
 | `.arcanaTweaksSide` | `src/enemy-lab-deck-editor-refinements.js` | Preserves the independently scrollable Arcana detail/control column. | Gate 3 — Arcana Tuning compound-editor migration. |
 | `#hitFeelPanel` | `src/hit-feel.js` | Preserves the existing independently scrolling Hit Feel development overlay. | Gate 3 — Hit Feel tool integration. |
+
+The registry-backed deck and Arcana roots also retain Main's specialized
+`deckEditorMode` presentation while their section is active. The later
+refinement stylesheet allows `width: min(72vw, 940px)` and hides the 30px
+gutter for those paired editor panes only. Leaving either editor removes the
+mode classes and restores the ordinary `min(48vw, 560px)` drawer.
 
 The hidden Arena pause panel (`#panel`) remains scrollable in the shared Arena
 shell CSS but is not an Enemy Lab scroll owner: Enemy Lab hides it with the

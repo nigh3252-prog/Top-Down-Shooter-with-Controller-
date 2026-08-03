@@ -44,6 +44,7 @@ export function installEnemyLabSectionUI({
   setMessage,
   renderWorkspace=()=>null,
   selectWorkspace=()=>{},
+  onDetailScrollRestored=()=>{},
 }={}){
   if(!document||!runtime||!sectionRegistry)return null;
 
@@ -53,6 +54,7 @@ export function installEnemyLabSectionUI({
   const workflowBar=document.getElementById('labWorkflowBar');
   const profileBar=document.getElementById('labProfileBar');
   const controlParkingHost=document.getElementById('labControlStaging');
+  const dock=document.getElementById('labDock');
   const group=(data,id)=>data.controlGroups?.find(item=>item.id===id)||null;
   const renderGroup=(data,id)=>{
     const item=group(data,id);
@@ -68,6 +70,12 @@ export function installEnemyLabSectionUI({
   let renderedSectionId='';
   const rememberRenderedSection=()=>{
     if(renderedSectionId)sectionScrollMemory.remember(renderedSectionId,values?.scrollTop||0);
+  };
+  const syncCompoundEditorShell=root=>{
+    const hasArcana=!!root?.querySelector?.('.arcanaTweaksRoot');
+    const hasDeck=hasArcana||!!root?.querySelector?.('.deckEditorRoot');
+    dock?.classList.toggle('deckEditorMode',hasDeck);
+    dock?.classList.toggle('arcanaTweaksMode',hasArcana);
   };
   const selectSection=id=>{
     const definition=sectionRegistry.getDefinition(id);
@@ -237,13 +245,15 @@ export function installEnemyLabSectionUI({
       }
     }
     if(!root.childNodes.length)root.append(status('SECTION LOADING','This section is waiting for its controls to register.'));
+    syncCompoundEditorShell(root);
     const targetScrollTop=previousSectionId===definition.id&&!preserveScroll?0:sectionScrollMemory.restore(definition.id);
     values.replaceChildren(root);
     renderedSectionId=definition.id;
     sectionScrollMemory.activate(definition.id);
     values.scrollTop=targetScrollTop;
+    onDetailScrollRestored();
     requestAnimationFrame(()=>{
-      if(renderedSectionId===definition.id)values.scrollTop=targetScrollTop;
+      if(renderedSectionId===definition.id){values.scrollTop=targetScrollTop;onDetailScrollRestored();}
     });
   }
 
@@ -267,5 +277,5 @@ export function installEnemyLabSectionUI({
     }
   });
   renderAll();
-  return{renderCategories,renderValues,renderAll,get activeSection(){return sectionScrollMemory.activeSection;},getSectionScrollPositions:()=>sectionScrollMemory.snapshot(),destroy:unsubscribe};
+  return{renderCategories,renderValues,renderAll,rememberActiveScroll:rememberRenderedSection,get activeSection(){return sectionScrollMemory.activeSection;},getSectionScrollPositions:()=>sectionScrollMemory.snapshot(),destroy:unsubscribe};
 }
