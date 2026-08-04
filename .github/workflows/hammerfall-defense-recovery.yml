@@ -1,0 +1,250 @@
+name: Fix Hammerfall Cross input and guard recovery
+
+on:
+  pull_request:
+    branches:
+      - automation/hammerfall-defense-recovery-base
+    types:
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply Hammerfall input and recovery fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, before, after, label):
+              source = path.read_text()
+              if after in source:
+                  return
+              if source.count(before) != 1:
+                  raise SystemExit(f'{path}: unexpected {label}')
+              path.write_text(source.replace(before, after))
+
+          arena_path = Path('combat-arena.html')
+          replace_once(
+              arena_path,
+              """function defenseDown(source='input'){
+            const result = window.__stance2Gate5Runtime?.defenseDown?.(source);
+            if(result?.handled) return result;
+            triggerDodge();
+            return { handled:true, delegated:true, source };
+          }""",
+              """function defenseDown(source='input'){
+            const runtime=window.__stance2Gate5Runtime;
+            const result=runtime?.defenseDown?.(source);
+            if(result?.handled)return result;
+            // Cross and LT must never fall through to dodge while Hammerfall is active.
+            // If the normal profile route misses for any reason, toggle the live shield
+            // state directly and keep the input consumed.
+            if(isHammerfallDefenseStance(arena.stance)){
+              const wasRaised=runtime?.snapshot?.()?.guardRaised===true;
+              const accepted=runtime?.setGuardRaised?.(!wasRaised)===true;
+              return{handled:true,accepted,kind:'shield-toggle',guardRaised:accepted?!wasRaised:wasRaised,source,
+                reason:accepted?'hammerfall-fallback':'hammerfall-runtime-pending'};
+            }
+            triggerDodge();
+            return { handled:true, delegated:true, source };
+          }""",
+              'Hammerfall defense fallback',
+          )
+          replace_once(
+              arena_path,
+              """  const light = bd(2)||bd(7);
+            const heavy = bd(3);
+            const shuffle = bd(1);
+            const dge = bd(0)||bd(6);""",
+              """  const light = bd(2)||bd(7);
+            const heavy = bd(3);
+            const shuffle = bd(1);
+            const cross = bd(0);
+            const leftTrigger = bd(6);""",
+              'separate Cross and LT state',
+          )
+          replace_once(
+              arena_path,
+              """  if(dge && !padPrev.dge) defenseDown('gamepad');
+            if(!dge && padPrev.dge) defenseUp('gamepad');""",
+              """  const crossPressed=cross&&!padPrev.cross;
+            const leftTriggerPressed=leftTrigger&&!padPrev.leftTrigger;
+            if(crossPressed||leftTriggerPressed)defenseDown(crossPressed?'gamepad-cross':'gamepad-left-trigger');
+            if(!cross&&!leftTrigger&&(padPrev.cross||padPrev.leftTrigger))defenseUp('gamepad');""",
+              'independent defense edges',
+          )
+          replace_once(
+              arena_path,
+              """  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;""",
+              """  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.cross=cross; padPrev.leftTrigger=leftTrigger; padPrev.lb=lb; padPrev.rb=rb;""",
+              'independent defense history',
+          )
+
+          runtime_path = Path('src/stance-gate5-defense.js')
+          replace_once(
+              runtime_path,
+              """    lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,
+            };""",
+              """    lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,guardBroken:false,
+            };""",
+              'guard break state',
+          )
+          replace_once(
+              runtime_path,
+              """    state.guardRaised=false;state.guardCounterRemaining=0;
+            state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;""",
+              """    state.guardRaised=false;state.guardCounterRemaining=0;state.guardBroken=false;
+            state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;""",
+              'guard break reset',
+          )
+          replace_once(
+              runtime_path,
+              """      state.guardRaised=!state.guardRaised;
+            if(!state.guardRaised)state.guardCounterRemaining=0;
+            state.lastOutcome=state.guardRaised?'guard-raised':'guard-lowered';""",
+              """      state.guardRaised=!state.guardRaised;
+            if(!state.guardRaised){state.guardCounterRemaining=0;state.guardBroken=false;}
+            else if((Number(arena.stamina.v)||0)>EPSILON)state.guardBroken=false;
+            state.lastOutcome=state.guardRaised?'guard-raised':'guard-lowered';""",
+              'guard toggle recovery',
+          )
+          replace_once(
+              runtime_path,
+              """    state.lastBlockCost=decision.actualSpent;
+            state.lastOverdrawAmount=decision.overdrawAmount;
+            triggerCatchForDefense(decision,before);""",
+              """    state.lastBlockCost=decision.actualSpent;
+            state.lastOverdrawAmount=decision.overdrawAmount;
+            state.guardBroken=false;
+            triggerCatchForDefense(decision,before);""",
+              'successful block recovery',
+          )
+          replace_once(
+              runtime_path,
+              """      if(!decision.allowed){
+                state.guardRaised=false;state.guardCounterRemaining=0;state.lastOutcome='guard-broken';
+                visuals.pulse('guard-break');publish();return{damage,outcome:'guard-broken'};
+              }""",
+              """      if(!decision.allowed){
+                const firstBreak=!state.guardBroken;
+                state.guardBroken=true;state.guardCounterRemaining=0;state.lastOutcome='guard-broken';
+                if(firstBreak)visuals.pulse('guard-break');
+                publish();return{damage,outcome:'guard-broken'};
+              }""",
+              'non-permanent guard break',
+          )
+          replace_once(
+              runtime_path,
+              """    const amount=Math.max(0,Number(dt)||0);
+            state.guardCounterRemaining=Math.max(0,state.guardCounterRemaining-amount);""",
+              """    const amount=Math.max(0,Number(dt)||0);
+            if(state.guardBroken&&(Number(arena.stamina.v)||0)>EPSILON){
+              state.guardBroken=false;
+              if(state.guardRaised)state.lastOutcome='guard-recovered';
+            }
+            state.guardCounterRemaining=Math.max(0,state.guardCounterRemaining-amount);""",
+              'stamina recovery re-arm',
+          )
+          replace_once(
+              runtime_path,
+              """      lastOutcome:state.lastOutcome,lastBlockCost:state.lastBlockCost,lastOverdrawAmount:state.lastOverdrawAmount,
+            attacking:!!PC.combatState.attack,""",
+              """      lastOutcome:state.lastOutcome,lastBlockCost:state.lastBlockCost,lastOverdrawAmount:state.lastOverdrawAmount,guardBroken:state.guardBroken,
+            attacking:!!PC.combatState.attack,""",
+              'guard break snapshot',
+          )
+          replace_once(
+              runtime_path,
+              """    const dt=Math.max(0,Number(args[0])||0);
+            syncStance();updateTimers(dt);applyGuardMovement(dt);""",
+              """    const dt=Math.max(0,Number(args[0])||0);
+            syncStance();
+            // Cancel any legacy dodge state raised by a second input path before the
+            // ordinary dash runtime can move the player in Hammerfall.
+            if(currentProfile()?.kind==='shield'&&arena.dodge.t>=0){arena.dodge.t=-1;PC.basicDashRuntime?.reset?.();}
+            updateTimers(dt);applyGuardMovement(dt);""",
+              'stray Hammerfall dodge suppression',
+          )
+
+          test_path = Path('tests/stance-gate5-defense.test.mjs')
+          test = test_path.read_text()
+          marker = "\nconsole.log('stance gate 5 defense runtime tests passed');"
+          addition = """
+          {
+            const h=makeHarness({stanceId:'S01',staminaValue:0});
+            h.runtime.defenseDown('test');
+            const broken=h.enemySystem.hit({damage:10,kind:'grunt',name:'Slash',dir:{x:0,z:-1}});
+            assert.equal(broken.damage,10,'an empty guard should let the breaking hit through');
+            assert.equal(h.runtime.snapshot().guardRaised,true,'guard break must not silently disarm a visibly raised shield');
+            assert.equal(h.runtime.snapshot().guardBroken,true);
+            h.arena.stamina.v=20;
+            h.PC.updateCombat(.01);
+            assert.equal(h.runtime.snapshot().guardBroken,false,'restored stamina should re-arm the raised shield');
+            const recovered=h.enemySystem.hit({damage:10,kind:'grunt',name:'Slash',dir:{x:0,z:-1}});
+            assert.equal(recovered.damage,0,'the raised shield should resume blocking after stamina returns');
+            assert.equal(h.arena.stamina.v,5);
+            h.runtime.destroy();
+          }
+          {
+            const h=makeHarness({stanceId:'S01'});
+            h.arena.dodge.t=.01;
+            h.PC.updateCombat(.01);
+            assert.equal(h.arena.dodge.t,-1,'Hammerfall must cancel stray legacy dodge state before movement');
+            h.runtime.destroy();
+          }
+          """
+          if addition.strip() not in test:
+              if test.count(marker) != 1:
+                  raise SystemExit('stance gate 5 test: unexpected footer')
+              test_path.write_text(test.replace(marker, addition + marker))
+
+          presentation_path = Path('tests/hammerfall-shield-presentation.test.mjs')
+          presentation = presentation_path.read_text()
+          old = """assert.match(arena,/const light = bd\\(2\\)\\|\\|bd\\(7\\);/);
+          assert.match(arena,/const dge = bd\\(0\\)\\|\\|bd\\(6\\);/);
+          assert.doesNotMatch(arena,/hammerfallDefense&&bd\\(2\\)/);"""
+          new = """assert.match(arena,/const light = bd\\(2\\)\\|\\|bd\\(7\\);/);
+          assert.match(arena,/const cross = bd\\(0\\);/);
+          assert.match(arena,/const leftTrigger = bd\\(6\\);/);
+          assert.match(arena,/crossPressed\\|\\|leftTriggerPressed/);
+          assert.match(arena,/gamepad-cross/);
+          assert.match(arena,/hammerfall-fallback/);
+          assert.doesNotMatch(arena,/padPrev\\.dge/);"""
+          if new not in presentation:
+              if presentation.count(old) != 1:
+                  raise SystemExit('presentation test: unexpected mapping assertions')
+              presentation_path.write_text(presentation.replace(old, new))
+          PY
+          git diff --check
+          node tests/stance-gate5-defense.test.mjs
+          node tests/hammerfall-shield-presentation.test.mjs
+          npm run test:combat
+
+      - name: Commit and push tested fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/hammerfall-defense-recovery.yml
+          git add combat-arena.html src/stance-gate5-defense.js tests/stance-gate5-defense.test.mjs tests/hammerfall-shield-presentation.test.mjs
+          git diff --cached --check
+          git commit -m "Fix Hammerfall Cross input and guard recovery"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
