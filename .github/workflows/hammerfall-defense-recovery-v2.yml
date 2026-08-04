@@ -1,0 +1,49 @@
+name: Apply robust Hammerfall defense recovery
+
+on:
+  pull_request:
+    branches:
+      - automation/hammerfall-defense-recovery-base
+    types:
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply and test recovery patch
+        shell: bash
+        run: |
+          python .hammerfall-defense-recovery/apply.py
+          git diff --check
+          node tests/stance-gate5-defense.test.mjs
+          node tests/hammerfall-shield-presentation.test.mjs
+          npm run test:combat
+
+      - name: Commit and push tested fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -rf .hammerfall-defense-recovery
+          git rm -f .github/workflows/hammerfall-defense-recovery.yml .github/workflows/hammerfall-defense-recovery-v2.yml
+          git add combat-arena.html src/stance-gate5-defense.js tests/stance-gate5-defense.test.mjs tests/hammerfall-shield-presentation.test.mjs
+          git diff --cached --check
+          git commit -m "Fix Hammerfall Cross input and guard recovery"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
