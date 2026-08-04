@@ -1002,8 +1002,18 @@ function triggerDodge(){
   CombatAudio.playTest('swingLight');
 }
 function defenseDown(source='input'){
-  const result = window.__stance2Gate5Runtime?.defenseDown?.(source);
-  if(result?.handled) return result;
+  const runtime=window.__stance2Gate5Runtime;
+  const result=runtime?.defenseDown?.(source);
+  if(result?.handled)return result;
+  // Cross and LT must never fall through to dodge while Hammerfall is active.
+  // If the normal profile route misses for any reason, toggle the live shield
+  // state directly and keep the input consumed.
+  if(isHammerfallDefenseStance(arena.stance)){
+    const wasRaised=runtime?.snapshot?.()?.guardRaised===true;
+    const accepted=runtime?.setGuardRaised?.(!wasRaised)===true;
+    return{handled:true,accepted,kind:'shield-toggle',guardRaised:accepted?!wasRaised:wasRaised,source,
+      reason:accepted?'hammerfall-fallback':'hammerfall-runtime-pending'};
+  }
   triggerDodge();
   return { handled:true, delegated:true, source };
 }
@@ -1323,18 +1333,21 @@ function pollPad(){
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
   // PlayStation Backbone standard mapping: Cross/X is bottom (0), Square is left (2).
-  const light = bd(2)||bd(7);
+const light = bd(2)||bd(7);
   const heavy = bd(3);
   const shuffle = bd(1);
-  const dge = bd(0)||bd(6);
+  const cross = bd(0);
+  const leftTrigger = bd(6);
   const lb = bd(4), rb = bd(5);
   const strt = bd(9), sel = bd(8);
   const weaponPrev = bd(12), weaponNext = bd(13);
   if(light && !padPrev.light) lightDown();
   if(heavy && !padPrev.heavy) heavyDown();
   if(!heavy && padPrev.heavy) heavyUp();
-  if(dge && !padPrev.dge) defenseDown('gamepad');
-  if(!dge && padPrev.dge) defenseUp('gamepad');
+const crossPressed=cross&&!padPrev.cross;
+  const leftTriggerPressed=leftTrigger&&!padPrev.leftTrigger;
+  if(crossPressed||leftTriggerPressed)defenseDown(crossPressed?'gamepad-cross':'gamepad-left-trigger');
+  if(!cross&&!leftTrigger&&(padPrev.cross||padPrev.leftTrigger))defenseUp('gamepad');
   if(shuffle && !padPrev.shuffle) startDeckShuffle();
   if(lb && !padPrev.lb) playCard(0);
   if(rb && !padPrev.rb) playCard(1);
@@ -1344,7 +1357,7 @@ function pollPad(){
   if(weaponNext && !padPrev.weaponNext) cycleWeapon(1);
   if(strt && !padPrev.strt) toggleMenu();
   if(sel && !padPrev.sel) toggleMenu();
-  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
+padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.cross=cross; padPrev.leftTrigger=leftTrigger; padPrev.lb=lb; padPrev.rb=rb;
   padPrev.strt=strt; padPrev.sel=sel; padPrev.weaponPrev=weaponPrev; padPrev.weaponNext=weaponNext;
 }
 function gatherInput(){

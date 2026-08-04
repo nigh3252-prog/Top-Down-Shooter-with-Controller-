@@ -124,4 +124,27 @@ function makeHarness({stanceId='S24',staminaValue=100}={}){
   h.runtime.destroy();
 }
 
+{
+  const h=makeHarness({stanceId:'S01',staminaValue:0});
+  h.runtime.defenseDown('test');
+  const broken=h.enemySystem.hit({damage:10,kind:'grunt',name:'Slash',dir:{x:0,z:-1}});
+  assert.equal(broken.damage,10,'an empty guard should let the breaking hit through');
+  assert.equal(h.runtime.snapshot().guardRaised,true,'guard break must not silently disarm a visibly raised shield');
+  assert.equal(h.runtime.snapshot().guardBroken,true);
+  h.arena.stamina.v=20;
+  h.PC.updateCombat(.01);
+  assert.equal(h.runtime.snapshot().guardBroken,false,'restored stamina should re-arm the raised shield');
+  const recovered=h.enemySystem.hit({damage:10,kind:'grunt',name:'Slash',dir:{x:0,z:-1}});
+  assert.equal(recovered.damage,0,'the raised shield should resume blocking after stamina returns');
+  assert.equal(h.arena.stamina.v,5);
+  h.runtime.destroy();
+}
+{
+  const h=makeHarness({stanceId:'S01'});
+  h.arena.dodge.t=.01;
+  h.PC.updateCombat(.01);
+  assert.equal(h.arena.dodge.t,-1,'Hammerfall must cancel stray legacy dodge state before movement');
+  h.runtime.destroy();
+}
+
 console.log('stance gate 5 defense runtime tests passed');

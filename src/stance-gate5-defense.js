@@ -16,7 +16,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   const state={
     stanceId:'',profileId:null,guardRaised:false,guardCounterRemaining:0,
     parryRemaining:0,parryRecoveryRemaining:0,parrySuccessRemaining:0,
-    lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,
+lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,guardBroken:false,
   };
   const original={updateCombat:PC.updateCombat,startCombatAttack:PC.startCombatAttack};
   const visuals=installStanceGate5Visuals({PC,windowRef,documentRef});
@@ -46,7 +46,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     return{x:2*(q.x*q.z+q.w*q.y),z:1-2*(q.x*q.x+q.y*q.y)};
   }
   function resetTransient(reason='stance-change'){
-    state.guardRaised=false;state.guardCounterRemaining=0;
+state.guardRaised=false;state.guardCounterRemaining=0;state.guardBroken=false;
     state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;
     state.lastOutcome=reason;
   }
@@ -72,8 +72,9 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
       return{handled:true,accepted:true,kind:'parry',source};
     }
     if(profile.kind==='shield'){
-      state.guardRaised=!state.guardRaised;
-      if(!state.guardRaised)state.guardCounterRemaining=0;
+state.guardRaised=!state.guardRaised;
+      if(!state.guardRaised){state.guardCounterRemaining=0;state.guardBroken=false;}
+      else if((Number(arena.stamina.v)||0)>EPSILON)state.guardBroken=false;
       state.lastOutcome=state.guardRaised?'guard-raised':'guard-lowered';
       publish();
       return{handled:true,accepted:true,kind:'shield-toggle',guardRaised:state.guardRaised,source};
@@ -101,8 +102,9 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     const decision=evaluateStanceSpend({available:before,cost,source:STANCE_SPEND_SOURCES.defense,catchPhase:phase,epsilon:EPSILON});
     if(!decision.allowed)return decision;
     arena.stamina.v=Math.max(0,before-decision.actualSpent);
-    state.lastBlockCost=decision.actualSpent;
+state.lastBlockCost=decision.actualSpent;
     state.lastOverdrawAmount=decision.overdrawAmount;
+    state.guardBroken=false;
     triggerCatchForDefense(decision,before);
     return decision;
   }
@@ -124,9 +126,11 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
       if(!frontal){state.lastOutcome='guard-bypassed';publish();return{damage};}
       const cost=shieldBlockCost(damage,profile);
       const decision=spendShieldBlock(cost);
-      if(!decision.allowed){
-        state.guardRaised=false;state.guardCounterRemaining=0;state.lastOutcome='guard-broken';
-        visuals.pulse('guard-break');publish();return{damage,outcome:'guard-broken'};
+if(!decision.allowed){
+        const firstBreak=!state.guardBroken;
+        state.guardBroken=true;state.guardCounterRemaining=0;state.lastOutcome='guard-broken';
+        if(firstBreak)visuals.pulse('guard-break');
+        publish();return{damage,outcome:'guard-broken'};
       }
       state.guardCounterRemaining=profile.guardCounterWindow;
       state.lastOutcome=decision.overdraw?'blocked-overdraw':'blocked';
@@ -150,7 +154,11 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     if(reduction>0){current.x-=nx*reduction;current.z-=nz*reduction;writeActorPosition(current);}
   }
   function updateTimers(dt){
-    const amount=Math.max(0,Number(dt)||0);
+const amount=Math.max(0,Number(dt)||0);
+    if(state.guardBroken&&(Number(arena.stamina.v)||0)>EPSILON){
+      state.guardBroken=false;
+      if(state.guardRaised)state.lastOutcome='guard-recovered';
+    }
     state.guardCounterRemaining=Math.max(0,state.guardCounterRemaining-amount);
     state.parrySuccessRemaining=Math.max(0,state.parrySuccessRemaining-amount);
     if(state.parryRemaining>0){
@@ -168,7 +176,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
       customDefense:usesCustomDefense(profile),shieldOwned:shieldOwned(),guardRaised:state.guardRaised,
       guardCounterRemaining:state.guardCounterRemaining,parryRemaining:state.parryRemaining,
       parryRecoveryRemaining:state.parryRecoveryRemaining,parrySuccessRemaining:state.parrySuccessRemaining,
-      lastOutcome:state.lastOutcome,lastBlockCost:state.lastBlockCost,lastOverdrawAmount:state.lastOverdrawAmount,
+lastOutcome:state.lastOutcome,lastBlockCost:state.lastBlockCost,lastOverdrawAmount:state.lastOverdrawAmount,guardBroken:state.guardBroken,
       attacking:!!PC.combatState.attack,
     });
     PC.combatState.stance2Gate5=lastSnapshot;visuals.update(lastSnapshot,dt);return lastSnapshot;
@@ -187,8 +195,12 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     publish();return result;
   };
   PC.updateCombat=function(...args){
-    const dt=Math.max(0,Number(args[0])||0);
-    syncStance();updateTimers(dt);applyGuardMovement(dt);
+const dt=Math.max(0,Number(args[0])||0);
+    syncStance();
+    // Cancel any legacy dodge state raised by a second input path before the
+    // ordinary dash runtime can move the player in Hammerfall.
+    if(currentProfile()?.kind==='shield'&&arena.dodge.t>=0){arena.dodge.t=-1;PC.basicDashRuntime?.reset?.();}
+    updateTimers(dt);applyGuardMovement(dt);
     const result=original.updateCombat.apply(this,args);
     lastActorPosition=readActorPosition();publish(dt);return result;
   };
