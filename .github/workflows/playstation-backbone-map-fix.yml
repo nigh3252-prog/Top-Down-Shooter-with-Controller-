@@ -1,0 +1,68 @@
+name: Correct PlayStation Backbone face-button mapping
+
+on:
+  pull_request:
+    branches:
+      - automation/playstation-backbone-map-fix-base
+    types:
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Correct PlayStation button mapping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          arena_path = Path('combat-arena.html')
+          arena = arena_path.read_text()
+          before = """  const hammerfallDefense = isHammerfallDefenseStance(arena.stance);\n  // Backbone's physical X button is the west face button (standard index 2).\n  // In Hammerfall it joins Cross / LT as defense instead of also starting a light attack.\n  const light = (!hammerfallDefense&&bd(2))||bd(7);\n  const heavy = bd(3);\n  const shuffle = bd(1);\n  const dge = bd(0)||bd(6)||(hammerfallDefense&&bd(2));"""
+          after = """  // PlayStation Backbone standard mapping: Cross/X is bottom (0), Square is left (2).\n  const light = bd(2)||bd(7);\n  const heavy = bd(3);\n  const shuffle = bd(1);\n  const dge = bd(0)||bd(6);"""
+          if after not in arena:
+              if arena.count(before) != 1:
+                  raise SystemExit('combat-arena.html: unexpected gamepad mapping')
+              arena = arena.replace(before, after)
+              arena_path.write_text(arena)
+
+          test_path = Path('tests/hammerfall-shield-presentation.test.mjs')
+          test = test_path.read_text()
+          old = """assert.match(arena,/const hammerfallDefense = isHammerfallDefenseStance\\(arena\\.stance\\);/);\nassert.match(arena,/const light = \\(!hammerfallDefense&&bd\\(2\\)\\)\\|\\|bd\\(7\\);/);\nassert.match(arena,/const dge = bd\\(0\\)\\|\\|bd\\(6\\)\\|\\|\\(hammerfallDefense&&bd\\(2\\)\\);/);"""
+          new = """assert.match(arena,/const light = bd\\(2\\)\\|\\|bd\\(7\\);/);\nassert.match(arena,/const dge = bd\\(0\\)\\|\\|bd\\(6\\);/);\nassert.doesNotMatch(arena,/hammerfallDefense&&bd\\(2\\)/);"""
+          if new not in test:
+              if test.count(old) != 1:
+                  raise SystemExit('hammerfall presentation test: unexpected mapping assertions')
+              test_path.write_text(test.replace(old, new))
+          PY
+          git diff --check
+          node tests/hammerfall-shield-presentation.test.mjs
+          npm run test:combat
+
+      - name: Commit and push tested correction
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/playstation-backbone-map-fix.yml
+          git add combat-arena.html tests/hammerfall-shield-presentation.test.mjs
+          git diff --cached --check
+          git commit -m "Correct PlayStation Backbone defense mapping"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
