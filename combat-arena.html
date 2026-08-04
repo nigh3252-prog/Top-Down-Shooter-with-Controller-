@@ -1322,13 +1322,11 @@ function pollPad(){
   const l=Math.hypot(mx,mz);
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
-  const hammerfallDefense = isHammerfallDefenseStance(arena.stance);
-  // Backbone's physical X button is the west face button (standard index 2).
-  // In Hammerfall it joins Cross / LT as defense instead of also starting a light attack.
-  const light = (!hammerfallDefense&&bd(2))||bd(7);
+  // PlayStation Backbone standard mapping: Cross/X is bottom (0), Square is left (2).
+  const light = bd(2)||bd(7);
   const heavy = bd(3);
   const shuffle = bd(1);
-  const dge = bd(0)||bd(6)||(hammerfallDefense&&bd(2));
+  const dge = bd(0)||bd(6);
   const lb = bd(4), rb = bd(5);
   const strt = bd(9), sel = bd(8);
   const weaponPrev = bd(12), weaponNext = bd(13);

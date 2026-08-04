@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const arena=readFileSync(new URL('../combat-arena.html',import.meta.url),'utf8');
-assert.match(arena,/const hammerfallDefense = isHammerfallDefenseStance\(arena\.stance\);/);
-assert.match(arena,/const light = \(!hammerfallDefense&&bd\(2\)\)\|\|bd\(7\);/);
-assert.match(arena,/const dge = bd\(0\)\|\|bd\(6\)\|\|\(hammerfallDefense&&bd\(2\)\);/);
+assert.match(arena,/const light = bd\(2\)\|\|bd\(7\);/);
+assert.match(arena,/const dge = bd\(0\)\|\|bd\(6\);/);
+assert.doesNotMatch(arena,/hammerfallDefense&&bd\(2\)/);
 
 const visuals=readFileSync(new URL('../src/stance-gate5-visuals.js',import.meta.url),'utf8');
 assert.match(visuals,/shield\.scale\.setScalar\(1\.8\)/);
