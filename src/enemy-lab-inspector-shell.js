@@ -3,28 +3,12 @@ export const ENEMY_LAB_INSPECTOR_CLOSE_TARGET=44;
 
 // These are the only normal shell-level scrollers. Compound editor panes are
 // deliberately recorded below instead of being hidden by a broad CSS rule.
-export const ENEMY_LAB_INSPECTOR_SCROLL_OWNERS=Object.freeze(['#labCategories','#labValues']);
+export const ENEMY_LAB_INSPECTOR_SCROLL_OWNERS=Object.freeze(['#labCategories','#labSubcategories','#labValues']);
 export const ENEMY_LAB_INSPECTOR_SCROLL_CONTROLLERS=Object.freeze(['#valueScrollGutter']);
 
-// Gate 1 keeps these specialized editors intact because collapsing them into
-// the section scroller would change card/deck and Arcana editing behavior.
-// They are the explicit Gate 3 compound-editor migration inventory.
+// Gate 1B flattens the registry-backed deck and Arcana editors into #labValues.
+// Hit Feel remains the one pre-existing standalone diagnostic exception.
 export const ENEMY_LAB_RETAINED_COMPOUND_SCROLLERS=Object.freeze([
-  Object.freeze({
-    selector:'.deckEditorCardsPane',
-    reason:'The card browser keeps an independent, long catalog beside its editor controls.',
-    migration:'Gate 3 — compound deck-editor migration',
-  }),
-  Object.freeze({
-    selector:'.deckEditorControlsPane',
-    reason:'Deck editing controls preserve their own reading position while the card catalog changes.',
-    migration:'Gate 3 — compound deck-editor migration',
-  }),
-  Object.freeze({
-    selector:'.arcanaTweaksMain, .arcanaTweaksSide',
-    reason:'Arcana’s paired tuning panes intentionally compare independent long control sets.',
-    migration:'Gate 3 — compound Arcana-editor migration',
-  }),
   Object.freeze({
     selector:'#hitFeelPanel',
     reason:'Hit Feel is an existing standalone diagnostic tool whose internal scroll behavior is coupled to its visual tuning controls.',

@@ -210,8 +210,11 @@ export function installEnemyLabDeckEditor(deck){
     style.textContent=`
       #labCategories .deckEditorCategory b{white-space:normal;line-height:1.12}
       #labValues.deckEditorActive{padding:0!important;overflow:hidden!important;touch-action:none!important}
-      #labDock.deckEditorMode #valueScrollGutter{display:none}
+      #labDock.deckEditorLegacyMode #valueScrollGutter{display:none}
       .deckEditorRoot{display:grid;grid-template-columns:minmax(280px,1fr) minmax(176px,220px);width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:rgba(0,0,0,.05)}
+      .deckEditorRegistryFlow{display:flex;flex-direction:column;gap:8px;height:auto;min-height:0;overflow:visible;padding:8px;background:rgba(0,0,0,.05)}
+      .deckEditorRegistryFlow .deckEditorCardsPane,.deckEditorRegistryFlow .deckEditorControlsPane{overflow:visible;padding:0;border:0;background:transparent}
+      .deckEditorRegistryFlow .deckEditorControlStack{min-height:0}
       .deckEditorCardsPane,.deckEditorControlsPane{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#8a5630 rgba(0,0,0,.16)}
       .deckEditorCardsPane::-webkit-scrollbar,.deckEditorControlsPane::-webkit-scrollbar{width:9px}
       .deckEditorCardsPane::-webkit-scrollbar-track,.deckEditorControlsPane::-webkit-scrollbar-track{background:rgba(0,0,0,.16)}
@@ -257,6 +260,11 @@ export function installEnemyLabDeckEditor(deck){
       @media (orientation:landscape){
         #labDock.deckEditorMode{width:min(68vw,860px);grid-template-columns:minmax(0,1fr) 0 100px}
         #labDock.deckEditorMode #dockHead,#labDock.deckEditorMode #message{grid-column:1/4}
+      }
+      @media (orientation:landscape) and (max-width:733px){
+        .deckEditorRegistryFlow .deckCardTile{grid-template-columns:minmax(0,1fr)}
+        .deckEditorRegistryFlow .deckCardAction{width:100%}
+        .deckEditorRegistryFlow .deckCardDetails{grid-column:1}
       }
       @media (orientation:portrait){
         #labDock.deckEditorMode{height:min(88dvh,900px);grid-template-rows:auto 1fr 0 58px auto}
@@ -334,19 +342,28 @@ export function installEnemyLabDeckEditor(deck){
       expandedByContext.set(editorContextKey(),nextOpen?card.id:null);
     });
     if(mode==='browse'){
-      const add=makeButton('deckCardAction',inDeck?'IN DECK':'ADD',()=>{
-        if(inDeck)return;
+      const stanceCount=selectedCards().filter(item=>!isNonStance(item)).length;
+      const required=inDeck&&!isNonStance(card)&&stanceCount<=1;
+      const action=required?'REQUIRED':inDeck?'REMOVE':'ADD';
+      const add=makeButton(`deckCardAction${inDeck?' remove':''}`,action,()=>{
+        if(required)return;
         saveEditorScroll(values);
-        selectedIds.push(card.id);
+        if(inDeck)selectedIds=selectedIds.filter(id=>id!==card.id);
+        else selectedIds.push(card.id);
+        if(expandedByContext.get(editorContextKey())===card.id&&!inDeck)expandedByContext.set(editorContextKey(),null);
         applySelected();
         requestEditorRender();
       });
-      add.disabled=inDeck;
+      add.disabled=required;
+      add.dataset.browseDeckAction=required?'required':inDeck?'remove':'add';
+      add.setAttribute('aria-label',required
+        ?`${cleanCardName(card)} is the required final stance`
+        :inDeck?`Remove ${cleanCardName(card)} from the deck`:`Add ${cleanCardName(card)} to the deck`);
       tile.append(info,add,details);
     }else{
       const remainingStances=selectedCards().filter(item=>!isNonStance(item)).length;
       const lastStance=!isNonStance(card)&&remainingStances<=1;
-      const remove=makeButton('deckCardAction remove','REMOVE',()=>{
+      const remove=makeButton(`deckCardAction${lastStance?'':' remove'}`,lastStance?'REQUIRED':'REMOVE',()=>{
         if(lastStance){setMessage('The deck needs at least one stance card.');return;}
         saveEditorScroll(values);
         selectedIds=selectedIds.filter(id=>id!==card.id);
@@ -355,6 +372,10 @@ export function installEnemyLabDeckEditor(deck){
         requestEditorRender();
       });
       remove.disabled=lastStance;
+      remove.dataset.currentDeckAction=lastStance?'required':'remove';
+      remove.setAttribute('aria-label',lastStance
+        ?`${cleanCardName(card)} is the required final stance`
+        :`Remove ${cleanCardName(card)} from the deck`);
       tile.append(info,remove,details);
     }
     return tile;
@@ -365,7 +386,7 @@ export function installEnemyLabDeckEditor(deck){
     const heading=parentDocument.createElement('b');heading.className='deckEditorControlTitle';heading.textContent=title;
     card.appendChild(heading);return card;
   }
-  function renderBrowse(root,values,categories){
+  function renderBrowse(root,values,categories,{registry=false}={}){
     const shown=family==='ALL'?catalog:catalog.filter(card=>cardFamily(card)===family);
     const missing=shown.filter(card=>!selectedIds.includes(card.id));
     const cardsPane=parentDocument.createElement('div');cardsPane.className='deckEditorCardsPane';
@@ -400,12 +421,12 @@ export function installEnemyLabDeckEditor(deck){
       requestEditorRender();
     });
     addShown.disabled=!missing.length;
-    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent='This control column and the card list scroll independently.';
+    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent=registry?'Filters and summary stay above the card list.':'This control column and the card list scroll independently.';
     actionsCard.append(addShown,note);
     stack.append(summaryCard,familyCard,actionsCard);controls.appendChild(stack);
-    root.append(cardsPane,controls);
+    if(registry)root.append(controls,cardsPane);else root.append(cardsPane,controls);
   }
-  function renderCurrentDeck(root,values,categories){
+  function renderCurrentDeck(root,values,categories,{registry=false}={}){
     const cards=selectedCards();
     const stanceCount=cards.filter(card=>!isNonStance(card)).length;
     const cardsPane=parentDocument.createElement('div');cardsPane.className='deckEditorCardsPane';
@@ -431,10 +452,10 @@ export function installEnemyLabDeckEditor(deck){
     }
     countsCard.appendChild(countList);
     const noteCard=controlCard('EDITING');
-    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent='Remove cards from the list on the left. The final stance stays protected so the combat deck always remains playable.';
+    const note=parentDocument.createElement('span');note.className='deckControlNote';note.textContent=registry?'Remove cards from the card list below. The final stance stays protected so the combat deck always remains playable.':'Remove cards from the list on the left. The final stance stays protected so the combat deck always remains playable.';
     noteCard.appendChild(note);
     stack.append(summaryCard,countsCard,noteCard);controls.appendChild(stack);
-    root.append(cardsPane,controls);
+    if(registry)root.append(controls,cardsPane);else root.append(cardsPane,controls);
   }
   function syncCategoryButtons(categories){
     for(const [view,label] of [['browse','BROWSE CARDS'],['deck','CURRENT DECK']]){
@@ -455,6 +476,7 @@ export function installEnemyLabDeckEditor(deck){
   }
   function setEditorMode(dock,values,enabled){
     dock.classList.toggle('deckEditorMode',enabled);
+    dock.classList.toggle('deckEditorLegacyMode',enabled);
     values.classList.toggle('deckEditorActive',enabled);
   }
   function renderEditor(values,categories){
@@ -474,18 +496,14 @@ export function installEnemyLabDeckEditor(deck){
     restoreEditorScroll(values);
   }
 
-  function renderRegistryEditor(){
+  function renderRegistryEditor(view='browse'){
     if(!initialized)return null;
-    activeView=activeView==='deck'?'deck':'browse';
+    const selectedView=view==='deck'?'deck':'browse';
+    activeView=selectedView;
     const workspace=parentDocument.createElement('div');workspace.className='deckEditorWorkspace';
-    const tabs=parentDocument.createElement('div');tabs.className='deckEditorTabs';
-    for(const [view,label] of [['browse','BROWSE CARDS'],['deck','CURRENT DECK']]){
-      const button=parentDocument.createElement('button');button.type='button';button.className=`miniBtn${activeView===view?' on':''}`;button.textContent=label;
-      button.addEventListener('click',()=>{activeView=view;requestEditorRender();});tabs.appendChild(button);
-    }
-    const root=parentDocument.createElement('div');root.className='deckEditorRoot';root.dataset.view=activeView;
-    if(activeView==='browse')renderBrowse(root,null,null);else renderCurrentDeck(root,null,null);
-    workspace.append(tabs,root);
+    const root=parentDocument.createElement('div');root.className='deckEditorRoot deckEditorRegistryFlow';root.dataset.view=selectedView;
+    if(selectedView==='browse')renderBrowse(root,null,null,{registry:true});else renderCurrentDeck(root,null,null,{registry:true});
+    workspace.appendChild(root);
     return workspace;
   }
 
@@ -509,7 +527,8 @@ export function installEnemyLabDeckEditor(deck){
 
     if(menu){
       activeView='browse';
-      menu.registerView({id:'deck-editor',sectionId:'loadout',label:'COMBAT DECK',description:'Browse cards and edit the current live deck.',order:20,render:renderRegistryEditor});
+      menu.registerView({id:'deck-editor',sectionId:'loadout',label:'BROWSE CARDS',description:'Browse all cards and add or remove them from the live deck.',order:20,slot:'middle',render:()=>renderRegistryEditor('browse')});
+      menu.registerView({id:'deck-editor-current',sectionId:'loadout',label:'CURRENT DECK',description:'Review the complete live deck and protect its final stance.',order:21,slot:'middle',render:()=>renderRegistryEditor('deck')});
       window.__enemyLabDeckEditor={
         get catalog(){return catalog.slice();},
         get cardIds(){return selectedIds.slice();},
@@ -519,7 +538,12 @@ export function installEnemyLabDeckEditor(deck){
         setIds(ids){const next=normalizeStoredDeck(Array.isArray(ids)?ids:[]);if(!next.length||!hasStance(next.map(id=>byId.get(id))))return false;selectedIds=next.slice();applySelected({announce:false,shuffle:true});requestEditorRender();return selectedIds.slice();},
         add(id){if(!byId.has(id)||selectedIds.includes(id))return false;selectedIds.push(id);applySelected();requestEditorRender();return true;},
         remove(id){const card=byId.get(id);if(!card||!selectedIds.includes(id))return false;if(!isNonStance(card)&&selectedCards().filter(item=>!isNonStance(item)).length<=1)return false;selectedIds=selectedIds.filter(cardId=>cardId!==id);applySelected();requestEditorRender();return true;},
-        show(view='browse'){activeView=view==='deck'?'deck':'browse';menu.select('loadout');requestEditorRender();},
+        show(view='browse'){
+          const selectedView=view==='deck'?'deck-editor-current':'deck-editor';
+          activeView=view==='deck'?'deck':'browse';
+          if(typeof menu.selectView==='function')menu.selectView('loadout',selectedView);
+          else menu.select('loadout');
+        },
       };
       return;
     }

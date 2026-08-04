@@ -32,11 +32,12 @@ button:active{transform:translateY(1px);background:#264542}
 #closeBtn{position:absolute;right:0;top:0;width:44px;height:44px;padding:0;color:transparent;background:transparent;border-color:transparent;box-shadow:none;z-index:1}#closeBtn::before{content:"×";position:absolute;right:7px;top:4px;width:20px;height:20px;display:grid;place-items:center;color:var(--gold);font-size:18px;line-height:1;border:1px solid var(--line);border-radius:6px;background:rgba(16,38,40,.95)}
 .srOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 #labControlStaging{display:none!important}
-#labCategories,#labValues{scrollbar-width:none;overscroll-behavior:contain;min-width:0;min-height:0}#labCategories::-webkit-scrollbar,#labValues::-webkit-scrollbar{display:none}
-#labCategories{display:flex;flex-direction:column;gap:6px;padding:7px;background:rgba(0,0,0,.14);overflow-y:auto;overflow-x:hidden;touch-action:pan-y}
-#labCategories .choice{justify-content:center;text-align:center}
-#labCategories .choice b{font-size:9px;letter-spacing:.08em}
-#labCategories .choice span,#labCategories .choice em{display:none}
+#labCategories,#labSubcategories,#labValues{scrollbar-width:none;overscroll-behavior:contain;min-width:0;min-height:0}#labCategories::-webkit-scrollbar,#labSubcategories::-webkit-scrollbar,#labValues::-webkit-scrollbar{display:none}
+#labCategories,#labSubcategories{display:flex;flex-direction:column;gap:6px;padding:7px;background:rgba(0,0,0,.14);overflow-y:auto;overflow-x:hidden;touch-action:pan-y}
+#labSubcategories{background:rgba(0,0,0,.08);border-left:1px solid rgba(49,80,77,.4);border-right:1px solid rgba(49,80,77,.4)}
+#labCategories .choice,#labSubcategories .choice{justify-content:center;text-align:center}
+#labCategories .choice b{font-size:9px;letter-spacing:.08em}#labSubcategories .choice b{font-size:8px;line-height:1.15;letter-spacing:.05em;overflow-wrap:anywhere}
+#labCategories .choice span,#labCategories .choice em,#labSubcategories .choice span,#labSubcategories .choice em{display:none}
 #labCategories .choice.testCategory{color:#172321;border-color:#ffd092;background:linear-gradient(145deg,#f1ad50,#d67a3f);box-shadow:inset 0 0 0 1px rgba(255,224,172,.42),0 2px 9px rgba(232,160,76,.18)}
 #labCategories .choice.testCategory.on{color:#10201d;border-color:#fff0cf;box-shadow:inset 0 0 0 2px rgba(255,244,214,.72),0 0 15px rgba(232,160,76,.34)}
 #labCategories .choice.systemCategory{border-color:#467a74;color:#a9ddd3;background:rgba(53,101,95,.22)}
@@ -65,14 +66,14 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
 #result{position:fixed;left:50%;top:20%;z-index:84;transform:translate(-50%,-12px);opacity:0;pointer-events:none;transition:.18s;padding:12px 15px;border:1px solid #8a5630;border-radius:9px;background:rgba(8,20,22,.94);text-align:center;box-shadow:0 8px 35px #0008}
 #result.on{opacity:1;transform:translate(-50%,0)}#result b{display:block;color:var(--gold);font-size:12px;letter-spacing:.12em}#result span{display:block;margin-top:4px;color:var(--muted);font-size:9px}
 @media (orientation:landscape){
-  #labDock{top:0;right:0;bottom:0;width:min(48vw,560px);border-radius:14px 0 0 14px;border-right:0;grid-template-columns:minmax(230px,1fr) 30px 92px;grid-template-rows:30px minmax(0,1fr) auto;transform:translateX(calc(100% + 24px));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-  #labDock.on{transform:translateX(0)}#dockHead{grid-column:1/4;grid-row:1}#labValues{grid-column:1;grid-row:2}#valueScrollGutter{grid-column:2;grid-row:2;border-left:1px solid rgba(49,80,77,.55);border-right:1px solid rgba(49,80,77,.55)}#valueScrollGutter::before{left:50%;bottom:10px;transform:translateX(-50%) rotate(-90deg);transform-origin:center}#valueScrollThumb{left:9px;right:9px;top:0;min-height:38px}#labCategories{grid-column:3;grid-row:2}#message{grid-column:1/4;grid-row:3}
+  #labDock{top:0;right:0;bottom:0;width:min(calc(48vw + 82px),642px);border-radius:14px 0 0 14px;border-right:0;grid-template-columns:minmax(0,1fr) 30px 82px 92px;grid-template-rows:30px minmax(0,1fr) auto;transform:translateX(calc(100% + 24px));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock.on{transform:translateX(0)}#dockHead{grid-column:1/5;grid-row:1}#labValues{grid-column:1;grid-row:2}#valueScrollGutter{grid-column:2;grid-row:2;border-left:1px solid rgba(49,80,77,.55);border-right:1px solid rgba(49,80,77,.55)}#valueScrollGutter::before{left:50%;bottom:10px;transform:translateX(-50%) rotate(-90deg);transform-origin:center}#valueScrollThumb{left:9px;right:9px;top:0;min-height:38px}#labSubcategories{grid-column:3;grid-row:2}#labCategories{grid-column:4;grid-row:2}#message{grid-column:1/5;grid-row:3}
   .choice{width:100%;min-height:48px}.controlCard,.sliderCard,.statusCard,.sectionCard{width:100%}#labCategories .choice{min-height:42px;padding:7px}.labSectionPanel{padding:8px}.labSectionPanel .choice{min-height:48px}
 }
-@media (orientation:landscape) and (max-width:733px){#labDock{grid-template-columns:minmax(0,1fr) 30px 92px}}
+@media (orientation:landscape) and (max-width:733px){.deckCardTile{grid-template-columns:minmax(0,1fr)}.deckCardAction{width:100%}.deckCardDetails{grid-column:1}}
 @media (orientation:portrait){
-  #labDock{left:0;right:0;bottom:0;height:min(84dvh,680px);border-radius:16px 16px 0 0;grid-template-columns:minmax(0,1fr) minmax(92px,108px);grid-template-rows:30px minmax(0,1fr) auto;transform:translateY(105%);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-  #labDock.on{transform:translateY(0)}#dockHead{grid-column:1/3;grid-row:1}#labValues{grid-column:1;grid-row:2}#valueScrollGutter{display:none}#labCategories{grid-column:2;grid-row:2}#message{grid-column:1/3;grid-row:3}
+  #labDock{left:0;right:0;bottom:0;height:min(84dvh,680px);border-radius:16px 16px 0 0;grid-template-columns:minmax(0,1fr) minmax(76px,88px) minmax(92px,108px);grid-template-rows:30px minmax(0,1fr) auto;transform:translateY(105%);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  #labDock.on{transform:translateY(0)}#dockHead{grid-column:1/4;grid-row:1}#labValues{grid-column:1;grid-row:2}#valueScrollGutter{display:none}#labSubcategories{grid-column:2;grid-row:2}#labCategories{grid-column:3;grid-row:2}#message{grid-column:1/4;grid-row:3}
   .choice{width:100%;min-height:48px}.controlCard,.sliderCard,.statusCard,.sectionCard{width:100%}#labCategories .choice{min-height:42px;padding:6px}.labSectionPanel{padding:8px}.labSectionPanel .choice{min-height:46px}#labHud{top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right))}#testBadge{max-width:58vw}
 }
 </style>
@@ -95,7 +96,7 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
   </div>
   <section id="labValues" data-lab-scroll-owner="detail"></section>
   <div id="valueScrollGutter" role="scrollbar" aria-label="Drag to scroll options" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="valueScrollThumb"></div></div>
-  <nav id="labCategories" data-lab-scroll-owner="navigation"></nav><div id="message"></div>
+  <nav id="labSubcategories" data-lab-scroll-owner="secondary-navigation" aria-label="Enemy Lab subsection views"></nav><nav id="labCategories" data-lab-scroll-owner="navigation"></nav><div id="message"></div>
 </aside>
 <script type="module">
 import { gameContent } from './src/game-content.js';
@@ -107,6 +108,7 @@ import { installArenaShell } from './src/arena-shell.js';
 import { runtimeConfigFromLocation } from './src/arena-runtime-config.js';
 import { createArenaRuntime } from './src/arena-runtime.js';
 import { createEnemyLabValueScrollGutter } from './src/enemy-lab-inspector-shell.js';
+import { routeEnemyLabRuntimeEvent, syncEnemyLabMountedControls } from './src/enemy-lab-render-policy.js';
 import { createEnemyLabSectionRegistry } from './src/enemy-lab-section-registry.js';
 import { installEnemyLabSectionUI } from './src/enemy-lab-section-ui.js';
 
@@ -116,7 +118,7 @@ installArenaShell({mode:runtimeConfig.mode});
 const sectionRegistry=createEnemyLabSectionRegistry();
 const runtime=createArenaRuntime({config:runtimeConfig,sectionRegistry});
 const $=id=>document.getElementById(id);
-const dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories');
+const dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories'),subcategoriesEl=$('labSubcategories');
 const valueScrollGutter=$('valueScrollGutter'),valueScrollThumb=$('valueScrollThumb');
 const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
 let sectionUI=null;
@@ -149,7 +151,7 @@ let state={workspaceMode:'test',category:capturePage?'capture':(safeCategory==='
 const initialCaptureStage=String(pageParams.get('stage')||'motion').toLowerCase();
 const savedCapture=saved.capture&&typeof saved.capture==='object'?saved.capture:{};
 const captureState={arcanaId:normalizeCaptureArcanaId(pageParams.get('arcana')||savedCapture.arcanaId||savedCapture.ability||'DRAGON-ARC'),aim:normalizeCaptureAim(pageParams.get('aim')||savedCapture.aim||'right').id,dummy:normalizeCaptureDummy(pageParams.get('layout')||savedCapture.layout||savedCapture.dummy||'none').layout,rngSeed:pageParams.get('rngSeed')||savedCapture.rngSeed||4401,stage:String(pageParams.get('stage')||savedCapture.stage||initialCaptureStage).toLowerCase(),effects:pageParams.has('effects')?!['0','false','off'].includes(String(pageParams.get('effects')).toLowerCase()):savedCapture.effects??!['motion','contract'].includes(initialCaptureStage),renderMode:pageParams.get('renderMode')||savedCapture.renderMode||(['motion','contract'].includes(initialCaptureStage)?'proxy':'style')};
-let dockOpen=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0,controlsRefreshQueued=false;
+let dockOpen=false,lastPlan=null,running=false,sawEnemy=false,testStart=0,startHp=100,resultTimer=0,partnerCycle=0;
 const currentEnemy=()=>catalog.find(enemy=>enemy.id===state.enemyId)||catalog[0],controlBridge=()=>runtime,captureBridge=()=>runtime.capture;
 const captureFacade=window.__abilityCapture={
   ready:()=>captureBridge()?.ready?.()===true,
@@ -225,9 +227,51 @@ let renderCategories=()=>{},renderValues=()=>{},renderAll=()=>{};
 function renderType(){return list(...familyOrder.map(family=>choice({label:family,sub:`${catalog.filter(enemy=>enemy.family===family).length} enemies`,active:state.family===family,onClick:()=>{state.family=family;const first=catalog.find(enemy=>enemy.family===family);if(first)state.enemyId=first.id;partnerCycle=0;ensurePartner();save();renderValues();}})));}function renderEnemy(){return list(...catalog.filter(enemy=>enemy.family===state.family).map(enemy=>choice({label:enemy.label,sub:enemy.role,meta:enemy.tags.slice(0,4).join(' · ')||enemy.system,active:enemy.id===state.enemyId,onClick:()=>{state.enemyId=enemy.id;partnerCycle=0;ensurePartner();save();renderValues();}})));}
 function renderSpawn(){const focal=currentEnemy();const nodes=['solo','pack','wave'].map(mode=>choice({label:mode.toUpperCase(),sub:mode==='solo'?'One focal enemy':mode==='pack'?'Matching copies':'Focal + partner',active:state.mode===mode,onClick:()=>{state.mode=mode;ensurePartner();save();renderValues();}}));if(state.mode==='solo')nodes.push(status(`${focal.label} SOLO`,'One enemy. Best for studying movement, telegraphs, reach, and hit reactions.'));if(state.mode==='pack'){const max=Math.min(12,focal.encounter?.maxCount||12,focal.family==='GOBLINS'?4:12);state.packCount=Math.max(2,Math.min(max,state.packCount));const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<div class="row"><label>SAME-ENEMY COUNT</label><div class="stepper"><button class="miniBtn" id="countDown">−</button><span class="value">${state.packCount}</span><button class="miniBtn" id="countUp">+</button></div></div><div class="statusCard"><b>${state.packCount} × ${focal.label}</b><span>Tests crowd spacing and repeated pressure.</span></div>`;nodes.push(card);queueMicrotask(()=>{$('countDown')?.addEventListener('click',()=>{state.packCount=Math.max(2,state.packCount-1);save();renderValues({preserveScroll:true});});$('countUp')?.addEventListener('click',()=>{state.packCount=Math.min(max,state.packCount+1);save();renderValues({preserveScroll:true});});});}if(state.mode==='wave'){const candidates=partnerCandidates();const {focalCount,partnerCount,partner}=countsForWave();nodes.push(...['low','standard','high'].map(level=>choice({label:level.toUpperCase(),sub:'Threat level',active:state.threat===level,onClick:()=>{state.threat=level;save();renderValues({preserveScroll:true});}})));const card=document.createElement('div');card.className='controlCard';card.innerHTML=`<label style="font-size:8.5px;color:var(--muted)">MATCHING PARTNER</label><select id="partnerSelect">${candidates.map(enemy=>`<option value="${enemy.id}"${enemy.id===partner?.id?' selected':''}>${enemy.family} · ${enemy.label}</option>`).join('')}</select><div class="row"><label>AUTO MATCH</label><button class="miniBtn" id="rerollBtn">REROLL</button></div><div class="statusCard"><b>${focalCount} × ${focal.label}${partner?` + ${partnerCount} × ${partner.label}`:''}</b><span>${partner?'A compatible cross-system pairing.':'No compatible partner found.'}</span></div>`;nodes.push(card);queueMicrotask(()=>{$('partnerSelect')?.addEventListener('change',event=>{state.partnerId=event.target.value;save();});$('rerollBtn')?.addEventListener('click',()=>{if(candidates.length){partnerCycle=(partnerCycle+1)%candidates.length;state.partnerId=candidates[partnerCycle].id;save();renderValues({preserveScroll:true});}});});}return list(...nodes);}
 function renderTestActions(){const configured=buildPlan();return list(status('CONFIGURED TEST',configured?.label||'No valid test configuration.'),choice({label:'SPAWN TEST',sub:'Close the lab and start this configuration',className:'primary',onClick:()=>startTest()}),choice({label:'CLEAR',sub:'Remove all active enemies and queued spawns',className:'danger',onClick:()=>{clearTest();renderValues({preserveScroll:true});}}),choice({label:'REPEAT',sub:lastPlan?`Run ${lastPlan.label} again`:'Run a test first',onClick:()=>{if(lastPlan)startTest(lastPlan);else setMessage('Run a test first.');}}));}function renderRoom(data){const options=data.roomOptions?.length?data.roomOptions:[{id:'large',label:'Large · 24',active:true}];return list(status('OPEN ARENA','One clean hexagonal test chamber. No maze corridors, doors, room transitions, or visible trees.'),...options.map(option=>choice({label:option.label,sub:'Cell size · reloads chamber',active:option.active,onClick:()=>controlBridge()?.setCellSize?.(option.id)})));}
-function renderControl(group,control){const bridge=controlBridge(),accessibleLabel=control.placement?.fullAccessibleLabel||control.placement?.accessibleLabel||control.label;if(control.kind==='range'){const card=document.createElement('div');card.className='sliderCard';card.innerHTML=`<label>${control.label}<output>${control.value}</output></label><input type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${control.value}"${control.disabled?' disabled':''}>`;const input=card.querySelector('input'),output=card.querySelector('output');input.setAttribute('aria-label',accessibleLabel);input.addEventListener('input',()=>{output.value=input.value;bridge?.setControl?.(control.id,Number(input.value));});return card;}if(control.kind==='select'){const card=document.createElement('div');card.className='controlCard';const label=document.createElement('label');label.textContent=control.label;label.style.cssText='font-size:8.5px;color:var(--muted);letter-spacing:.06em';const select=document.createElement('select');select.disabled=!!control.disabled;select.setAttribute('aria-label',accessibleLabel);for(const option of control.options||[]){const item=document.createElement('option');item.value=option.value;item.textContent=option.label;item.selected=option.selected;select.appendChild(item);}select.addEventListener('change',()=>bridge?.setControl?.(control.id,select.value));card.append(label,select);return card;}if(control.kind==='text'){const card=document.createElement('div');card.className='controlCard';const label=document.createElement('label');label.textContent=control.label;label.style.cssText='font-size:8.5px;color:var(--muted)';const input=document.createElement('input');input.className='textInput';input.value=control.value||'';input.disabled=!!control.disabled;input.setAttribute('aria-label',accessibleLabel);input.addEventListener('change',()=>bridge?.setControl?.(control.id,input.value));card.append(label,input);return card;}const button=choice({label:control.label,sub:control.note,meta:control.kind==='check'?(control.checked?'ON':'OFF'):'',active:!!(control.active||control.checked),className:control.kind==='check'?'toggle':'',onClick:()=>{const next=control.kind==='check'?!button.classList.contains('on'):undefined;const changed=control.kind==='button'?bridge?.invokeControl?.(control.id):bridge?.setControl?.(control.id,next);if(!changed)return;if(control.kind==='check'){button.classList.toggle('on',next);const em=button.querySelector('em');if(em)em.textContent=next?'ON':'OFF';}else setTimeout(()=>renderValues({preserveScroll:true}),60);}});button.disabled=!!control.disabled;button.setAttribute('aria-label',accessibleLabel);return button;}function renderControlGroup(group){const nodes=[status(group.label,`${group.controls.length} direct Lab control${group.controls.length===1?'':'s'} · updates the arena system in place.`,'sectionCard')];for(const control of group.controls)nodes.push(renderControl(group,control));return list(...nodes);}
+function renderControl(group,control){
+  const bridge=controlBridge(),accessibleLabel=control.placement?.fullAccessibleLabel||control.placement?.accessibleLabel||control.label;
+  const mark=node=>{node.dataset.arenaControlId=control.id;node.dataset.arenaControlKind=control.kind;return node;};
+  if(control.kind==='range'){
+    const card=mark(document.createElement('div'));card.className='sliderCard';
+    card.innerHTML=`<label>${control.label}<output>${control.value}</output></label><input type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${control.value}"${control.disabled?' disabled':''}>`;
+    const input=card.querySelector('input'),output=card.querySelector('output');
+    input.setAttribute('aria-label',accessibleLabel);
+    input.addEventListener('input',()=>{output.value=input.value;output.textContent=input.value;bridge?.setControl?.(control.id,Number(input.value));});
+    return card;
+  }
+  if(control.kind==='select'){
+    const card=mark(document.createElement('div'));card.className='controlCard';
+    const label=document.createElement('label');label.textContent=control.label;label.style.cssText='font-size:8.5px;color:var(--muted);letter-spacing:.06em';
+    const select=document.createElement('select');select.disabled=!!control.disabled;select.setAttribute('aria-label',accessibleLabel);
+    for(const option of control.options||[]){const item=document.createElement('option');item.value=option.value;item.textContent=option.label;item.selected=option.selected;select.appendChild(item);}
+    select.addEventListener('change',()=>bridge?.setControl?.(control.id,select.value));card.append(label,select);return card;
+  }
+  if(control.kind==='text'){
+    const card=mark(document.createElement('div'));card.className='controlCard';
+    const label=document.createElement('label');label.textContent=control.label;label.style.cssText='font-size:8.5px;color:var(--muted)';
+    const input=document.createElement('input');input.className='textInput';input.value=control.value||'';input.disabled=!!control.disabled;input.setAttribute('aria-label',accessibleLabel);
+    input.addEventListener('change',()=>bridge?.setControl?.(control.id,input.value));card.append(label,input);return card;
+  }
+  const button=mark(choice({label:control.label,sub:control.note,meta:control.kind==='check'?(control.checked?'ON':'OFF'):'',active:!!(control.active||control.checked),className:control.kind==='check'?'toggle':'',onClick:()=>{
+    const next=control.kind==='check'?!button.classList.contains('on'):undefined;
+    const changed=control.kind==='button'?bridge?.invokeControl?.(control.id):bridge?.setControl?.(control.id,next);
+    if(!changed||control.kind!=='check')return;
+    button.classList.toggle('on',next);const em=button.querySelector('em');if(em)em.textContent=next?'ON':'OFF';
+  }}));
+  button.disabled=!!control.disabled;button.setAttribute('aria-label',accessibleLabel);return button;
+}
+function renderControlGroup(group){const nodes=[status(group.label,`${group.controls.length} direct Lab control${group.controls.length===1?'':'s'} · updates the arena system in place.`,'sectionCard')];for(const control of group.controls)nodes.push(renderControl(group,control));return list(...nodes);}
 function setDockOpen(open,{syncArena=true}={}){dockOpen=!!open;dock.classList.toggle('on',dockOpen);veil.classList.toggle('on',dockOpen);document.body.classList.toggle('dockOpen',dockOpen);if(dockOpen){renderAll({preserveCategoryScroll:true,preserveValueScroll:true});scrollGutterController.syncAfterDockOpen();requestAnimationFrame(()=>scrollGutterController.syncAfterDockOpen());}if(syncArena)runtime.setMenuOpen(dockOpen);}
-runtime.subscribe(event=>{if(event.type==='menu'&&event.open!==dockOpen)setDockOpen(event.open,{syncArena:false});if(dockOpen&&['register','remove','change','invoke'].includes(event.type)){if(controlsRefreshQueued)return;controlsRefreshQueued=true;requestAnimationFrame(()=>{controlsRefreshQueued=false;renderAll({preserveCategoryScroll:true,preserveValueScroll:true});});}});
+runtime.subscribe(event=>{
+  if(event.type==='menu'&&event.open!==dockOpen)setDockOpen(event.open,{syncArena:false});
+  routeEnemyLabRuntimeEvent(event,{
+    onStructural:()=>sectionUI?.syncRuntimeStructure?.(event),
+    onControl:()=>{
+      if(!dockOpen)return;
+      const data=runtime.snapshot?.()||runtime.getLabSnapshot?.()||{};
+      syncEnemyLabMountedControls(values,data.controlGroups||[]);
+    },
+  });
+});
 function ensureArenaStarted(){runtime.setStarted(true);}function buildPlan(){const focal=currentEnemy();if(state.mode==='solo')return {label:`${focal.label} Solo`,groups:[{spawnKind:focal.id,count:1}]};if(state.mode==='pack')return {label:`${focal.label} Pack ×${state.packCount}`,groups:[{spawnKind:focal.id,count:state.packCount}]};const {focalCount,partnerCount,partner}=countsForWave();if(!partner)return null;return {label:`${focal.label} + ${partner.label}`,groups:[{spawnKind:focal.id,count:focalCount},{spawnKind:partner.id,count:partnerCount}]};}function showResult(title,detail){result.querySelector('b').textContent=title;result.querySelector('span').textContent=detail;result.classList.add('on');clearTimeout(resultTimer);resultTimer=setTimeout(()=>result.classList.remove('on'),2600);}function startTest(plan=buildPlan()){setMessage('');if(!plan){setMessage('No compatible partner is available for this wave.');return;}ensureArenaStarted();setDockOpen(false);const response=runtime.startLabScenario(-777,plan);if(!response?.ok){setMessage(response?.error||'Enemy Lab could not spawn this composition.');setDockOpen(true);return;}lastPlan=JSON.parse(JSON.stringify(plan));running=true;sawEnemy=false;testStart=performance.now();startHp=runtime.getSnapshot().playerHp;testBadge.innerHTML=`<strong>${plan.label.toUpperCase()}</strong> · spawning`;save();}function clearTest(){runtime.clearRoomRuntime();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
 function updateTestProgress(data=runtime.getSnapshot()){if(!running)return;const alive=data.aliveCount||0,pending=(data.queuedSpawnCount||0)+(data.telegraphCount||0);if(alive>0||pending>0)sawEnemy=true;const elapsed=(performance.now()-testStart)/1000;testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;if(sawEnemy&&alive===0&&pending===0){running=false;const damage=Math.max(0,Math.round(startHp-data.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;}else if(data.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}}function prepareRuntime(){const panel=$('panel'),menuButton=$('menuBtn');if(menuButton)menuButton.style.display='none';if(panel){panel.classList.add('hidden');panel.style.display='none';}runtime.setStarted(true);if(capturePage){captureFacade.reset(capturePayload());updateCaptureBadge();if(state.category==='capture')renderValues({preserveScroll:true});}else{runtime.clearRoomRuntime();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';}}
 runtime.subscribe(event=>{if(event.type==='state')updateTestProgress(event.snapshot);});prepareRuntime();$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));ensurePartner();renderAll();
@@ -241,7 +285,7 @@ startTest=(plan=buildPlan())=>{
   testBadge.innerHTML=`<strong>${response.plan.label||state.encounterMode}</strong> · spawning`;save();
 };
 let setupWorkflow=null;
-sectionUI=installEnemyLabSectionUI({document,runtime,sectionRegistry,state,catalog,familyOrder,categoriesEl,values,categoryHint,choice,list,status,save,renderCapture,renderSpawn,renderRoom,renderType,renderEnemy,renderControlGroup,startTest:()=>startTest(),clearTest,setMessage,renderWorkspace:mode=>setupWorkflow?.render(mode),selectWorkspace:mode=>setupWorkflow?.select(mode),onDetailScrollRestored:()=>scrollGutterController.syncAfterSectionRestore()});
+sectionUI=installEnemyLabSectionUI({document,runtime,sectionRegistry,state,catalog,familyOrder,categoriesEl,subcategoriesEl,values,categoryHint,choice,list,status,save,renderCapture,renderSpawn,renderRoom,renderType,renderEnemy,renderControlGroup,startTest:()=>startTest(),clearTest,setMessage,renderWorkspace:mode=>setupWorkflow?.render(mode),selectWorkspace:mode=>setupWorkflow?.select(mode),onDetailScrollRestored:()=>scrollGutterController.syncAfterSectionRestore()});
 if(sectionUI){renderCategories=sectionUI.renderCategories;renderValues=sectionUI.renderValues;renderAll=sectionUI.renderAll;sectionUI.renderAll();}
 if(!capturePage){
   const profileController=installEnemyLabCombatProfiles({storage:localStorage,hostWindow:window,sectionRegistry,runtime,state,captureState,resources:developmentTools,saveWorkspace:save,setMessage});

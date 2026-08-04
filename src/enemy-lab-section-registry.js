@@ -40,6 +40,7 @@ export function createEnemyLabSectionRegistry(){
   const slots=new Map();
   const listeners=new Set();
   let activeSection='encounter';
+  const activeViews=new Map();
 
   const emit=event=>{for(const listener of [...listeners])listener(event);};
   const getDefinition=id=>ENEMY_LAB_SECTION_DEFINITIONS.find(section=>section.id===id)||null;
@@ -52,10 +53,12 @@ export function createEnemyLabSectionRegistry(){
     if(!viewId||!SECTION_IDS.has(parentId))throw new Error(`Invalid Enemy Lab section view: ${id}`);
     if(typeof render!=='function')throw new Error(`Enemy Lab section view ${viewId} needs a render function.`);
     if(views.has(viewId))throw new Error(`Duplicate Enemy Lab section view: ${viewId}`);
-    const view=Object.freeze({id:viewId,sectionId:parentId,label:String(label||viewId).trim(),description:String(description||''),order:Number(order)||100,render,slot:slot?String(slot):null});
+    const numericOrder=Number(order);
+    const view=Object.freeze({id:viewId,sectionId:parentId,label:String(label||viewId).trim(),description:String(description||''),order:Number.isFinite(numericOrder)?numericOrder:100,render,slot:slot?String(slot):null});
     views.set(viewId,view);
+    if(!activeViews.has(parentId))activeViews.set(parentId,viewId);
     emit({type:'register',sectionId:parentId,view});
-    return()=>{if(!views.delete(viewId))return false;emit({type:'remove',sectionId:parentId,viewId});return true;};
+    return()=>{if(!views.delete(viewId))return false;if(activeViews.get(parentId)===viewId)activeViews.delete(parentId);emit({type:'remove',sectionId:parentId,viewId});return true;};
   }
 
   function registerSlot({id,sectionId='profiles',slot='profile-bar',render=null,order=0}={}){
@@ -63,7 +66,8 @@ export function createEnemyLabSectionRegistry(){
     if(!slotId||!SECTION_IDS.has(parentId))throw new Error(`Invalid Enemy Lab section slot: ${id}`);
     if(typeof render!=='function')throw new Error(`Enemy Lab section slot ${slotId} needs a render function.`);
     if(slots.has(slotId))throw new Error(`Duplicate Enemy Lab section slot: ${slotId}`);
-    const definition=Object.freeze({id:slotId,sectionId:parentId,slot:String(slot),render,order:Number(order)||0});
+    const numericOrder=Number(order);
+    const definition=Object.freeze({id:slotId,sectionId:parentId,slot:String(slot),render,order:Number.isFinite(numericOrder)?numericOrder:0});
     slots.set(slotId,definition);
     emit({type:'slot-register',sectionId:parentId,slot:definition});
     return()=>{if(!slots.delete(slotId))return false;emit({type:'slot-remove',sectionId:parentId,slotId});return true;};
@@ -77,10 +81,25 @@ export function createEnemyLabSectionRegistry(){
     return{ok:true,sectionId:id};
   }
 
-  function invalidate(sectionId=null){
+  function selectView(sectionId,viewId){
+    const parentId=asId(sectionId),id=asId(viewId);
+    const view=views.get(id);
+    if(!SECTION_IDS.has(parentId)||!view||view.sectionId!==parentId)return{ok:false,reason:`Unknown Enemy Lab view: ${viewId}`};
+    activeViews.set(parentId,id);
+    activeSection=parentId;
+    emit({type:'view-select',sectionId:parentId,viewId:id});
+    return{ok:true,sectionId:parentId,viewId:id};
+  }
+
+  function invalidate(sectionId=null,viewId=null){
     const id=sectionId?asId(sectionId):activeSection;
     if(id&&!SECTION_IDS.has(id))return false;
-    emit({type:'invalidate',sectionId:id||null});
+    const targetViewId=viewId?asId(viewId):null;
+    if(targetViewId){
+      const view=views.get(targetViewId);
+      if(!view||view.sectionId!==id)return false;
+    }
+    emit({type:'invalidate',sectionId:id||null,viewId:targetViewId});
     return true;
   }
 
@@ -90,6 +109,7 @@ export function createEnemyLabSectionRegistry(){
       ...definition,
       controlGroups:Object.freeze((ENEMY_LAB_CONTROL_GROUPS[definition.id]||[]).map(id=>groups.get(id)).filter(Boolean)),
       views:Object.freeze(getViews(definition.id).map(view=>Object.freeze({id:view.id,label:view.label,description:view.description,slot:view.slot}))),
+      activeViewId:activeViews.get(definition.id)||getViews(definition.id)[0]?.id||null,
       slots:Object.freeze([...slots.values()].filter(slot=>slot.sectionId===definition.id).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id)).map(slot=>Object.freeze({id:slot.id,slot:slot.slot}))),
     }));
   }
@@ -99,11 +119,13 @@ export function createEnemyLabSectionRegistry(){
     get sectionIds(){return ENEMY_LAB_SECTION_ORDER.slice();},
     getDefinition,
     getViews,
+    getActiveView:sectionId=>views.get(activeViews.get(asId(sectionId)))||getViews(asId(sectionId))[0]||null,
     getSlots:sectionId=>[...slots.values()].filter(slot=>slot.sectionId===asId(sectionId)).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id)),
     sections,
     registerView,
     registerSlot,
     select,
+    selectView,
     invalidate,
     dispatch:event=>{emit(event);return event;},
     subscribe(listener){if(typeof listener!=='function')return()=>{};listeners.add(listener);return()=>listeners.delete(listener);},

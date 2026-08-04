@@ -19,9 +19,9 @@ const sectionUi=read('src/enemy-lab-section-ui.js');
 
 assert.equal(ENEMY_LAB_INSPECTOR_HEADER_HEIGHT,30,'the visual header remains inside the 28–32px contract');
 assert.equal(ENEMY_LAB_INSPECTOR_CLOSE_TARGET,44,'the close action keeps a 44px effective touch target');
-assert.deepEqual(ENEMY_LAB_INSPECTOR_SCROLL_OWNERS,['#labCategories','#labValues']);
+assert.deepEqual(ENEMY_LAB_INSPECTOR_SCROLL_OWNERS,['#labCategories','#labSubcategories','#labValues']);
 assert.deepEqual(ENEMY_LAB_INSPECTOR_SCROLL_CONTROLLERS,['#valueScrollGutter']);
-assert.equal((lab.match(/data-lab-scroll-owner=/g)||[]).length,2,'the controller does not declare a third normal scroll owner');
+assert.equal((lab.match(/data-lab-scroll-owner=/g)||[]).length,3,'the shell declares main, subsection, and detail owners');
 assert.match(lab,/id="valueScrollGutter" role="scrollbar" aria-label="Drag to scroll options" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"/);
 assert.match(lab,/#valueScrollGutter\{position:relative;overflow:hidden;[^}]*touch-action:none/,'the gutter is a non-scrolling drag controller');
 assert.doesNotMatch(lab,/#valueScrollGutter\{[^}]*overflow-(?:x|y):auto/);
@@ -39,8 +39,8 @@ assert.match(sectionUi,/const viewContentCache=new Map\(\)/,'registered views ke
 assert.match(sectionUi,/const content=next\|\|viewContentCache\.get\(view\.id\)/,'a null duplicate render cannot make an existing registered view disappear');
 assert.match(sectionUi,/selectWorkspace\?\.\('test'\)/,'normal sections leave a workflow view through its existing API');
 assert.doesNotMatch(sectionUi,/categoriesEl\.hidden=true/,'the eight-section rail remains present in every workflow view');
-assert.match(lab,/@media \(orientation:portrait\)\{[\s\S]*grid-template-columns:minmax\(0,1fr\) minmax\(92px,108px\)/,'portrait keeps a vertical detail/rail split');
-assert.equal(ENEMY_LAB_RETAINED_COMPOUND_SCROLLERS.length,4,'every retained compound scroller has an explicit Gate 3 inventory entry');
+assert.match(lab,/@media \(orientation:portrait\)\{[\s\S]*grid-template-columns:minmax\(0,1fr\) minmax\(76px,88px\) minmax\(92px,108px\)/,'portrait keeps a vertical detail/subsection/main rail split');
+assert.equal(ENEMY_LAB_RETAINED_COMPOUND_SCROLLERS.length,1,'only the pre-existing Hit Feel overlay remains a compound-scroller exception');
 for(const entry of ENEMY_LAB_RETAINED_COMPOUND_SCROLLERS){
   assert.match(entry.migration,/Gate 3/);
   assert.ok(entry.selector&&entry.reason);

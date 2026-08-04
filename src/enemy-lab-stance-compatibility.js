@@ -110,7 +110,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   }
   function activate(){
     open=true;
-    if(useRegistry){sectionRegistry.select('diagnostics');sectionRegistry.invalidate('diagnostics');return;}
+    if(useRegistry){sectionRegistry.selectView?.('diagnostics','stance-compatibility');sectionRegistry.select('diagnostics');sectionRegistry.invalidate('diagnostics','stance-compatibility');return;}
     for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.stanceCompatibilityCategory==='1');
     render(true);
   }
@@ -191,7 +191,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     },true);
     ensureCategory();
   }
-  refreshTimer=globalThis.setInterval?.(()=>{if(useRegistry)sectionRegistry.invalidate('diagnostics');else{syncCategoryLabel();render(false);}},250)||0;
+  refreshTimer=globalThis.setInterval?.(()=>{if(useRegistry)sectionRegistry.invalidate('diagnostics','stance-compatibility');else{syncCategoryLabel();render(false);}},250)||0;
 
   const api={installed:true,open:activate,snapshot:()=>currentSnapshot(runtime),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
   globalThis.__enemyLabStanceCompatibility=api;
