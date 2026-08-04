@@ -15,7 +15,7 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
     try{
       const THREE=await import('three');
       if(destroyed)return;
-      const root=new THREE.Group();root.name='Gate 5 Defense Visuals';
+      const root=new THREE.Group();root.name='Arena Defense Visuals';
       const shield=new THREE.Group();shield.name='Hammerfall Kite Shield';
       const shape=new THREE.Shape();
       shape.moveTo(0,1.2);shape.lineTo(.78,.72);shape.lineTo(.68,-.38);shape.lineTo(0,-1.12);shape.lineTo(-.68,-.38);shape.lineTo(-.78,.72);shape.closePath();
@@ -33,15 +33,14 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
       const parryMaterial=new THREE.MeshBasicMaterial({color:0xbcecff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
       const parry=new THREE.Mesh(new THREE.RingGeometry(.85,1.12,48),parryMaterial);parry.rotation.x=-Math.PI/2;parry.position.y=.14;parry.visible=false;root.add(parry);
       const flashLight=new THREE.PointLight(0xbcecff,0,7,2);flashLight.position.set(0,1.9,.4);root.add(flashLight);
-      visual={THREE,root,shield,board,boardGeometry,boardMaterial,rimGeometry,rimMaterial,boss,parry,parryMaterial,flashLight,pulseT:0,pulseDuration:.24,pulseKind:'parry'};
+      visual={THREE,root,shield,board,boardGeometry,boardMaterial,rimGeometry,rimMaterial,boss,parry,parryMaterial,flashLight,pulseT:0,pulseDuration:.24};
       if(pendingPulse){pulse(pendingPulse);pendingPulse=null;}
       update(lastState,0);
-    }catch(error){console.warn('[stance-gate5] defense visuals did not install',error);}
+    }catch(error){console.warn('[arena-defense] visuals did not install',error);}
   })();
 
   function actorRoot(){
     const activeModel=PC.combatLayer?.parent||null;
-    // activeModel is parented to actorVisual, which owns the player's facing yaw.
     return activeModel?.parent||activeModel;
   }
   function ensureParent(){
@@ -51,7 +50,7 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
   }
   function pulse(kind='parry'){
     if(!visual){pendingPulse=kind;return;}
-    visual.pulseKind=kind;visual.pulseT=visual.pulseDuration;
+    visual.pulseT=visual.pulseDuration;
     const color=kind==='block'?0xffd789:kind==='guard-break'?0xff746b:0xbcecff;
     visual.parryMaterial.color.setHex(color);visual.flashLight.color.setHex(color);
     if(kind==='block')visual.boardMaterial.emissive.setHex(0x7b5420);
@@ -60,20 +59,20 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
   function update(state,dt=0){
     lastState=state||lastState;if(!visual||!lastState)return;ensureParent();
     const shieldOwned=lastState.shieldOwned===true;
-    const hammerfall=lastState.profileId==='hammerfall-shield'||lastState.stanceId==='S01';
+    const shieldStance=lastState.kind==='shield';
     const attacking=lastState.attacking===true;
-    const poseName=!hammerfall?'back':lastState.guardRaised&&!attacking?'guard':'side';
+    const poseName=!shieldStance?'back':lastState.guardRaised&&!attacking?'guard':'side';
     const pose=shieldPose(visual.THREE,poseName);
     visual.shield.visible=shieldOwned;
     visual.shield.position.lerp(pose.position,Math.min(1,.18+Math.max(0,Number(dt)||0)*9));
     const targetQ=new visual.THREE.Quaternion().setFromEuler(pose.rotation);
     visual.shield.quaternion.slerp(targetQ,Math.min(1,.2+Math.max(0,Number(dt)||0)*10));
 
-    const parryActive=lastState.stanceId==='S26'&&(lastState.parryRemaining>0||lastState.parrySuccessRemaining>0);
+    const parryActive=lastState.kind==='parry'&&(lastState.parryRemaining>0||lastState.parrySuccessRemaining>0);
     visual.parry.visible=parryActive||visual.pulseT>0;
     if(parryActive){
       const active=lastState.parryRemaining>0;
-      visual.parryMaterial.opacity=active ? .62 : .82;
+      visual.parryMaterial.opacity=active?.62:.82;
       visual.parry.scale.setScalar(active?1:1.18);
     }
     if(visual.pulseT>0){
