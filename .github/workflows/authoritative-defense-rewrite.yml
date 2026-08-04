@@ -30,6 +30,7 @@ jobs:
       - name: Apply coherent rewrite
         run: |
           node .defense-rewrite/apply.mjs
+          node .defense-rewrite/fix-test.mjs
           git diff --check
           node --check src/stance-gate5-defense.js
           node --check src/stance-gate5-visuals.js
