@@ -4,7 +4,8 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
     stanceId:'S24',
     label:'BUILT-IN DODGE',
     kind:'existing-dodge',
-    summary:'Rat Step uses the current Combat Arena dodge exactly as authored.',
+    dodgeCost:12,
+    summary:'Rat Step uses the current Combat Arena dodge exactly as authored and spends 12 stamina.',
   }),
   S26:Object.freeze({
     id:'long-blade-parry',
