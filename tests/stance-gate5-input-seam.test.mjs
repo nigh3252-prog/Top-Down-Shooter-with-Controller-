@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const arena=readFileSync(new URL('../combat-arena.html',import.meta.url),'utf8');
+const weaponBalance=readFileSync(new URL('../src/weapon-balance.js',import.meta.url),'utf8');
+assert.match(arena,/createStanceGate5Runtime/);
+assert.match(arena,/readPlayStationBackboneInput/);
+assert.match(arena,/resolvePlayStationBackboneActions/);
+assert.match(arena,/if\(padActions\.defensePressed\)defenseDown/);
+assert.match(arena,/if\(padActions\.lightPressed\)lightDown/);
+assert.match(arena,/const defenseController=createStanceGate5Runtime/);
+assert.match(arena,/pad.pressed.cross||pad.pressed.l2/);
+assert.match(arena,/pad.pressed.square||pad.pressed.r2/);
+assert.match(arena,/getPlayerForward\s*\(\)\s*\{\s*return\s*\{\s*x:\s*Math\.sin\(actorFacing\),\s*z:\s*Math\.cos\(actorFacing\)\s*\};\s*\}/);
+assert.doesNotMatch(arena,/__stance2Gate5Runtime/);
+assert.doesNotMatch(weaponBalance,/stance-gate5-defense/);
+console.log('stance gate 5 synchronous input seam tests passed');

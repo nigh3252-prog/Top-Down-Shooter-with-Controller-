@@ -259,6 +259,8 @@ import { installStoneWanderer } from './src/stone-wanderer.js';
 import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
+import { createStanceGate5Runtime } from './src/stance-gate5-defense.js';
+import { readPlayStationBackboneInput, resolvePlayStationBackboneActions } from './src/playstation-backbone-input.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
@@ -537,6 +539,7 @@ function setStance(index){
   const pool = stancePoolForWeapon();
   arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
   arena.stance = pool[arena.stanceIndex];
+  defenseController?.syncStance?.();
   PC.setReadyPose(guardPoseFor(arena.stance));
   resetChainState();
   updateModePanel();
@@ -697,6 +700,16 @@ roomTransition = createRoomTransitionController({
     announce(encounterState.isCleared(payload.toRoomId) ? `ROOM ${payload.toRoomId + 1} · QUIET` : `ROOM ${payload.toRoomId + 1}`, 1.0);
   }
 });
+
+const defenseController=createStanceGate5Runtime({
+  arenaHandle:{
+    PC,arena,deck,enemySystem,actorPos,
+    get roomTransition(){return roomTransition;},
+    getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
+  },
+  windowRef:window,documentRef:document,
+});
+window.__arenaDefenseController=defenseController;
 
 function beginRoomTransition(doorTarget, toRoomId){
   if(roomTransition.active || !encounterState.isDoorOpened(doorTarget.edge)) return false;
@@ -980,8 +993,11 @@ function updateCharge(dt){
 
 /* ---------- dodge ---------- */
 function triggerDodge(){
+  if(defenseController?.consumesDefenseInput?.())return false;
   const d = arena.dodge;
-  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return false;
+  const dodgeSpend=defenseController?.spendDodge?.();
+  if(dodgeSpend?.allowed===false){exhaustFlash();announce('NO STAMINA',.55);return false;}
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
@@ -996,7 +1012,15 @@ function triggerDodge(){
   arena.invulnT = Math.max(arena.invulnT, DODGE_IFRAMES);
   CombatAudio.playTest('swingLight');
 }
-
+function defenseDown(source='input'){
+  const result=defenseController.defenseDown(source);
+  if(result?.handled)return result;
+  triggerDodge();
+  return{handled:true,delegated:true,source};
+}
+function defenseUp(source='input'){
+  return defenseController.defenseUp(source);
+}
 /* ---------- hits: swept weapon zones vs enemies ---------- */
 const shake = new THREE.Vector3(), shakeVel = new THREE.Vector3();
 const effects = [];
@@ -1234,7 +1258,7 @@ addEventListener('keydown', e=>{
   keys[e.key.toLowerCase()] = true;
   if(e.key==='j') lightDown();
   if(e.key==='l') heavyDown();
-  if(e.key==='k') triggerDodge();
+  if(e.key==='k') defenseDown('keyboard');
   if(e.key==='q') playCard(0);
   if(e.key==='e') playCard(1);
   if(e.key==='r') startDeckShuffle();
@@ -1246,6 +1270,7 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>{
   keys[e.key.toLowerCase()] = false;
   if(e.key==='l') heavyUp();
+  if(e.key==='k') defenseUp('keyboard');
   if(e.key.toLowerCase()==='q') PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
   if(e.key.toLowerCase()==='e') PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
 });
@@ -1307,28 +1332,26 @@ function pollPad(){
   const l=Math.hypot(mx,mz);
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
-  const light = bd(2)||bd(7);
-  const heavy = bd(3);
-  const shuffle = bd(1);
-  const dge = bd(0)||bd(6);
-  const lb = bd(4), rb = bd(5);
-  const strt = bd(9), sel = bd(8);
-  const weaponPrev = bd(12), weaponNext = bd(13);
-  if(light && !padPrev.light) lightDown();
-  if(heavy && !padPrev.heavy) heavyDown();
-  if(!heavy && padPrev.heavy) heavyUp();
-  if(dge && !padPrev.dge) triggerDodge();
-  if(shuffle && !padPrev.shuffle) startDeckShuffle();
-  if(lb && !padPrev.lb) playCard(0);
-  if(rb && !padPrev.rb) playCard(1);
-  if(!lb && padPrev.lb) PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
-  if(!rb && padPrev.rb) PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
-  if(weaponPrev && !padPrev.weaponPrev) cycleWeapon(-1);
-  if(weaponNext && !padPrev.weaponNext) cycleWeapon(1);
-  if(strt && !padPrev.strt) toggleMenu();
-  if(sel && !padPrev.sel) toggleMenu();
-  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
-  padPrev.strt=strt; padPrev.sel=sel; padPrev.weaponPrev=weaponPrev; padPrev.weaponNext=weaponNext;
+  const pad=readPlayStationBackboneInput(gp,padPrev);
+  const padActions=resolvePlayStationBackboneActions(pad);
+  defenseController.recordGamepad(pad,padActions);
+  // Defense wins a same-frame Android/Backbone alias conflict. This prevents a
+  // Cross press that is also reported as Square from starting an attack first
+  // and making Hammerfall reject the shield toggle as busy.
+  if(padActions.defensePressed)defenseDown(padActions.defenseSource);
+  if(padActions.lightPressed)lightDown();
+  if(pad.pressed.triangle)heavyDown();
+  if(pad.released.triangle)heavyUp();
+  if(padActions.defenseReleased)defenseUp('gamepad');
+  if(pad.pressed.circle)startDeckShuffle();
+  if(pad.pressed.l1)playCard(0);
+  if(pad.pressed.r1)playCard(1);
+  if(pad.released.l1)PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
+  if(pad.released.r1)PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
+  if(pad.pressed.dpadUp)cycleWeapon(-1);
+  if(pad.pressed.dpadDown)cycleWeapon(1);
+  if(pad.pressed.options||pad.pressed.create)toggleMenu();
+  Object.assign(padPrev,pad.current,{__rawDown:[...pad.rawDown]});
 }
 function gatherInput(){
   const k = keyMove();
@@ -1708,6 +1731,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
 
   updateCharge(dt);
   PC.updateCombat(dt, simulationNow, sway, rawDt);
+  defenseController.update(dt);
 }
 
 const clock = new THREE.Clock();
@@ -2065,10 +2089,11 @@ setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()),
 respawn();
 updateModePanel();
 
-window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState,
+window.__arena = { enemySystem, PC, combatState, FEEL, arena, actorPos, deck, dungeon, encounterState, defenseController,
+  get playerFacing(){return actorFacing;}, getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
   get mazeWorld(){ return captureMazeWorld(); }, get activeRoomId(){ return activeRoomId; }, get roomTransition(){ return roomTransition; },
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
-  lightDown, heavyDown, attackDown, attackUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
+  lightDown, heavyDown, attackDown, attackUp, defenseDown, defenseUp, triggerDodge, cycleWeapon, cycleStance, beginTestSwing, setCombatInputMode,
   playCard, startDeckShuffle };
 
 if(ABILITY_CAPTURE_MODE){
