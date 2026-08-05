@@ -42,6 +42,21 @@ assert.ok(
 assert.doesNotMatch(poll, /lightDown\([^)]*\).*\b(?:cross|button\s*0|bd\(0\))/s);
 assert.doesNotMatch(poll, /\b(?:cross|button\s*0|bd\(0\)).*lightDown\(/s);
 
+const dodgeStart=arena.indexOf('function triggerDodge()');
+const dodgeEnd=arena.indexOf('function defenseDown',dodgeStart);
+assert.ok(dodgeStart>=0&&dodgeEnd>dodgeStart,'Combat Arena dodge route should be present');
+const dodge=arena.slice(dodgeStart,dodgeEnd);
+assert.match(dodge,/defenseController\?\.spendDodge\?\.\(\)/,'Rat Step dodge must route through stance-defense spending');
+assert.match(dodge,/dodgeSpend\?\.allowed===false/,'empty stamina must reject the dodge');
+assert.ok(
+  dodge.indexOf('if(arena.deadT')<dodge.indexOf('spendDodge'),
+  'dodge eligibility must be checked before stamina is spent',
+);
+assert.ok(
+  dodge.indexOf('spendDodge')<dodge.indexOf('d.t = 0'),
+  'stamina must be approved before dodge movement and invulnerability begin',
+);
+
 // Roadie Run previously replaced navigator.getGamepads and masked button 0.
 // It remains available as an isolated prototype, but must never be booted by
 // the Combat Arena runtime where Cross belongs to the defense seam.
