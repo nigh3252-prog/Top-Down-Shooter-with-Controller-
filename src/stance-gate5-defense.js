@@ -72,7 +72,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     if(profile.kind==='parry'){
       if(state.parryRemaining>0||state.parryRecoveryRemaining>0)return{handled:true,accepted:false,reason:'parry-recovery',source};
       state.parryRemaining=profile.parryWindow;state.parrySuccessRemaining=0;state.lastOutcome='parry-open';
-      visuals.pulse('parry');publish();return{handled:true,accepted:true,kind:'parry',source};
+      visuals.pulse('parry-open');publish();return{handled:true,accepted:true,kind:'parry',source};
     }
     if(profile.kind==='shield'){
       state.guardRaised=!state.guardRaised;state.guardBroken=false;
@@ -133,7 +133,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     const dir=hit.dir||{};state.lastHitDirection=`${Number(dir.x)||0},${Number(dir.z)||0}`;
     if(profile?.kind==='parry'&&state.parryRemaining>0){
       state.parryRemaining=0;state.parryRecoveryRemaining=.14;state.parrySuccessRemaining=profile.successFlash;
-      state.lastOutcome='parried';visuals.pulse('parry');publish();return{...hit,damage:0,outcome:'deflected'};
+      state.lastOutcome='parried';visuals.pulse('parry-success');publish();return{...hit,damage:0,outcome:'deflected'};
     }
     if(profile?.kind==='shield'&&state.guardRaised&&!PC.combatState.attack){
       const frontal=isFrontalShieldHit({incomingDir:hit.dir,forward:authoritativeForward(),arcDegrees:profile.blockArcDegrees});
