@@ -29,7 +29,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   const state=arena.defense={
     stanceId:'',profileId:null,kind:'existing-dodge',guardRaised:false,guardBroken:false,
     guardCounterRemaining:0,parryRemaining:0,parryRecoveryRemaining:0,parrySuccessRemaining:0,
-    lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,lastInput:'',lastHitDirection:'',
+    lastOutcome:'ready',lastBlockCost:0,lastDodgeCost:0,lastOverdrawAmount:0,lastInput:'',lastHitDirection:'',
     rawButtons:'',rawPressed:'',gamepadId:'',gamepadMapping:'',aliasConflict:false,
   };
   const originalStartCombatAttack=PC.startCombatAttack;
@@ -52,7 +52,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   function resetTransient(reason='stance-change'){
     state.guardRaised=false;state.guardBroken=false;state.guardCounterRemaining=0;
     state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;
-    state.lastOutcome=reason;
+    state.lastDodgeCost=0;state.lastOutcome=reason;
   }
   function syncStance(){
     const profile=currentProfile();
@@ -84,25 +84,47 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   }
   function defenseUp(source='input'){state.lastInput=source;return{handled:consumesDefenseInput(),source};}
 
-  function triggerCatchForDefense(decision,before){
+  function triggerCatchForDefense(decision,before,attackKey='stance-defense'){
     if(!decision?.opensCatch)return;
     const engine=windowRef?.__stance2Gate4Runtime?.engine;
     if(!engine||engine.snapshot().phase!=='idle')return;
     engine.trigger({
       before,after:Number(arena.stamina.v)||0,source:STANCE_SPEND_SOURCES.defense,
-      attackKey:'stance-defense',weaponId:String(PC.combatState.weapon||''),stanceId:String(arena.stance?.id||''),
+      attackKey,weaponId:String(PC.combatState.weapon||''),stanceId:String(arena.stance?.id||''),
       requestedCost:decision.requestedCost,actualSpent:decision.actualSpent,
       overdrawAmount:decision.overdrawAmount,overdraw:decision.overdraw,
     });
   }
-  function spendShieldBlock(cost){
+  function spendStanceDefense(cost,attackKey){
     const before=Math.max(0,Number(arena.stamina.v)||0);
     const phase=windowRef?.__stance2Gate4Runtime?.engine?.snapshot?.().phase||'idle';
     const decision=evaluateStanceSpend({available:before,cost,source:STANCE_SPEND_SOURCES.defense,catchPhase:phase,epsilon:EPSILON});
+    if(decision.allowed){
+      arena.stamina.v=Math.max(0,before-decision.actualSpent);
+      triggerCatchForDefense(decision,before,attackKey);
+    }
+    return{before,decision};
+  }
+  function spendShieldBlock(cost){
+    const {decision}=spendStanceDefense(cost,'hammerfall-block');
     if(!decision.allowed)return decision;
-    arena.stamina.v=Math.max(0,before-decision.actualSpent);
     state.lastBlockCost=decision.actualSpent;state.lastOverdrawAmount=decision.overdrawAmount;state.guardBroken=false;
-    triggerCatchForDefense(decision,before);return decision;
+    return decision;
+  }
+  function spendDodge(){
+    const profile=syncStance();
+    const cost=Math.max(0,Number(profile?.dodgeCost)||0);
+    if(profile?.kind!=='existing-dodge'||cost<=EPSILON){
+      return Object.freeze({
+        allowed:true,source:STANCE_SPEND_SOURCES.defense,available:Math.max(0,Number(arena.stamina.v)||0),
+        requestedCost:0,actualSpent:0,overdrawAmount:0,overdraw:false,opensCatch:false,reason:'free-fallback-dodge',
+      });
+    }
+    const {decision}=spendStanceDefense(cost,'rat-step-dodge');
+    state.lastDodgeCost=decision.actualSpent;
+    state.lastOverdrawAmount=decision.overdrawAmount;
+    state.lastOutcome=decision.allowed?(decision.overdraw?'dodge-overdraw':'dodge-spent'):'dodge-empty';
+    publish();return decision;
   }
   function resolvePlayerHit(hit={}){
     const profile=syncStance();
@@ -169,7 +191,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   enemySystem.setPlayerDefenseResolver(resolvePlayerHit);
   syncStance();publish();
   const api={
-    installed:true,state,defenseDown,defenseUp,resolvePlayerHit,update,syncStance,consumesDefenseInput,snapshot:()=>lastSnapshot,
+    installed:true,state,defenseDown,defenseUp,spendDodge,resolvePlayerHit,update,syncStance,consumesDefenseInput,snapshot:()=>lastSnapshot,
     recordGamepad(input,actions={}){
       const down=['cross','square','l2','r2'].filter(name=>input?.current?.[name]);
       const edges=['cross','square','l2','r2'].filter(name=>input?.pressed?.[name]);
