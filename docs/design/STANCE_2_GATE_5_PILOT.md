@@ -6,7 +6,13 @@ This pilot keeps one existing defense input while changing its behavior for thre
 
 Rat Step does not add a new sidestep system. Cross / LT / K continues to call the current Combat Arena dodge exactly as it did before Gate 5.
 
-Other non-pilot stances also retain that existing dodge as their fallback defense.
+- A successful Rat Step dodge spends 12 stamina.
+- Cooldown, movement-lock, and other eligibility checks happen before the spend, so a rejected dodge does not consume stamina.
+- A positive reserve below 12 may Overdraw, reaches zero, and opens the ordinary Stance Catch.
+- Starting from zero stamina cannot dodge.
+- Playing a stance card during Catch continues to refill stamina through the existing rule.
+
+Other non-pilot stances retain the existing dodge as their fallback defense and remain free in this representative pilot. Their defensive costs are deferred to the full stance-defense rollout.
 
 ## Long Blade Form — sword parry
 
@@ -47,7 +53,7 @@ Drafting or owning Hammerfall makes a basic kite shield visible on the character
 
 ## Input routing
 
-Combat Arena owns the defense button edge. K and Cross / LT call one `defenseDown()` seam. Long Blade and Hammerfall consume that input; Rat Step and non-pilot stances fall through to the unchanged `triggerDodge()` implementation. Gate 5 does not add keyboard listeners, start a second gamepad loop, or manipulate the built-in dodge cooldown.
+Combat Arena owns the defense button edge. K and Cross / LT call one `defenseDown()` seam. Long Blade and Hammerfall consume that input; Rat Step falls through to the existing `triggerDodge()` implementation, which requests the Rat Step stamina spend only after the dodge is eligible to begin. Non-pilot stances retain the unchanged fallback dodge. Gate 5 does not add keyboard listeners, start a second gamepad loop, or manipulate the built-in dodge cooldown.
 
 ## Damage pipeline
 
@@ -67,4 +73,5 @@ Resolution order for this pilot:
 - Shield strain as a second resource.
 - Enemy-specific parry recoil and riposte animations.
 - Full / Adapted defense variations across the complete 3×3 matrix.
+- Defensive stamina costs for the remaining stance families.
 - Full rollout across all 30 stances.
