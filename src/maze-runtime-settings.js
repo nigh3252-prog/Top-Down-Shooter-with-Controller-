@@ -191,5 +191,8 @@ export function installMazeRuntimeControls(){
 
 if(typeof document !== 'undefined'){
   queueMicrotask(()=>installMazeRuntimeControls());
-  if(isCombatArenaRuntime()) import('./roadie-run.js').catch(error=>console.error('Roadie run failed to load', error));
+  // Combat Arena input is owned exclusively by combat-arena.html. Do not load
+  // Roadie Run here: it masks standard Gamepad button 0 (PlayStation Cross)
+  // before the authoritative defense controller can distinguish dodge, parry,
+  // and Hammerfall shield behavior.
 }
