@@ -1,0 +1,47 @@
+name: Apply Rat Step dodge stamina
+
+on:
+  pull_request:
+    branches:
+      - automation/rat-step-dodge-stamina-base
+    types:
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply and test Rat Step stamina
+        run: |
+          node .rat-step-stamina/apply.mjs
+          git diff --check
+          node --check src/stance-defense-profiles.js
+          node --check src/stance-gate5-defense.js
+          npm run test:combat
+
+      - name: Commit and push tested arena seam
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -rf .rat-step-stamina
+          git rm -f .github/workflows/backbone-cross-debug.yml
+          git add combat-arena.html
+          git diff --cached --check
+          git commit -m "Make Rat Step dodge spend stance stamina"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
