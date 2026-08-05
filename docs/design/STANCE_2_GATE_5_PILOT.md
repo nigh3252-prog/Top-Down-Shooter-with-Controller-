@@ -20,8 +20,10 @@ Other non-pilot stances retain the existing dodge as their fallback defense and 
 - A hit during that window is negated.
 - Missing the window creates 0.32 seconds of parry recovery.
 - The parry replaces the dodge input only while Long Blade Form is active.
+- Opening the window creates a small blue-white burst around the player.
+- Successfully deflecting a hit creates a larger white-gold confirmation burst.
 
-This first pilot validates timing and readability. Enemy-specific counter reactions are deferred until the basic parry feels correct.
+The parry deliberately uses this lightweight burst rather than authored sword posing or a new animation rig. Enemy-specific recoil, riposte, and counter animations remain deferred until the basic timing feels correct.
 
 ## Hammerfall Guard — kite shield
 
