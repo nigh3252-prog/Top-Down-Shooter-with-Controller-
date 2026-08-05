@@ -7,6 +7,7 @@ import {
 } from '../src/stance-defense-profiles.js';
 
 assert.equal(resolveStanceDefenseProfile('S24').kind,'existing-dodge');
+assert.equal(resolveStanceDefenseProfile('S24').dodgeCost,12);
 assert.equal(resolveStanceDefenseProfile('S26').kind,'parry');
 assert.equal(resolveStanceDefenseProfile('S01').kind,'shield');
 assert.equal(resolveStanceDefenseProfile('S09'),null);
