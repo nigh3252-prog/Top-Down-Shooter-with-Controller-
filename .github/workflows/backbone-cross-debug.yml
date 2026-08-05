@@ -30,6 +30,7 @@ jobs:
       - name: Apply and test Backbone fix
         run: |
           node .cross-debug/apply.mjs
+          node .cross-debug/fix-test.mjs
           git diff --check
           node --check src/playstation-backbone-input.js
           node --check src/stance-gate5-defense.js
