@@ -1,0 +1,33 @@
+name: Cross routing audit
+
+on:
+  pull_request:
+    branches:
+      - automation/cross-audit-test-base
+    types:
+      - opened
+      - synchronize
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event.pull_request.number == 119
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run combat suite
+        run: |
+          git diff --check
+          npm run test:combat
