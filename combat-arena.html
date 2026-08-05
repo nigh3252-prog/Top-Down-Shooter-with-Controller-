@@ -995,7 +995,9 @@ function updateCharge(dt){
 function triggerDodge(){
   if(defenseController?.consumesDefenseInput?.())return false;
   const d = arena.dodge;
-  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return false;
+  const dodgeSpend=defenseController?.spendDodge?.();
+  if(dodgeSpend?.allowed===false){exhaustFlash();announce('NO STAMINA',.55);return false;}
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
