@@ -260,7 +260,7 @@ import { installPlayerCombat } from './src/player-combat.js';
 import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, normalizeStoneWeaponId } from './src/weapons.js';
 import { STANCE_CARDS } from './src/stance-cards.js';
 import { createStanceGate5Runtime } from './src/stance-gate5-defense.js';
-import { readPlayStationBackboneInput } from './src/playstation-backbone-input.js';
+import { readPlayStationBackboneInput, resolvePlayStationBackboneActions } from './src/playstation-backbone-input.js';
 import { guardPoseFor } from './src/guard-poses.js';
 import { lightFollowupForStage, HEAVY_LIGHT_STAGE } from './src/combat-links.js';
 import { COMBAT_INPUT_MODES, DEFAULT_COMBAT_INPUT_MODE, bufferExpiresAt, getCombatInputMode, lightFollowupForActiveMove, shouldExpireBufferedInput } from './src/combat-input-modes.js';
@@ -1331,12 +1331,16 @@ function pollPad(){
   if(l>1){mx/=l;mz/=l;}
   padMove.x=mx; padMove.z=mz;
   const pad=readPlayStationBackboneInput(gp,padPrev);
-  defenseController.recordGamepad(pad);
-  if(pad.pressed.square||pad.pressed.r2)lightDown();
+  const padActions=resolvePlayStationBackboneActions(pad);
+  defenseController.recordGamepad(pad,padActions);
+  // Defense wins a same-frame Android/Backbone alias conflict. This prevents a
+  // Cross press that is also reported as Square from starting an attack first
+  // and making Hammerfall reject the shield toggle as busy.
+  if(padActions.defensePressed)defenseDown(padActions.defenseSource);
+  if(padActions.lightPressed)lightDown();
   if(pad.pressed.triangle)heavyDown();
   if(pad.released.triangle)heavyUp();
-  if(pad.pressed.cross||pad.pressed.l2)defenseDown(pad.pressed.cross?'gamepad-cross':'gamepad-l2');
-  if(!pad.current.cross&&!pad.current.l2&&(pad.released.cross||pad.released.l2))defenseUp('gamepad');
+  if(padActions.defenseReleased)defenseUp('gamepad');
   if(pad.pressed.circle)startDeckShuffle();
   if(pad.pressed.l1)playCard(0);
   if(pad.pressed.r1)playCard(1);
@@ -1345,7 +1349,7 @@ function pollPad(){
   if(pad.pressed.dpadUp)cycleWeapon(-1);
   if(pad.pressed.dpadDown)cycleWeapon(1);
   if(pad.pressed.options||pad.pressed.create)toggleMenu();
-  Object.assign(padPrev,pad.current);
+  Object.assign(padPrev,pad.current,{__rawDown:[...pad.rawDown]});
 }
 function gatherInput(){
   const k = keyMove();

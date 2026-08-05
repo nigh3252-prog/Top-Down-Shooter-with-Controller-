@@ -15,6 +15,8 @@ function installDebugOverlay(documentRef,windowRef){
     `DEFENSE ${snapshot.kind} · ${snapshot.guardRaised?'UP':'DOWN'}${snapshot.guardBroken?' · EMPTY':''}`,
     `STANCE ${snapshot.stanceId||'-'} · ${snapshot.lastOutcome}`,
     `PAD ${snapshot.lastInput||'-'} · HIT ${snapshot.lastHitDirection||'-'}`,
+    `RAW DOWN ${snapshot.rawButtons||'-'} · EDGE ${snapshot.rawPressed||'-'}`,
+    `MAP ${snapshot.gamepadMapping||'-'} · ${snapshot.gamepadId||'-'}`,
     `STAMINA ${snapshot.stamina.toFixed(1)}`,
   ].join('\n');};
 }
@@ -28,6 +30,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     stanceId:'',profileId:null,kind:'existing-dodge',guardRaised:false,guardBroken:false,
     guardCounterRemaining:0,parryRemaining:0,parryRecoveryRemaining:0,parrySuccessRemaining:0,
     lastOutcome:'ready',lastBlockCost:0,lastOverdrawAmount:0,lastInput:'',lastHitDirection:'',
+    rawButtons:'',rawPressed:'',gamepadId:'',gamepadMapping:'',aliasConflict:false,
   };
   const originalStartCombatAttack=PC.startCombatAttack;
   const visuals=installStanceGate5Visuals({PC,windowRef,documentRef});
@@ -167,9 +170,17 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   syncStance();publish();
   const api={
     installed:true,state,defenseDown,defenseUp,resolvePlayerHit,update,syncStance,consumesDefenseInput,snapshot:()=>lastSnapshot,
-    recordGamepad(input){
-      const names=['cross','square','l2','r2'].filter(name=>input?.current?.[name]);
-      if(names.length)state.lastInput=`pad:${names.join('+')}`;
+    recordGamepad(input,actions={}){
+      const down=['cross','square','l2','r2'].filter(name=>input?.current?.[name]);
+      const edges=['cross','square','l2','r2'].filter(name=>input?.pressed?.[name]);
+      state.rawButtons=(input?.rawDown||[]).join(',');
+      state.rawPressed=(input?.rawPressed||[]).join(',');
+      state.gamepadId=String(input?.id||'');
+      state.gamepadMapping=String(input?.mapping||'');
+      state.aliasConflict=actions?.aliasConflict===true;
+      if(edges.length||input?.rawPressed?.length){
+        state.lastInput=`edge:${edges.join('+')||'-'} raw:${state.rawPressed||'-'}${state.aliasConflict?' ALIAS':''}`;
+      }else if(down.length)state.lastInput=`held:${down.join('+')}`;
       publish();
     },
     setGuardRaised(value){if(currentProfile()?.kind!=='shield')return false;state.guardRaised=!!value;state.guardBroken=false;publish();return true;},

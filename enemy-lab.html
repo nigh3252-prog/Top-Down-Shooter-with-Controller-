@@ -72,6 +72,9 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
 <script>
 (()=>{
   const outer=new URLSearchParams(location.search),inner=new URLSearchParams({seed:'enemy-lab-001',layout:'arena',enemyLab:'1'});
+  // Diagnostics belong to the embedded Combat Arena, so forward them from the
+  // phone-friendly Enemy Lab URL instead of silently dropping them.
+  if(outer.has('defenseDebug'))inner.set('defenseDebug',outer.get('defenseDebug'));
   if(outer.get('capture')==='1'){
     inner.set('capture','1');
     for(const key of['arcana','aim','rngSeed','clean','stage','effects','renderMode'])if(outer.has(key))inner.set(key,outer.get(key));

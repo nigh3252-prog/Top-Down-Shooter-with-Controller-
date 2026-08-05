@@ -4,6 +4,9 @@ const arena=readFileSync(new URL('../combat-arena.html',import.meta.url),'utf8')
 const weaponBalance=readFileSync(new URL('../src/weapon-balance.js',import.meta.url),'utf8');
 assert.match(arena,/createStanceGate5Runtime/);
 assert.match(arena,/readPlayStationBackboneInput/);
+assert.match(arena,/resolvePlayStationBackboneActions/);
+assert.match(arena,/if\(padActions\.defensePressed\)defenseDown/);
+assert.match(arena,/if\(padActions\.lightPressed\)lightDown/);
 assert.match(arena,/const defenseController=createStanceGate5Runtime/);
 assert.match(arena,/pad.pressed.cross||pad.pressed.l2/);
 assert.match(arena,/pad.pressed.square||pad.pressed.r2/);
