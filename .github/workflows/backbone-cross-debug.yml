@@ -1,0 +1,33 @@
+name: Apply Backbone Cross priority and diagnostics
+
+on:
+  pull_request:
+    branches:
+      - automation/backbone-cross-debug-base
+    types:
+      - opened
+      - synchronize
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit and test Cross routing
+        run: |
+          git diff --check
+          npm run test:combat
