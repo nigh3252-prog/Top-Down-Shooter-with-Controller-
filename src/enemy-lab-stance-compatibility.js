@@ -1,4 +1,4 @@
-import { STANCE_CARDS } from './stance-cards.js';
+import { listCards } from './card-registry.js';
 import { STONE_WEAPONS } from './weapons.js';
 import {
   STANCE_CLASSES,
@@ -13,6 +13,8 @@ import {
 } from './stance-gate2-runtime.js';
 import { resolveGate3FullPayoff } from './stance-gate3-payoffs.js';
 import { resolveStanceMovementProfile } from './stance-movement-profiles.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
 
 const cleanName=value=>String(value||'').replace(/^S\d+\s*/,'').trim();
 
@@ -30,13 +32,10 @@ function makeStatus(document,title,body,tone=''){
   const detail=document.createElement('span');detail.textContent=body;
   card.append(heading,detail);return card;
 }
-function activeRuntime(document){
-  const frame=document.getElementById('arenaFrame');
-  try{return frame?.contentWindow?.__arena||null;}catch{return null;}
-}
-function currentSnapshot(document){
-  const runtime=activeRuntime(document),stance=runtime?.arena?.stance||null;
-  const weaponId=String(runtime?.combatState?.weapon||''),weapon=STONE_WEAPONS[weaponId]||null;
+function currentSnapshot(runtime){
+  const stance=runtime?.arena?.stance||null;
+  const weaponId=String(runtime?.combatState?.weapon||'');
+  const weapon=STONE_WEAPONS[weaponId]||null;
   const compatibility=resolveStanceWeaponCompatibility({stance,weapon,weaponId});
   const gate2=resolveGate2PilotProfile({stance,weapon,weaponId});
   const gate3=resolveGate3FullPayoff({stance,weapon,weaponId});
@@ -64,12 +63,15 @@ function catchDescription(catchState){
   return['GATE 4 · READY',`Any positive final reserve may Overdraw one stance attack. Catch window ×${multiplier} = ${duration.toFixed(2)} sec. Whiff refunds return only real stamina.`,''];
 }
 
-export function installEnemyLabStanceCompatibility({document=globalThis.document}={}){
+export function installEnemyLabStanceCompatibility({document=globalThis.document,runtime=null,sectionRegistry=null}={}){
   if(!document)return{installed:false,reason:'missing-document'};
   const page=new URL(document.location?.href||globalThis.location?.href||'http://localhost/enemy-lab.html');
   if(page.searchParams.get('capture')==='1')return{installed:false,reason:'capture-mode'};
-  const categories=document.getElementById('labCategories'),values=document.getElementById('labValues'),hint=document.getElementById('categoryHint');
-  if(!categories||!values)return{installed:false,reason:'missing-controls'};
+  const useRegistry=!!sectionRegistry;
+  const categories=useRegistry?null:document.getElementById('labCategories');
+  const values=useRegistry?null:document.getElementById('labValues');
+  const hint=useRegistry?null:document.getElementById('categoryHint');
+  if(!useRegistry&&(!categories||!values))return{installed:false,reason:'missing-controls'};
   if(document.documentElement.dataset.enemyLabStanceCompatibility==='1')return globalThis.__enemyLabStanceCompatibility||{installed:true};
   document.documentElement.dataset.enemyLabStanceCompatibility='1';
 
@@ -93,8 +95,11 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   let open=false,refreshTimer=0,lastKey='';
   const categoryButton=()=>categories.querySelector('[data-stance-compatibility-category="1"]');
   function syncCategoryLabel(){
+    if(useRegistry)return;
     const button=categoryButton();if(!button)return;
-    const snapshot=currentSnapshot(document),title=button.querySelector('b');if(!title)return;
+    const snapshot=currentSnapshot(runtime);
+    const title=button.querySelector('b');
+    if(!title)return;
     if(snapshot.compatibility.tier==='unknown')title.textContent='STANCE 2.0';
     else title.textContent=`STANCE 2.0 · ${snapshot.compatibility.label}${snapshot.liveGate4?' · G4':snapshot.gate3.active?' · G3':snapshot.gate2.active?' · G2':''}`;
   }
@@ -104,18 +109,35 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     button.disabled=false;button.dataset.stanceCompatibilityCategory='1';categories.appendChild(button);
   }
   function activate(){
-    open=true;for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.stanceCompatibilityCategory==='1');render(true);
+    open=true;
+    if(useRegistry){sectionRegistry.selectView?.('diagnostics','stance-compatibility');sectionRegistry.select('diagnostics');sectionRegistry.invalidate('diagnostics','stance-compatibility');return;}
+    for(const button of categories.querySelectorAll('.choice'))button.classList.toggle('on',button.dataset.stanceCompatibilityCategory==='1');
+    render(true);
   }
   function render(force=false){
-    if(!open)return;
-    const snapshot=currentSnapshot(document),stanceId=String(snapshot.stance?.id||'');
+    if(!open&&!useRegistry)return null;
+    const snapshot=currentSnapshot(runtime);
+    const stanceId=String(snapshot.stance?.id||'');
+    const live2=String(snapshot.liveGate2?.profileId||'');
+    const live3=String(snapshot.liveGate3?.payoffId||'');
+    const movementId=String(snapshot.liveGate3?.movementProfileId||snapshot.movement.profile?.id||'');
+    const recoveryKey=Number(snapshot.liveGate3?.recoveryRemaining||0).toFixed(1);
     const catchKey=`${snapshot.liveGate4?.phase||'none'}:${Number(snapshot.liveGate4?.remaining||0).toFixed(1)}:${snapshot.liveGate4?.windowMultiplier||1}`;
-    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,snapshot.liveGate2?.profileId||'',snapshot.liveGate3?.payoffId||'',snapshot.liveGate3?.movementProfileId||snapshot.movement.profile?.id||'',catchKey].join('|');
-    if(!force&&key===lastKey)return;lastKey=key;syncCategoryLabel();
+    const key=[stanceId,snapshot.weaponId,snapshot.compatibility.tier,live2,live3,movementId,recoveryKey,catchKey].join('|');
+    if(!force&&key===lastKey)return;
+    lastKey=key;
+    syncCategoryLabel();
     if(hint)hint.textContent=snapshot.liveGate4
       ?'Gate 4 is live: any positive final reserve may Overdraw one stance attack, then the Catch Ring asks for a true stance card.'
-      :snapshot.gate3.active?'Gate 3 payoff and movement commitment are live.':snapshot.gate2.active?'Gate 2 expression and movement profile are live.':'This pairing remains a Gate 1 diagnostic.';
-    const oldTop=values.scrollTop,root=document.createElement('div');root.className='valueList';root.dataset.stanceCompatibilityRoot='1';
+      :snapshot.gate3.active
+        ?'Gate 3 full-expression payoff and movement commitment are live for this matched pilot pairing.'
+        :snapshot.gate2.active
+          ?'Gate 2 expression and its stance/weapon movement profile are live. Adapted and unusable pairs do not receive the matched-class Gate 3 payoff.'
+          :'This pairing remains a Gate 1 diagnostic outside the current pilot.';
+    const oldTop=values?.scrollTop||0;
+    const root=document.createElement('div');
+    root.className='valueList';
+    root.dataset.stanceCompatibilityRoot='1';
 
     if(snapshot.compatibility.tier==='unknown')root.appendChild(makeStatus(document,'WAITING FOR COMBAT ARENA','Start the arena so the active stance and weapon can be inspected.'));
     else{
@@ -137,6 +159,8 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       const live=snapshot.liveGate3;root.appendChild(makeStatus(document,live?.label||snapshot.gate3.payoff?.label||'GATE 3 PAYOFF ACTIVE',live?.summary||snapshot.gate3.payoff?.summary||'','payoff'));
     }else if(snapshot.gate2.active)root.appendChild(makeStatus(document,'NO FULL-EXPRESSION PAYOFF',`This ${snapshot.compatibility.label.toLowerCase()} pairing keeps Gate 2 behavior and movement, but matched-class confirmation and breaking privileges remain locked. Cleave mode: ${snapshot.liveGate3?.cleaveMode||'pending runtime'}.`));
 
+    root.appendChild(makeStatus(document,'GATE 3 PILOT PAYOFFS','Rat Step + dagger: movement freedom. Long Blade Form + longsword: larger confirmed follow-up window. Hammerfall + greatsword: doubled stagger, minimum stun, and unrestricted cleave.'));
+
     const [catchTitle,catchBody,catchTone]=catchDescription(snapshot.liveGate4);root.appendChild(makeStatus(document,catchTitle,catchBody,catchTone));
     root.appendChild(makeStatus(document,'GATE 4 CONTROLS','MENU → STANCE 2.0 → STANCE CATCH WINDOW. Range ×1–×10 in whole steps; browser default ×2. Catch Ring flashes white-gold, drains clockwise, turns green on success, and red on miss.'));
 
@@ -151,12 +175,25 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
       const detail=document.createElement('span');detail.textContent=STANCE_CARDS.filter(stance=>STANCE_CLASS_BY_ID[stance.id]===stanceClass).map(stance=>cleanName(stance.name)).join(' · ');
       group.append(title,detail);root.appendChild(group);
     }
-    values.replaceChildren(root);requestAnimationFrame(()=>{values.scrollTop=oldTop;});
+    if(useRegistry)return root;
+    values.replaceChildren(root);
+    requestAnimationFrame(()=>{values.scrollTop=oldTop;});
   }
 
-  categories.addEventListener('click',event=>{const button=event.target.closest?.('.choice');if(!button||button.dataset.stanceCompatibilityCategory==='1')return;open=false;},true);
-  new MutationObserver(()=>ensureCategory()).observe(categories,{childList:true});ensureCategory();
-  refreshTimer=globalThis.setInterval?.(()=>{syncCategoryLabel();render(false);},250)||0;
-  const api={installed:true,open:activate,snapshot:()=>currentSnapshot(document),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
-  globalThis.__enemyLabStanceCompatibility=api;return api;
+  if(useRegistry){
+    open=true;
+    sectionRegistry.registerView({id:'stance-compatibility',sectionId:'diagnostics',label:'STANCE DIAGNOSTICS',description:'Inspect Gate 2, Gate 3, and Gate 4 stance/weapon behavior.',order:20,render:()=>render(false)});
+  }else{
+    categories.addEventListener('click',event=>{
+      const button=event.target.closest?.('.choice');
+      if(!button||button.dataset.stanceCompatibilityCategory==='1')return;
+      open=false;
+    },true);
+    ensureCategory();
+  }
+  refreshTimer=globalThis.setInterval?.(()=>{if(useRegistry)sectionRegistry.invalidate('diagnostics','stance-compatibility');else{syncCategoryLabel();render(false);}},250)||0;
+
+  const api={installed:true,open:activate,snapshot:()=>currentSnapshot(runtime),destroy(){if(refreshTimer)globalThis.clearInterval?.(refreshTimer);}};
+  globalThis.__enemyLabStanceCompatibility=api;
+  return api;
 }

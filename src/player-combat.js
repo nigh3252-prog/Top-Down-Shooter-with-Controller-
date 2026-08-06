@@ -1,19 +1,16 @@
-// Merge-forward integration wrapper. The complete current-main combat module
-// keeps Pilebunker defaults, vertical melee aim, and the approved weapon core;
-// this layer adds the centralized Blood Slash / Bing Bong effect runtime.
-//
-// The pinned module has its own relative-import module graph, including its own
-// arena-enemy registry instance. Bridge the local router into that registry so
-// Pilebunker sees and damages the same enemies rendered by this branch.
+import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.js';
+// Current-main combat composition. The local core preserves the validated
+// weapon/attack implementation, the Pilebunker layer adds its approved combat
+// behavior, and this module installs the remaining dash and Arcana runtimes.
 
-import { installPlayerCombat as installMainPlayerCombat } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/player-combat.js';
-import { setArenaEnemySource as setPinnedArenaEnemySource } from 'https://cdn.jsdelivr.net/gh/nigh3252-prog/Top-Down-Shooter-with-Controller-@091c4b7afd3667fe2851de83912c873e200d1d9c/src/arena-enemy-registry.js';
-import { getArenaEnemySystem } from './arena-enemy-registry.js';
+import { installPlayerCombat as installMainPlayerCombat } from './player-combat-pilebunker.js';
+import { getArenaEnemySystem, setArenaEnemySource } from './arena-enemy-registry.js';
 import { createArenaEnemyRegistryBridge } from './arena-enemy-registry-bridge.js';
 import { installBasicDashRuntime } from './basic-dash.js';
 import { installDashMagicJet } from './dash-magic-jet.js';
-import { installDashJetPanel } from './dash-magic-jet-panel.js';
+import { createDashJetControlDescriptors } from './dash-magic-jet-panel.js';
 import { installCombatCardEffects } from './combat-card-effects.js';
+import { createEffectDispatcher, createRuntimeHandlerTable } from './effect-registry.js';
 import { installWizardArcanaRuntime } from './wizard-arcana-runtime.js';
 import { installWizardFlameStrikeRuntime } from './wizard-flame-strike-runtime.js';
 import { installWizardWindSlashRuntime } from './wizard-wind-slash-runtime.js';
@@ -26,12 +23,14 @@ import { installWizardFusionLeapRuntime } from './wizard-fusion-leap-runtime.js'
 import { installWizardArcaneTypesRuntime } from './wizard-arcane-types-runtime.js';
 import { installWizardAlliedArcanaRuntime } from './wizard-allied-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
-import { installEnemyLabArcanaControlsHotfix } from './enemy-lab-arcana-controls-hotfix.js';
 
 export function installPlayerCombat(api){
   const PC=installMainPlayerCombat(api);
-  const arenaPage=/(?:^|\/)combat-arena\.html$/i.test(location.pathname)||/HEX MAZE COMBAT/i.test(document.title);
-  if(!arenaPage)return PC;
+  const runtimeMode=getArenaRuntimeConfig()?.mode;
+  const supportedArenaRuntime=runtimeMode==='arena'||runtimeMode==='enemy-lab'
+    ||/(?:^|\/)combat-arena\.html$/i.test(location.pathname)
+    ||/HEX MAZE COMBAT/i.test(document.title);
+  if(!supportedArenaRuntime)return PC;
 
   const {THREE}=api;
   const playerWorld=new THREE.Vector3();
@@ -39,36 +38,29 @@ export function installPlayerCombat(api){
   const identityQ=new THREE.Quaternion();
   const enemyRegistryBridge=createArenaEnemyRegistryBridge({
     getLocalSystem:getArenaEnemySystem,
-    setPinnedSource:setPinnedArenaEnemySource,
+    setPinnedSource:setArenaEnemySource,
   });
   const basicDashRuntime=installBasicDashRuntime(api);
   const dashMagicJet=installDashMagicJet({
     THREE,scene:api.scene,
     getDashState:()=>basicDashRuntime.state,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-    getRoomKey:()=>window.__arena?.activeRoomId??null,
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    getRoomKey:()=>getArenaRuntime()?.activeRoomId??null,
     getInterrupted:()=>{
-      const handle=window.__arena;
+      const handle=getArenaRuntime();
       return !!handle&&(handle.arena?.deadT>=0||!!handle.roomTransition?.active);
     },
   });
-  installDashJetPanel({runtime:dashMagicJet});
-  installEnemyLabArcanaControlsHotfix();
+  for(const descriptor of createDashJetControlDescriptors(dashMagicJet))api.controlRegistry?.register?.(
+    {id:'dash-jet',label:'DASH JET',source:'player-combat',placement:{section:'loadout',subsection:'Dash Jet'},profile:{scope:'profile',pathPrefix:'ability.dashJet'}},
+    {...descriptor,profile:descriptor.kind==='button'?{scope:'ephemeral',exclusion:'Reset action; tuned values are stored individually.'}:{path:`ability.dashJet.${descriptor.id.split('.').at(-1)}`,scope:'profile',migrationId:`dash-jet-${descriptor.id}`},placement:{section:'loadout',subsection:'Dash Jet',order:0,accessibleLabel:`Player loadout / Dash Jet / ${descriptor.label}`}},
+  );
 
   // Arcana were authored and validated through the embedded Enemy Lab. Every
   // runtime family now initializes under that same context in the full Combat
   // Arena, then the real URL is restored immediately. This keeps one authored
   // implementation for all 46 cards without enabling Lab-only deck/editor UI.
-  function installArenaArcanaRuntime(factory){
-    const current=new URL(location.href);
-    const alreadyEnabled=current.searchParams.get('enemyLab')==='1'||current.searchParams.get('mode')==='enemy-lab';
-    if(alreadyEnabled)return factory();
-    const original=`${location.pathname}${location.search}${location.hash}`;
-    current.searchParams.set('enemyLab','1');
-    history.replaceState(history.state,'',current);
-    try{return factory();}
-    finally{history.replaceState(history.state,'',original);}
-  }
+  const installArenaArcanaRuntime=factory=>factory();
 
   function getPlayerTransform(){
     const root=api.actorVisual?.parent;
@@ -81,7 +73,7 @@ export function installPlayerCombat(api){
   }
   function advanceArenaPlayer(dx,dz){
     const moveX=Number(dx)||0,moveZ=Number(dz)||0;
-    const position=window.__arena?.actorPos;
+    const position=getArenaRuntime()?.actorPos;
     if(!position)return false;
     if(Number.isFinite(position.x))position.x+=moveX;
     if(Number.isFinite(position.y))position.y+=moveZ;
@@ -95,21 +87,21 @@ export function installPlayerCombat(api){
     THREE,scene:api.scene,PC,hooks:api.hooks,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getStance:()=>window.__arena?.arena?.stance||null,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getStance:()=>getArenaRuntime()?.arena?.stance||null,
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   });
   const wizardArcanaDamageScaler=installWizardArcanaDamageScaler({getEnemySystem:getArenaEnemySystem});
   const wizardArcanaRuntime=installArenaArcanaRuntime(()=>installWizardArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
   const wizardRebuiltArcanaRuntime=installArenaArcanaRuntime(()=>installWizardRebuiltArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
   const wizardFlameStrikeRuntime=installArenaArcanaRuntime(()=>installWizardFlameStrikeRuntime({
     THREE,scene:api.scene,
@@ -125,24 +117,24 @@ export function installPlayerCombat(api){
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
   const wizardNextSourceRuntime=installArenaArcanaRuntime(()=>installWizardNextSourceRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
     advancePlayer:advanceArenaPlayer,
   }));
   const wizardNextTwentyBasicsRuntime=installArenaArcanaRuntime(()=>installWizardNextTwentyBasicsRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
-    getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
+    getMoveInput:()=>getArenaRuntime()?.arenaMoveInput?.()||{x:0,z:0},
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-    translatePlayer:(dx,dz)=>window.__arena?.translateArcanaPlayer?.(dx,dz),
-    setMovementLock:(locked)=>window.__arena?.setArcanaMovementLock?.(locked),
-    setFacingLock:(direction)=>window.__arena?.setArcanaFacingLock?.(direction),
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    translatePlayer:(dx,dz)=>getArenaRuntime()?.translateArcanaPlayer?.(dx,dz),
+    setMovementLock:(locked)=>getArenaRuntime()?.setArcanaMovementLock?.(locked),
+    setFacingLock:(direction)=>getArenaRuntime()?.setArcanaFacingLock?.(direction),
   }));
   let arcanaDamageAdapter=null,arcanaDamageSystem=null;
   function syncArcanaDamageInterceptor(){
@@ -156,14 +148,14 @@ export function installPlayerCombat(api){
   const wizardNextTwentyDashRuntime=installArenaArcanaRuntime(()=>installWizardNextTwentyDashRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
-    getMoveInput:()=>window.__arena?.arenaMoveInput?.()||{x:0,z:0},
+    getMoveInput:()=>getArenaRuntime()?.arenaMoveInput?.()||{x:0,z:0},
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
     startDashMotion:(options)=>basicDashRuntime.startDashMotion(options),
-    validateTeleportEndpoint:(endpoint)=>window.__arena?.validateArcanaTeleportEndpoint?.(endpoint)??{ok:false,reason:'arena-unavailable'},
-    teleportPlayer:(endpoint)=>window.__arena?.teleportArcanaPlayer?.(endpoint),
-    setPlayerTargetable:(targetable)=>window.__arena?.setArcanaTargetable?.(targetable),
-    setPlayerVisible:(visible)=>window.__arena?.setArcanaPlayerVisible?.(visible),
+    validateTeleportEndpoint:(endpoint)=>getArenaRuntime()?.validateArcanaTeleportEndpoint?.(endpoint)??{ok:false,reason:'arena-unavailable'},
+    teleportPlayer:(endpoint)=>getArenaRuntime()?.teleportArcanaPlayer?.(endpoint),
+    setPlayerTargetable:(targetable)=>getArenaRuntime()?.setArcanaTargetable?.(targetable),
+    setPlayerVisible:(visible)=>getArenaRuntime()?.setArcanaPlayerVisible?.(visible),
     registerPlayerDamageInterceptor:(interceptor)=>{
       arcanaDamageAdapter=hit=>{
         const result=interceptor?.(Number(hit?.damage)||0,hit)||{};
@@ -180,41 +172,68 @@ export function installPlayerCombat(api){
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-    setPlayerPosition:(position,context)=>window.__arena?.setArcanaPlayerPosition?.(position,context),
-    setPlayerInvulnerable:(value,context)=>window.__arena?.setArcanaPlayerInvulnerable?.(value,context),
-    setPlayerAirborne:(value,context)=>window.__arena?.setArcanaPlayerAirborne?.(value,context),
-    setPlayerHeight:(value,context)=>window.__arena?.setArcanaPlayerHeight?.(value,context),
-    setEnemyCarried:(enemy,detail)=>window.__arena?.setArcanaEnemyCarried?.(enemy,detail),
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    setPlayerPosition:(position,context)=>getArenaRuntime()?.setArcanaPlayerPosition?.(position,context),
+    setPlayerInvulnerable:(value,context)=>getArenaRuntime()?.setArcanaPlayerInvulnerable?.(value,context),
+    setPlayerAirborne:(value,context)=>getArenaRuntime()?.setArcanaPlayerAirborne?.(value,context),
+    setPlayerHeight:(value,context)=>getArenaRuntime()?.setArcanaPlayerHeight?.(value,context),
+    setEnemyCarried:(enemy,detail)=>getArenaRuntime()?.setArcanaEnemyCarried?.(enemy,detail),
   }));
   const wizardArcaneTypesRuntime=installArenaArcanaRuntime(()=>installWizardArcaneTypesRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
-    validatePosition:(position)=>window.__arena?.validateArcanaTeleportEndpoint?.(position)?.ok===true,
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    validatePosition:(position)=>getArenaRuntime()?.validateArcanaTeleportEndpoint?.(position)?.ok===true,
     applyEnemyStatus:(enemy,kind,duration,options)=>getArenaEnemySystem()?.applyStatus?.(enemy,kind,duration,options),
   }));
   const wizardAlliedArcanaRuntime=installArenaArcanaRuntime(()=>installWizardAlliedArcanaRuntime({
     THREE,scene:api.scene,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
-    getMazeSegments:()=>window.__arena?.mazeWorld?.getCollisionSegments?.()||[],
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
 
-  const previousAbilityCanPlay=window.__ABILITY_CARD_CAN_PLAY__;
-  const fusionLeapIds=new Set(['FLAME-FUSION','HEROIC-LEAP']);
-  const alliedArcanaIds=new Set(['RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM']);
-  const arcaneTypeIds=new Set(['CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION']);
-  window.__ABILITY_CARD_CAN_PLAY__=card=>{
-    const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();
-    if(wizardFusionLeapRuntime.busy)return false;
+  function arcanaIdFor(card){return String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();}
+  function canPlayArcanaCard(card){
+    const id=arcanaIdFor(card);
+    if(!id||wizardFusionLeapRuntime.busy)return false;
     if(wizardArcaneTypesRuntime.state?.ballCharge&&id!=='BALL-LIGHTNING')return false;
-    if(fusionLeapIds.has(id))return wizardFusionLeapRuntime.canCast(card);
-    if(alliedArcanaIds.has(id))return wizardAlliedArcanaRuntime.canCast(id);
-    if(arcaneTypeIds.has(id))return wizardArcaneTypesRuntime.canCast(card);
-    return typeof previousAbilityCanPlay==='function'?previousAbilityCanPlay(card):true;
-  };
+    return true;
+  }
+  // The local Pilebunker layer owns the exact guided-aim startup; this wrapper
+  // deliberately fails closed until that layer exposes its direct card API.
+  function canPlayPilebunker(){
+    return typeof PC.canPlayPilebunker==='function'&&PC.canPlayPilebunker()===true;
+  }
+  function playPilebunker(card,context={}){
+    try{if(!enemyRegistryBridge.sync({required:true}))return false;}catch{return false;}
+    return typeof PC.playPilebunker==='function'&&PC.playPilebunker(card,context)===true;
+  }
+  function makeArcanaHandler(runtime){
+    return{
+      canPlay(card,context={}){return canPlayArcanaCard(card)&&runtime?.canPlay?.(card,context)===true;},
+      play(card,context={}){return canPlayArcanaCard(card)&&runtime?.play?.(card,context)===true;},
+    };
+  }
+  const pilebunkerCardRuntime=Object.freeze({canPlay:canPlayPilebunker,play:playPilebunker});
+  const runtimeHandlerTable=createRuntimeHandlerTable({
+    pilebunker:pilebunkerCardRuntime,
+    bloodSlash:{canPlay:()=>true,play:()=>combatEffectRuntime.playBloodSlash()},
+    bingBong:{canPlay:()=>true,play:()=>true},
+    wizardArcana:makeArcanaHandler(wizardArcanaRuntime),
+    wizardFlameStrike:makeArcanaHandler(wizardFlameStrikeRuntime),
+    wizardWindSlash:makeArcanaHandler(wizardWindSlashRuntime),
+    wizardRebuiltArcana:makeArcanaHandler(wizardRebuiltArcanaRuntime),
+    wizardAirBasics:makeArcanaHandler(wizardAirBasicsRuntime),
+    wizardNextSource:makeArcanaHandler(wizardNextSourceRuntime),
+    wizardNextTwentyBasics:makeArcanaHandler(wizardNextTwentyBasicsRuntime),
+    wizardNextTwentyDash:makeArcanaHandler(wizardNextTwentyDashRuntime),
+    wizardFusionLeap:makeArcanaHandler(wizardFusionLeapRuntime),
+    wizardAlliedArcana:makeArcanaHandler(wizardAlliedArcanaRuntime),
+    wizardArcaneTypes:makeArcanaHandler(wizardArcaneTypesRuntime),
+  });
+  const cardEffectDispatcher=createEffectDispatcher({runtimeHandlers:runtimeHandlerTable});
 
   function releaseArcanaInput(detail={}){
     return wizardArcaneTypesRuntime.releaseBallLightning?.({...detail,phase:'release'})||false;
@@ -253,11 +272,6 @@ export function installPlayerCombat(api){
     return{preservedResources:!!preserved};
   }
 
-  // Update syncing normally establishes the bridge before the player can use a
-  // card. The required play-time check prevents a visual-only Pilebunker if the
-  // arena registry ever changes or fails to initialize in a future merge.
-  window.addEventListener('powbunker:play',()=>enemyRegistryBridge.sync({required:true}));
-
   const updateMainCombat=PC.updateCombat;
   PC.updateCombat=function(dt,now,sway,rawDt=dt){
     enemyRegistryBridge.sync();
@@ -284,7 +298,10 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'basicDashRuntime',{value:basicDashRuntime,enumerable:true});
   Object.defineProperty(PC,'dashMagicJet',{value:dashMagicJet,enumerable:true});
   Object.defineProperty(PC,'pilebunkerEnemyRegistryBridge',{value:enemyRegistryBridge,enumerable:true});
+  Object.defineProperty(PC,'pilebunkerCardRuntime',{value:pilebunkerCardRuntime,enumerable:true});
   Object.defineProperty(PC,'combatEffectRuntime',{value:combatEffectRuntime,enumerable:true});
+  Object.defineProperty(PC,'runtimeHandlerTable',{value:runtimeHandlerTable,enumerable:true});
+  Object.defineProperty(PC,'cardEffectDispatcher',{value:cardEffectDispatcher,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaDamageScaler',{value:wizardArcanaDamageScaler,enumerable:true});
   Object.defineProperty(PC,'wizardArcanaRuntime',{value:wizardArcanaRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardRebuiltArcanaRuntime',{value:wizardRebuiltArcanaRuntime,enumerable:true});

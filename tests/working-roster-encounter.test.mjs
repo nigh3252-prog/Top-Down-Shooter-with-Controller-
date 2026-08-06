@@ -53,7 +53,7 @@ assert.deepEqual([...sameSystemSeen].sort(),[...sameSystemRoster].sort());
 
 const lionPlan=createWorkingRosterEncounterPlan({depth:1,rosterIds:['lion'],random:()=>0});
 assert.equal(lionPlan.groups[0].spawnKind,'lion');
-assert.equal(lionPlan.groups[0].arenaStatus,'lab-only');
+assert.equal(lionPlan.groups[0].arenaStatus,'lab');
 assert.equal(lionPlan.planningDepth,2,'a roster containing only a later enemy remains playable from room one');
 const noLionPlan=createWorkingRosterEncounterPlan({depth:8,rosterIds:['spid','hadesNumbskull'],random:()=>0});
 assert.ok(noLionPlan.groups.every(group=>group.spawnKind!=='lion'));

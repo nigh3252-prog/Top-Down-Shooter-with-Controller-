@@ -101,17 +101,19 @@ assert.equal(longSemanticTrace.length,80,'long-lived Arcana must retain their fu
 assert.deepEqual(longSemanticTrace.at(-1),{kind:'event',index:79},'capture serialization must retain late expiry and cleanup events');
 
 const enemyLab=fs.readFileSync(path.join(root,'enemy-lab.html'),'utf8');
-const arena=fs.readFileSync(path.join(root,'combat-arena.html'),'utf8');
+const arena=fs.readFileSync(path.join(root,'src/arena-runtime.js'),'utf8');
 const arenaEnemies=fs.readFileSync(path.join(root,'src/arena-enemies-base.js'),'utf8');
 const playerCombat=fs.readFileSync(path.join(root,'src/player-combat.js'),'utf8');
-assert.match(enemyLab,/inner\.set\('capture','1'\)/,'Enemy Lab should propagate capture mode into its iframe');
+assert.doesNotMatch(enemyLab,/<iframe|contentWindow|contentDocument/,'Enemy Lab should host capture in the same document');
+assert.match(enemyLab,/createArenaRuntime\(\{config:runtimeConfig,sectionRegistry\}\)/,'Enemy Lab should create the shared runtime directly with the shared section registry');
 assert.match(enemyLab,/dataset\.testid='arcana-capture-select'/);
 assert.match(enemyLab,/window\.__abilityCapture/,'Enemy Lab should forward the capture hook');
 assert.match(enemyLab,/act:action=>/,'Enemy Lab should forward the generic deterministic action interface');
-assert.match(enemyLab,/restoredCategory==='capture'\?'test':restoredCategory/,'normal Enemy Lab must not restore the capture-only category');
+assert.match(enemyLab,/safeCategory==='capture'\?'encounter':safeCategory/,'normal Enemy Lab must not restore the capture-only category');
 assert.match(enemyLab,/arcana-capture-status/,'manual PLAY should expose a live status readout');
 assert.match(arena,/if\(ABILITY_CAPTURE_MODE\)/);
-assert.match(arena,/window\.__abilityCapture=createAbilityCaptureController/);
+assert.match(arena,/captureController=createAbilityCaptureController/);
+assert.match(arena,/provideArenaCaptureController\(captureController\)/);
 assert.match(arena,/if\(op==='release'\)\{arena\.charge\.buttonHeld=false;PC\.releaseArcanaInput\?\.\(\{\.\.\.action,source:'capture'\}\);return true;\}/,'deterministic release input must reach hold-and-release Arcana such as Ball Lightning');
 assert.match(arena,/for\(const eventName of \['pointerup','pointercancel','pointerleave'\]\)el\.addEventListener\(eventName,\(\)=>PC\.releaseArcanaInput/,'pointer release must end an explicitly held Arcana input');
 assert.match(playerCombat,/Object\.defineProperty\(PC,'releaseArcanaInput'/,'player combat must expose explicit Arcana release routing');
@@ -136,7 +138,7 @@ assert.match(arena,/if\(arena\.arcanaFacingLock\)return false;/,'capture aim cha
 assert.match(arena,/return\{ok:false,start,end:\{\.\.\.start\},reason:'outside-maze'\}/,'invalid Arcana teleports must return an explicit failure result');
 assert.match(arena,/function validateArcanaTeleportEndpoint\(desired=\{\}\)\{/,'Chaotic Rift must have a non-mutating arena endpoint preflight');
 assert.match(arena,/resolved\.collided\|\|Math\.hypot\(resolved\.x-requested\.x,resolved\.z-requested\.z\)>\.005/,'teleport preflight must reject a collision-adjusted endpoint');
-assert.match(playerCombat,/validateTeleportEndpoint:\(endpoint\)=>window\.__arena\?\.validateArcanaTeleportEndpoint\?\.\(endpoint\)/,'the dash runtime must receive the arena preflight callback');
+assert.match(playerCombat,/validateTeleportEndpoint:\(endpoint\)=>getArenaRuntime\(\)\?\.validateArcanaTeleportEndpoint\?\.\(endpoint\)/,'the dash runtime must receive the arena preflight callback through typed runtime context');
 assert.match(arena,/function heroicLeapCommitted\(\)\{return !!\(arena\.arcanaAirborne\|\|PC\.wizardFusionLeapRuntime\?\.busy\);\}/,'Heroic Leap rush and airborne phases must share one combat commitment gate');
 assert.match(arena,/function canUseCombatInput\(\)\{[^}]*!arcanaDashBusy\(\)[^}]*!heroicLeapCommitted\(\)[^}]*!arena\.arcanaMovementLocked/,'normal attacks must reject throughout Heroic Leap commitment');
 const heavyStart=arena.indexOf('function heavyDown()'),heavyCommitGate=arena.indexOf('heroicLeapCommitted()',heavyStart),heavyHeldMutation=arena.indexOf('arena.charge.buttonHeld = true',heavyStart);
@@ -179,6 +181,6 @@ assert.doesNotMatch(arena,/invulnerable: capture \|\| arena\.arcanaUntargetable/
 assert.match(arenaEnemies,/p\.targetable!==false&&Math\.hypot\(pr\.x - p\.x, pr\.z - p\.z\)/,'hostile projectiles must respect Chaotic Rift targetability without blocking direct status or capture damage');
 assert.doesNotMatch(arena,/if\(ABILITY_CAPTURE_MODE\)HitFeel\.tuning\.master=0/,'capture mode must not disable polish for every stage');
 assert.match(arena,/config\?\.effects===false\|\|config\?\.stage==='motion'\?0:CAPTURE_HIT_FEEL_MASTER/);
-assert.match(arena,/else frame\(\)/,'the normal autonomous arena loop should remain enabled outside capture mode');
+assert.match(arena,/else startRuntime\(\)/,'the normal autonomous arena loop should remain enabled outside capture mode');
 
 console.log('ability capture tests passed');

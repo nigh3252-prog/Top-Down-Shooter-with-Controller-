@@ -55,10 +55,10 @@ function installControl(document,{initialValue,onChange}={}){
   };
 }
 
-export function installStanceGate4RingSize({windowRef=globalThis.window,pollMs=150}={}){
+export function installStanceGate4RingSize({arenaHandle=null,windowRef=globalThis.window,documentRef=windowRef?.document,pollMs=150}={}){
   if(!windowRef)return{installed:false,reason:'missing-window'};
   if(windowRef.__stance2Gate4RingSize?.installed)return windowRef.__stance2Gate4RingSize;
-  const PC=windowRef.__arena?.PC;
+  const PC=arenaHandle?.PC||windowRef.__arena?.PC;
   if(!PC)return{installed:false,reason:'missing-arena'};
 
   let multiplier=clampCatchRingSize(StoneSettings.get(CATCH_RING_SIZE_SETTING,1));
@@ -81,7 +81,7 @@ export function installStanceGate4RingSize({windowRef=globalThis.window,pollMs=1
     return multiplier;
   }
 
-  const control=installControl(windowRef.document,{initialValue:multiplier,onChange:setMultiplier});
+  const control=installControl(documentRef,{initialValue:multiplier,onChange:setMultiplier});
   apply();
   timer=windowRef.setInterval?.(apply,pollMs)||0;
 

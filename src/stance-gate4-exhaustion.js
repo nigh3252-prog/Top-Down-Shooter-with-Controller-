@@ -149,7 +149,7 @@ function installCatchVisual({PC,windowRef,documentRef}={}){
   }};
 }
 
-export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.window,documentRef=globalThis.document,basePlayerSpeed=8.5,engineOptions={}}={}){
+export function createStanceGate4Runtime({arenaHandle,gate3Runtime=null,windowRef=globalThis.window,documentRef=globalThis.document,basePlayerSpeed=8.5,engineOptions={}}={}){
   const handle=arenaHandle,PC=handle?.PC,arena=handle?.arena,deck=handle?.deck;
   if(!PC?.combatState||!arena?.stamina||!deck?.play)throw new Error('[stance-gate4] missing Combat Arena stamina/deck handle');
   let windowMultiplier=documentRef?clampMultiplier(StoneSettings.get(CATCH_WINDOW_SETTING,2)):clampMultiplier(engineOptions.windowMultiplier||1);
@@ -157,6 +157,8 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
   const renderHud=installHud(documentRef),visual=installCatchVisual({PC,windowRef,documentRef});
   const controls=installCatchControls(documentRef,{initialMultiplier:windowMultiplier,onChange:setWindowMultiplier});
   const original={updateCombat:PC.updateCombat,startCombatAttack:PC.startCombatAttack,deckPlay:deck.play,spendQuote:globalThis.__STANCE_SPEND_QUOTE__};
+  const clearGate3MovementRecovery=()=>
+    (gate3Runtime||windowRef?.__stance2Gate3Runtime)?.clearMovementRecovery?.();
   let lastStamina=Number(arena.stamina.v)||0,lastActorPosition=readActorPosition();
   let pendingFailure=false,ownsAttackLock=false,lastSnapshot=null,pendingSpendQuote=null,spendContext=null;
 
@@ -221,7 +223,7 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
   function processEvents(){
     for(const event of engine.drainEvents()){
       if(event.type==='opened')visual.pulse('open');
-      else if(event.type==='success'){pendingFailure=false;clearGate4Lock();visual.pulse('success');windowRef?.__stance2Gate3Runtime?.clearMovementRecovery?.();}
+      else if(event.type==='success'){pendingFailure=false;clearGate4Lock();visual.pulse('success');clearGate3MovementRecovery();}
       else if(event.type==='missed'){pendingFailure=true;visual.pulse('missed');}
       else if(event.type==='failure-finished'){pendingFailure=false;clearGate4Lock();}
       else if(event.type==='cancelled')pendingFailure=false;
@@ -229,7 +231,7 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
   }
   function maybeBeginFailure(){
     if(!pendingFailure||PC.combatState.attack)return;
-    engine.beginFailure();pendingFailure=false;windowRef?.__stance2Gate3Runtime?.clearMovementRecovery?.();processEvents();
+    engine.beginFailure();pendingFailure=false;clearGate3MovementRecovery();processEvents();
   }
   function setWindowMultiplier(value){
     windowMultiplier=clampMultiplier(value);StoneSettings.set(CATCH_WINDOW_SETTING,windowMultiplier);
@@ -246,7 +248,7 @@ export function createStanceGate4Runtime({arenaHandle,windowRef=globalThis.windo
     const result=original.deckPlay.call(this,slot);
     if(result&&cardRestoresStamina(result)&&engine.snapshot().phase==='open'){
       engine.playStance({cardId:String(result.id||''),stanceId:String(result.id||'')});processEvents();publish();
-      const clear=()=>windowRef?.__stance2Gate3Runtime?.clearMovementRecovery?.();
+      const clear=()=>clearGate3MovementRecovery();
       if(typeof queueMicrotask==='function')queueMicrotask(clear);else setTimeout(clear,0);
     }
     return result;
@@ -284,7 +286,7 @@ export function installStanceGate4Runtime({windowRef=globalThis.window,maxAttemp
   const attach=()=>{
     const handle=windowRef.__arena;
     if(handle?.PC&&handle?.arena&&handle?.deck&&windowRef.__stance2Gate3Runtime?.installed){
-      const runtime=createStanceGate4Runtime({arenaHandle:handle,windowRef,documentRef:windowRef.document});windowRef.__stance2Gate4Runtime=runtime;return runtime;
+      const runtime=createStanceGate4Runtime({arenaHandle:handle,gate3Runtime:windowRef.__stance2Gate3Runtime,windowRef,documentRef:windowRef.document});windowRef.__stance2Gate4Runtime=runtime;return runtime;
     }
     if(attempts++<maxAttempts)windowRef.setTimeout?.(attach,pollMs);return null;
   };

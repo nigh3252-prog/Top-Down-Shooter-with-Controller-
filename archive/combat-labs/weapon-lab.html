@@ -465,19 +465,19 @@
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, buildStoneWeaponMesh, normalizeStoneWeaponId } from './src/weapons.js';
-import { installCombatAudioDirector } from './src/combat-audio.js';
-import { installLabModes } from './src/lab-modes.js';
-import { installBentWorld } from './src/bent-world.js';
-import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from './src/attacks.js';
-import { getWeaponDamageMultiplier } from './src/combat-balance.js';
-import { STANCE_CARDS } from './src/stance-cards.js';
-import { guardPoseFor } from './src/guard-poses.js';
-import { createCombatEnemySystem } from './src/enemies.js';
-import { DIRECTOR_MODES } from './src/combat-director.js';
-import { StoneSettings } from './src/settings.js';
-import { installStoneWanderer } from './src/stone-wanderer.js';
-import { installPlayerCombat } from './src/player-combat.js';
+import { STONE_WEAPON_ORDER, cloneWeaponDefinitions, installRedTollGreatsword, buildStoneWeaponMesh, normalizeStoneWeaponId } from '../../src/weapons.js';
+import { installCombatAudioDirector } from '../../src/combat-audio.js';
+import { installLabModes } from '../../src/lab-modes.js';
+import { installBentWorld } from '../../src/bent-world.js';
+import { ATTACK_DEFINITIONS, ATTACK_GROUPS, APPROVED_VERTICAL_ATTACKS, BAD_VERTICAL_ATTACKS, ALL_VERTICAL_ATTACKS, EXACT_ATTACK_POOL } from '../../src/attacks.js';
+import { getWeaponDamageMultiplier } from '../../src/combat-balance.js';
+import { STANCE_CARDS } from '../../src/stance-cards.js';
+import { guardPoseFor } from '../../src/guard-poses.js';
+import { createCombatEnemySystem } from '../../src/enemies.js';
+import { DIRECTOR_MODES } from '../../src/combat-director.js';
+import { StoneSettings } from '../../src/settings.js';
+import { installStoneWanderer } from '../../src/stone-wanderer.js';
+import { installPlayerCombat } from '../../src/player-combat.js';
 
 // Stone Wanderer rig + shared stone materials now live in src/stone-wanderer.js.
 // The weapon/arm builders below still use several of the shared materials.

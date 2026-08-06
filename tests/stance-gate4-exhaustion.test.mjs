@@ -31,9 +31,10 @@ function makeHarness({staminaStart=10,requestedCost=10}={}){
     play(){const card={id:'S24',type:'stance'};stamina.v=100;stamina.pending=0;return card;},
   };
   let clearedRecovery=0;
-  const windowRef={__stance2Gate3Runtime:{clearMovementRecovery(){clearedRecovery++;}}};
+  const gate3Runtime={clearMovementRecovery(){clearedRecovery++;}};
+  const windowRef={};
   const handle={PC,arena,deck,actorPos,arenaMoveInput:()=>({...move})};
-  const runtime=createStanceGate4Runtime({arenaHandle:handle,windowRef,documentRef:null,basePlayerSpeed:8.5});
+  const runtime=createStanceGate4Runtime({arenaHandle:handle,gate3Runtime,windowRef,documentRef:null,basePlayerSpeed:8.5});
   return{runtime,PC,arena,deck,stamina,combatState,actorPos,move,weapon,get clearedRecovery(){return clearedRecovery;}};
 }
 

@@ -1,5 +1,6 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
 import { pointSegmentDistance2D, segmentIntersection2D } from './wizard-arcana-runtime.js';
+import { getArenaCaptureOptions, getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const TAU=Math.PI*2;
@@ -157,11 +158,10 @@ export function normalizeNextTwentyBasicsVisualMode(stage='style'){
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
   try{
+    const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;
     const params=new URLSearchParams(globalThis.location?.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));
+    return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(globalThis.location?.pathname||'');
   }catch{return false;}
 }
 function isCaptureRuntime(){try{return new URLSearchParams(globalThis.location?.search||'').get('capture')==='1';}catch{return false;}}
@@ -169,7 +169,7 @@ function currentVisualMode(){
   if(!isCaptureRuntime())return'style';
   let stage='style';
   try{
-    const capture=window.__abilityCapture?.snapshot?.()||{},params=new URLSearchParams(globalThis.location?.search||'');
+    const capture=getArenaCaptureOptions()||{},params=new URLSearchParams(globalThis.location?.search||'');
     stage=capture.stage||capture.renderMode||params.get('stage')||params.get('renderMode')||'style';
   }catch{}
   return normalizeNextTwentyBasicsVisualMode(stage);
@@ -346,7 +346,7 @@ export function installWizardNextTwentyBasicsRuntime({
 }={}){
   const initial=readArcanaTweaks();
   const emptySnapshot=()=>({simulationTime:0,castSerial:0,lastCast:null,visualMode:'style',movementLocked:false,facingLocked:false,effects:[],semanticEvents:[]});
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},cast(){return false;},snapshot:emptySnapshot,update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},cast(){return false;},snapshot:emptySnapshot,update(){},reset(){},dispose(){}};
 
   const state={
     effects:[],sizeMultiplier:initial.sizeMultiplier,elapsed:0,castSerial:0,lastCast:null,
@@ -479,6 +479,9 @@ export function installWizardNextTwentyBasicsRuntime({
     if(casted){state.castSerial++;state.lastCast=id;}
     return casted;
   }
+  const canPlayIds=new Set(['ICE-DAGGER','RIP-TIDE','AQUA-ARC','CHAOS-CRUSHER']);
+  function canPlay(card){return canPlayIds.has(card?.arcanaId);}
+  function play(card,context={}){return canPlay(card)?cast(card,context):false;}
 
   function updateCombo(effect,dt,emitter){
     effect.age+=dt;
@@ -529,11 +532,11 @@ export function installWizardNextTwentyBasicsRuntime({
   }
   function snapshot(){return{simulationTime:state.elapsed,castSerial:state.castSerial,lastCast:state.lastCast,visualMode:state.visualMode,movementLocked:state.movementLocks.size>0,movementLocks:[...state.movementLocks],facingLocked:state.facingLocks.size>0,facingLocks:[...state.facingLocks.keys()],effects:state.effects.map(effectSnapshot),semanticEvents:state.semanticEvents.map(event=>({...event}))};}
 
-  const onPlay=event=>cast(event?.detail?.card);
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   return{
-    state,cast,snapshot,reset,
+    state,cast,canPlay,play,snapshot,reset,
     update(dt,now=0){
       const frame=Math.max(0,Number(dt)||0),time=Number(now)||0;state.elapsed+=frame;
       for(const effect of[...state.effects]){

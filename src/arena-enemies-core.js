@@ -10,19 +10,21 @@ import {
 } from './arena-enemies-guard.js';
 import { setArenaEnemySource } from './arena-enemy-registry.js';
 import { createFlareArenaEnemySystem } from './flare-arena-enemies.js';
-import { isFlareSpawnKind } from './flare-enemies.js';
 import { createHadesArenaEnemySystem } from './hades-arena-enemies.js';
-import { HADES_TARTARUS_POOL_ID, isHadesSpawnKind } from './hades-enemies.js';
+import { HADES_TARTARUS_POOL_ID } from './hades-enemies.js';
 import { ALL_ENEMIES_BUDGET_ID } from './encounter-pools.js';
 import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 import { setHadesNativeModeActive } from './hades-encounter-tuning.js';
 import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-base.js';
 import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
+import { getArenaEnemyBySpawnKind, listArenaEnemies } from './arena-enemy-content-registry.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const ORIGINAL_GOBLIN_IDS=new Set(Object.keys(ARENA_ENEMY_ARCHETYPES).filter(id=>id!==LUGARU_DUELIST_ID));
+const ORIGINAL_GOBLIN_IDS=new Set(
+  listArenaEnemies({family:'GOBLINS'}).map(enemy=>enemy.id).filter(id=>id!==LUGARU_DUELIST_ID),
+);
 
 export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){
   const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
@@ -53,6 +55,10 @@ export function routeArenaEnemyStatus(systems,enemy,kind,duration,options={},fal
 export function createArenaEnemySystem(options={}){
   const factionService=options.factionService||createArenaFactionService();
   const externalEncounterCleared=options.onEncounterCleared;
+  const onActivityTransition=typeof options.onActivityTransition==='function'?options.onActivityTransition:null;
+  const notifyActivity=(kind,count,systemKey)=>{
+    if(Number(count)>0)onActivityTransition?.({kind,count,systemKey});
+  };
   let combinedMode=false;
   let labMode=false;
   let selectedSpawnKind='mixed';
@@ -97,7 +103,12 @@ export function createArenaEnemySystem(options={}){
   for(const system of [flare,hades]){system.clearRoomRuntime();system.group.visible=false;}
 
   const all=method=>(...args)=>{for(const system of systems)system[method]?.(...args);};
-  const systemForKind=kind=>isHadesSpawnKind(kind)?['hades',hades]:isFlareSpawnKind(kind)?['flare',flare]:['original',original];
+  const systemForKind=kind=>{
+    const record=getArenaEnemyBySpawnKind(kind);
+    if(kind===HADES_TARTARUS_POOL_ID||record?.system==='hades')return['hades',hades];
+    if(record?.system==='flare')return['flare',flare];
+    return['original',original];
+  };
   const combinedSystems=()=>[...participatingKeys].map(key=>systemsByKey[key]);
   const visibleSystems=()=>combinedMode?combinedSystems():[active];
   const owningSystem=enemy=>systems.find(system=>system.enemies.includes(enemy))||null;
@@ -182,6 +193,7 @@ export function createArenaEnemySystem(options={}){
       system.setSpawnKind(groupPlan.spawnKind);
       system.setWaveSize(groupPlan.count);
       system.startRoomEncounter(roomId);
+      notifyActivity('living',system.enemies.length,groupPlan.system);
       hpSnapshots.set(system,system.playerHp);
     }
 
@@ -191,6 +203,7 @@ export function createArenaEnemySystem(options={}){
       original.setSpawnKind('goblins');
       original.setWaveSize(4);
       original.startRoomEncounter(roomId);
+      notifyActivity('living',original.enemies.length,'original');
       hpSnapshots.set(original,original.playerHp);
     }
   }
@@ -277,6 +290,7 @@ export function createArenaEnemySystem(options={}){
         retainOriginalGoblinKind(system,'grunt',groupPlan.count);
         system.configureLugaruDuelists?.(system.enemies);
       }
+      notifyActivity('living',system.enemies.length,groupPlan.system);
       hpSnapshots.set(system,system.playerHp);
     }
 
@@ -287,7 +301,10 @@ export function createArenaEnemySystem(options={}){
   function startRoomEncounter(roomId){
     labMode=false;
     if(combinedMode)startCombinedEncounter(roomId);
-    else active.startRoomEncounter(roomId);
+    else{
+      active.startRoomEncounter(roomId);
+      notifyActivity('living',active.enemies.length,activeKey);
+    }
   }
 
   function resolveCrossSystemBodies(){
@@ -452,9 +469,9 @@ export function createArenaEnemySystem(options={}){
     get combatDirectorEnabled(){return combinedMode?true:isCombatDirectorEnabled(active);},
     get combatDirectorStatus(){return this.combatDirectorEnabled?'Combat Director: On':'Combat Director: Off — Tartarus Native Behavior';},
     get labMode(){return labMode;},
+    onActivityTransition,
     factionService,originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);
-  globalThis.__enemyLabEnemySystem=api;
   return api;
 }

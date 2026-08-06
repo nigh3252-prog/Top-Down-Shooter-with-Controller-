@@ -1,6 +1,9 @@
+import { arcanaEffectId } from './effect-registry.js';
+
 const makeArcana=({id,name,icon,description,summary,rows,chain})=>Object.freeze({
   id:`WOL-${id}`,
   arcanaId:id,
+  effectId:arcanaEffectId(id),
   sourceGame:'Wizard of Legend',
   type:'ability',
   name,

@@ -6,6 +6,22 @@ import { installNativeHadesRosterCadence } from './hades-native-roster-cadence.j
 import { installWorkingRosterEncounterMode } from './working-roster-encounter-mode.js';
 import { installWorkingRosterSameSystemMode } from './working-roster-same-system-mode.js';
 
+export {
+  ARENA_ENEMY_FAMILIES,
+  ARENA_ENEMY_IDS,
+  ARENA_ENEMY_REGISTRY,
+  ARENA_ENEMY_STATUSES,
+  getArenaEnemy,
+  getArenaEnemyBySpawnKind,
+  getEnemy,
+  listArenaEnemies,
+  listEnemies,
+  normalizeArenaEnemyStatus,
+  normalizeArenaStatus,
+  requireArenaEnemy,
+  requireEnemy,
+} from './arena-enemy-content-registry.js';
+
 const registry = {
   enemies: null,
   source: null,
@@ -19,9 +35,14 @@ function sourceEnemies() {
 
 export function setArenaEnemySource(source) {
   const topLevelRouter=!!(source?.originalSystem&&source?.flareSystem&&source?.hadesSystem);
-  const rosterSource=topLevelRouter?installWorkingRosterEncounterMode(source):source;
+  const onActivityTransition=source?.onActivityTransition;
+  const rosterSource=topLevelRouter
+    ?installWorkingRosterEncounterMode(source,{onActivityTransition})
+    :source;
   const mixedSource=topLevelRouter?installWorkingRosterSameSystemMode(rosterSource):rosterSource;
-  const registeredSource=topLevelRouter?installNativeHadesRosterCadence(mixedSource):mixedSource;
+  const registeredSource=topLevelRouter
+    ?installNativeHadesRosterCadence(mixedSource,{onActivityTransition})
+    :mixedSource;
   const enemies = Array.isArray(registeredSource) ? registeredSource : registeredSource?.enemies;
   if (!Array.isArray(enemies)) {
     registry.enemies = null;

@@ -61,24 +61,3 @@ export function weaponAllowsCleave({ weaponDef, attackSlot = -1, maxCharge = fal
   if (staminaClass !== 'Light') return true;
   return attackSlot === 2 && maxCharge === true;
 }
-
-async function bootStanceRuntimes(){
-  if(typeof window==='undefined'||typeof location==='undefined')return;
-  if(!/(?:^|\/)combat-arena\.html$/i.test(location.pathname||''))return;
-  if(new URLSearchParams(location.search||'').get('capture')==='1')return;
-  try{
-    const gate2=await import('./stance-gate2-runtime.js');
-    gate2.installStanceGate2Runtime({windowRef:window});
-    const gate3=await import('./stance-gate3-payoffs.js');
-    gate3.installStanceGate3Runtime({windowRef:window});
-    const gate4=await import('./stance-gate4-exhaustion.js');
-    gate4.installStanceGate4Runtime({windowRef:window});
-    const ringSize=await import('./stance-gate4-ring-size.js');
-    ringSize.installStanceGate4RingSize({windowRef:window});
-  }catch(error){
-    console.warn('[stance-2] runtime did not install',error);
-  }
-}
-
-if(typeof queueMicrotask==='function')queueMicrotask(bootStanceRuntimes);
-else if(typeof setTimeout==='function')setTimeout(bootStanceRuntimes,0);

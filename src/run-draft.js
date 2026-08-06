@@ -1,12 +1,16 @@
+import { getArenaRuntime, subscribeArenaRuntime } from './arena-runtime-context.js';
 import { ATTACK_DEFINITIONS } from './attacks.js';
-import { EXTRA_STANCE_CARDS, NON_STANCE_CARDS } from './ability-cards.js';
+import { listCards } from './card-registry.js';
 import { applyActiveCombatProfileToArena } from './combat-profile.js';
 import { guardPoseFor } from './guard-poses.js';
 import { createRewardTotemGate } from './reward-totem-gate.js';
-import { STANCE_CARDS } from './stance-cards.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
 import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
+const EXTRA_STANCE_CARDS = listCards({family:'special-stance'});
+const NON_STANCE_CARDS = listCards({family:'non-stance'});
 
 export const STARTER_STANCE_IDS = Object.freeze(['S24','S09']);
 export const ALL_STANCE_CARDS = Object.freeze([...STANCE_CARDS,...EXTRA_STANCE_CARDS]);
@@ -67,7 +71,7 @@ function addStyles(){
   `;document.head.appendChild(style);
 }
 
-function forceArenaReset(){const panel=document.getElementById('panel'),reset=document.getElementById('resetBtn');if(!panel||!reset)return;panel.classList.remove('hidden');reset.click();}
+function forceArenaReset(){getArenaRuntime()?.resetFight?.();}
 function setOpeningStance(api,stance){if(!stance)return;api.arena.stance=stance;api.arena.stanceIndex=0;api.PC.setReadyPose?.(guardPoseFor(stance));}
 
 export function installRunDraft(deck){
@@ -129,13 +133,25 @@ export function installRunDraft(deck){
   function openSetup(){if(!state.api)return;state.setupOpen=true;state.api.arena.paused=true;renderOffers();startGate.classList.remove('hidden');}
   const topBar=document.getElementById('topBar');if(topBar&&!document.getElementById('runSetupBtn')){const button=document.createElement('button');button.className='tbtn';button.id='runSetupBtn';button.textContent='RUN';button.title='Choose a new run loadout';button.addEventListener('click',openSetup);topBar.insertBefore(button,topBar.firstChild);}
 
-  async function waitForArena(){
-    const api=window.__arena;if(!api?.PC||api.deck!==deck||!api.arena||!api.encounterState||!api.enemySystem){setTimeout(waitForArena,40);return;}
+  const arenaReady=api=>!!api?.PC&&api.deck===deck&&!!api.arena&&!!api.encounterState&&!!api.enemySystem;
+  let runtimeSubscription=null;
+  async function attachArena(api){
+    if(!arenaReady(api)||state.api)return;
     state.api=api;
     state.profile=applyActiveCombatProfileToArena(state.api);
     state.seenCleared=api.encounterState.progress?.cleared||0;
     try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}
     renderOffers();startGate.classList.remove('hidden');monitorProgress();
+  }
+  function waitForArena(){
+    const api=getArenaRuntime();
+    if(arenaReady(api)){void attachArena(api);return;}
+    runtimeSubscription?.();
+    runtimeSubscription=subscribeArenaRuntime(event=>{
+      if(!arenaReady(event?.runtime))return;
+      runtimeSubscription?.();runtimeSubscription=null;
+      void attachArena(event.runtime);
+    });
   }
   function monitorProgress(){if(state.api){const cleared=state.api.encounterState?.progress?.cleared||0;if(state.api.arena.started&&cleared>state.seenCleared){state.seenCleared=cleared;state.totem?.arm(state.api.activeRoomId);}else if(cleared<state.seenCleared){state.seenCleared=cleared;state.totem?.reset();}}requestAnimationFrame(monitorProgress);}
   waitForArena();

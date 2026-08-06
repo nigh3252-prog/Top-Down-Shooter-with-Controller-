@@ -1,9 +1,11 @@
 import { createCombatDirector, DEFAULT_DIRECTOR_SETTINGS } from './combat-director.js';
 import { ENEMY_ATTACK_BY_KIND } from './enemy-attacks.js';
-import { STANCE_CARDS } from './stance-cards.js';
+import { listCards } from './card-registry.js';
 import { STONE_WEAPONS } from './weapons.js';
 import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
+
+const STANCE_CARDS = listCards({family:'stance'});
 
 export const ENEMY_STATS = {
   chaser: { radius: .46, height: 3.15, hp: 38, speed: 4.2, stop: 1.35, color: 0xff8f72 },

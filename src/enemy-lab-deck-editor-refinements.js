@@ -5,10 +5,9 @@ import {
   readArcanaTweaks,
   writeArcanaTweaks,
 } from './wizard-arcana-settings.js';
+import { getArenaRuntime } from './arena-runtime-context.js';
 
-function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
 function isWizardArcana(card){return card?.sourceGame==='Wizard of Legend'&&typeof card?.arcanaId==='string';}
-function cleanCardName(card){return String(card?.name||card?.id||'CARD').replace(/^S\d+\s*/, '');}
 
 export function claimArcanaTileDecoration(tile,card){
   if(!tile?.dataset||!isWizardArcana(card))return false;
@@ -25,10 +24,7 @@ export function wizardArcanaCards(catalog=[]){
 export function installEnemyLabDeckEditorRefinements(){
   if(typeof window==='undefined'||window.__enemyLabDeckEditorRefinementsInstalled)return;
   window.__enemyLabDeckEditorRefinementsInstalled=true;
-
-  let parentWindow,parentDocument;
-  try{parentWindow=window.parent;parentDocument=parentWindow.document;}catch{return;}
-  if(!parentDocument||parentWindow===window)return;
+  const parentWindow=window,parentDocument=document;
 
   const state={arcanaFamily:false,tweaksOpen:false,suppressCoreFamily:false};
   const styleId='enemyLabDeckEditorRefinementStyles';
@@ -48,6 +44,8 @@ export function installEnemyLabDeckEditorRefinements(){
       .arcanaTweaksRoot{display:grid;grid-template-columns:minmax(280px,1fr) minmax(176px,220px);width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:rgba(0,0,0,.05)}
       .arcanaTweaksMain,.arcanaTweaksSide{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-gutter:stable;padding:10px}
       .arcanaTweaksSide{border-left:1px solid rgba(49,80,77,.72);background:rgba(4,14,16,.72)}
+      .arcanaTweaksRegistryFlow{display:flex;flex-direction:column;height:auto;overflow:visible}
+      .arcanaTweaksRegistryFlow .arcanaTweaksMain,.arcanaTweaksRegistryFlow .arcanaTweaksSide{overflow:visible;padding:8px;border-left:0;background:transparent}
       .arcanaTweaksStack{display:flex;flex-direction:column;gap:10px}
       .arcanaTweaksCard{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid rgba(122,74,44,.88);border-radius:9px;background:rgba(31,20,15,.82)}
       .arcanaTweaksCard h3{margin:0;color:#ffc27e;font-size:11px;letter-spacing:.12em}
@@ -175,7 +173,6 @@ export function installEnemyLabDeckEditorRefinements(){
     const byId=new Map(catalog.map(card=>[card.id,card]));
     const selectedIds=editor.cardIds;
     const selected=new Set(selectedIds);
-    const stanceCount=selectedIds.reduce((count,id)=>count+(!isNonStance(byId.get(id))?1:0),0);
     const browse=root.dataset.view==='browse';
 
     for(const tile of root.querySelectorAll('.deckCardTile')){
@@ -185,22 +182,9 @@ export function installEnemyLabDeckEditorRefinements(){
       if(!browse)continue;
       const button=tile.querySelector('.deckCardAction');
       if(!button)continue;
-
-      if(!selected.has(id)){
-        delete button.dataset.browseDeckAction;
-        button.classList.remove('remove');
-        continue;
-      }
-
-      const required=!isNonStance(card)&&stanceCount<=1;
-      const label=required?'REQUIRED':'REMOVE';
-      if(button.textContent!==label)button.textContent=label;
-      button.disabled=required;
-      button.classList.add('remove');
-      button.dataset.browseDeckAction=required?'required':'remove';
-      button.setAttribute('aria-label',required
-        ?`${cleanCardName(card)} is the required final stance`
-        :`Remove ${cleanCardName(card)} from the deck`);
+      // The core deck editor owns Browse action state and click handling.
+      // Refinements may decorate tiles, but must not race the first stable render.
+      if(!selected.has(id))button.classList.remove('remove');
     }
     applyArcanaFamilyFilter(root,editor);
     addCurrentDeckArcanaCount(root,editor);
@@ -211,21 +195,26 @@ export function installEnemyLabDeckEditorRefinements(){
     const heading=parentDocument.createElement('h3');heading.textContent=title;card.appendChild(heading);return card;
   }
 
-  function renderArcanaTweaks(){
-    const dock=parentDocument.getElementById('labDock'),values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
-    if(!dock||!values||!categories)return;
+  function renderArcanaTweaks({mount=true}={}){
+    const sectionRegistry=getArenaRuntime()?.sectionRegistry||null;
+    const dock=parentDocument.getElementById('labDock');
+    const values=sectionRegistry?null:parentDocument.getElementById('labValues');
+    const categories=sectionRegistry?null:parentDocument.getElementById('labCategories');
+    if(!dock||(!sectionRegistry&&(!values||!categories)))return null;
     const editor=window.__enemyLabDeckEditor;
-    if(editor?.activeView){
+    if(editor?.activeView&&!sectionRegistry){
       state.tweaksOpen=false;
       const baseCategory=categories.querySelector('.choice:not([data-deck-editor-category]):not([data-arcana-tweaks-category])');
       baseCategory?.click();
     }
     state.tweaksOpen=true;state.arcanaFamily=false;
-    dock.classList.add('deckEditorMode','arcanaTweaksMode');values.classList.add('deckEditorActive');
-    for(const choice of categories.querySelectorAll('.choice'))choice.classList.toggle('on',choice.hasAttribute('data-arcana-tweaks-category'));
+    if(!sectionRegistry){
+      dock.classList.add('deckEditorMode','arcanaTweaksMode');values.classList.add('deckEditorActive');
+      for(const choice of categories.querySelectorAll('.choice'))choice.classList.toggle('on',choice.hasAttribute('data-arcana-tweaks-category'));
+    }
     const hint=parentDocument.getElementById('categoryHint');if(hint)hint.textContent='Scale Wizard Arcana visuals and collision footprints for testing.';
 
-    const root=parentDocument.createElement('div');root.className='arcanaTweaksRoot';
+    const root=parentDocument.createElement('div');root.className=`arcanaTweaksRoot${sectionRegistry?' arcanaTweaksRegistryFlow':''}`;
     const main=parentDocument.createElement('div');main.className='arcanaTweaksMain';
     const mainStack=parentDocument.createElement('div');mainStack.className='arcanaTweaksStack';
     const sizeCard=makeTweaksCard('ARCANA SIZE');
@@ -265,8 +254,11 @@ export function installEnemyLabDeckEditorRefinements(){
     summary.appendChild(rows);
     const use=makeTweaksCard('TESTING USE');const useText=parentDocument.createElement('p');useText.textContent='Use oversized effects to inspect targeting, overlap, crowd control, and mobile readability. Return to 1× when comparing source-like proportions.';use.appendChild(useText);
     sideStack.append(summary,use);side.appendChild(sideStack);
-    root.append(main,side);values.replaceChildren(root);values.scrollTop=0;values.scrollLeft=0;
+    root.append(main,side);
     sync(current.sizeMultiplier);
+    if(sectionRegistry||!mount)return root;
+    values.replaceChildren(root);values.scrollTop=0;values.scrollLeft=0;
+    return root;
   }
 
   function closeTweaks(){
@@ -295,11 +287,19 @@ export function installEnemyLabDeckEditorRefinements(){
 
   const finishInstall=(attempt=0)=>{
     const values=parentDocument.getElementById('labValues'),categories=parentDocument.getElementById('labCategories');
+    const sectionRegistry=getArenaRuntime()?.sectionRegistry||null;
     if(!values||!categories||!window.__enemyLabDeckEditor){if(attempt<240)setTimeout(()=>finishInstall(attempt+1),40);return;}
-    ensureTweaksCategory(categories);
-
-    new MutationObserver(()=>{ensureTweaksCategory(categories);queueDecoration();}).observe(categories,{childList:true,subtree:true});
-    new MutationObserver(queueDecoration).observe(values,{childList:true,subtree:true});
+    if(sectionRegistry){
+      sectionRegistry.registerView({id:'arcana-tweaks',sectionId:'visuals',label:'ARCANA SCALE',description:'Tune Wizard Arcana visual and collision footprints.',order:20,render:()=>renderArcanaTweaks({mount:false})});
+      sectionRegistry.subscribe(event=>{
+        if(event.type==='view-select')state.tweaksOpen=event.viewId==='arcana-tweaks';
+        else if(event.type==='select'&&event.sectionId!=='visuals')state.tweaksOpen=false;
+        if(event.sectionId==='loadout'&&(event.type==='invalidate'||event.type==='select'||event.type==='view-select'))queueDecoration();
+      });
+      queueDecoration();
+    }else{
+      ensureTweaksCategory(categories);
+    }
 
     parentDocument.addEventListener('click',event=>{
       const tweaks=event.target.closest?.('[data-arcana-tweaks-category]');
@@ -318,12 +318,6 @@ export function installEnemyLabDeckEditorRefinements(){
         queueDecoration();return;
       }
 
-      const remove=event.target.closest?.('.deckEditorRoot[data-view="browse"] .deckCardAction[data-browse-deck-action="remove"]');
-      if(!remove)return;
-      event.preventDefault();event.stopImmediatePropagation();
-      const id=remove.closest('.deckCardTile')?.dataset.cardId,editor=window.__enemyLabDeckEditor;
-      if(!id||!editor)return;
-      if(!editor.remove(id))setMessage('The deck needs at least one stance card.');
     },true);
 
     window.__enemyLabArcanaControls={

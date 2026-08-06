@@ -1,4 +1,5 @@
 import { ARCANA_TWEAKS_EVENT, clampArcanaSize, readArcanaTweaks } from './wizard-arcana-settings.js';
+import { getArenaRuntimeConfig } from './arena-runtime-context.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const AIR_HOT=0xf3ffff;
@@ -56,11 +57,10 @@ export function pointInWindSlashArc({
 }
 
 function isEnemyLabRuntime(){
-  if(typeof window==='undefined')return false;
   try{
+    const config=getArenaRuntimeConfig();if(config)return config.mode==='arena'||config.enemyLab;
     const params=new URLSearchParams(location.search||'');
-    if(params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab')return true;
-    return !!(window.parent&&window.parent!==window&&window.frameElement?.id==='arenaFrame'&&/(?:^|\/)enemy-lab\.html$/i.test(window.parent.location?.pathname||''));
+    return params.get('enemyLab')==='1'||params.get('mode')==='enemy-lab'||/(?:^|\/)combat-arena\.html$/i.test(location.pathname||'');
   }catch{return false;}
 }
 
@@ -114,7 +114,7 @@ function makeImpactFlash(THREE,scene,x,y,z,size){
 
 export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySystem}={}){
   const initial=readArcanaTweaks();
-  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},update(){},reset(){},dispose(){}};
+  if(!THREE||!scene||!isEnemyLabRuntime())return{state:{effects:[],sizeMultiplier:initial.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},dispose(){}};
   const state={effects:[],sizeMultiplier:initial.sizeMultiplier};
 
   function add(effect){state.effects.push(effect);return effect;}
@@ -159,6 +159,8 @@ export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySys
   }
 
   function startCombo(){add({type:'windSlashCombo',age:0,nextBeat:0,life:.78});}
+  function canPlay(card){return card?.arcanaId==='WIND-SLASH';}
+  function play(card,context={}){if(!canPlay(card))return false;startCombo();return true;}
   function updateCombo(effect,dt){
     effect.age+=dt;
     while(effect.nextBeat<WIND_SLASH_BEATS.length&&effect.age>=WIND_SLASH_BEATS[effect.nextBeat].time){
@@ -181,11 +183,11 @@ export function installWizardWindSlashRuntime({THREE,scene,getPlayer,getEnemySys
     if(k>=1)remove(effect);
   }
 
-  const onPlay=event=>{if(event?.detail?.card?.arcanaId==='WIND-SLASH')startCombo();};
+  const onPlay=event=>play(event?.detail?.card,event?.detail||{});
   const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   return{
-    state,reset,
+    state,canPlay,play,reset,
     update(dt,now=0){for(const effect of[...state.effects]){if(effect.type==='windSlashCombo')updateCombo(effect,Math.max(0,dt));else if(effect.type==='windSlashArc')updateArc(effect,Math.max(0,dt),Number(now)||0);}},
     dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();},
   };
