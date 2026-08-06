@@ -35,9 +35,14 @@ function sourceEnemies() {
 
 export function setArenaEnemySource(source) {
   const topLevelRouter=!!(source?.originalSystem&&source?.flareSystem&&source?.hadesSystem);
-  const rosterSource=topLevelRouter?installWorkingRosterEncounterMode(source):source;
+  const onActivityTransition=source?.onActivityTransition;
+  const rosterSource=topLevelRouter
+    ?installWorkingRosterEncounterMode(source,{onActivityTransition})
+    :source;
   const mixedSource=topLevelRouter?installWorkingRosterSameSystemMode(rosterSource):rosterSource;
-  const registeredSource=topLevelRouter?installNativeHadesRosterCadence(mixedSource):mixedSource;
+  const registeredSource=topLevelRouter
+    ?installNativeHadesRosterCadence(mixedSource,{onActivityTransition})
+    :mixedSource;
   const enemies = Array.isArray(registeredSource) ? registeredSource : registeredSource?.enemies;
   if (!Array.isArray(enemies)) {
     registry.enemies = null;

@@ -390,6 +390,51 @@ function syncSlider(document,label,value){
   }
 }
 
+function arenaSnapshot(api){
+  try{return api?.getSnapshot?.()||api?.snapshot?.()||null;}catch{return null;}
+}
+
+function traceArenaProfile(api,phase,profile,details={}){
+  api?.traceStartup?.(phase,{
+    profile:{
+      id:String(profile?.id||''),
+      name:String(profile?.name||''),
+      encounterMode:String(profile?.encounterMode||''),
+      directorMode:String(profile?.directorMode||''),
+      pressureBudget:Number(profile?.pressureBudget)||0,
+      rosterCount:Array.isArray(profile?.enemyIds)?profile.enemyIds.length:0,
+    },
+    ...details,
+  });
+}
+
+function applyArenaEncounterMode(api,encounterMode,profile){
+  const selectionApi=typeof api?.selectEncounterMode==='function';
+  const snapshot=arenaSnapshot(api);
+  const currentMode=String(snapshot?.encounterMode||'');
+  const currentSpawnKind=String(api?.enemySystem?.spawnKind||'');
+  const alreadyMatches=currentMode===encounterMode||
+    (currentMode==='lab-direct'&&currentSpawnKind===encounterMode);
+  if(selectionApi&&alreadyMatches){
+    traceArenaProfile(api,'profile-encounter-noop',profile,{encounter:{requestedMode:encounterMode,changed:false}});
+    return{ok:true,changed:false,mode:currentMode||encounterMode};
+  }
+  if(selectionApi){
+    const selection=api.selectEncounterMode(encounterMode);
+    if(selection?.ok===true){
+      traceArenaProfile(api,'profile-encounter-configured',profile,{encounter:{requestedMode:encounterMode,changed:true}});
+      return selection;
+    }
+    if(selection?.reason==='roster-empty'||selection?.reason==='roster-unavailable'){
+      traceArenaProfile(api,'profile-encounter-fallback',profile,{encounter:{requestedMode:encounterMode,changed:true,reason:selection.reason}});
+      return selection;
+    }
+  }
+  api.enemySystem.setSpawnKind?.(encounterMode);
+  traceArenaProfile(api,'profile-encounter-direct',profile,{encounter:{requestedMode:encounterMode,changed:true}});
+  return{ok:true,changed:true,mode:encounterMode};
+}
+
 export function installCombatProfileTuningPersistence({
   storage=globalThis.localStorage,
   document=globalThis.document,
@@ -432,7 +477,8 @@ export function applyCombatProfileToArena(api,profile,{
   const encounterMode=normalized.encounterMode==='lab-direct'
     ?String(normalized.workspace?.settings?.['scenario.encounterId']||normalized.enemyId||'mixed')
     :normalized.encounterMode;
-  api.enemySystem.setSpawnKind?.(encounterMode);
+  traceArenaProfile(api,'profile-apply-begin',normalized,{encounter:{requestedMode:encounterMode}});
+  applyArenaEncounterMode(api,encounterMode,normalized);
   api.enemySystem.setPressureBudget?.(normalized.pressureBudget);
   api.enemySystem.setAggression?.(normalized.aggression);
   api.enemySystem.setSpeedScale?.(normalized.enemySpeed);
@@ -457,6 +503,7 @@ export function applyCombatProfileToArena(api,profile,{
   syncSlider(document,'IDLE RANGE',normalized.idleRange);
   const modeGrid=document?.getElementById?.('modeGrid');
   modeGrid?.querySelectorAll?.('button').forEach(button=>button.classList.toggle('on',button.dataset.id===normalized.directorMode));
+  traceArenaProfile(api,'profile-apply-complete',normalized,{encounter:{requestedMode:encounterMode}});
   return normalized;
 }
 

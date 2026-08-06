@@ -104,6 +104,7 @@ export function installRosterSpawnTelegraphSupport(system,{
   systemKey='original',
   planGetter=()=>null,
   catalog=ARENA_ENEMY_CATALOG,
+  onActivityTransition=null,
 }={}){
   if(!system||system.__workingRosterSpawnTelegraphSupport)return system;
   if(!Array.isArray(system.enemies)||!system.group||typeof system.startRoomEncounter!=='function'||typeof system.update!=='function')return system;
@@ -116,6 +117,9 @@ export function installRosterSpawnTelegraphSupport(system,{
   let queue=[];
   let pending=[];
   let lastPlayer={x:0,z:0};
+  const reportActivity=(kind,count)=>{
+    if(Number(count)>0)onActivityTransition?.({kind,count,systemKey});
+  };
 
   const enemyWeight=enemy=>Math.max(.1,Number(enemy?.def?.activeWeight)||weightsByKind.get(String(enemy?.kind||''))||1);
   const activeWeight=()=>system.enemies.reduce((sum,enemy)=>sum+(Number(enemy?.hp)>0?enemyWeight(enemy):0),0);
@@ -165,7 +169,7 @@ export function installRosterSpawnTelegraphSupport(system,{
     enemy.root.visible=false;
     enemy.root.parent?.remove?.(enemy.root);
   }
-  function attachEnemy(enemy,position=spawnPoint(enemy)){
+  function attachEnemy(enemy,position=spawnPoint(enemy),{notify=true}={}){
     if(!enemy)return;
     enemy.x=Number(position?.x)||0;
     enemy.z=Number(position?.z)||0;
@@ -175,7 +179,10 @@ export function installRosterSpawnTelegraphSupport(system,{
       enemy.root.visible=true;
     }
     enemy.cooldown=Math.max(.18,Number(enemy.cooldown)||0);
-    if(!system.enemies.includes(enemy))system.enemies.push(enemy);
+    if(!system.enemies.includes(enemy)){
+      system.enemies.push(enemy);
+      if(notify)reportActivity('living',system.enemies.length);
+    }
   }
   function destroyRing(ring){
     ring?.parent?.remove?.(ring);
@@ -201,9 +208,9 @@ export function installRosterSpawnTelegraphSupport(system,{
   function restoreDeferred(){
     for(const entry of pending){
       destroyRing(entry.ring);
-      attachEnemy(entry.enemy,entry.position);
+      attachEnemy(entry.enemy,entry.position,{notify:false});
     }
-    for(const enemy of queue)attachEnemy(enemy);
+    for(const enemy of queue)attachEnemy(enemy,undefined,{notify:false});
     pending=[];
     queue=[];
   }
@@ -216,6 +223,7 @@ export function installRosterSpawnTelegraphSupport(system,{
       t:settings.spawnDelay,
       total:settings.spawnDelay,
     });
+    reportActivity('telegraph',pending.length);
   }
   function fillTelegraphs(player=lastPlayer){
     if(!enabled||!queue.length)return;
@@ -238,6 +246,7 @@ export function installRosterSpawnTelegraphSupport(system,{
     if(!enabled||!system.enemies.length)return;
     queue=system.enemies.splice(0);
     for(const enemy of queue)detachEnemy(enemy);
+    reportActivity('queue',queue.length);
     lastPlayer=currentPlayer();
     fillTelegraphs(lastPlayer);
   }
@@ -304,6 +313,7 @@ function clarifyHadesStyleControls(){
 export function installWorkingRosterEncounterMode(source,{
   storage=globalThis.localStorage,
   catalog=ARENA_ENEMY_CATALOG,
+  onActivityTransition=null,
 }={}){
   if(!source||source.__workingRosterEncounterMode)return source;
   if(typeof source.setSpawnKind!=='function')return source;
@@ -312,8 +322,8 @@ export function installWorkingRosterEncounterMode(source,{
     releaseTarget:enemy=>source.factionService?.releaseTarget?.(enemy),
   });
   const currentPlan=()=>source.currentEncounterPlan;
-  installRosterSpawnTelegraphSupport(source.originalSystem,{systemKey:'original',planGetter:currentPlan,catalog});
-  installRosterSpawnTelegraphSupport(source.flareSystem,{systemKey:'flare',planGetter:currentPlan,catalog});
+  installRosterSpawnTelegraphSupport(source.originalSystem,{systemKey:'original',planGetter:currentPlan,catalog,onActivityTransition});
+  installRosterSpawnTelegraphSupport(source.flareSystem,{systemKey:'flare',planGetter:currentPlan,catalog,onActivityTransition});
   const baseSetSpawnKind=source.setSpawnKind.bind(source);
   const spawnDescriptor=Object.getOwnPropertyDescriptor(source,'spawnKind');
   const baseSpawnKind=()=>spawnDescriptor?.get?.call(source)??ALL_ENEMIES_BUDGET_ID;

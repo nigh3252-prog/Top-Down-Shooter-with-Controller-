@@ -55,6 +55,10 @@ export function routeArenaEnemyStatus(systems,enemy,kind,duration,options={},fal
 export function createArenaEnemySystem(options={}){
   const factionService=options.factionService||createArenaFactionService();
   const externalEncounterCleared=options.onEncounterCleared;
+  const onActivityTransition=typeof options.onActivityTransition==='function'?options.onActivityTransition:null;
+  const notifyActivity=(kind,count,systemKey)=>{
+    if(Number(count)>0)onActivityTransition?.({kind,count,systemKey});
+  };
   let combinedMode=false;
   let labMode=false;
   let selectedSpawnKind='mixed';
@@ -189,6 +193,7 @@ export function createArenaEnemySystem(options={}){
       system.setSpawnKind(groupPlan.spawnKind);
       system.setWaveSize(groupPlan.count);
       system.startRoomEncounter(roomId);
+      notifyActivity('living',system.enemies.length,groupPlan.system);
       hpSnapshots.set(system,system.playerHp);
     }
 
@@ -198,6 +203,7 @@ export function createArenaEnemySystem(options={}){
       original.setSpawnKind('goblins');
       original.setWaveSize(4);
       original.startRoomEncounter(roomId);
+      notifyActivity('living',original.enemies.length,'original');
       hpSnapshots.set(original,original.playerHp);
     }
   }
@@ -284,6 +290,7 @@ export function createArenaEnemySystem(options={}){
         retainOriginalGoblinKind(system,'grunt',groupPlan.count);
         system.configureLugaruDuelists?.(system.enemies);
       }
+      notifyActivity('living',system.enemies.length,groupPlan.system);
       hpSnapshots.set(system,system.playerHp);
     }
 
@@ -294,7 +301,10 @@ export function createArenaEnemySystem(options={}){
   function startRoomEncounter(roomId){
     labMode=false;
     if(combinedMode)startCombinedEncounter(roomId);
-    else active.startRoomEncounter(roomId);
+    else{
+      active.startRoomEncounter(roomId);
+      notifyActivity('living',active.enemies.length,activeKey);
+    }
   }
 
   function resolveCrossSystemBodies(){
@@ -459,6 +469,7 @@ export function createArenaEnemySystem(options={}){
     get combatDirectorEnabled(){return combinedMode?true:isCombatDirectorEnabled(active);},
     get combatDirectorStatus(){return this.combatDirectorEnabled?'Combat Director: On':'Combat Director: Off — Tartarus Native Behavior';},
     get labMode(){return labMode;},
+    onActivityTransition,
     factionService,originalSystem:original,flareSystem:flare,hadesSystem:hades,
   };
   setArenaEnemySource(api);

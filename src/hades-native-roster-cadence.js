@@ -29,6 +29,7 @@ function enemyDefinition(enemy){
 function installNativeHadesCadenceOnSystem(system,{
   systemKey='original',
   planGetter=()=>null,
+  onActivityTransition=null,
 }={}){
   if(!system||system.__nativeHadesRosterCadence)return system;
   if(!Array.isArray(system.enemies)||!system.group||typeof system.startRoomEncounter!=='function'||typeof system.update!=='function')return system;
@@ -42,6 +43,9 @@ function installNativeHadesCadenceOnSystem(system,{
   let spawnTelegraphs=[];
   let lastPlayer={x:0,z:0};
   let time=0;
+  const reportActivity=(kind,count)=>{
+    if(Number(count)>0)onActivityTransition?.({kind,count,systemKey});
+  };
 
   const kindOf=enemy=>String(enemy?.kind||enemy?.spawnKind||'');
   const pointOf=enemy=>({x:Number(enemy?.x)||0,z:Number(enemy?.z)||0});
@@ -87,7 +91,7 @@ function installNativeHadesCadenceOnSystem(system,{
     enemy.root.parent?.remove?.(enemy.root);
   }
 
-  function attachEnemy(enemy,position=pointOf(enemy)){
+  function attachEnemy(enemy,position=pointOf(enemy),{notify=true}={}){
     if(!enemy)return;
     enemy.x=Number(position?.x)||0;
     enemy.z=Number(position?.z)||0;
@@ -98,7 +102,10 @@ function installNativeHadesCadenceOnSystem(system,{
     }
     if(Number.isFinite(Number(enemy.spawnGrace)))enemy.spawnGrace=Math.max(.18,Number(enemy.spawnGrace)||0);
     else enemy.cooldown=Math.max(.18,Number(enemy.cooldown)||0);
-    if(!system.enemies.includes(enemy))system.enemies.push(enemy);
+    if(!system.enemies.includes(enemy)){
+      system.enemies.push(enemy);
+      if(notify)reportActivity('living',system.enemies.length);
+    }
   }
 
   function destroySpawnTelegraph(entry){
@@ -129,9 +136,9 @@ function installNativeHadesCadenceOnSystem(system,{
   function restoreDeferred(){
     for(const entry of spawnTelegraphs){
       destroySpawnTelegraph(entry);
-      attachEnemy(entry.enemy,{x:entry.x,z:entry.z});
+      attachEnemy(entry.enemy,{x:entry.x,z:entry.z},{notify:false});
     }
-    for(const enemy of queue)attachEnemy(enemy);
+    for(const enemy of queue)attachEnemy(enemy,undefined,{notify:false});
     spawnTelegraphs=[];
     queue=[];
   }
@@ -174,6 +181,7 @@ function installNativeHadesCadenceOnSystem(system,{
         total:duration,
         mesh:makeSpawnTelegraph(enemy,position,def),
       });
+      reportActivity('telegraph',spawnTelegraphs.length);
     }
   }
 
@@ -202,6 +210,7 @@ function installNativeHadesCadenceOnSystem(system,{
     if(!enabled||!system.enemies.length)return;
     queue=system.enemies.splice(0);
     for(const enemy of queue)detachEnemy(enemy);
+    reportActivity('queue',queue.length);
     lastPlayer=currentPlayer();
     releaseQueuedSpawns(lastPlayer);
   }
@@ -237,13 +246,13 @@ function installNativeHadesCadenceOnSystem(system,{
   return system;
 }
 
-export function installNativeHadesRosterCadence(source){
+export function installNativeHadesRosterCadence(source,{onActivityTransition=null}={}){
   if(!source||source.__nativeHadesRosterCadence)return source;
   if(!source.originalSystem||!source.flareSystem)return source;
 
   const currentPlan=()=>source.currentEncounterPlan;
-  installNativeHadesCadenceOnSystem(source.originalSystem,{systemKey:'original',planGetter:currentPlan});
-  installNativeHadesCadenceOnSystem(source.flareSystem,{systemKey:'flare',planGetter:currentPlan});
+  installNativeHadesCadenceOnSystem(source.originalSystem,{systemKey:'original',planGetter:currentPlan,onActivityTransition});
+  installNativeHadesCadenceOnSystem(source.flareSystem,{systemKey:'flare',planGetter:currentPlan,onActivityTransition});
 
   const baseSetSpawnKind=source.setSpawnKind.bind(source);
   source.setSpawnKind=kind=>{

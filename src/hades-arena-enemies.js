@@ -16,7 +16,7 @@ const norm=(x,z)=>{const d=Math.hypot(x,z)||1;return{x:x/d,z:z/d};};
 const wrapPi=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const pointSegmentDistance=(p,a,b)=>{const dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz||1;const t=clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/l2,0,1);return Math.hypot(p.x-(a.x+dx*t),p.z-(a.z+dz*t));};
 
-export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navigation=null,roomEncounterMode=false,onEncounterCleared=null,factionService=null,systemKey='hades'}={}){
+export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navigation=null,roomEncounterMode=false,onEncounterCleared=null,factionService=null,systemKey='hades',onActivityTransition=null}={}){
   const rig=installHadesEnemyRig(THREE);
   const group=new THREE.Group();
   group.name='Hades Tartarus Enemies';
@@ -60,6 +60,9 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   let activeEncounterRoomId=null;
   let currentEncounterPlan=null;
   let lastPlayer={x:0,z:0,invulnerable:false};
+  const reportActivity=(kind,count)=>{
+    if(Number(count)>0)onActivityTransition?.({kind,count,systemKey});
+  };
 
   const markerMat=new THREE.MeshStandardMaterial({color:0xf2d3c0,roughness:.5,flatShading:true});
   const markerBg=new THREE.MeshStandardMaterial({color:0x281b25,roughness:.85,flatShading:true});
@@ -208,6 +211,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
       root,visual,barBg,bar,telegraph,tokenRing,
     };
     enemies.push(e);
+    reportActivity('living',enemies.length);
     return e;
   }
 
@@ -340,6 +344,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     group.add(mesh);
     const duration=entry.extra?.delay??currentEncounterPlan?.spawnDelay??.82;
     spawnTelegraphs.push({kind:entry.kind,def,x:p.x,z:p.z,t:duration,total:duration,mesh,extra:entry.extra||{}});
+    reportActivity('telegraph',spawnTelegraphs.length);
   }
 
   function queuedKindCount(kind){
@@ -371,6 +376,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
   function queueSpawn(kind,position=null,extra={}){
     const entry={kind,position,extra};
     if(extra.priority)spawnQueue.unshift(entry);else spawnQueue.push(entry);
+    reportActivity('queue',spawnQueue.length);
   }
 
   function updateSpawnTelegraphs(dt){
@@ -408,6 +414,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
         pursuitWeightCap:3,simultaneousTelegraphs:2,spawnDelay:.72,
       };
     spawnQueue=currentEncounterPlan.entries.map(kind=>({kind,position:null,extra:{}}));
+    reportActivity('queue',spawnQueue.length);
     releaseQueuedSpawns();
   }
 

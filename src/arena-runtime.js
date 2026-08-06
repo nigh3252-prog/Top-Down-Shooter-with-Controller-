@@ -32,6 +32,7 @@ import { installStanceGate4RingSize } from './stance-gate4-ring-size.js';
 import { resolveArenaTheme } from './arena-theme-registry.js';
 import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { readArenaStandardSetup } from './arena-standard-setup.js';
+import { createArenaStartupTrace } from './arena-startup-trace.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -39,6 +40,39 @@ import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOp
 export function createArenaRuntime({ config = {}, controlRegistry = createArenaControlRegistry(), sectionRegistry = null } = {}) {
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
+  const lockedStandard=runtimeConfig.enemyLab?null:readArenaStandardSetup();
+  const startupTrace=createArenaStartupTrace({location:globalThis.location});
+  const summarizeStandard=standard=>{
+    if(!standard)return{locked:false};
+    return{
+      locked:true,
+      id:String(standard.id||''),
+      version:Number(standard.standardVersion)||0,
+      name:String(standard.name||''),
+      sourceProfileId:String(standard.sourceProfileId||standard.profile?.extensions?.sourceProfileId||''),
+      lockedAt:Number(standard.lockedAt)||0,
+    };
+  };
+  const summarizeProfile=profile=>{
+    if(!profile)return null;
+    const settings=profile.workspace?.settings||{};
+    const content=profile.workspace?.content||{};
+    const rosterIds=Array.isArray(content.rosterIds)?content.rosterIds:Array.isArray(content.enemyIds)?content.enemyIds:[];
+    return{
+      id:String(profile.id||''),
+      name:String(profile.name||''),
+      sourceProfileId:String(profile.extensions?.sourceProfileId||''),
+      encounterMode:String(profile.encounterMode||profile.workspace?.scenario?.encounterMode||settings['scenario.encounterId']||''),
+      directorMode:String(profile.directorMode||settings['combat.directorMode']||''),
+      pressureBudget:Number(profile.pressureBudget??settings['combat.pressure'])||0,
+      rosterCount:rosterIds.length,
+      rosterIds:[...rosterIds],
+    };
+  };
+  startupTrace.mark('runtime-created',{
+    standard:summarizeStandard(lockedStandard),
+    profile:summarizeProfile(lockedStandard?.profile),
+  });
   const ARENA_VISUAL_STYLE_OPTIONS=Object.freeze([
     {id:'neutral',label:'NEUTRAL'},
     {id:'original',label:'ORIGINAL'},
@@ -379,6 +413,32 @@ function selectStance(id){
 /* ---------- maze navigation + room encounters ---------- */
 const encounterRandom = createSeededRandom(`${MAZE_SEED}:encounters`);
 let encounterState = null;
+const STARTUP_ACTIVITY_PHASES=Object.freeze({queue:'queued-spawn',telegraph:'telegraph-created',living:'first-living'});
+let startupMilestones={roomId:null,queue:false,telegraph:false,living:false};
+function resetStartupMilestones(roomId=null){
+  startupMilestones={roomId,queue:false,telegraph:false,living:false};
+}
+function traceArenaActivityTransition({kind,count,systemKey}={}){
+  if(!startupTrace.enabled)return null;
+  const roomId=encounterState?.activeRoomId??activeRoomId;
+  if(startupMilestones.roomId!==roomId)resetStartupMilestones(roomId);
+  const activityKind=String(kind||'');
+  const phase=STARTUP_ACTIVITY_PHASES[activityKind];
+  const currentCount=Number(count)||0;
+  if(!phase||startupMilestones[activityKind]||currentCount<=0)return null;
+  startupMilestones[activityKind]=true;
+  const counts={
+    queue:Number(enemySystem.queuedSpawnCount)||0,
+    telegraph:Number(enemySystem.telegraphCount)||0,
+    living:(enemySystem.enemies||[]).filter(enemy=>Number(enemy?.hp)>0).length,
+  };
+  return traceArenaState(phase,{
+    ...counts,
+    activity:{kind:activityKind,currentCount,systemKey:String(systemKey||''),counts},
+    room:{activeRoomId:roomId,encounterRoomId:encounterState?.encounterRoomId??roomId},
+  });
+}
+const traceActivityTransition=startupTrace.enabled?traceArenaActivityTransition:null;
 const transitionOverlay = document.getElementById('roomTransition');
 const transitionTitle = document.getElementById('rtTitle');
 const transitionView = { cameraPush:0 };
@@ -447,6 +507,7 @@ let roomTransition = null;
 /* ---------- enemies ---------- */
 const enemySystem = createArenaEnemySystem({
   THREE, worldRoot, controlRegistry, arenaRadius:ARENA, navigation:mazeNavigation, roomEncounterMode:true,
+  onActivityTransition:traceActivityTransition,
   onEncounterCleared(roomId){
     encounterState?.clearRoom(roomId);
     syncDoorStates();
@@ -455,16 +516,105 @@ const enemySystem = createArenaEnemySystem({
   }
 });
 encounterState = createRoomEncounterState(dungeon, {
-  onRoomEnter({ roomId, cleared }){
+  onRoomEnter({ roomId, previousRoomId, cleared }){
+    resetStartupMilestones(roomId);
     syncDoorStates();
+    traceArenaState('room-entered',{
+      room:{activeRoomId:roomId,encounterRoomId:cleared?null:roomId,previousRoomId,cleared},
+    });
     if(cleared) announce(`ROOM ${roomId + 1} · CLEARED`, .8);
   },
   onEncounterStart({ roomId }){
     syncDoorStates();
-    enemySystem.startRoomEncounter(roomId);
+    traceArenaState('room-encounter-begin',{
+      encounter:{roomId,requestedMode:selectedEncounterMode},
+    });
+    let startError=null;
+    try{
+      enemySystem.startRoomEncounter(roomId);
+    }catch(error){
+      startError=error;
+    }
+    const plan=enemySystem.currentEncounterPlan||null;
+    const diagnostic=showRosterPlanDiagnostic({roomId,plan,error:startError});
+    traceArenaState(startError||diagnostic?'room-encounter-failed':'room-encounter-started',{
+      encounter:{roomId,requestedMode:selectedEncounterMode,plan:summarizePlan(plan),error:startError?.message||diagnostic?.reason||''},
+    });
+    if(startError||diagnostic)return;
     announce(`ROOM ${roomId + 1} · SEAL`, 1.1);
   }
 }, { enemyLab:runtimeConfig.enemyLab });
+
+const summarizePlan=plan=>{
+  if(!plan)return null;
+  const groups=Array.isArray(plan.groups)?plan.groups:[];
+  return{
+    mode:String(plan.mode||''),
+    typeIds:Array.isArray(plan.typeIds)?[...plan.typeIds]:[],
+    groups:groups.map(group=>({
+      system:String(group?.system||''),
+      spawnKind:String(group?.spawnKind||group?.kind||''),
+      count:Number(group?.count)||0,
+    })),
+    rosterCount:Number(plan.rosterCount)||0,
+    availableTypeCount:Number(plan.availableTypeCount)||0,
+    totalCount:Number(plan.totalCount)||groups.reduce((sum,group)=>sum+(Number(group?.count)||0),0),
+  };
+};
+function traceArenaState(phase,overrides={}){
+  if(!startupTrace.enabled)return null;
+  const rosterStatus=enemySystem.getWorkingRosterEncounterStatus?.()||{};
+  const plan=enemySystem.currentEncounterPlan||null;
+  const director=enemySystem.director;
+  const base={
+    standard:summarizeStandard(lockedStandard),
+    profile:summarizeProfile(lockedStandard?.profile),
+    encounter:{
+      requestedMode:String(overrides.encounter?.requestedMode??selectedEncounterMode??''),
+      selectedMode:String(selectedEncounterMode||''),
+      spawnKind:String(enemySystem.spawnKind||''),
+      label:encounterModeLabel(selectedEncounterMode),
+      warning:String(encounterModeWarning||''),
+      plan:summarizePlan(plan),
+    },
+    director:{
+      mode:String(director?.getMode?.()||director?.mode||''),
+      pressureBudget:Number(director?.settings?.pressureBudget)||0,
+      aggression:Number(director?.settings?.aggression)||0,
+      enabled:enemySystem.combatDirectorEnabled!==false,
+    },
+    roster:{
+      source:lockedStandard?'locked-standard':'working-roster-storage',
+      active:!!rosterStatus.active,
+      count:Array.isArray(rosterStatus.ids)?rosterStatus.ids.length:0,
+      ids:Array.isArray(rosterStatus.ids)?[...rosterStatus.ids]:[],
+      warning:String(rosterStatus.warning||''),
+    },
+    room:{
+      activeRoomId,
+      encounterRoomId:encounterState?.encounterRoomId??null,
+      progress:encounterState?.progress||null,
+    },
+    queue:Number(enemySystem.queuedSpawnCount)||0,
+    telegraph:Number(enemySystem.telegraphCount)||0,
+    living:(enemySystem.enemies||[]).filter(enemy=>Number(enemy?.hp)>0).length,
+    activity:null,
+  };
+  const state={...base};
+  for(const key of ['standard','profile','encounter','director','roster','room']){
+    if(overrides[key]!==undefined)state[key]={...base[key],...(overrides[key]||{})};
+  }
+  for(const key of ['queue','telegraph','living','activity'])if(overrides[key]!==undefined)state[key]=overrides[key];
+  for(const [key,value] of Object.entries(overrides)){
+    if(!(key in state))state[key]=value;
+  }
+  const event=startupTrace.mark(phase,state);
+  if(event&&globalThis.document?.documentElement?.dataset){
+    globalThis.document.documentElement.dataset.arenaStartupTracePhase=event.phase;
+    globalThis.document.documentElement.dataset.arenaStartupTrace=JSON.stringify(event);
+  }
+  return event;
+}
 
 roomTransition = createRoomTransitionController({
   duration:.98,
@@ -957,6 +1107,8 @@ function flashVignette(){
   v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
 }
 function respawn(){
+  resetStartupMilestones(null);
+  traceArenaState('respawn-begin',{transition:{kind:'full-reset'}});
   // Respawn is a full scene reset: unlike a room transition it restores the
   // authored Arcana charge/cooldown banks to their default state.
   PC.resetArcanaRuntimeState?.({preserveResources:false});
@@ -985,6 +1137,7 @@ function respawn(){
   syncDoorStates();
   arena.prevHp = enemySystem.playerHp;
   arena.prevWave = enemySystem.wave;
+  traceArenaState('respawn-complete',{transition:{kind:'full-reset'}});
 }
 function watchPlayerState(dt){
   const hp = enemySystem.playerHp;
@@ -1205,7 +1358,10 @@ const SPAWN_OPTIONS = Object.freeze([
   { id:'goblins', label:'Goblins Only' },
   ...ARENA_ENEMY_OPTIONS
 ]);
-enemySystem.setSpawnKind(StoneSettings.get('arena.spawnKind', enemySystem.spawnKind));
+const lockedEncounterMode=lockedStandard?.profile?.workspace?.settings?.['scenario.encounterId']||
+  lockedStandard?.profile?.workspace?.scenario?.encounterMode||'';
+const bootSpawnKind=lockedEncounterMode||StoneSettings.get('arena.spawnKind', enemySystem.spawnKind);
+enemySystem.setSpawnKind(bootSpawnKind);
 const DIR_SLIDERS = [
   { label:'WAVE SIZE',       min:1,  max:12,  step:1,   get:()=>enemySystem.waveSize,       set:v=>enemySystem.setWaveSize(v) },
   { label:'PRESSURE BUDGET', min:.5, max:4,   step:.25, get:()=>enemySystem.director.settings.pressureBudget, set:v=>enemySystem.setPressureBudget(v) },
@@ -1224,13 +1380,17 @@ const PLANNED_ENCOUNTER_MODE_IDS=new Set(ARENA_ENEMY_OPTIONS.map(option=>option.
 const encounterModeLabel=id=>id===LAB_DIRECT_ENCOUNTER_MODE
   ?'Direct Lab Composition'
   :(ARENA_ENEMY_OPTIONS.find(option=>option.id===id)?.label||id);
+if(PLANNED_ENCOUNTER_MODE_IDS.has(bootSpawnKind))selectedEncounterMode=bootSpawnKind;
+traceArenaState('systems-ready');
 
 function selectEncounterMode(id){
   const requested=String(id||'').trim();
   if(requested===LAB_DIRECT_ENCOUNTER_MODE){
+    const changed=selectedEncounterMode!==requested;
     selectedEncounterMode=requested;
     encounterModeWarning='';
-    return{ok:true,mode:selectedEncounterMode,label:encounterModeLabel(selectedEncounterMode)};
+    traceArenaState('encounter-select-'+(changed?'applied':'noop'),{encounter:{requestedMode:requested,changed}});
+    return{ok:true,mode:selectedEncounterMode,changed,label:encounterModeLabel(selectedEncounterMode)};
   }
   if(!PLANNED_ENCOUNTER_MODE_IDS.has(requested))return{ok:false,mode:selectedEncounterMode,reason:`Unknown encounter mode: ${requested||'(empty)'}`};
   if(requested===WORKING_ROSTER_HADES_ID){
@@ -1239,19 +1399,51 @@ function selectEncounterMode(id){
       enemySystem.setSpawnKind?.(ALL_ENEMIES_BUDGET_ID);
       selectedEncounterMode=ALL_ENEMIES_BUDGET_ID;
       encounterModeWarning='Working roster is empty; using All · Budgeted Encounter. Configure the roster to enable roster planning.';
+      traceArenaState('encounter-select-fallback',{encounter:{requestedMode:requested,changed:true,reason:'roster-empty'}});
       return{ok:false,mode:selectedEncounterMode,reason:'roster-empty',warning:encounterModeWarning,label:encounterModeLabel(selectedEncounterMode)};
     }
+  }
+  if(requested===selectedEncounterMode&&enemySystem.spawnKind===requested){
+    encounterModeWarning='';
+    traceArenaState('encounter-select-noop',{encounter:{requestedMode:requested,changed:false}});
+    return{ok:true,mode:selectedEncounterMode,changed:false,label:encounterModeLabel(selectedEncounterMode)};
   }
   enemySystem.setSpawnKind?.(requested);
   const actual=enemySystem.spawnKind;
   if(requested===WORKING_ROSTER_HADES_ID&&actual!==requested){
     selectedEncounterMode=ALL_ENEMIES_BUDGET_ID;
     encounterModeWarning='Working roster is unavailable; using All · Budgeted Encounter.';
+    traceArenaState('encounter-select-fallback',{encounter:{requestedMode:requested,changed:true,reason:'roster-unavailable'}});
     return{ok:false,mode:selectedEncounterMode,reason:'roster-unavailable',warning:encounterModeWarning,label:encounterModeLabel(selectedEncounterMode)};
   }
   selectedEncounterMode=requested;
   encounterModeWarning='';
-  return{ok:true,mode:selectedEncounterMode,label:encounterModeLabel(selectedEncounterMode)};
+  traceArenaState('encounter-select-applied',{encounter:{requestedMode:requested,changed:true}});
+  return{ok:true,mode:selectedEncounterMode,changed:true,label:encounterModeLabel(selectedEncounterMode)};
+}
+
+function showRosterPlanDiagnostic({roomId=null,plan=null,error=null}={}){
+  if(selectedEncounterMode!==WORKING_ROSTER_HADES_ID)return null;
+  const status=enemySystem.getWorkingRosterEncounterStatus?.()||{};
+  const ids=Array.isArray(status.ids)?status.ids:[];
+  if(!ids.length)return null;
+  const groups=Array.isArray(plan?.groups)?plan.groups:[];
+  const hasEntries=groups.some(group=>Number(group?.count)>0);
+  const hasTypes=Array.isArray(plan?.typeIds)&&plan.typeIds.length>0;
+  if(!error&&plan&&groups.length&&hasEntries&&hasTypes)return null;
+  const reason=String(error?.message||(!plan?'planner-did-not-produce-a-plan':!groups.length||!hasEntries?'empty-plan':!hasTypes?'plan-has-no-types':'planner-produced-an-invalid-plan')).replace(/\s+/g,' ').trim();
+  const director=String(enemySystem.director?.getMode?.()||enemySystem.director?.mode||'unknown');
+  const message='ROSTER PLAN FAILED · source='+selectedEncounterMode+' ('+encounterModeLabel(selectedEncounterMode)+')'+
+    ' · roster='+ids.length+' · director='+director+' · reason='+reason;
+  encounterModeWarning=message;
+  announce(message,6);
+  traceArenaState('roster-plan-failed',{
+    encounter:{roomId,reason,plan:summarizePlan(plan)},
+    roster:{source:lockedStandard?'locked-standard':'working-roster-storage',count:ids.length,ids:[...ids]},
+    director:{mode:director},
+    diagnostic:message,
+  });
+  return{reason,message};
 }
 
 function startPlannedLabEncounter(mode=selectedEncounterMode,{roomId=-777}={}){
@@ -1887,12 +2079,14 @@ function destroyRuntime(){
 
 let captureController=null;
 const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
   config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
+  getStartupTrace,traceStartup:(phase,details={})=>traceArenaState(phase,details),
   setCellSize:id=>setMazeRuntimeCellSize(id),resetFight:()=>respawn(),
   getControlGroups:()=>controlRegistry.getControlGroups(),setControl:(id,value)=>controlRegistry.setControl(id,value),invokeControl:(id,...args)=>controlRegistry.invokeControl(id,...args),
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
@@ -1921,9 +2115,16 @@ if(!arena.stance) ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 if(!runtimeConfig.enemyLab){
-  const standard=readArenaStandardSetup();
+  const standard=lockedStandard;
   if(standard?.profile?.workspace?.settings){
+    traceArenaState('standard-apply-begin',{
+      standard:summarizeStandard(standard),
+      profile:summarizeProfile(standard.profile),
+    });
     const applied=controlRegistry.applyProfileSettings(standard.profile.workspace.settings,{includeGlobal:true});
+    traceArenaState(applied.ok?'standard-applied':'standard-apply-failed',{
+      standardApply:{ok:applied.ok,applied:applied.applied,errors:applied.errors,warnings:applied.warnings},
+    });
     if(!applied.ok)console.warn('Arena Standard settings were only partially applied.',applied.errors);
   }
 }
