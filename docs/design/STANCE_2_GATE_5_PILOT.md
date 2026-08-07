@@ -17,13 +17,14 @@ Other non-pilot stances retain the existing dodge as their fallback defense and 
 ## Long Blade Form — sword parry
 
 - Tap defense to open a 0.22 second parry window.
-- A hit during that window is negated.
-- A successful parry inflicts a significant 1.25 second stagger on the attacking enemy, cancelling its attack and creating a real punish window.
+- A hit during that window is negated, costs no stamina, and inflicts a significant 1.25 second stagger on the attacking enemy.
+- The successful parry cancels the enemy's current attack, adds a short knockback/reaction, and creates a real punish window.
 - The success cue adds a brighter white-gold expanding ring and eight-spoke burst on top of the existing confirmation pop.
-- Missing the window creates 0.32 seconds of parry recovery.
+- Missing the window costs 12 stamina and creates 0.32 seconds of parry recovery.
+- A positive reserve below 12 may Overdraw on the miss, reaches zero, and opens the ordinary Stance Catch.
+- Starting from zero stamina cannot begin the parry attempt.
 - The parry replaces the dodge input only while Long Blade Form is active.
 - Opening the window creates a small blue-white burst around the player.
-- Successfully deflecting a hit creates a larger white-gold confirmation burst.
 
 The parry deliberately uses this lightweight burst rather than authored sword posing or a new animation rig. Enemy-specific recoil, riposte, and counter animations remain deferred until the basic timing feels correct.
 
