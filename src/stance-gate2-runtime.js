@@ -1,6 +1,7 @@
 import { STANCE_CARDS } from './stance-cards.js';
 import { guardPoseFor } from './guard-poses.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
+import { STONE_WEAPONS } from './weapons.js';
 
 export const GATE2_STANCE_IDS=Object.freeze(['S24','S26','S01']);
 export const GATE2_WEAPON_IDS=Object.freeze(['dagger','longsword','greatsword']);
@@ -77,6 +78,33 @@ export const GATE2_PAIR_PROFILES=Object.freeze({
   }),
 });
 
+const classPairKey=(stanceClass,weaponClass)=>`${stanceClass}:${weaponClass}`;
+export const GATE2_CLASS_TEMPLATE_SOURCES=Object.freeze({
+  'Light:Light':'S24:dagger',
+  'Light:Medium':'S24:longsword',
+  'Light:Heavy':'S24:greatsword',
+  'Medium:Light':'S26:dagger',
+  'Medium:Medium':'S26:longsword',
+  'Medium:Heavy':'S26:greatsword',
+  'Heavy:Light':'S01:dagger',
+  'Heavy:Medium':'S01:longsword',
+  'Heavy:Heavy':'S01:greatsword',
+});
+export const GATE2_CLASS_PAIR_TEMPLATES=Object.freeze(Object.fromEntries(
+  Object.entries(GATE2_CLASS_TEMPLATE_SOURCES).map(([key,sourcePair])=>[key,GATE2_PAIR_PROFILES[sourcePair]]),
+));
+function materializeClassTemplateProfile({template,pilotProfile,stanceId,weaponId,compatibility}={}){
+  if(!template)return null;
+  if(pilotProfile)return pilotProfile;
+  return freezeProfile({
+    ...template,
+    id:`stance2-${String(compatibility?.stanceClass||'unknown').toLowerCase()}-${String(compatibility?.weaponClass||'unknown').toLowerCase()}-${String(compatibility?.tier||'unknown')}`,
+    sourceProfileId:template.id,
+    stanceId,weaponId,
+    label:`${template.label} · CLASS TEMPLATE`,
+  });
+}
+
 export function isGate2PilotPair(stanceId,weaponId){
   return Object.prototype.hasOwnProperty.call(GATE2_PAIR_PROFILES,pairKey(String(stanceId||''),String(weaponId||'')));
 }
@@ -85,17 +113,23 @@ export function resolveGate2PilotProfile({stance,weapon,weaponId=''}={}){
   const stanceId=String(stance?.id||stance||'');
   const resolvedWeaponId=String(weaponId||weapon?.id||'');
   const compatibility=resolveStanceWeaponCompatibility({stance,weapon,weaponId:resolvedWeaponId});
-  const profile=GATE2_PAIR_PROFILES[pairKey(stanceId,resolvedWeaponId)]||null;
+  const pilotProfile=GATE2_PAIR_PROFILES[pairKey(stanceId,resolvedWeaponId)]||null;
+  const templateKey=classPairKey(compatibility.stanceClass,compatibility.weaponClass);
+  const template=GATE2_CLASS_PAIR_TEMPLATES[templateKey]||null;
+  const profile=materializeClassTemplateProfile({template,pilotProfile,stanceId,weaponId:resolvedWeaponId,compatibility});
   const originalChain=BASELINE_CHAIN_BY_ID.get(stanceId)||Object.freeze([...(stance?.chain||[])]);
   return Object.freeze({
-    active:!!profile,
+    active:!!profile&&compatibility.tier!=='unknown',
     stanceId,
     weaponId:resolvedWeaponId,
     compatibility,
+    templateKey,
+    sourceProfileId:profile?.sourceProfileId||profile?.id||null,
     profile,
     effectiveChain:Object.freeze([...(profile?.moveKeys||originalChain)]),
   });
 }
+
 
 function materializeFailureAttack(PC,{group,label,phases}){
   let t=0,contactAt=0;
@@ -299,7 +333,7 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
       stanceId:resolved.stanceId,
       weaponId:resolved.weaponId,
       tier:resolved.compatibility.tier,
-      label:resolved.profile?.label||'OUTSIDE GATE 2 PILOT',
+      label:resolved.profile?.label||'UNKNOWN STANCE 2 PAIR',
       profileId:resolved.profile?.id||null,
       failed:!!resolved.profile?.failed,
       effectiveChain:Object.freeze([...resolved.effectiveChain]),
@@ -349,7 +383,7 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
   function selectPair({stanceId,weaponId}={}){
     const stance=STANCE_BY_ID.get(String(stanceId||''));
     const requestedWeapon=String(weaponId||'');
-    if(!stance||!isGate2PilotPair(stance.id,requestedWeapon))return{ok:false,error:'Unknown Gate 2 pilot pair'};
+    if(!stance||!STONE_WEAPONS[requestedWeapon])return{ok:false,error:'Unknown Stance 2 pair'};
     resetCombatForPair(handle);
     if(PC.combatState.weapon!==requestedWeapon)PC.selectCombatWeapon(requestedWeapon);
     if(modifiedStance&&modifiedStance!==stance)restoreStanceChain(modifiedStance);

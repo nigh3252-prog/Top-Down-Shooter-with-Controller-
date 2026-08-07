@@ -22,7 +22,7 @@ assert.equal(cleaveModeForGate3Expression(pair('S24','longsword')),'adapted-medi
 assert.equal(cleaveModeForGate3Expression(pair('S26','dagger')),'adapted-light');
 assert.equal(cleaveModeForGate3Expression(pair('S26','greatsword')),'adapted-heavy');
 assert.equal(cleaveModeForGate3Expression(pair('S01','greatsword')),'full-heavy');
-assert.equal(cleaveModeForGate3Expression(pair('S23','dagger')),null);
+assert.equal(cleaveModeForGate3Expression(pair('S23','dagger')),'full-light');
 
 const cleaveWeapon={staminaClass:'Medium',stance2CleaveMode:'full-medium',stance2CurrentAttackGroup:'horizontal'};
 assert.equal(weaponAllowsCleave({weaponDef:cleaveWeapon,attackSlot:0,maxCharge:false}),true);
@@ -115,8 +115,10 @@ function makeHarness({stanceId,weaponId,movePenalty=.55,attack=null,hitIds=[],ac
   arena.stance=stanceById('S23');
   combatState.weapon='dagger';
   runtime.apply();
-  assert.equal(runtime.snapshot().active,false);
-  assert.equal(Object.hasOwn(STONE_WEAPONS.greatsword,'stance2CleaveMode'),false,'leaving the pilot should restore the modified weapon');
+  assert.equal(runtime.snapshot().active,true);
+  assert.equal(runtime.snapshot().payoffId,'stance2-full-light');
+  assert.equal(STONE_WEAPONS.dagger.stance2CleaveMode,'full-light');
+  assert.equal(Object.hasOwn(STONE_WEAPONS.greatsword,'stance2CleaveMode'),false,'switching class templates should restore the modified weapon');
   runtime.destroy();
   assert.equal(combatState.stance2Gate3,undefined);
 }

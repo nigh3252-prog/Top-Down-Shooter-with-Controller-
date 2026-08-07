@@ -39,11 +39,29 @@ export const GATE3_FULL_PAYOFFS=Object.freeze({
   }),
 });
 
+export const GATE3_FULL_CLASS_PAYOFFS=Object.freeze({
+  Light:GATE3_FULL_PAYOFFS[pairKey('S24','dagger')],
+  Medium:GATE3_FULL_PAYOFFS[pairKey('S26','longsword')],
+  Heavy:GATE3_FULL_PAYOFFS[pairKey('S01','greatsword')],
+});
+function materializeFullClassPayoff(template,pilotPayoff,stanceId,weaponId,gate2){
+  if(!template)return null;
+  if(pilotPayoff)return pilotPayoff;
+  return freezePayoff({
+    ...template,
+    id:`stance2-full-${String(gate2?.compatibility?.stanceClass||'unknown').toLowerCase()}`,
+    sourcePayoffId:template.id,
+    stanceId,weaponId,
+  });
+}
+
 export function resolveGate3FullPayoff({stance,weapon,weaponId=''}={}){
   const stanceId=String(stance?.id||stance||'');
   const resolvedWeaponId=String(weaponId||weapon?.id||'');
   const gate2=resolveGate2PilotProfile({stance,weapon,weaponId:resolvedWeaponId});
-  const payoff=GATE3_FULL_PAYOFFS[pairKey(stanceId,resolvedWeaponId)]||null;
+  const pilotPayoff=GATE3_FULL_PAYOFFS[pairKey(stanceId,resolvedWeaponId)]||null;
+  const template=gate2.compatibility.tier==='full'?GATE3_FULL_CLASS_PAYOFFS[gate2.compatibility.stanceClass]||null:null;
+  const payoff=materializeFullClassPayoff(template,pilotPayoff,stanceId,resolvedWeaponId,gate2);
   return Object.freeze({
     active:!!payoff&&gate2.active&&gate2.compatibility.tier==='full',
     stanceId,
@@ -52,6 +70,7 @@ export function resolveGate3FullPayoff({stance,weapon,weaponId=''}={}){
     payoff,
   });
 }
+
 
 export function cleaveModeForGate3Expression({stance,weapon,weaponId=''}={}){
   const gate2=resolveGate2PilotProfile({stance,weapon,weaponId});

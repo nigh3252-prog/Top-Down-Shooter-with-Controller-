@@ -29,6 +29,10 @@ The first playable 3×3 slice uses:
 - Longsword — Medium weapon
 - Greatsword — Heavy weapon
 
+### Canonical class-template rollout
+
+The tested 3×3 pilot is now the canonical attack/movement template for the complete roster. All 30 stances and every weighted weapon resolve by stance class × weapon class; no new pair-specific behavior is invented during rollout. Same-class pairs retain the stance-authored chain, adapted and failed pairs inherit the approved pilot-cell expression, and matched-class Gate 3 payoffs apply by class. See `STANCE_2_CLASS_TEMPLATE.md`.
+
 ### Full expression
 
 Matching pairs keep the stance-authored three-move chain and use stance-dominant cadence.
