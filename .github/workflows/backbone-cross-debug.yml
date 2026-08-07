@@ -1,0 +1,48 @@
+name: Apply Stance 2 class templates
+
+on:
+  pull_request:
+    branches:
+      - automation/stance2-class-template-base
+    types:
+      - opened
+      - synchronize
+      - edited
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.event.pull_request.number == 119
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Gate 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stance-2-gate-5-pilot
+          fetch-depth: 0
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply and test class templates
+        run: |
+          node .stance2-class-template/apply.mjs
+          git diff --check
+          node --check src/stance-gate2-runtime.js
+          node --check src/stance-movement-profiles.js
+          node --check src/stance-gate3-payoffs.js
+          npm run test:combat
+      - name: Commit and push tested class templates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -rf .stance2-class-template
+          git rm -f .github/workflows/backbone-cross-debug.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Make Stance 2 pilot grid the universal class template"
+          git push origin HEAD:agent/stance-2-gate-5-pilot
