@@ -28,7 +28,7 @@ for(const stanceId of GATE2_STANCE_IDS){
   }
 }
 assert.deepEqual(resolveGate2PilotProfile({stance:stanceById('S24'),weapon:STONE_WEAPONS.dagger,weaponId:'dagger'}).effectiveChain,stanceById('S24').chain);
-assert.deepEqual(resolveGate2PilotProfile({stance:stanceById('S24'),weapon:STONE_WEAPONS.longsword,weaponId:'longsword'}).effectiveChain,['vertical10','stab3','horizontal3']);
+assert.deepEqual(resolveGate2PilotProfile({stance:stanceById('S24'),weapon:STONE_WEAPONS.longsword,weaponId:'longsword'}).effectiveChain,stanceById('S24').chain);
 assert.deepEqual(resolveGate2PilotProfile({stance:stanceById('S24'),weapon:STONE_WEAPONS.greatsword,weaponId:'greatsword'}).effectiveChain,[GATE2_FAILURE_ATTACKS.tooHeavy,GATE2_FAILURE_ATTACKS.tooHeavy,GATE2_FAILURE_ATTACKS.tooHeavy]);
 assert.equal(resolveGate2PilotProfile({stance:stanceById('S23'),weapon:STONE_WEAPONS.longsword,weaponId:'longsword'}).active,true);
 
@@ -71,7 +71,7 @@ const runtime=createStanceGate2Runtime({arenaHandle:handle,windowRef:{}});
 
 let snapshot=runtime.snapshot();
 assert.equal(snapshot.profileId,'rat-step-longsword-adapted');
-assert.deepEqual(arena.stance.chain,['vertical10','stab3','horizontal3']);
+assert.deepEqual(arena.stance.chain,originalRatStep,'adjacent weight should preserve Rat Step authored attacks');
 assert.ok(PC.RIG.gripCenter>0,'half-sword grip should move up the blade');
 const baseScale=1+(combatState.tune.length-1)*.36+(combatState.tune.weight-.35)*.78;
 assert.ok(Math.abs(baseScale-GATE2_PAIR_PROFILES['S24:longsword'].pace.strike)<1e-6,'stance pace should dominate the weapon timing base');

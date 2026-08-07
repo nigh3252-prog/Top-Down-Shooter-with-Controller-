@@ -2,6 +2,7 @@ import { STANCE_CARDS } from './stance-cards.js';
 import { guardPoseFor } from './guard-poses.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
 import { STONE_WEAPONS } from './weapons.js';
+import { getStanceAttackAdapter, withAdaptedStanceAttack } from './stance-attack-adapters.js';
 
 export const GATE2_STANCE_IDS=Object.freeze(['S24','S26','S01']);
 export const GATE2_WEAPON_IDS=Object.freeze(['dagger','longsword','greatsword']);
@@ -118,6 +119,7 @@ export function resolveGate2PilotProfile({stance,weapon,weaponId=''}={}){
   const template=GATE2_CLASS_PAIR_TEMPLATES[templateKey]||null;
   const profile=materializeClassTemplateProfile({template,pilotProfile,stanceId,weaponId:resolvedWeaponId,compatibility});
   const originalChain=BASELINE_CHAIN_BY_ID.get(stanceId)||Object.freeze([...(stance?.chain||[])]);
+  const effectiveChain=profile?.failed&&profile?.moveKeys?profile.moveKeys:originalChain;
   return Object.freeze({
     active:!!profile&&compatibility.tier!=='unknown',
     stanceId,
@@ -126,7 +128,7 @@ export function resolveGate2PilotProfile({stance,weapon,weaponId=''}={}){
     templateKey,
     sourceProfileId:profile?.sourceProfileId||profile?.id||null,
     profile,
-    effectiveChain:Object.freeze([...(profile?.moveKeys||originalChain)]),
+    effectiveChain:Object.freeze([...effectiveChain]),
   });
 }
 
@@ -307,7 +309,7 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
     const nextContext=resolved.active?pairKey(resolved.stanceId,weaponId):null;
 
     if(modifiedStance&&modifiedStance!==stance)restoreStanceChain(modifiedStance);
-    if(resolved.active&&resolved.profile?.moveKeys&&stance){
+    if(resolved.active&&resolved.profile?.failed&&resolved.profile?.moveKeys&&stance){
       stance.chain=[...resolved.profile.moveKeys];
       modifiedStance=stance;
     }else if(stance&&modifiedStance===stance){
@@ -336,6 +338,7 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
       label:resolved.profile?.label||'UNKNOWN STANCE 2 PAIR',
       profileId:resolved.profile?.id||null,
       failed:!!resolved.profile?.failed,
+      attackAdapterId:getStanceAttackAdapter(resolved.compatibility.stanceClass,resolved.compatibility.weaponClass)?.id||null,
       effectiveChain:Object.freeze([...resolved.effectiveChain]),
       gripMode:resolved.profile?.gripMode||'normal',
       pace:resolved.profile?Object.freeze({...resolved.profile.pace}):null,
@@ -367,10 +370,16 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
   PC.startCombatAttack=function(key,group,...rest){
     const resolved=apply();
     const slot=Number(handle.arena.chain?.activeSlot);
-    const replacement=resolved.active&&resolved.profile?.moveKeys&&slot>=0?resolved.profile.moveKeys[slot]:null;
+    const replacement=resolved.active&&resolved.profile?.failed&&resolved.profile?.moveKeys&&slot>=0?resolved.profile.moveKeys[slot]:null;
     const resolvedKey=replacement&&PC.ATTACKS[replacement]?replacement:key;
-    const resolvedGroup=PC.ATTACKS[resolvedKey]?.group||group;
-    const result=original.startCombatAttack.call(this,resolvedKey,resolvedGroup,...rest);
+    const invoke=()=>{
+      const resolvedGroup=PC.ATTACKS[resolvedKey]?.group||group;
+      return original.startCombatAttack.call(this,resolvedKey,resolvedGroup,...rest);
+    };
+    const adapted=resolved.active&&!resolved.profile?.failed&&resolved.compatibility.tier==='adapted'&&resolvedKey===key;
+    const result=adapted
+      ?withAdaptedStanceAttack(PC,key,resolved.compatibility.stanceClass,resolved.compatibility.weaponClass,invoke)
+      :invoke();
     if(resolved.profile?.failed&&handle.arena.charge){
       handle.arena.charge.active=false;
       handle.arena.charge.queued=false;
