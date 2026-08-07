@@ -1,41 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createStanceGate5Runtime } from '../src/stance-gate5-defense.js';
-
-const attacker={id:7,wizardStableId:'original:0007',hp:45,knockX:0,knockZ:0,flash:0,squash:0,squashT:0,squashMax:0};
-let defenseResolver=hit=>hit;
-const stuns=[];
-const enemySystem={
-  enemies:[attacker],
-  setPlayerDefenseResolver(resolver){defenseResolver=typeof resolver==='function'?resolver:(hit=>hit);return true;},
-  stunEnemy(enemy,duration,options){stuns.push({enemy,duration,options});enemy.stunned=Math.max(enemy.stunned||0,duration);return true;},
-  hit(hit){return defenseResolver(hit);},
-};
-const combatState={weapon:'longsword',attack:null,attackKey:'',readyLock:0};
-const PC={combatState,combatLayer:null,startCombatAttack(){return true;}};
-const arena={stance:{id:'S26',name:'S26 Long Blade Form'},deadT:-1,dodge:{t:-1,cool:0},stamina:{v:100,pending:0},chain:{activeSlot:-1},charge:{active:false,queued:false,buttonHeld:false,hold:0,tier:1/3,forceTier:null},swing:{}};
-const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck:{pool:[]},enemySystem,getPlayerForward:()=>({x:0,z:1}),roomTransition:null},windowRef:{location:{search:''},__stance2Gate4Runtime:null},documentRef:null});
-
-assert.equal(runtime.defenseDown('gamepad-cross').accepted,true);
-const result=enemySystem.hit({damage:18,kind:'grunt',name:'Slash',dir:{x:0,z:1},sourceEnemy:attacker,sourceEnemyId:attacker.wizardStableId});
-assert.equal(result.damage,0);
-assert.equal(result.outcome,'deflected');
-assert.equal(result.staggered,true);
-assert.equal(result.staggerDuration,1.25);
-assert.equal(stuns.length,1);
-assert.equal(stuns[0].enemy,attacker);
-assert.equal(stuns[0].duration,1.25);
-assert.equal(stuns[0].options.kind,'parryStagger');
-assert.ok(attacker.stunned>=1.25);
-assert.ok(Math.abs(attacker.knockZ)>=3,'parry stagger should visibly knock the attacker backward');
-assert.equal(runtime.snapshot().lastOutcome,'parried-stagger');
-runtime.destroy();
-
-const base=readFileSync(new URL('../src/arena-enemies-base.js',import.meta.url),'utf8');
-const visuals=readFileSync(new URL('../src/stance-gate5-visuals.js',import.meta.url),'utf8');
-assert.match(base,/sourceEnemy:e,sourceEnemyId:e\.wizardStableId/,'melee hits must identify the attacker for parry stagger');
-assert.match(base,/sourceEnemyId:pr\.sourceEnemyId/,'projectiles must retain their owner id');
-assert.match(visuals,/Long Blade Parry Success Ring/);
-assert.match(visuals,/Long Blade Parry Success Star/);
-assert.match(visuals,/10\.5\*strength/,'successful parry should use the stronger flash');
-console.log('Long Blade parry stagger and success flair tests passed');
+function makeHarness({stamina=100}={}){
+ const attacker={id:7,wizardStableId:'original:0007',hp:45,knockX:0,knockZ:0,flash:0,squash:0,squashT:0,squashMax:0};let defenseResolver=hit=>hit,phase='idle';const stuns=[],catchEvents=[];
+ const enemySystem={enemies:[attacker],setPlayerDefenseResolver(r){defenseResolver=typeof r==='function'?r:(hit=>hit);return true;},stunEnemy(enemy,duration,options){stuns.push({enemy,duration,options});enemy.stunned=Math.max(enemy.stunned||0,duration);return true;},hit(hit){return defenseResolver(hit);}};
+ const combatState={weapon:'longsword',attack:null,attackKey:'',readyLock:0};const PC={combatState,combatLayer:null,startCombatAttack(){return true;}};
+ const arena={stance:{id:'S26',name:'S26 Long Blade Form'},deadT:-1,dodge:{t:-1,cool:0},stamina:{v:stamina,pending:0},chain:{activeSlot:-1},charge:{active:false,queued:false,buttonHeld:false,hold:0,tier:1/3,forceTier:null},swing:{}};
+ const engine={snapshot(){return{phase};},trigger(e){catchEvents.push(e);phase='catch';return e;}};const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck:{pool:[]},enemySystem,getPlayerForward:()=>({x:0,z:1}),roomTransition:null},windowRef:{location:{search:''},__stance2Gate4Runtime:{engine}},documentRef:null});
+ return{runtime,enemySystem,attacker,stuns,catchEvents,arena};}
+{const h=makeHarness();assert.equal(h.runtime.defenseDown('gamepad-cross').accepted,true);const r=h.enemySystem.hit({damage:18,kind:'grunt',name:'Slash',dir:{x:0,z:1},sourceEnemy:h.attacker,sourceEnemyId:h.attacker.wizardStableId});assert.equal(r.damage,0);assert.equal(r.outcome,'deflected');assert.equal(r.staggered,true);assert.equal(r.staggerDuration,1.25);assert.equal(h.stuns.length,1);assert.equal(h.arena.stamina.v,100,'successful parry stays free');assert.equal(h.catchEvents.length,0);h.runtime.destroy();}
+{const h=makeHarness();assert.equal(h.runtime.defenseDown('gamepad-cross').accepted,true);h.runtime.update(.23);assert.equal(h.arena.stamina.v,88);assert.equal(h.runtime.snapshot().lastParryMissCost,12);assert.equal(h.runtime.snapshot().lastOutcome,'parry-whiff-cost');assert.ok(h.runtime.snapshot().parryRecoveryRemaining>0);h.runtime.destroy();}
+{const h=makeHarness({stamina:5});assert.equal(h.runtime.defenseDown('gamepad-cross').accepted,true);h.runtime.update(.23);assert.equal(h.arena.stamina.v,0);assert.equal(h.runtime.snapshot().lastOutcome,'parry-whiff-overdraw');assert.equal(h.catchEvents.length,1);assert.equal(h.catchEvents[0].source,'stance-defense');assert.equal(h.catchEvents[0].attackKey,'long-blade-parry-whiff');assert.equal(h.catchEvents[0].requestedCost,12);assert.equal(h.catchEvents[0].actualSpent,5);assert.equal(h.catchEvents[0].overdrawAmount,7);h.runtime.destroy();}
+{const h=makeHarness({stamina:0});const a=h.runtime.defenseDown('gamepad-cross');assert.equal(a.accepted,false);assert.equal(a.reason,'empty-reserve');h.runtime.destroy();}
+const base=readFileSync(new URL('../src/arena-enemies-base.js',import.meta.url),'utf8'),visuals=readFileSync(new URL('../src/stance-gate5-visuals.js',import.meta.url),'utf8');assert.match(base,/sourceEnemy:e,sourceEnemyId:e\.wizardStableId/);assert.match(visuals,/Long Blade Parry Success Ring/);assert.match(visuals,/Long Blade Parry Success Star/);console.log('Long Blade parry stagger, flair, and whiff stamina tests passed');

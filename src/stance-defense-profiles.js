@@ -14,9 +14,10 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
     kind:'parry',
     parryWindow:.22,
     missRecovery:.32,
+    missStaminaCost:12,
     successFlash:.34,
     parryStaggerDuration:1.25,
-    summary:'Tap defense for a short sword-parry window. A success deflects the hit and heavily staggers the attacker.',
+    summary:'Tap defense for a short sword-parry window. Success is free and heavily staggers the attacker; a whiff costs 12 stamina.',
   }),
   S01:Object.freeze({
     id:'hammerfall-kite-shield',

@@ -29,7 +29,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   const state=arena.defense={
     stanceId:'',profileId:null,kind:'existing-dodge',guardRaised:false,guardBroken:false,
     guardCounterRemaining:0,parryRemaining:0,parryRecoveryRemaining:0,parrySuccessRemaining:0,
-    lastOutcome:'ready',lastBlockCost:0,lastDodgeCost:0,lastOverdrawAmount:0,lastInput:'',lastHitDirection:'',
+    lastOutcome:'ready',lastBlockCost:0,lastDodgeCost:0,lastParryMissCost:0,lastOverdrawAmount:0,lastInput:'',lastHitDirection:'',
     rawButtons:'',rawPressed:'',gamepadId:'',gamepadMapping:'',aliasConflict:false,
   };
   const originalStartCombatAttack=PC.startCombatAttack;
@@ -70,7 +70,7 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
   function resetTransient(reason='stance-change'){
     state.guardRaised=false;state.guardBroken=false;state.guardCounterRemaining=0;
     state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;
-    state.lastDodgeCost=0;state.lastOutcome=reason;
+    state.lastDodgeCost=0;state.lastParryMissCost=0;state.lastOutcome=reason;
   }
   function syncStance(){
     const profile=currentProfile();
@@ -89,7 +89,9 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     if(!canStartDefense())return{handled:true,accepted:false,reason:'busy',source};
     if(profile.kind==='parry'){
       if(state.parryRemaining>0||state.parryRecoveryRemaining>0)return{handled:true,accepted:false,reason:'parry-recovery',source};
-      state.parryRemaining=profile.parryWindow;state.parrySuccessRemaining=0;state.lastOutcome='parry-open';
+      const missCost=Math.max(0,Number(profile.missStaminaCost)||0);
+      if(missCost>EPSILON&&(Number(arena.stamina.v)||0)<=EPSILON)return{handled:true,accepted:false,reason:'empty-reserve',source};
+      state.parryRemaining=profile.parryWindow;state.parrySuccessRemaining=0;state.lastParryMissCost=0;state.lastOutcome='parry-open';
       visuals.pulse('parry-open');publish();return{handled:true,accepted:true,kind:'parry',source};
     }
     if(profile.kind==='shield'){
@@ -184,7 +186,13 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     if(state.parryRemaining>0){
       state.parryRemaining=Math.max(0,state.parryRemaining-amount);
       if(state.parryRemaining<=0&&state.lastOutcome==='parry-open'){
-        state.parryRecoveryRemaining=profile?.missRecovery||0;state.lastOutcome='parry-missed';
+        state.parryRecoveryRemaining=profile?.missRecovery||0;
+        const missCost=Math.max(0,Number(profile?.missStaminaCost)||0);
+        if(missCost>EPSILON){
+          const {decision}=spendStanceDefense(missCost,'long-blade-parry-whiff');
+          state.lastParryMissCost=decision.actualSpent;state.lastOverdrawAmount=decision.overdrawAmount;
+          state.lastOutcome=decision.allowed?(decision.overdraw?'parry-whiff-overdraw':'parry-whiff-cost'):'parry-whiff-empty';
+        }else state.lastOutcome='parry-missed';
       }
     }else state.parryRecoveryRemaining=Math.max(0,state.parryRecoveryRemaining-amount);
     publish(amount);return lastSnapshot;
