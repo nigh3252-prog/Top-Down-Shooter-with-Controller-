@@ -49,6 +49,24 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     const x=Number(value?.x??value?.forwardX),z=Number(value?.z??value?.forwardZ),length=Math.hypot(x,z);
     return length>EPSILON?{x:x/length,z:z/length}:{x:0,z:1};
   }
+  function resolveParryAttacker(hit={}){
+    if(hit?.sourceEnemy&&Number(hit.sourceEnemy.hp)>0)return hit.sourceEnemy;
+    const sourceId=String(hit?.sourceEnemyId||'');
+    if(!sourceId)return null;
+    return (enemySystem.enemies||[]).find(enemy=>
+      Number(enemy?.hp)>0&&(String(enemy?.wizardStableId||'')===sourceId||String(enemy?.id||'')===sourceId)
+    )||null;
+  }
+  function addParryImpactReaction(enemy,dir){
+    if(!enemy)return;
+    const dx=Number(dir?.x)||0,dz=Number(dir?.z)||0,length=Math.hypot(dx,dz)||1;
+    enemy.knockX=(Number(enemy.knockX)||0)-dx/length*3.4;
+    enemy.knockZ=(Number(enemy.knockZ)||0)-dz/length*3.4;
+    if('flash' in enemy)enemy.flash=Math.max(Number(enemy.flash)||0,.34);
+    if('squash' in enemy)enemy.squash=Math.max(Number(enemy.squash)||0,.72);
+    if('squashT' in enemy)enemy.squashT=Math.max(Number(enemy.squashT)||0,.28);
+    if('squashMax' in enemy)enemy.squashMax=Math.max(Number(enemy.squashMax)||0,.28);
+  }
   function resetTransient(reason='stance-change'){
     state.guardRaised=false;state.guardBroken=false;state.guardCounterRemaining=0;
     state.parryRemaining=0;state.parryRecoveryRemaining=0;state.parrySuccessRemaining=0;
@@ -133,7 +151,13 @@ export function createStanceGate5Runtime({arenaHandle,windowRef=globalThis.windo
     const dir=hit.dir||{};state.lastHitDirection=`${Number(dir.x)||0},${Number(dir.z)||0}`;
     if(profile?.kind==='parry'&&state.parryRemaining>0){
       state.parryRemaining=0;state.parryRecoveryRemaining=.14;state.parrySuccessRemaining=profile.successFlash;
-      state.lastOutcome='parried';visuals.pulse('parry-success');publish();return{...hit,damage:0,outcome:'deflected'};
+      const attacker=resolveParryAttacker(hit);
+      const staggerDuration=Math.max(0,Number(profile.parryStaggerDuration)||0);
+      const staggered=!!attacker&&staggerDuration>0&&enemySystem.stunEnemy?.(attacker,staggerDuration,{kind:'parryStagger'})!==false;
+      if(staggered)addParryImpactReaction(attacker,hit.dir);
+      state.lastOutcome=staggered?'parried-stagger':'parried';
+      visuals.pulse('parry-success');publish();
+      return{...hit,damage:0,outcome:'deflected',staggered,staggerDuration:staggered?staggerDuration:0};
     }
     if(profile?.kind==='shield'&&state.guardRaised&&!PC.combatState.attack){
       const frontal=isFrontalShieldHit({incomingDir:hit.dir,forward:authoritativeForward(),arcDegrees:profile.blockArcDegrees});

@@ -18,6 +18,8 @@ Other non-pilot stances retain the existing dodge as their fallback defense and 
 
 - Tap defense to open a 0.22 second parry window.
 - A hit during that window is negated.
+- A successful parry inflicts a significant 1.25 second stagger on the attacking enemy, cancelling its attack and creating a real punish window.
+- The success cue adds a brighter white-gold expanding ring and eight-spoke burst on top of the existing confirmation pop.
 - Missing the window creates 0.32 seconds of parry recovery.
 - The parry replaces the dodge input only while Long Blade Form is active.
 - Opening the window creates a small blue-white burst around the player.

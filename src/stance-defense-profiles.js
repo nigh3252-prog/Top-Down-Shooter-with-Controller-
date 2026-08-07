@@ -15,7 +15,8 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
     parryWindow:.22,
     missRecovery:.32,
     successFlash:.34,
-    summary:'Tap defense for a short sword-parry window. A miss creates brief recovery.',
+    parryStaggerDuration:1.25,
+    summary:'Tap defense for a short sword-parry window. A success deflects the hit and heavily staggers the attacker.',
   }),
   S01:Object.freeze({
     id:'hammerfall-kite-shield',

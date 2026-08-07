@@ -38,10 +38,19 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
       const burstGeometry=new THREE.SphereGeometry(.46,14,9);
       const burstMaterial=new THREE.MeshBasicMaterial({color:0xbcecff,transparent:true,opacity:0,wireframe:true,depthWrite:false,blending:THREE.AdditiveBlending});
       const burst=new THREE.Mesh(burstGeometry,burstMaterial);burst.name='Long Blade Parry Burst';burst.position.set(0,1.25,.24);burst.visible=false;root.add(burst);
+      const successRingGeometry=new THREE.RingGeometry(.58,.76,52);
+      const successRingMaterial=new THREE.MeshBasicMaterial({color:0xfff0aa,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+      const successRing=new THREE.Mesh(successRingGeometry,successRingMaterial);successRing.name='Long Blade Parry Success Ring';successRing.rotation.x=-Math.PI/2;successRing.position.y=.38;successRing.visible=false;root.add(successRing);
+      const starPoints=[];
+      for(let i=0;i<8;i++){const a=i*Math.PI/4,c=Math.cos(a),s=Math.sin(a);starPoints.push(new THREE.Vector3(c*.34,0,s*.34),new THREE.Vector3(c*1.22,0,s*1.22));}
+      const successStarGeometry=new THREE.BufferGeometry().setFromPoints(starPoints);
+      const successStarMaterial=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
+      const successStar=new THREE.LineSegments(successStarGeometry,successStarMaterial);successStar.name='Long Blade Parry Success Star';successStar.position.y=.62;successStar.visible=false;root.add(successStar);
       const flashLight=new THREE.PointLight(0xbcecff,0,7,2);flashLight.position.set(0,1.9,.4);root.add(flashLight);
       visual={
         THREE,root,shield,board,boardGeometry,boardMaterial,rimGeometry,rimMaterial,boss,
-        parry,parryMaterial,burst,burstGeometry,burstMaterial,flashLight,
+        parry,parryMaterial,burst,burstGeometry,burstMaterial,
+        successRing,successRingGeometry,successRingMaterial,successStar,successStarGeometry,successStarMaterial,flashLight,
         pulseT:0,pulseDuration:.24,burstT:0,burstDuration:.18,burstSuccess:false,
       };
       if(pendingPulse){pulse(pendingPulse);pendingPulse=null;}
@@ -72,6 +81,10 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
       visual.burstMaterial.color.setHex(color);
       visual.burst.scale.setScalar(parrySuccess?.48:.30);
       visual.burst.visible=true;
+      if(parrySuccess){
+        visual.successRing.scale.setScalar(.62);visual.successRingMaterial.opacity=1;visual.successRing.visible=true;
+        visual.successStar.scale.setScalar(.72);visual.successStarMaterial.opacity=1;visual.successStar.visible=true;
+      }
     }
     if(kind==='block')visual.boardMaterial.emissive.setHex(0x7b5420);
     else if(kind==='guard-break')visual.boardMaterial.emissive.setHex(0x7d1814);
@@ -118,14 +131,26 @@ export function installStanceGate5Visuals({PC,windowRef=globalThis.window,docume
       visual.burst.scale.setScalar(start+distance*expansion);
       visual.burstMaterial.opacity=(visual.burstSuccess?.95:.72)*strength*strength;
       visual.burst.rotation.y+=frameDt*(visual.burstSuccess?8:5);
+      if(visual.burstSuccess){
+        visual.successRing.visible=true;
+        visual.successRing.scale.setScalar(.62+3.25*expansion);
+        visual.successRingMaterial.opacity=.96*Math.pow(strength,1.35);
+        visual.successStar.visible=true;
+        visual.successStar.scale.setScalar(.72+1.95*expansion);
+        visual.successStar.rotation.y+=frameDt*10;
+        visual.successStarMaterial.opacity=.92*strength*strength;
+        visual.flashLight.intensity=Math.max(visual.flashLight.intensity,10.5*strength);
+      }
     }else{
       visual.burst.visible=false;visual.burstMaterial.opacity=0;
+      visual.successRing.visible=false;visual.successRingMaterial.opacity=0;
+      visual.successStar.visible=false;visual.successStarMaterial.opacity=0;
     }
   }
   function destroy(){
     destroyed=true;if(!visual)return;visual.root.parent?.remove(visual.root);
-    visual.boardGeometry.dispose();visual.rimGeometry.dispose();visual.parry.geometry.dispose();visual.burstGeometry.dispose();visual.boss.geometry.dispose();
-    visual.boardMaterial.dispose();visual.rimMaterial.dispose();visual.parryMaterial.dispose();visual.burstMaterial.dispose();visual.boss.material.dispose();visual=null;
+    visual.boardGeometry.dispose();visual.rimGeometry.dispose();visual.parry.geometry.dispose();visual.burstGeometry.dispose();visual.successRingGeometry.dispose();visual.successStarGeometry.dispose();visual.boss.geometry.dispose();
+    visual.boardMaterial.dispose();visual.rimMaterial.dispose();visual.parryMaterial.dispose();visual.burstMaterial.dispose();visual.successRingMaterial.dispose();visual.successStarMaterial.dispose();visual.boss.material.dispose();visual=null;
   }
   return{update,pulse,destroy};
 }
