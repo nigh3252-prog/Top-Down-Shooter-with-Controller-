@@ -1,15 +1,46 @@
-export const STANCE_DEFENSE_PROFILES=Object.freeze({
-  S24:Object.freeze({
-    id:'rat-step-existing-dodge',
-    stanceId:'S24',
+export const STANCE_DEFENSE_FAMILY_BY_ID=Object.freeze({
+  S01:'block',
+  S02:'parry',
+  S03:'block',
+  S04:'block',
+  S05:'block',
+  S06:'block',
+  S07:'parry',
+  S08:'parry',
+  S09:'dodge',
+  S10:'parry',
+  S11:'dodge',
+  S12:'parry',
+  S13:'dodge',
+  S14:'block',
+  S15:'dodge',
+  S16:'parry',
+  S17:'parry',
+  S18:'parry',
+  S19:'parry',
+  S20:'block',
+  S21:'block',
+  S22:'parry',
+  S23:'dodge',
+  S24:'dodge',
+  S25:'dodge',
+  S26:'parry',
+  S27:'parry',
+  S28:'block',
+  S29:'parry',
+  S30:'block',
+});
+
+export const STANCE_DEFENSE_FAMILY_TEMPLATES=Object.freeze({
+  dodge:Object.freeze({
+    sourceStanceId:'S24',
     label:'BUILT-IN DODGE',
     kind:'existing-dodge',
     dodgeCost:12,
-    summary:'Rat Step uses the current Combat Arena dodge exactly as authored and spends 12 stamina.',
+    summary:'Uses the current Combat Arena dodge and spends 12 stamina on an eligible dodge.',
   }),
-  S26:Object.freeze({
-    id:'long-blade-parry',
-    stanceId:'S26',
+  parry:Object.freeze({
+    sourceStanceId:'S26',
     label:'SWORD PARRY',
     kind:'parry',
     parryWindow:.22,
@@ -17,11 +48,10 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
     missStaminaCost:12,
     successFlash:.34,
     parryStaggerDuration:1.25,
-    summary:'Tap defense for a short sword-parry window. Success is free and heavily staggers the attacker; a whiff costs 12 stamina.',
+    summary:'Tap defense for a short parry window. Success is free and heavily staggers the attacker; a whiff costs 12 stamina.',
   }),
-  S01:Object.freeze({
-    id:'hammerfall-kite-shield',
-    stanceId:'S01',
+  block:Object.freeze({
+    sourceStanceId:'S01',
     label:'KITE SHIELD',
     kind:'shield',
     blockArcDegrees:120,
@@ -29,9 +59,34 @@ export const STANCE_DEFENSE_PROFILES=Object.freeze({
     guardCounterWindow:.8,
     minimumBlockCost:8,
     staminaPerDamage:1.5,
-    summary:'Tap to toggle the kite shield between the left side and frontal guard.',
+    summary:'Tap to toggle the kite shield between the side and frontal guard.',
   }),
 });
+
+const SAMPLE_PROFILE_IDS=Object.freeze({
+  S24:'rat-step-existing-dodge',
+  S26:'long-blade-parry',
+  S01:'hammerfall-kite-shield',
+});
+
+function materializeDefenseProfile(stanceId,family){
+  const template=STANCE_DEFENSE_FAMILY_TEMPLATES[family];
+  if(!template)return null;
+  return Object.freeze({
+    ...template,
+    id:SAMPLE_PROFILE_IDS[stanceId]||`stance-${String(stanceId).toLowerCase()}-${family}`,
+    stanceId,
+    family,
+    sourceProfileStanceId:template.sourceStanceId,
+  });
+}
+
+export const STANCE_DEFENSE_PROFILES=Object.freeze(Object.fromEntries(
+  Object.entries(STANCE_DEFENSE_FAMILY_BY_ID).map(([stanceId,family])=>[
+    stanceId,
+    materializeDefenseProfile(stanceId,family),
+  ]),
+));
 
 export function isHammerfallDefenseStance(stance){
   const candidates=stance&&typeof stance==='object'
