@@ -80,4 +80,34 @@ function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase
   assert.equal(h.arena.stamina.v,5);
   h.runtime.destroy();
 }
+
+// Full-rollout regression: non-sample stances must use the exact same runtime families.
+{
+  const h=makeHarness({stance:{id:'S09'},stamina:100});
+  assert.equal(h.runtime.snapshot().kind,'existing-dodge');
+  assert.equal(h.runtime.defenseDown('cross').delegated,true);
+  const spend=h.runtime.spendDodge();
+  assert.equal(spend.requestedCost,12);
+  assert.equal(h.arena.stamina.v,88);
+  h.runtime.destroy();
+}
+{
+  const h=makeHarness({stance:{id:'S16'},stamina:100});
+  assert.equal(h.runtime.snapshot().kind,'parry');
+  assert.equal(h.runtime.defenseDown('cross').accepted,true);
+  const result=h.enemySystem.hit({damage:12,dir:{x:0,z:-1}});
+  assert.equal(result.damage,0);
+  assert.equal(result.outcome,'deflected');
+  h.runtime.destroy();
+}
+{
+  const h=makeHarness({stance:{id:'S14'},stamina:100});
+  assert.equal(h.runtime.snapshot().kind,'shield');
+  assert.equal(h.runtime.defenseDown('cross').guardRaised,true);
+  const result=h.enemySystem.hit({damage:10,dir:{x:0,z:-1}});
+  assert.equal(result.damage,0);
+  assert.equal(result.outcome,'blocked');
+  assert.equal(h.arena.stamina.v,85);
+  h.runtime.destroy();
+}
 console.log('stance gate 5 authoritative defense tests passed');
