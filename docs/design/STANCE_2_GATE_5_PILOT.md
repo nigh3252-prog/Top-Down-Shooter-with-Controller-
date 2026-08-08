@@ -1,82 +1,116 @@
-# Stance 2.0 Gate 5 Pilot
+# Stance 2.0 Gate 5 Defense Rollout
 
-This pilot keeps one existing defense input while changing its behavior for three approved stances.
+Gate 5 uses one Combat Arena defense input and three approved defense families. The original pilot stances remain the canonical behavior sources, while all 30 stance cards now choose one of those same families by stance ID.
 
-## Rat Step — existing dodge
+- **Dodge** inherits Rat Step's existing Combat Arena dodge and stamina rule.
+- **Parry** inherits Long Blade Form's timing, miss cost, success feedback, and attacker stagger.
+- **Block** inherits Hammerfall Guard's kite-shield guard, frontal block, stamina conversion, and Guard Counter.
 
-Rat Step does not add a new sidestep system. Cross / LT / K continues to call the current Combat Arena dodge exactly as it did before Gate 5.
+Defense family is independent of the stance's Light / Medium / Heavy attack class. A Heavy stance assigned Dodge still uses Heavy Stance 2.0 attack movement and pauses; only its defense button behavior changes.
 
-- A successful Rat Step dodge spends 12 stamina.
-- Cooldown, movement-lock, and other eligibility checks happen before the spend, so a rejected dodge does not consume stamina.
-- A positive reserve below 12 may Overdraw, reaches zero, and opens the ordinary Stance Catch.
+## Assignment
+
+| Weight | Dodge | Parry | Block |
+| --- | ---: | ---: | ---: |
+| Light | 3 | 3 | 1 |
+| Medium | 3 | 5 | 2 |
+| Heavy | 1 | 5 | 7 |
+| **Total** | **7** | **13** | **10** |
+
+### Light
+
+- S14 Street Duelist — Block
+- S16 Needle Line — Parry
+- S18 False Invitation — Parry
+- S19 Surgeon Ladder — Parry
+- S23 Low Knife — Dodge
+- S24 Rat Step — Dodge
+- S25 Alley Fang — Dodge
+
+### Medium
+
+- S03 Iron Chapel — Block
+- S11 Hasso Waltz — Dodge
+- S12 Crescent Cut — Parry
+- S13 Red Ribbon — Dodge
+- S15 Open Palm Cut — Dodge
+- S17 High Needle — Parry
+- S20 Pike Drill — Block
+- S22 Hook and Thrust — Parry
+- S26 Long Blade Form — Parry
+- S29 Crossguard Bloom — Parry
+
+### Heavy
+
+- S01 Hammerfall Guard — Block
+- S02 Bell Ringer — Parry
+- S04 Anvil Step — Block
+- S05 Grave Mallet — Block
+- S06 Split Oak — Block
+- S07 Butcher Measure — Parry
+- S08 Left-Hand Reaper — Parry
+- S09 Deep Launch — Dodge
+- S10 Guillotine Reel — Parry
+- S21 Boar Spear — Block
+- S27 Crown Splitter — Parry
+- S28 Doorbreaker — Block
+- S30 Spiral Oath — Block
+
+## Dodge family
+
+Dodge stances do not add a second sidestep system. Cross / LT / K delegates to the current Combat Arena dodge exactly as Rat Step does.
+
+- An eligible dodge spends 12 stamina.
+- Cooldown, movement-lock, and other eligibility checks happen before the spend.
+- A positive reserve below 12 may Overdraw to zero and open Stance Catch.
 - Starting from zero stamina cannot dodge.
 - Playing a stance card during Catch continues to refill stamina through the existing rule.
 
-Other non-pilot stances retain the existing dodge as their fallback defense and remain free in this representative pilot. Their defensive costs are deferred to the full stance-defense rollout.
-
-## Long Blade Form — sword parry
+## Parry family
 
 - Tap defense to open a 0.22 second parry window.
-- A hit during that window is negated, costs no stamina, and inflicts a significant 1.25 second stagger on the attacking enemy.
-- The successful parry cancels the enemy's current attack, adds a short knockback/reaction, and creates a real punish window.
-- The success cue adds a brighter white-gold expanding ring and eight-spoke burst on top of the existing confirmation pop.
-- Missing the window costs 12 stamina and creates 0.32 seconds of parry recovery.
-- A positive reserve below 12 may Overdraw on the miss, reaches zero, and opens the ordinary Stance Catch.
+- A hit during that window is negated and costs no stamina.
+- A successful parry inflicts the existing significant 1.25 second stagger on the attacking enemy, cancels its current attack, and adds the short knockback/reaction.
+- The successful cue uses the bright white-gold expanding ring, eight-spoke burst, enlarged pop, and stronger light flash.
+- Missing the window costs 12 stamina and creates 0.32 seconds of recovery.
+- A positive reserve below 12 may Overdraw on the miss and open Stance Catch.
 - Starting from zero stamina cannot begin the parry attempt.
-- The parry replaces the dodge input only while Long Blade Form is active.
-- Opening the window creates a small blue-white burst around the player.
 
-The parry deliberately uses this lightweight burst rather than authored sword posing or a new animation rig. Enemy-specific recoil, riposte, and counter animations remain deferred until the basic timing feels correct.
+## Block family
 
-## Hammerfall Guard — kite shield
+Block stances use the existing Hammerfall kite-shield behavior.
 
-Drafting or owning Hammerfall makes a basic kite shield visible on the character.
-
-- Outside Hammerfall, the shield rests on the back.
-- Entering Hammerfall moves it to the character's left side.
-- Tap defense to toggle the shield up in front.
-- Tap defense again to lower it to the left side.
+- Tap defense to toggle the shield into frontal guard; tap again to lower it to the side.
 - The shield remains raised without holding the defense button.
 - Movement is reduced to 55% while guarding.
 - Attacking moves the shield aside and temporarily removes its protection.
-
-### Blocking
-
 - Frontal protection uses a 120 degree arc.
-- Rear and sufficiently off-angle attacks bypass the shield.
 - A successful block converts health damage into stamina cost.
 - Block cost is the greater of 8 stamina or 1.5 stamina per incoming damage.
-- A block may use the Gate 4 `stance-defense` Overdraw source from a positive reserve.
+- A block may Overdraw from a positive reserve through the Gate 4 `stance-defense` source.
 - Starting from zero stamina cannot block and causes guard break.
-
-### Guard Counter
-
-- Every successful block opens a 0.8 second Guard Counter window.
-- Pressing Heavy during that window starts the Hammerfall heavy attack.
-- The attack is automatically set to full charge; the player does not need to hold Heavy.
-- Its normal charged stamina spending and Gate 4 Overdraw behavior remain intact.
+- Every successful block opens the existing 0.8 second Guard Counter window; pressing Heavy uses the current stance's heavy slot at full charge.
 
 ## Input routing
 
-Combat Arena owns the defense button edge. K and Cross / LT call one `defenseDown()` seam. Long Blade and Hammerfall consume that input; Rat Step falls through to the existing `triggerDodge()` implementation, which requests the Rat Step stamina spend only after the dodge is eligible to begin. Non-pilot stances retain the unchanged fallback dodge. Gate 5 does not add keyboard listeners, start a second gamepad loop, or manipulate the built-in dodge cooldown.
+Combat Arena remains the sole owner of the defense button edge. Parry and Block consume the defense input. Dodge-family stances delegate to the existing `triggerDodge()` path, which requests the shared stance-defense stamina spend only after the dodge is eligible to begin.
 
 ## Damage pipeline
 
-The existing arena enemy-system object keeps a stable identity. It exposes a prioritized registered-interceptor API for stance defense while preserving `setPlayerDamageInterceptor()` as the legacy Arcana slot. No proxy is published through the enemy registry, and `damageEnemy()` is never repatched by Gate 5.
-
-Resolution order for this pilot:
+Resolution order remains:
 
 1. Existing invulnerability checks inside the enemy system.
 2. Gate 5 parry or shield evaluation.
 3. Existing Arcana damage interception.
 4. Remaining damage reaches player health.
 
+## Validation
+
+Automated coverage asserts the exact 30-card assignment, the Light / Medium / Heavy quotas, and off-sample runtime behavior for each family. Rat Step, Long Blade Form, and Hammerfall Guard remain regression anchors for the three canonical mechanics.
+
 ## Deferred
 
-- Card shuffling or Stamina Crash at zero.
-- Shield running.
-- Shield strain as a second resource.
-- Enemy-specific parry recoil and riposte animations.
-- Full / Adapted defense variations across the complete 3×3 matrix.
-- Defensive stamina costs for the remaining stance families.
-- Full rollout across all 30 stances.
+- Additional defense families beyond Dodge / Parry / Block.
+- Weight-specific variants of those defenses.
+- Shield running or shield strain as a second resource.
+- Enemy-specific parry recoil, riposte, and counter animations.
