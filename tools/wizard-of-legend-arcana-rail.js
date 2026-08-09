@@ -67,6 +67,7 @@
 
   const catalog=document.getElementById('catalog');
   const video=document.getElementById('showcase-video');
+  video.src=data.video.src;
   const modeRail=document.getElementById('mode-rail');
   const contextRail=document.getElementById('context-rail');
   const contextLabel=document.getElementById('context-label');
