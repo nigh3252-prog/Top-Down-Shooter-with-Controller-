@@ -665,6 +665,46 @@
     line-height:1.05;
   }
 
+  .playback-status{
+    flex:0 0 auto;
+    display:grid;
+    align-content:center;
+    gap:2px;
+    min-width:135px;
+    max-width:205px;
+    padding:0 3px;
+  }
+
+  .playback-status strong,
+  .playback-status small{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .playback-status strong{
+    color:var(--rail-text);
+    font-size:.72rem;
+  }
+
+  .playback-status small{
+    color:var(--rail-muted);
+    font-size:.58rem;
+  }
+
+  .playback-speed-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    cursor:default;
+  }
+
+  .playback-speed-chip select{
+    min-height:28px;
+    padding:.2rem .34rem;
+    font-size:.68rem;
+  }
+
   .mode-wrap{
     padding-bottom:var(--rail-safe-bottom);
     box-shadow:0 -12px 28px #0008;
@@ -769,7 +809,7 @@
     </details>
 
     <div class="rail-video-card">
-      <video id="showcase-video" controls playsinline preload="metadata"></video>
+      <video id="showcase-video" controls playsinline loop preload="metadata"></video>
       <div class="clip-badge" id="clip-badge">Selected clip</div>
     </div>
 
@@ -790,7 +830,7 @@
       <div class="progress-line"><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div><small id="progress-label">Progress is saved on this device.</small></div>
     </section>
 
-    <div class="transport-row" aria-label="Showcase clip controls">
+    <div class="transport-row" hidden aria-hidden="true" aria-label="Showcase clip controls">
       <span class="clip-status"><strong id="video-name">Full showcase</strong><span id="video-range">Choose an Arcana to play its bounded clip.</span></span>
       <button id="previous-clip" type="button">← Previous</button>
       <button id="next-clip" type="button">Next →</button>

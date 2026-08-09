@@ -54,6 +54,7 @@
   const categoryOptions=[['all','All categories'],...uniqueValues('category',categoryOrder).map(value=>[value,value])];
 
   const modes=[
+    {id:'playback',label:'Play',kind:'playback'},
     {id:'arcana',label:'Arcana',kind:'entries'},
     {id:'element',label:'Element',kind:'filter',key:'element',options:elementOptions},
     {id:'category',label:'Category',kind:'filter',key:'category',options:categoryOptions},
@@ -68,6 +69,7 @@
   const catalog=document.getElementById('catalog');
   const video=document.getElementById('showcase-video');
   video.src=data.video.src;
+  video.loop=true;
   const modeRail=document.getElementById('mode-rail');
   const contextRail=document.getElementById('context-rail');
   const contextLabel=document.getElementById('context-label');
@@ -77,6 +79,7 @@
   let selectedEntryId=data.entries[0]?.id??null;
   let visibleEntries=[...data.entries];
   let activeEntry=null;
+  let activeStart=0;
   let activeEnd=null;
   let activeClipMode='showcase';
   let activeSegmentIndex=0;
@@ -194,8 +197,25 @@
     ];
   }
   function selectedContextId(mode){return mode.kind==='entries'?selectedEntryId:modeState[mode.id].selected;}
+  function renderPlaybackContext(){
+    const name=document.getElementById('video-name')?.textContent??'Full showcase';
+    const range=document.getElementById('video-range')?.textContent??'Choose an Arcana to play its bounded clip.';
+    const speed=String(video.playbackRate||1);
+    const speedOptions=[['0.5','0.5×'],['0.75','0.75×'],['1','1×'],['1.25','1.25×'],['1.5','1.5×']].map(([value,label])=>'<option value="'+value+'"'+(speed===value?' selected':'')+'>'+label+'</option>').join('');
+    contextLabel.textContent='Playback';
+    contextRail.innerHTML=[
+      '<span class="playback-status" aria-live="polite"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(range)+'</small></span>',
+      '<button class="rail-chip playback-chip" type="button" data-playback-action="previous-clip" aria-label="Previous Arcana">← Previous</button>',
+      '<button class="rail-chip playback-chip" type="button" data-playback-action="next-clip" aria-label="Next Arcana">Next →</button>',
+      '<button class="rail-chip playback-chip" type="button" data-playback-action="full-showcase">Full video</button>',
+      '<button class="rail-chip playback-chip" type="button" data-playback-action="replay-clip" aria-label="Replay current clip">↻ Replay</button>',
+      '<label class="rail-chip playback-speed-chip"><span>Speed</span><select data-playback-speed aria-label="Playback speed">'+speedOptions+'</select></label>'
+    ].join('');
+    requestAnimationFrame(()=>{contextRail.scrollLeft=modeState.playback.visited?modeState.playback.scrollLeft:0;modeState.playback.visited=true;});
+  }
   function renderContext(){
     const mode=modeDef();
+    if(mode.kind==='playback'){renderPlaybackContext();return;}
     const items=contextItems(mode);
     contextLabel.textContent=mode.kind==='entries'?`${mode.label} · ${visibleEntries.length} shown`:mode.label;
     const selected=selectedContextId(mode);
@@ -212,7 +232,7 @@
     const useReference=mode==='reference'&&entry.referenceWindow;
     const segment=mode==='segment'?entry.showcaseSegments?.[segmentIndex]:null;
     const clip=useReference?entry.referenceWindow:segment??showcaseClip(entry);
-    activeEntry=entry;activeClipMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeEnd=clip.end;
+    activeEntry=entry;activeClipMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeStart=clip.start;activeEnd=clip.end;
     const label=useReference?'Base reference lock':segment?`${segment.kind==='charged'?'Charged':'Base'} segment`:'Full showcase';
     updateClipLabels(entry,clip,label);video.poster=entry.poster;
     const seek=()=>{video.currentTime=clip.start;if(autoplay)video.play().catch(()=>{});};
@@ -251,7 +271,7 @@
     if(!visibleEntries.some(entry=>entry.id===selectedEntryId))selectedEntryId=visibleEntries[0]?.id??null;
     renderContext();renderCurrentView();updateMetrics();
   }
-  function setSelectedEntry(entry,autoplay=false,mode='showcase',segmentIndex=0){
+  function setSelectedEntry(entry,autoplay=true,mode='showcase',segmentIndex=0){
     if(!entry)return;
     selectedEntryId=entry.id;modeState.arcana.selected=entry.id;setClip(entry,autoplay,mode,segmentIndex);renderCurrentView();contextRail.querySelectorAll('[data-item]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.item===entry.id)));updateSelectionHeader();
   }
@@ -277,9 +297,14 @@
   function plainForCopy(markdown){return String(markdown??'').replace(/[#*`>|]/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim();}
   function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),1800);}
   function handleContextClick(event){
+    const playbackButton=event.target.closest('[data-playback-action]');
+    if(playbackButton&&modeDef().kind==='playback'){
+      document.getElementById(playbackButton.dataset.playbackAction)?.click();
+      return;
+    }
     const button=event.target.closest('[data-item]');if(!button)return;
     const mode=modeDef();const id=button.dataset.item;modeState[mode.id].selected=id;
-    if(mode.kind==='entries'){setSelectedEntry(data.entries.find(item=>item.id===id),false);return;}
+    if(mode.kind==='entries'){setSelectedEntry(data.entries.find(item=>item.id===id),true);return;}
     if(mode.kind==='filter'){setFilter(mode,id);return;}
     if(mode.kind==='tools'){performTool(id);return;}
     modeState.research.selected=id;renderCurrentView();renderContext();
@@ -295,6 +320,13 @@
   renderModeRail();
   modeRail.addEventListener('click',event=>{const button=event.target.closest('[data-mode]');if(button)setMode(button.dataset.mode);});
   contextRail.addEventListener('click',handleContextClick);
+  contextRail.addEventListener('change',event=>{
+    const select=event.target.closest('[data-playback-speed]');
+    if(!select)return;
+    video.playbackRate=Number(select.value);
+    const legacy=document.getElementById('playback-speed');
+    if(legacy)legacy.value=select.value;
+  });
   contextRail.addEventListener('scroll',saveContextPosition,{passive:true});
   attachRailDrag(modeRail);attachRailDrag(contextRail);
   searchInput.addEventListener('input',event=>{filterState.search=event.target.value.trim();refresh();});
@@ -311,11 +343,11 @@
   document.getElementById('previous-clip').addEventListener('click',()=>stepClip(-1));
   document.getElementById('next-clip').addEventListener('click',()=>stepClip(1));
   document.getElementById('replay-clip').addEventListener('click',()=>activeEntry?setClip(activeEntry,true,activeClipMode,activeSegmentIndex):video.play());
-  document.getElementById('full-showcase').addEventListener('click',()=>{activeEntry=null;activeEnd=null;activeClipMode='showcase';video.poster='';updateClipLabels(null,null,'Full showcase');video.currentTime=0;video.play().catch(()=>{});});
+  document.getElementById('full-showcase').addEventListener('click',()=>{activeEntry=null;activeStart=0;activeEnd=null;activeClipMode='showcase';video.poster='';updateClipLabels(null,null,'Full showcase');video.currentTime=0;video.play().catch(()=>{});});
   document.getElementById('playback-speed').addEventListener('change',event=>video.playbackRate=Number(event.target.value));
   document.getElementById('research-link').addEventListener('click',()=>{modeState.research.selected='construction';if(activeMode==='research'){renderContext();renderCurrentView();}else setMode('research');});
   document.getElementById('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{const incoming=JSON.parse(await file.text());if(incoming.schemaVersion!==1||!incoming.entries)throw new Error();progress=progressFromPayload(incoming);saveProgress();renderCurrentView();toast('Progress imported.');}catch{toast('That progress file is not valid.');}event.target.value='';});
-  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd){video.pause();video.currentTime=activeEnd;}});
+  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd){const wasPlaying=!video.paused;video.currentTime=activeStart;if(wasPlaying)video.play().catch(()=>{});}});
   window.addEventListener('hashchange',()=>{const entry=data.entries.find(item=>`#arcana-${item.id}`===location.hash);if(entry){activeMode='arcana';modeRail.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode==='arcana')));selectedEntryId=entry.id;filterState.search='';searchInput.value='';filterState.element='all';filterState.category='all';filterState.lineage='all';filterState.status='all';filterState.sort='source';refresh();setClip(entry,false);}});
 
   document.getElementById('tracked-count').textContent=data.entries.length;
