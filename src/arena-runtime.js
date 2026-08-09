@@ -24,11 +24,12 @@ import { createRoomEncounterState } from './room-encounters.js';
 import { createRoomTransitionController } from './room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './ability-capture.js';
 import { getArenaMazeSettings, getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setArenaMazeCellSize, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
-import { installRoadieRun } from './roadie-run.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
 import { installStanceGate3Runtime } from './stance-gate3-payoffs.js';
 import { createStanceGate4Runtime } from './stance-gate4-exhaustion.js';
 import { installStanceGate4RingSize } from './stance-gate4-ring-size.js';
+import { createStanceGate5Runtime } from './stance-gate5-defense.js';
+import { readPlayStationBackboneInput, resolvePlayStationBackboneActions } from './playstation-backbone-input.js';
 import { resolveArenaTheme } from './arena-theme-registry.js';
 import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { readArenaStandardSetup } from './arena-standard-setup.js';
@@ -343,6 +344,7 @@ function setStance(index){
   const pool = stancePoolForWeapon();
   arena.stanceIndex = ((index % pool.length) + pool.length) % pool.length;
   arena.stance = pool[arena.stanceIndex];
+  stanceGate5Runtime?.syncStance?.();
   PC.setReadyPose(guardPoseFor(arena.stance));
   resetChainState();
 }
@@ -915,8 +917,11 @@ function updateCharge(dt){
 
 /* ---------- dodge ---------- */
 function triggerDodge(){
+  if(stanceGate5Runtime?.consumesDefenseInput?.())return false;
   const d = arena.dodge;
-  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked) return;
+  if(arena.deadT >= 0 || roomTransition?.active || d.t >= 0 || d.cool > 0 || arcanaDashBusy() || heroicLeapCommitted() || arena.arcanaMovementLocked)return false;
+  const dodgeSpend=stanceGate5Runtime?.spendDodge?.();
+  if(dodgeSpend?.allowed===false){exhaustFlash();announce('NO STAMINA',.55);return false;}
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   const mv = Math.hypot(input.mx, input.mz);
@@ -930,6 +935,15 @@ function triggerDodge(){
   d.t = 0; d.dirX = dir.x; d.dirZ = dir.z; d.cool = DODGE_COOL;
   arena.invulnT = Math.max(arena.invulnT, DODGE_IFRAMES);
   CombatAudio.playTest('swingLight');
+  return true;
+}
+function defenseDown(source='input'){
+  const result=stanceGate5Runtime?.defenseDown?.(source);
+  if(result?.handled)return result;
+  return{handled:true,delegated:true,source,dodged:triggerDodge()};
+}
+function defenseUp(source='input'){
+  return stanceGate5Runtime?.defenseUp?.(source)||{handled:false,source};
 }
 
 /* ---------- hits: swept weapon zones vs enemies ---------- */
@@ -1171,7 +1185,7 @@ addEventListener('keydown', e=>{
   keys[e.key.toLowerCase()] = true;
   if(e.key==='j') lightDown();
   if(e.key==='l') heavyDown();
-  if(e.key==='k') triggerDodge();
+  if(e.key==='k') defenseDown('keyboard');
   if(e.key==='q') playCard(0);
   if(e.key==='e') playCard(1);
   if(e.key==='r') startDeckShuffle();
@@ -1183,6 +1197,7 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>{
   keys[e.key.toLowerCase()] = false;
   if(e.key==='l') heavyUp();
+  if(e.key==='k') defenseUp('keyboard');
   if(e.key.toLowerCase()==='q') PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
   if(e.key.toLowerCase()==='e') PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
 });
@@ -1235,37 +1250,32 @@ const padPrev = {};
 const padMove = { x:0, z:0 };
 function pollPad(){
   const gp = navigator.getGamepads?.()[0];
-  if(!gp) return;
-  const bd = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  if(!gp)return;
+  const pad=readPlayStationBackboneInput(gp,padPrev);
+  const padActions=resolvePlayStationBackboneActions(pad);
   const dz = v => Math.abs(v)>.16?v:0;
   let mx = dz(gp.axes[0]||0), mz = dz(gp.axes[1]||0);
   // D-pad left/right remain movement; up/down are reserved for weapon testing.
-  if(bd(14))mx-=1; if(bd(15))mx+=1;
+  if(pad.current.dpadLeft)mx-=1;if(pad.current.dpadRight)mx+=1;
   const l=Math.hypot(mx,mz);
   if(l>1){mx/=l;mz/=l;}
-  padMove.x=mx; padMove.z=mz;
-  const light = bd(2)||bd(7);
-  const heavy = bd(3);
-  const shuffle = bd(1);
-  const dge = bd(0)||bd(6);
-  const lb = bd(4), rb = bd(5);
-  const strt = bd(9), sel = bd(8);
-  const weaponPrev = bd(12), weaponNext = bd(13);
-  if(light && !padPrev.light) lightDown();
-  if(heavy && !padPrev.heavy) heavyDown();
-  if(!heavy && padPrev.heavy) heavyUp();
-  if(dge && !padPrev.dge) triggerDodge();
-  if(shuffle && !padPrev.shuffle) startDeckShuffle();
-  if(lb && !padPrev.lb) playCard(0);
-  if(rb && !padPrev.rb) playCard(1);
-  if(!lb && padPrev.lb) PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
-  if(!rb && padPrev.rb) PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
-  if(weaponPrev && !padPrev.weaponPrev) cycleWeapon(-1);
-  if(weaponNext && !padPrev.weaponNext) cycleWeapon(1);
-  if(strt && !padPrev.strt) toggleMenu();
-  if(sel && !padPrev.sel) toggleMenu();
-  padPrev.light=light; padPrev.heavy=heavy; padPrev.shuffle=shuffle; padPrev.dge=dge; padPrev.lb=lb; padPrev.rb=rb;
-  padPrev.strt=strt; padPrev.sel=sel; padPrev.weaponPrev=weaponPrev; padPrev.weaponNext=weaponNext;
+  padMove.x=mx;padMove.z=mz;
+  stanceGate5Runtime?.recordGamepad?.(pad,padActions);
+  // Defense wins a same-frame Android/Backbone alias conflict.
+  if(padActions.defensePressed)defenseDown(padActions.defenseSource);
+  if(padActions.lightPressed)lightDown();
+  if(pad.pressed.triangle)heavyDown();
+  if(pad.released.triangle)heavyUp();
+  if(padActions.defenseReleased)defenseUp('gamepad');
+  if(pad.pressed.circle)startDeckShuffle();
+  if(pad.pressed.l1)playCard(0);
+  if(pad.pressed.r1)playCard(1);
+  if(pad.released.l1)PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
+  if(pad.released.r1)PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
+  if(pad.pressed.dpadUp)cycleWeapon(-1);
+  if(pad.pressed.dpadDown)cycleWeapon(1);
+  if(pad.pressed.options||pad.pressed.create)toggleMenu();
+  Object.assign(padPrev,pad.current,{__rawDown:[...pad.rawDown]});
 }
 function gatherInput(){
   const k = keyMove();
@@ -1643,6 +1653,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
 
   updateCharge(dt);
   PC.updateCombat(dt, simulationNow, sway, rawDt);
+  stanceGate5Runtime?.update?.(dt);
 }
 
 const clock = new THREE.Clock();
@@ -1753,7 +1764,7 @@ function teleportArcanaPlayer(desired={}){
   return validation;
 }
 let running=false,destroyed=false,frameRequest=0,lastStateEmit=0;
-let stanceGate2Runtime=null,stanceGate3Runtime=null,stanceGate4Runtime=null,stanceGate4RingSize=null;
+let stanceGate2Runtime=null,stanceGate3Runtime=null,stanceGate4Runtime=null,stanceGate4RingSize=null,stanceGate5Runtime=null;
 function emitRuntimeState(now=performance.now()){
   if(now-lastStateEmit<200)return;
   lastStateEmit=now;
@@ -2067,6 +2078,7 @@ function destroyRuntime(){
   if(destroyed)return false;
   stopRuntime();
   destroyed=true;
+  stanceGate5Runtime?.destroy?.();stanceGate5Runtime=null;
   stanceGate4RingSize?.destroy?.();stanceGate4RingSize=null;
   stanceGate4Runtime?.destroy?.();stanceGate4Runtime=null;
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
@@ -2083,7 +2095,8 @@ const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
   config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
-  get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},
+  get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},get defenseController(){return stanceGate5Runtime;},
+  get playerFacing(){return actorFacing;},getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
   getStartupTrace,traceStartup:(phase,details={})=>traceArenaState(phase,details),
@@ -2094,7 +2107,7 @@ const runtimeHandle={
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
   selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
-  lightDown,heavyDown,attackDown,attackUp,triggerDodge,cycleWeapon,cycleStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
+  lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,cycleStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };
 provideArenaRuntime(runtimeHandle);
 registerRuntimeControls();
@@ -2103,8 +2116,8 @@ if(!ABILITY_CAPTURE_MODE){
   stanceGate3Runtime=installStanceGate3Runtime({arenaHandle:runtimeHandle,gate2Runtime:stanceGate2Runtime});
   stanceGate4Runtime=createStanceGate4Runtime({arenaHandle:runtimeHandle,gate3Runtime:stanceGate3Runtime,windowRef:globalThis.window,documentRef:document});
   stanceGate4RingSize=installStanceGate4RingSize({arenaHandle:runtimeHandle,windowRef:globalThis.window,documentRef:document});
+  stanceGate5Runtime=createStanceGate5Runtime({arenaHandle:runtimeHandle,gate4Runtime:stanceGate4Runtime,windowRef:globalThis.window,documentRef:document});
 }
-if(!runtimeConfig.enemyLab)installRoadieRun();
 
 /* ---------- boot ---------- */
 spawnCharacter();
