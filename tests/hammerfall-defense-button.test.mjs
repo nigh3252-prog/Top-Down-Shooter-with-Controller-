@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readPlayStationBackboneInput } from '../src/playstation-backbone-input.js';
+const buttons=Array.from({length:16},()=>({pressed:false}));buttons[0]={pressed:true};
+const cross=readPlayStationBackboneInput({buttons,mapping:'standard'},{});
+assert.equal(cross.pressed.cross,true);
+assert.equal(cross.pressed.square,false);
+buttons[0]={pressed:false};buttons[2]={pressed:true};
+const square=readPlayStationBackboneInput({buttons,mapping:'standard'},cross.current);
+assert.equal(square.pressed.square,true);
+assert.equal(square.current.cross,false);
+console.log('Hammerfall defense-button regression test passed');
