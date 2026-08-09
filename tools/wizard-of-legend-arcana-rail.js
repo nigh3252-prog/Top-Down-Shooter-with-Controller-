@@ -228,6 +228,9 @@
     clipBadge.textContent=entry?`${label} · ${formatTime(clip.start)}–${formatTime(clip.end)}`:'Full showcase video';
   }
   function attemptPlay(showFallback=false){
+    // Do not call play() again while media is already running: Android treats
+    // redundant play requests as a new native-control interaction.
+    if(!video.paused&&!video.ended)return;
     const request=video.play();
     if(request?.catch)request.catch(()=>{if(showFallback)toast('Tap the video to start playback.');});
   }
