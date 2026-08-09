@@ -237,7 +237,7 @@
     const useReference=mode==='reference'&&entry.referenceWindow;
     const segment=mode==='segment'?entry.showcaseSegments?.[segmentIndex]:null;
     const clip=useReference?entry.referenceWindow:segment??showcaseClip(entry);
-    activeEntry=entry;activeClipMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeStart=clip.start;activeEnd=clip.end;video.loop=false;
+    activeEntry=entry;activeClipMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeStart=clip.start;activeEnd=clip.end;video.loop=true;
     const label=useReference?'Base reference lock':segment?`${segment.kind==='charged'?'Charged':'Base'} segment`:'Full showcase';
     updateClipLabels(entry,clip,label);video.poster=entry.poster;
     const seek=()=>{video.currentTime=clip.start;if(autoplay)attemptPlay(true);};
@@ -352,8 +352,8 @@
   document.getElementById('playback-speed').addEventListener('change',event=>video.playbackRate=Number(event.target.value));
   document.getElementById('research-link').addEventListener('click',()=>{modeState.research.selected='construction';if(activeMode==='research'){renderContext();renderCurrentView();}else setMode('research');});
   document.getElementById('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{const incoming=JSON.parse(await file.text());if(incoming.schemaVersion!==1||!incoming.entries)throw new Error();progress=progressFromPayload(incoming);saveProgress();renderCurrentView();toast('Progress imported.');}catch{toast('That progress file is not valid.');}event.target.value='';});
-  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd){const wasPlaying=!video.paused;video.currentTime=activeStart;if(wasPlaying)attemptPlay(false);}});
-  video.addEventListener('ended',()=>{if(activeEnd!==null){video.currentTime=activeStart;attemptPlay(false);}});
+  // Seek inside the already-playing media instead of calling play() again; repeated play() calls reopen Android's native overlay.
+  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd)video.currentTime=activeStart;});
   window.addEventListener('hashchange',()=>{const entry=data.entries.find(item=>`#arcana-${item.id}`===location.hash);if(entry){activeMode='arcana';modeRail.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode==='arcana')));selectedEntryId=entry.id;filterState.search='';searchInput.value='';filterState.element='all';filterState.category='all';filterState.lineage='all';filterState.status='all';filterState.sort='source';refresh();setClip(entry,false);}});
 
   document.getElementById('tracked-count').textContent=data.entries.length;
