@@ -42,8 +42,8 @@ assert(Number.isFinite(getWeaponDamageMultiplier({
 })),'katana damage resolves through the normal balance path');
 
 const expectedStaminaClasses={
-  longsword:'Medium', dagger:'Light', rapier:'Light', katana:'Medium', whip:'Light',
-  mace:'Medium', spear:'Medium', battleaxe:'Heavy', warhammer:'Heavy', claymore:'Heavy', greatsword:'Heavy'
+  longsword:'Medium', dagger:'Light', rapier:'Light', katana:'Light', whip:'Light',
+  mace:'Medium', spear:'Medium', battleaxe:'Heavy', warhammer:'Heavy', claymore:'Medium', greatsword:'Heavy'
 };
 for(const [weaponId,staminaClass] of Object.entries(expectedStaminaClasses)){
   assert.equal(STONE_WEAPONS[weaponId].staminaClass,staminaClass,`${weaponId} has a definite stamina class`);

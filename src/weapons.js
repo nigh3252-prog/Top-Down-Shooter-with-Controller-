@@ -46,8 +46,8 @@ export const STONE_WEAPONS = {
   },
   katana: {
     label: 'Katana',
-    weightClass: 'Medium',
-    staminaClass: 'Medium',
+    weightClass: 'Light',
+    staminaClass: 'Light',
     kind: 'katana',
     baseLength: 0.98,
     profile: 'two-handed curved cutter; quick draw and committed edge arcs',
@@ -100,8 +100,8 @@ export const STONE_WEAPONS = {
   },
   claymore: {
     label: 'Claymore',
-    weightClass: 'Heavy',
-    staminaClass: 'Heavy',
+    weightClass: 'Medium',
+    staminaClass: 'Medium',
     kind: 'blade',
     baseLength: 1.48,
     profile: 'big two-handed blade; wide arcs and deep pullback',

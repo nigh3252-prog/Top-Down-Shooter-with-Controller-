@@ -4,6 +4,7 @@ import { applyActiveCombatProfileToArena } from './combat-profile.js';
 import { guardPoseFor } from './guard-poses.js';
 import { createRewardTotemGate } from './reward-totem-gate.js';
 import { STANCE_CARDS } from './stance-cards.js';
+import { getStanceClass, getStanceClassPresentation } from './stance-compatibility.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
 import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
@@ -51,6 +52,7 @@ function addStyles(){
   #startCard .sgTitle{text-align:center;margin-bottom:6px}#startCard .sgHint{text-align:center;margin-bottom:14px}
   #runOfferGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .runOffer,.rewardChoice{font-family:inherit;color:#9fd2c9;background:rgba(18,36,38,.9);border:1px solid #2c4a47;border-radius:8px;padding:12px;text-align:left;touch-action:manipulation}
+  .rewardChoice{position:relative}.rewardClassBadge{position:absolute;top:7px;right:7px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(159,210,201,.55);background:rgba(8,24,25,.9);color:#d9eee9;font-size:10px;font-weight:900;letter-spacing:0}
   .runOffer:active,.rewardChoice:active{transform:translateY(2px);background:#2c4a47}
   .runOfferWeapon{color:#e8a04c;font-size:14px;letter-spacing:.12em;text-align:center;margin-bottom:9px}
   .runOfferProfile{color:#6f9d96;font-size:9px;line-height:1.35;text-align:center;min-height:25px;margin-bottom:9px}
@@ -93,7 +95,14 @@ export function installRunDraft(deck){
     const choices=drawCards(pools.rewardPool,Math.min(3,pools.rewardPool.length));
     const rewardHint=rewardGate.querySelector('#cardRewardHint');
     if(rewardHint)rewardHint.textContent=pools.active?`Choose from the ${pools.cards.length}-card Working Ability Pool, or skip.`:'Choose one card for the run, or skip.';
-    rewardChoices.replaceChildren(...choices.map(card=>{const button=document.createElement('button');button.className='rewardChoice';button.innerHTML=`<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'}</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;}));
+    rewardChoices.replaceChildren(...choices.map(card=>{
+      const button=document.createElement('button');button.className='rewardChoice';
+      const presentation=!isNonStance(card)?getStanceClassPresentation(getStanceClass(card)):null;
+      const badge=presentation?`<div class="rewardClassBadge" title="${presentation.label} stance">${presentation.short}</div>`:'';
+      button.dataset.stanceType=presentation?.label||'';
+      button.innerHTML=`${badge}<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;
+      button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;
+    }));
     rewardGate.classList.remove('hidden');
   }
   rewardGate.querySelector('#cardRewardSkip').addEventListener('click',closeReward);

@@ -37,7 +37,13 @@ for(const stance of STANCE_CARDS){
 }
 assert.equal(checked,STANCE_CARDS.length*Object.keys(STONE_WEAPONS).length);
 
-const lightMedium=resolveGate2PilotProfile({stance:STANCE_CARDS.find(s=>s.id==='S23'),weapon:STONE_WEAPONS.katana,weaponId:'katana'});
+assert.equal(getWeaponClass(STONE_WEAPONS.katana),'Light');
+assert.equal(getWeaponClass(STONE_WEAPONS.claymore),'Medium');
+const katanaSpeed=resolveGate2PilotProfile({stance:STANCE_CARDS.find(s=>s.id==='S23'),weapon:STONE_WEAPONS.katana,weaponId:'katana'});
+assert.equal(katanaSpeed.compatibility.tier,'full');
+const claymoreBalanced=resolveGate2PilotProfile({stance:STANCE_CARDS.find(s=>s.id==='S03'),weapon:STONE_WEAPONS.claymore,weaponId:'claymore'});
+assert.equal(claymoreBalanced.compatibility.tier,'full');
+const lightMedium=resolveGate2PilotProfile({stance:STANCE_CARDS.find(s=>s.id==='S23'),weapon:STONE_WEAPONS.longsword,weaponId:'longsword'});
 assert.equal(lightMedium.sourceProfileId,'rat-step-longsword-adapted');
 assert.deepEqual(lightMedium.effectiveChain,STANCE_CARDS.find(s=>s.id==='S23').chain);
 assert.equal(getStanceAttackAdapter('Light','Medium').sourceCell,'S24:longsword');

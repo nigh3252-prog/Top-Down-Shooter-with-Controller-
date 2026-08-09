@@ -1,14 +1,28 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { STONE_WEAPONS } from '../src/weapons.js';
 import {
   STANCE_CLASSES,
   STANCE_CLASS_BY_ID,
   getStanceClass,
+  getStanceClassPresentation,
   getWeaponClass,
+  normalizeStanceClass,
+  stanceClassDisplayName,
   resolveStanceWeaponCompatibility,
   stanceClassCounts,
 } from '../src/stance-compatibility.js';
 
 assert.deepEqual(STANCE_CLASSES,['Light','Medium','Heavy']);
+assert.deepEqual(getStanceClassPresentation('Light'),{label:'Speed',short:'S',symbol:'»'});
+assert.deepEqual(getStanceClassPresentation('Medium'),{label:'Balanced',short:'B',symbol:'◈'});
+assert.deepEqual(getStanceClassPresentation('Heavy'),{label:'Power',short:'P',symbol:'⬟'});
+assert.equal(stanceClassDisplayName('Light'),'Speed');
+assert.equal(normalizeStanceClass('speed'),'Light');
+assert.equal(normalizeStanceClass('balanced'),'Medium');
+assert.equal(normalizeStanceClass('power'),'Heavy');
+assert.equal(getWeaponClass(STONE_WEAPONS.katana),'Light');
+assert.equal(getWeaponClass(STONE_WEAPONS.claymore),'Medium');
 assert.equal(Object.keys(STANCE_CLASS_BY_ID).length,30);
 for(let index=1;index<=30;index++){
   const id=`S${String(index).padStart(2,'0')}`;
@@ -40,5 +54,12 @@ assert.equal(preferred.preferredWeapon,true);
 assert.equal(offStyle.tier,'full');
 assert.equal(offStyle.preferredWeapon,false);
 assert.equal(resolveStanceWeaponCompatibility({stance:{id:'missing'},weapon:dagger}).tier,'unknown');
+
+const deckSource=readFileSync(new URL('../src/stance-deck.js',import.meta.url),'utf8');
+const draftSource=readFileSync(new URL('../src/run-draft.js',import.meta.url),'utf8');
+assert.match(deckSource,/stancePresentation\.symbol/);
+assert.match(deckSource,/stancePresentation\.label\.toUpperCase/);
+assert.match(draftSource,/rewardClassBadge/);
+assert.match(draftSource,/presentation\.short/);
 
 console.log('stance compatibility tests passed');

@@ -5,6 +5,7 @@ import {
   STANCE_CLASS_BY_ID,
   resolveStanceWeaponCompatibility,
   stanceClassCounts,
+  stanceClassDisplayName,
 } from './stance-compatibility.js';
 import {
   GATE2_STANCE_IDS,
@@ -100,7 +101,7 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
   }
   function ensureCategory(){
     if(categoryButton()){syncCategoryLabel();return;}
-    const button=makeChoice(document,{label:'STANCE 2.0',sub:'Weight-class compatibility',className:'stanceCompatibilityCategory',onClick:event=>{event.preventDefault();event.stopPropagation();activate();}});
+    const button=makeChoice(document,{label:'STANCE 2.0',sub:'Speed / Balanced / Power compatibility',className:'stanceCompatibilityCategory',onClick:event=>{event.preventDefault();event.stopPropagation();activate();}});
     button.disabled=false;button.dataset.stanceCompatibilityCategory='1';categories.appendChild(button);
   }
   function activate(){
@@ -120,13 +121,13 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     if(snapshot.compatibility.tier==='unknown')root.appendChild(makeStatus(document,'WAITING FOR COMBAT ARENA','Start the arena so the active stance and weapon can be inspected.'));
     else{
       const preferred=snapshot.compatibility.preferredWeapon?'PREFERRED WEAPON':'OFF-STYLE WEAPON';
-      root.appendChild(makeStatus(document,snapshot.compatibility.label,`${cleanName(snapshot.stance?.name)||stanceId} · ${snapshot.compatibility.stanceClass} stance with ${snapshot.weapon?.label||snapshot.weaponId} · ${snapshot.compatibility.weaponClass} weapon · ${preferred}`,snapshot.compatibility.tier));
+      root.appendChild(makeStatus(document,snapshot.compatibility.label,`${cleanName(snapshot.stance?.name)||stanceId} · ${stanceClassDisplayName(snapshot.compatibility.stanceClass)} stance with ${snapshot.weapon?.label||snapshot.weaponId} · ${stanceClassDisplayName(snapshot.compatibility.weaponClass)} weapon · ${preferred}`,snapshot.compatibility.tier));
     }
 
     if(snapshot.gate2.active){
       const live=snapshot.liveGate2;
       root.appendChild(makeStatus(document,live?.label||snapshot.gate2.profile?.label||'GATE 2 PILOT ACTIVE',`${snapshot.attackLabels.join(' → ')} · grip ${live?.gripMode||snapshot.gate2.profile?.gripMode||'normal'}${live?.failed?' · damaging hit zones disabled':''}`,'pilot'));
-      const consequence=snapshot.compatibility.tier==='full'?'Full expression uses the stance-authored chain with stance-dominant timing.':snapshot.compatibility.tier==='adapted'?'Adapted expression substitutes compact moves, changes grip, shortens reach, and reduces damage/stagger.':'Failed expression uses a misuse animation, cannot charge, and creates no damaging hit zones.';
+      const consequence=snapshot.compatibility.tier==='full'?'Full expression uses the stance-authored chain with stance-dominant timing.':snapshot.compatibility.tier==='adapted'?'Adapted expression keeps the stance-authored moves, procedurally retargets their pose/grip, shortens reach, and adjusts damage/stagger.':'Failed expression uses a misuse animation, cannot charge, and creates no damaging hit zones.';
       root.appendChild(makeStatus(document,'GATE 2 CONSEQUENCE',consequence,snapshot.compatibility.tier));
       const movement=snapshot.movement.profile,recovery=Number(snapshot.liveGate3?.recoveryRemaining||0);
       const recoveryText=movement?.recoveryDuration>0?` · recovery ${Number(movement.recoveryDuration).toFixed(2)} sec${recovery>0?` · ${recovery.toFixed(2)} sec remaining`:''}`:'';
@@ -141,13 +142,13 @@ export function installEnemyLabStanceCompatibility({document=globalThis.document
     root.appendChild(makeStatus(document,'GATE 4 CONTROLS','MENU → STANCE 2.0 → STANCE CATCH WINDOW. Range ×1–×10 in whole steps; browser default ×2. Catch Ring flashes white-gold, drains clockwise, turns green on success, and red on miss.'));
 
     const matrix=document.createElement('div');matrix.className='stanceMatrix';
-    const cells=[['LIGHT / LIGHT','FULL','0-class gap'],['LIGHT / MEDIUM','ADAPTED','1-class gap'],['LIGHT / HEAVY','UNUSABLE','2-class gap'],['MEDIUM / LIGHT','ADAPTED','1-class gap'],['MEDIUM / MEDIUM','FULL','0-class gap'],['MEDIUM / HEAVY','ADAPTED','1-class gap'],['HEAVY / LIGHT','UNUSABLE','2-class gap'],['HEAVY / MEDIUM','ADAPTED','1-class gap'],['HEAVY / HEAVY','FULL','0-class gap']];
+    const cells=[['SPEED / SPEED','FULL','0-class gap'],['SPEED / BALANCED','ADAPTED','1-class gap'],['SPEED / POWER','UNUSABLE','2-class gap'],['BALANCED / SPEED','ADAPTED','1-class gap'],['BALANCED / BALANCED','FULL','0-class gap'],['BALANCED / POWER','ADAPTED','1-class gap'],['POWER / SPEED','UNUSABLE','2-class gap'],['POWER / BALANCED','ADAPTED','1-class gap'],['POWER / POWER','FULL','0-class gap']];
     for(const [label,result,gap] of cells)matrix.appendChild(makeStatus(document,label,`${result} · ${gap}`,result.toLowerCase()));root.appendChild(matrix);
 
-    const counts=stanceClassCounts();root.appendChild(makeStatus(document,'STANCE CLASSIFICATION',`${counts.Light} Light · ${counts.Medium} Medium · ${counts.Heavy} Heavy · 30 total`));
+    const counts=stanceClassCounts();root.appendChild(makeStatus(document,'STANCE TYPES',`${counts.Light} Speed · ${counts.Medium} Balanced · ${counts.Heavy} Power · 30 total`));
     for(const stanceClass of STANCE_CLASSES){
       const group=document.createElement('div');group.className='stanceClassGroup';
-      const title=document.createElement('b');title.textContent=`${stanceClass.toUpperCase()} STANCES`;
+      const title=document.createElement('b');title.textContent=`${stanceClassDisplayName(stanceClass).toUpperCase()} STANCES`;
       const detail=document.createElement('span');detail.textContent=STANCE_CARDS.filter(stance=>STANCE_CLASS_BY_ID[stance.id]===stanceClass).map(stance=>cleanName(stance.name)).join(' · ');
       group.append(title,detail);root.appendChild(group);
     }
