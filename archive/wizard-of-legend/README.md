@@ -11,6 +11,11 @@ The checklist is the canonical working reference. The Markdown in
   to the improved source-first method.
 - `wizard_of_legend_arcana_source_reference.md` and the numbered append fragments
   contain the growing source-first analysis set in showcase order.
+- `gate1-video-inventory.md` is the Gate 1 ledger: all 149 distinct on-screen
+  Arcana with their whole-second showcase windows and separate charged
+  demonstrations. It owns showcase order for every entry in the checklist, and
+  the Arcana it lists without a source-first analysis appear as inventory-only
+  records.
 
 Do not implement an arcana directly from an initial-pass summary when the
 checklist marks it **legacy first-pass prototype — replacement required**.

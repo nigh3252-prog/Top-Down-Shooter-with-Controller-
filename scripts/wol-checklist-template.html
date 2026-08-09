@@ -19,13 +19,14 @@
     <div class="hero-main">
       <div class="eyebrow">Standalone source notebook · <span id="tracked-count">0</span> tracked arcana</div>
       <h1>Wizard of Legend Arcana Checklist</h1>
-      <p>A source-first implementation notebook for adding Wizard of Legend-inspired abilities to the Top Down Android Game. Improved analysis, legacy prototypes, exact showcase clips, construction recipes, and acceptance checks live together here.</p>
+      <p>A source-first implementation notebook for adding Wizard of Legend-inspired abilities to Saturn's Gravity. The complete video inventory, improved analysis, legacy prototypes, exact showcase clips, construction recipes, and acceptance checks live together here.</p>
+      <div class="notice"><strong>Gate 1 complete-video inventory:</strong> All 149 distinct on-screen Arcana are now listed in showcase order. The source contains 197 timestamped demonstrations because 48 Arcana also receive a separate charged demonstration. The 77 newly added records are intentionally inventory-only until the later behavior-alignment and detailed-analysis gates. Whole-second showcase boundaries come from the uploader's timestamp ledger and were cross-checked against every on-screen title card; tighter frame-audited reference locks remain separate.</div>
       <div class="notice"><strong>Dragon Arc reference-lock:</strong> The rejected narrow-stream passes were replaced from a metric-validated deterministic double-helix motion proxy, then finished with a segmented flame-dragon silhouette. Its source-comparison checkbox remains open for final user review.</div>
       <div class="notice"><strong>Five-card reference-lock:</strong> Whirling Tornado, Water Prison, Homing Flares, Bolt Rail, and Volt Disc now carry frame-audited base-form windows and deterministic contract/source/style review artifacts. Their comparison checkboxes remain open until the final user review.</div>
       <div class="notice"><strong>Next-twenty reference-lock:</strong> Ice Dagger through Chaotic Rift now have base-form Enemy Lab implementations. The fifteen continuous Dash Arcana reuse the approved Top Down Game dash movement while their source payloads remain independently auditable. All twenty comparison checkboxes stay open for batch review.</div>
       <div class="notice"><strong>Archetype sampler:</strong> One Agent plus nine distinct spell grammars now cover allied summons, wards, charm, projectile fusion, carried targets, returning projectiles, orbiting shields, vulnerable hold charge, stored-charge beam channeling, and delayed enemy teleportation. Aqua Beam is base-form only; all ten comparison checkboxes remain open for review.</div>
       <div class="hero-links">
-        <a href="index.html">← Game launcher</a>
+        <a href="../index.html">← Game launcher</a>
         <a href="https://youtu.be/cDyS1-SM2zc" target="_blank" rel="noreferrer">Original showcase ↗</a>
         <a href="#construction-language">Construction language</a>
       </div>
@@ -47,8 +48,8 @@
     <label class="sr-only" for="search">Search arcana</label><input id="search" type="search" placeholder="Search names, recipes, units, or notes…">
     <label class="sr-only" for="element-filter">Element</label><select id="element-filter"><option value="all">All elements</option></select>
     <label class="sr-only" for="category-filter">Category</label><select id="category-filter"><option value="all">All categories</option></select>
-    <label class="sr-only" for="lineage-filter">Analysis lineage</label><select id="lineage-filter"><option value="all">All lineages</option><option value="source-first">Source-first from outset</option><option value="rebuilt">Initial pass → rebuilt</option><option value="replacement-analyzed">Legacy → reanalyzed; replacement pending</option><option value="legacy">Legacy analysis and replacement required</option><option value="analyzed">Analyzed, not implemented</option></select>
-    <label class="sr-only" for="status-filter">Implementation status</label><select id="status-filter"><option value="all">All statuses</option><option value="source-first-implemented">Source-first implemented</option><option value="replacement-in-progress">Reference-lock rebuild</option><option value="not-implemented">Not implemented</option><option value="legacy-replace">Legacy: replace</option></select>
+    <label class="sr-only" for="lineage-filter">Analysis lineage</label><select id="lineage-filter"><option value="all">All lineages</option><option value="inventory">Video inventory only</option><option value="source-first">Source-first from outset</option><option value="rebuilt">Initial pass → rebuilt</option><option value="replacement-analyzed">Legacy → reanalyzed; replacement pending</option><option value="legacy">Legacy analysis and replacement required</option><option value="analyzed">Analyzed, not implemented</option></select>
+    <label class="sr-only" for="status-filter">Implementation status</label><select id="status-filter"><option value="all">All statuses</option><option value="inventory-only">Inventoried · analysis pending</option><option value="source-first-implemented">Source-first implemented</option><option value="replacement-in-progress">Reference-lock rebuild</option><option value="not-implemented">Not implemented</option><option value="legacy-replace">Legacy: replace</option></select>
     <label class="sr-only" for="sort-order">Sort order</label><select id="sort-order"><option value="source">Source order</option><option value="name">Name A–Z</option><option value="element">Element, then source</option></select>
     <div class="tool-actions">
       <button id="expand-all" type="button">Expand all</button><button id="collapse-all" type="button">Collapse all</button>
@@ -87,22 +88,27 @@
 (()=>{
   'use strict';
   const data=JSON.parse(document.getElementById('wol-data').textContent);
+  const assetPrefix='../';
+  data.video.src=assetPrefix+data.video.src;
+  data.entries.forEach(entry=>{entry.poster=assetPrefix+entry.poster;});
   const STORAGE_KEY='wol.arcanaChecklist.v1';
-  const CATALOG_REVISION=4;
+  const CATALOG_REVISION=5;
   const NEXT_TWENTY_IMPLEMENTED=['ice-dagger','rip-tide','aqua-arc','chaos-crusher','searing-rush','flare-rush','ignition-rush','air-burst','gust-burst','razor-burst','spike-track','toxic-trap','snare-track','thunder-line','circuit-line','shock-line','wave-front','frost-feint','frost-wing','chaotic-rift'];
   const ARCHETYPE_SAMPLER_IMPLEMENTED=['rapid-fire-agent','ward-of-flames','mentis-imperium','flame-fusion','heroic-leap','cyclone-boomerang','earthen-aegis','ball-lightning','aqua-beam','arcane-intervention'];
   const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};
   const elements={Fire:'var(--fire)',Air:'var(--air)',Earth:'var(--earth)',Lightning:'var(--lightning)',Water:'var(--water)',Ice:'var(--ice)',Chaos:'var(--chaos)'};
   const lineageLabels={
     'source-first':'Source-first from outset',rebuilt:'Initial pass → source-first rebuild',
-    'replacement-analyzed':'Legacy → source-first analysis · replace',legacy:'Legacy first-pass · reanalyze and replace',analyzed:'Analyzed · not implemented',
+    inventory:'Video inventory only · analysis pending','replacement-analyzed':'Legacy → source-first analysis · replace',legacy:'Legacy first-pass · reanalyze and replace',analyzed:'Analyzed · not implemented',
   };
-  const statusLabels={'source-first-implemented':'Source-first implemented','replacement-in-progress':'Reference-lock rebuild','not-implemented':'Not implemented','legacy-replace':'Legacy replacement required'};
+  const statusLabels={'inventory-only':'Inventoried · analysis pending','source-first-implemented':'Source-first implemented','replacement-in-progress':'Reference-lock rebuild','not-implemented':'Not implemented','legacy-replace':'Legacy replacement required'};
   const catalog=document.getElementById('catalog');
   const video=document.getElementById('showcase-video');
   video.src=data.video.src;
   let activeEntry=null;
   let activeEnd=null;
+  let activeMode='showcase';
+  let activeSegmentIndex=0;
   let visibleEntries=[...data.entries];
   let progress=loadProgress();
 
@@ -138,19 +144,23 @@
     flushParagraph();flushList();if(inCode&&code.length)html+=`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`;
     return html;
   }
-  function formatTime(seconds){const minutes=Math.floor(seconds/60);const fractional=seconds%1!==0;const remainder=(seconds-minutes*60).toFixed(fractional?1:0).padStart(fractional?4:2,'0');return `${minutes}:${remainder}`;}
+  function formatTime(seconds){const minutes=Math.floor(seconds/60);const remainder=seconds-minutes*60;const whole=Math.floor(remainder);const digits=String(Math.round((remainder-whole)*1000)).padStart(3,'0').replace(/0+$/,'');const fraction=digits?`.${digits}`:'';return `${minutes}:${String(whole).padStart(2,'0')}${fraction}`;}
   function defaultProgress(){return Object.fromEntries(data.entries.map(entry=>[entry.id,{...entry.defaults}]));}
-  function progressFromPayload(payload){const merged={...defaultProgress(),...payload.entries};const currentRevision=payload.catalogRevision??1;for(const [revision,changes] of Object.entries(CATALOG_MIGRATIONS)){if(Number(revision)<=currentRevision)continue;for(const [id,patch] of Object.entries(changes))merged[id]={...(merged[id]??{}),...patch};}return merged;}
+  function progressFromPayload(payload){const defaults=defaultProgress();const merged=Object.fromEntries(data.entries.map(entry=>[entry.id,{...defaults[entry.id],...(payload.entries[entry.id]??{})}]));const currentRevision=payload.catalogRevision??1;for(const [revision,changes] of Object.entries(CATALOG_MIGRATIONS)){if(Number(revision)<=currentRevision)continue;for(const [id,patch] of Object.entries(changes))if(merged[id])merged[id]={...merged[id],...patch};}return merged;}
   function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved?.schemaVersion===1&&saved.entries)return progressFromPayload(saved);}catch{}return defaultProgress();}
   function saveProgress(){localStorage.setItem(STORAGE_KEY,JSON.stringify({schemaVersion:1,catalogRevision:CATALOG_REVISION,entries:progress,updatedAt:new Date().toISOString()}));updateMetrics();}
   function lineageClass(entry){return entry.lineage==='legacy'||entry.lineage==='replacement-analyzed'?'legacy':entry.lineage==='rebuilt'?'rebuilt':'';}
+  function showcaseClip(entry){return entry.showcaseWindow??entry;}
+  function segmentSummary(entry){return (entry.showcaseSegments??[]).map(segment=>`${segment.kind==='charged'?'Charged':'Base'} ${formatTime(segment.start)}–${formatTime(segment.end)}`).join(' · ');}
   function cardTemplate(entry){
     const checked=progress[entry.id]??entry.defaults;
     const legacy=entry.lineage==='legacy';
+    const inventoryOnly=entry.status==='inventory-only';
     const replacement=Boolean(entry.currentImplementation);
+    const segmentButtons=(entry.showcaseSegments??[]).length>1?entry.showcaseSegments.map((segment,index)=>`<button type="button" data-action="watch-segment" data-segment-index="${index}">▶ ${segment.kind==='charged'?'Charged only':'Base only'}</button>`).join(''):'';
     const citations=entry.citations.length?`<ul>${entry.citations.map((url,index)=>`<li><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Source ${index+1}</a></li>`).join('')}</ul>`:'<p>The supplied showcase is the primary source for this entry.</p>';
     return `<article class="arcana-card" id="arcana-${entry.id}" data-id="${entry.id}" data-lineage="${entry.lineage}" style="--accent:${elements[entry.element]??'var(--gold)'}">
-      <div class="poster"><img loading="lazy" src="${entry.poster}" alt="${escapeHtml(entry.name)} showcase frame"><div class="poster-meta"><span class="order">${entry.status!=='legacy-replace'?`Source #${entry.order}`:'Legacy rebuild queue'}</span><span class="time">${entry.referenceWindow?'Base lock ':''}${formatTime(entry.referenceWindow?.start??entry.start)}–${formatTime(entry.referenceWindow?.end??entry.end)}</span></div></div>
+      <div class="poster"><img loading="lazy" src="${entry.poster}" alt="${escapeHtml(entry.name)} showcase frame"><div class="poster-meta"><span class="order">Source #${entry.order}</span><span class="time">${formatTime(showcaseClip(entry).start)}–${formatTime(showcaseClip(entry).end)}</span></div></div>
       <div class="card-body">
         <div class="title-row"><div><div class="badges"><span class="badge">${entry.element}</span><span class="badge">${entry.category}</span></div><h2>${escapeHtml(entry.name)}</h2></div></div>
         <div class="badges"><span class="badge ${lineageClass(entry)}">${lineageLabels[entry.lineage]}</span><span class="badge ${entry.status==='source-first-implemented'?'implemented':entry.status==='legacy-replace'||entry.status==='replacement-in-progress'?'legacy':''}">${statusLabels[entry.status]}</span></div>
@@ -158,17 +168,17 @@
         ${entry.revisionHistory?`<div class="notice"><strong>Revision history:</strong> ${escapeHtml(entry.revisionHistory)}</div>`:''}
         <p class="summary">${escapeHtml(entry.summary)}</p>
         <div class="stages" aria-label="${escapeHtml(entry.name)} progress">
-          <label class="stage"><input type="checkbox" data-stage="analysis" ${checked.analysis?'checked':''}> Source-first analysis complete</label>
-          <label class="stage"><input type="checkbox" data-stage="implementation" ${checked.implementation?'checked':''}> Source-first implementation complete</label>
-          <label class="stage"><input type="checkbox" data-stage="comparison" ${checked.comparison?'checked':''}> Source comparison passed</label>
+          <label class="stage"><input type="checkbox" data-stage="analysis" ${checked.analysis?'checked':''} ${inventoryOnly?'disabled':''}> Source-first analysis complete</label>
+          <label class="stage"><input type="checkbox" data-stage="implementation" ${checked.implementation?'checked':''} ${inventoryOnly?'disabled':''}> Source-first implementation complete</label>
+          <label class="stage"><input type="checkbox" data-stage="comparison" ${checked.comparison?'checked':''} ${inventoryOnly?'disabled':''}> Source comparison passed</label>
         </div>
-        <div class="card-actions"><button class="watch" type="button" data-action="watch">▶ Watch clip</button><button type="button" data-action="copy">Copy implementation brief</button></div>
+        <div class="card-actions"><button class="watch" type="button" data-action="watch">▶ Full showcase clip</button>${segmentButtons}${entry.referenceWindow?'<button type="button" data-action="watch-reference">▶ Base reference lock</button>':''}<button type="button" data-action="copy">Copy implementation brief</button></div>
         <div class="details-stack">
-          <details><summary>${legacy?'Initial-pass research (historical)':'Source-first analysis notebook'}</summary><div class="detail-content">${markdownToHtml(entry.analysisMarkdown)}</div></details>
+          <details><summary>${inventoryOnly?'Gate 1 video inventory':legacy?'Initial-pass research (historical)':'Source-first analysis notebook'}</summary><div class="detail-content">${markdownToHtml(entry.analysisMarkdown)}</div></details>
           ${replacement?`<details open><summary>Current game prototype & replacement plan</summary><div class="detail-content"><h3>What currently exists</h3><p>${escapeHtml(entry.currentImplementation)}</p><h3>Future source-first replacement checklist</h3>${markdownToHtml(entry.replacementChecklist)}</div></details>`:''}
           ${entry.supplementMarkdown?`<details><summary>Detailed implementation supplement</summary><div class="detail-content">${markdownToHtml(entry.supplementMarkdown)}</div></details>`:''}
           <details><summary>Recipe, acceptance, and issues</summary><div class="detail-content">${markdownToHtml([entry.recipe,entry.acceptance,entry.issues].filter(Boolean).join('\n\n'))}</div></details>
-          <details><summary>Sources & stable reference</summary><div class="detail-content"><p><code>#arcana-${entry.id}</code></p>${citations}</div></details>
+          <details><summary>Sources & stable reference</summary><div class="detail-content"><p><code>#arcana-${entry.id}</code></p><p><strong>Full showcase:</strong> ${formatTime(showcaseClip(entry).start)}–${formatTime(showcaseClip(entry).end)}${segmentSummary(entry)?`<br>${escapeHtml(segmentSummary(entry))}`:''}${entry.referenceWindow?`<br><strong>Audited base lock:</strong> ${formatTime(entry.referenceWindow.start)}–${formatTime(entry.referenceWindow.end)}`:''}</p>${citations}</div></details>
         </div>
       </div></article>`;
   }
@@ -187,20 +197,20 @@
     renderCatalog();
   }
   function renderCatalog(){catalog.innerHTML=visibleEntries.length?visibleEntries.map(cardTemplate).join(''):'<div class="empty">No arcana match these filters.</div>';document.getElementById('shown-count').textContent=`${visibleEntries.length} of ${data.entries.length} shown`;if(location.hash){const target=document.querySelector(location.hash);if(target)setTimeout(()=>target.scrollIntoView({block:'start'}),0);}}
-  function updateMetrics(){const values=Object.values(progress);const analysis=values.filter(item=>item.analysis).length;const implementation=values.filter(item=>item.implementation).length;const compared=values.filter(item=>item.comparison).length;document.getElementById('metric-analysis').textContent=analysis;document.getElementById('metric-implemented').textContent=implementation;document.getElementById('metric-legacy').textContent=data.entries.filter(entry=>entry.currentImplementation).length;document.getElementById('metric-compared').textContent=compared;const total=data.entries.length*3;const complete=values.reduce((sum,item)=>sum+Number(item.analysis)+Number(item.implementation)+Number(item.comparison),0);document.getElementById('progress-fill').style.width=`${complete/total*100}%`;document.getElementById('progress-label').textContent=`${complete} of ${total} source-first stages complete · saved on this device.`;}
-  function setClip(entry,autoplay=true){const clip=entry.referenceWindow??entry;activeEntry=entry;activeEnd=clip.end;document.getElementById('video-name').textContent=entry.name;document.getElementById('video-range').textContent=`${entry.referenceWindow?'Base reference lock · ':''}${formatTime(clip.start)}–${formatTime(clip.end)} · ${lineageLabels[entry.lineage]}`;video.poster=entry.poster;const seek=()=>{video.currentTime=clip.start;if(autoplay)video.play().catch(()=>{});};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{once:true});}
+  function updateMetrics(){const sourceEntries=data.entries.filter(entry=>entry.status!=='inventory-only');const values=sourceEntries.map(entry=>progress[entry.id]??entry.defaults);const analysis=values.filter(item=>item.analysis).length;const implementation=values.filter(item=>item.implementation).length;const compared=values.filter(item=>item.comparison).length;document.getElementById('metric-analysis').textContent=analysis;document.getElementById('metric-implemented').textContent=implementation;document.getElementById('metric-legacy').textContent=data.entries.filter(entry=>entry.currentImplementation).length;document.getElementById('metric-compared').textContent=compared;const total=sourceEntries.length*3;const complete=values.reduce((sum,item)=>sum+Number(item.analysis)+Number(item.implementation)+Number(item.comparison),0);document.getElementById('progress-fill').style.width=`${total?complete/total*100:0}%`;document.getElementById('progress-label').textContent=`${complete} of ${total} source-first stages complete · 149 of 149 Arcana inventoried · saved on this device.`;}
+  function setClip(entry,autoplay=true,mode='showcase',segmentIndex=0){const useReference=mode==='reference'&&entry.referenceWindow;const segment=mode==='segment'?entry.showcaseSegments?.[segmentIndex]:null;const clip=useReference?entry.referenceWindow:segment??showcaseClip(entry);activeEntry=entry;activeMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeEnd=clip.end;document.getElementById('video-name').textContent=entry.name;const segments=activeMode==='showcase'&&segmentSummary(entry)?` · ${segmentSummary(entry)}`:'';const clipLabel=useReference?'Base reference lock':segment?`${segment.kind==='charged'?'Charged':'Base'} segment`:'Full showcase';document.getElementById('video-range').textContent=`${clipLabel} · ${formatTime(clip.start)}–${formatTime(clip.end)}${segments} · ${lineageLabels[entry.lineage]}`;video.poster=entry.poster;const seek=()=>{video.currentTime=clip.start;if(autoplay)video.play().catch(()=>{});};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{once:true});}
   function stepClip(direction){const list=visibleEntries.length?visibleEntries:data.entries;let index=activeEntry?list.findIndex(entry=>entry.id===activeEntry.id):-1;if(index<0)index=0;else index=(index+direction+list.length)%list.length;setClip(list[index]);}
   function revealHashEntry(){const entry=data.entries.find(item=>`#arcana-${item.id}`===location.hash);if(!entry)return false;document.getElementById('search').value='';for(const id of ['element-filter','category-filter','lineage-filter','status-filter'])document.getElementById(id).value='all';document.getElementById('sort-order').value='source';applyFilters();setClip(entry,false);setTimeout(()=>document.getElementById(`arcana-${entry.id}`)?.scrollIntoView({block:'start'}),0);return true;}
-  async function copyBrief(entry){const stage=progress[entry.id]??entry.defaults,clip=entry.referenceWindow??entry;const text=[`${entry.name} — Wizard of Legend source reference`,`${location.href.split('#')[0]}#arcana-${entry.id}`,`${entry.referenceWindow?'Base reference-lock clip':'Clip'}: ${formatTime(clip.start)}–${formatTime(clip.end)}`,`Lineage: ${lineageLabels[entry.lineage]}`,`Status: ${statusLabels[entry.status]}`,`Stages: analysis ${stage.analysis?'complete':'pending'}; implementation ${stage.implementation?'complete':'pending'}; comparison ${stage.comparison?'passed':'pending'}`,'',entry.summary,'',plainForCopy(entry.recipe),'',plainForCopy(entry.acceptance),'',plainForCopy(entry.issues)].filter(Boolean).join('\n');try{await navigator.clipboard.writeText(text);toast('Implementation brief copied.');}catch{const area=document.createElement('textarea');area.value=text;document.body.append(area);area.select();document.execCommand('copy');area.remove();toast('Implementation brief copied.');}}
+  async function copyBrief(entry){const stage=progress[entry.id]??entry.defaults,clip=showcaseClip(entry);const text=[`${entry.name} — Wizard of Legend source reference`,`${location.href.split('#')[0]}#arcana-${entry.id}`,`Full showcase clip: ${formatTime(clip.start)}–${formatTime(clip.end)}`,segmentSummary(entry),entry.referenceWindow?`Base reference lock: ${formatTime(entry.referenceWindow.start)}–${formatTime(entry.referenceWindow.end)}`:'',`Lineage: ${lineageLabels[entry.lineage]}`,`Status: ${statusLabels[entry.status]}`,`Stages: analysis ${stage.analysis?'complete':'pending'}; implementation ${stage.implementation?'complete':'pending'}; comparison ${stage.comparison?'passed':'pending'}`,'',entry.summary,'',plainForCopy(entry.recipe),'',plainForCopy(entry.acceptance),'',plainForCopy(entry.issues)].filter(Boolean).join('\n');try{await navigator.clipboard.writeText(text);toast('Implementation brief copied.');}catch{const area=document.createElement('textarea');area.value=text;document.body.append(area);area.select();document.execCommand('copy');area.remove();toast('Implementation brief copied.');}}
   function plainForCopy(markdown){return String(markdown??'').replace(/[#*`>|]/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim();}
   function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),1800);}
   function populateFilters(){for(const [id,key] of [['element-filter','element'],['category-filter','category']]){const select=document.getElementById(id);[...new Set(data.entries.map(entry=>entry[key]))].sort().forEach(value=>select.add(new Option(value,value)));}}
   catalog.addEventListener('change',event=>{const input=event.target.closest('input[data-stage]');if(!input)return;const card=input.closest('.arcana-card');progress[card.dataset.id]={...(progress[card.dataset.id]??{}),[input.dataset.stage]:input.checked};saveProgress();});
-  catalog.addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(!button)return;const entry=data.entries.find(item=>item.id===button.closest('.arcana-card').dataset.id);if(button.dataset.action==='watch')setClip(entry);if(button.dataset.action==='copy')copyBrief(entry);});
+  catalog.addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(!button)return;const entry=data.entries.find(item=>item.id===button.closest('.arcana-card').dataset.id);if(button.dataset.action==='watch')setClip(entry);if(button.dataset.action==='watch-segment')setClip(entry,true,'segment',Number(button.dataset.segmentIndex));if(button.dataset.action==='watch-reference')setClip(entry,true,'reference');if(button.dataset.action==='copy')copyBrief(entry);});
   for(const id of ['search','element-filter','category-filter','lineage-filter','status-filter','sort-order'])document.getElementById(id).addEventListener(id==='search'?'input':'change',applyFilters);
   document.getElementById('expand-all').addEventListener('click',()=>catalog.querySelectorAll('details').forEach(node=>node.open=true));
   document.getElementById('collapse-all').addEventListener('click',()=>catalog.querySelectorAll('details').forEach(node=>node.open=false));
-  document.getElementById('replay-clip').addEventListener('click',()=>activeEntry?setClip(activeEntry):video.play());
+  document.getElementById('replay-clip').addEventListener('click',()=>activeEntry?setClip(activeEntry,true,activeMode,activeSegmentIndex):video.play());
   document.getElementById('previous-clip').addEventListener('click',()=>stepClip(-1));document.getElementById('next-clip').addEventListener('click',()=>stepClip(1));
   document.getElementById('full-showcase').addEventListener('click',()=>{activeEntry=null;activeEnd=null;video.poster='';document.getElementById('video-name').textContent='Full showcase';document.getElementById('video-range').textContent='22:09 complete source video';video.currentTime=0;video.play().catch(()=>{});});
   document.getElementById('playback-speed').addEventListener('change',event=>video.playbackRate=Number(event.target.value));
