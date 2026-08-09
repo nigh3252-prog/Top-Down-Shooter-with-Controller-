@@ -4,6 +4,8 @@ import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.
 // dedicated events resolve.
 
 import { getCard } from './card-registry.js';
+import { getStanceClass, getStanceClassPresentation } from './stance-compatibility.js';
+import { stanceDefenseLetter } from './stance-defense-profiles.js';
 import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
@@ -119,19 +121,25 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
       const card=s.hand[i],icon=el.querySelector('.cicon'),rows=el.querySelector('.crows'),sequence=s.manualSequence?.slot===i&&s.manualSequence.cardId===card?.id?s.manualSequence:null;
       const ability=card?.type==='ability',modifier=card?.type==='modifier',bing=card?.effectId==='bingBong',arcana=isWizardArcanaCard(card);
       const type=ability?'ability':(modifier?'modifier':'stance');el.dataset.cardType=card?type:'empty';
+      const stancePresentation=card&&type==='stance'?getStanceClassPresentation(getStanceClass(card)):null;
+      const defenseLetter=card&&type==='stance'?stanceDefenseLetter(card):'';
+      const stanceBadge=stancePresentation&&defenseLetter&&defenseLetter!=='?'?`${stancePresentation.short} / ${defenseLetter}`:'';
+      el.dataset.stanceType=stancePresentation?.label||'';
+      el.dataset.stanceTypeLetter=stancePresentation?.short||'';
+      el.dataset.stanceDefenseLetter=defenseLetter==='?'?'':defenseLetter;
       el.dataset.manualSequence=sequence?`${sequence.press}/${sequence.total}`:'';
       el.setAttribute('aria-pressed',sequence?'true':'false');
       el.setAttribute('aria-label',card?(sequence?`Continue ${card.name.replace(/^S\d+\s*/,'')} combo, press ${Math.min(sequence.total,sequence.press+1)} of ${sequence.total}`:`Play ${card.name.replace(/^S\d+\s*/,'')} ${type} card`):'Empty card slot');
       if(rows)rows.style.display=modifier?'none':'flex';
       if(icon){
-        icon.textContent=sequence?`${sequence.label}\n${sequence.press}/${sequence.total}`:arcana?(card.icon||'ARC'):(ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':'')));
+        icon.textContent=sequence?`${sequence.label}\n${sequence.press}/${sequence.total}`:arcana?(card.icon||'ARC'):(ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':stanceBadge)));
         icon.style.display='grid';icon.style.placeItems='center';icon.style.textAlign='center';icon.style.whiteSpace='pre-line';
-        icon.style.lineHeight=modifier||bing?'1.02':'';icon.style.fontWeight=ability||modifier||bing?'900':'';
-        icon.style.fontSize=sequence?'10px':arcana?'13px':(ability?'16px':(modifier||bing?'10px':''));
-        icon.style.letterSpacing=arcana?'.05em':(ability?'.08em':(modifier||bing?'.04em':''));
-        icon.style.color=arcana?(card.uiColor||'#ffd47b'):(ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':'')));
-        icon.style.borderColor=arcana?(card.uiBorder||'rgba(255,208,123,.72)'):(ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':'')));
-        icon.style.background=arcana?(card.uiBackground||'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))'):(ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':'')));
+        icon.style.lineHeight=modifier||bing?'1.02':(stancePresentation?'1':'');icon.style.fontWeight=ability||modifier||bing?'900':(stancePresentation?'900':'');
+        icon.style.fontSize=sequence?'10px':arcana?'13px':(ability?'16px':(modifier||bing?'10px':(stancePresentation?'12px':'')));
+        icon.style.letterSpacing=arcana?'.05em':(ability?'.08em':(modifier||bing?'.04em':(stancePresentation?'.04em':'')));
+        icon.style.color=arcana?(card.uiColor||'#ffd47b'):(ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':(stancePresentation?'#d9eee9':''))));
+        icon.style.borderColor=arcana?(card.uiBorder||'rgba(255,208,123,.72)'):(ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':(stancePresentation?'rgba(159,210,201,.55)':''))));
+        icon.style.background=arcana?(card.uiBackground||'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))'):(ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':(stancePresentation?'radial-gradient(circle,rgba(86,139,132,.22),rgba(18,36,38,.42))':''))));
       }
       el.style.borderColor=arcana?(card.uiColor||'#b98639'):(ability?'#a95b35':(modifier?'#b62d43':(bing?'#b98639':'')));
       el.style.boxShadow=sequence?`0 0 0 2px ${card.uiColor||'#ffe56d'},0 0 18px ${card.uiColor||'#ffe56d'}`:'';
