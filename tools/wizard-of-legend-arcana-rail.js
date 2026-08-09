@@ -69,12 +69,18 @@
   const catalog=document.getElementById('catalog');
   const video=document.getElementById('showcase-video');
   video.src=data.video.src;
+  video.controls=false;
   video.loop=true;
   const modeRail=document.getElementById('mode-rail');
   const contextRail=document.getElementById('context-rail');
   const contextLabel=document.getElementById('context-label');
   const searchInput=document.getElementById('search');
   const clipBadge=document.getElementById('clip-badge');
+  const playToggle=document.getElementById('video-play-toggle');
+  const seekControl=document.getElementById('video-seek');
+  const videoTime=document.getElementById('video-time');
+  const muteToggle=document.getElementById('video-mute-toggle');
+  const fullscreenToggle=document.getElementById('video-fullscreen');
   let activeMode='arcana';
   let selectedEntryId=data.entries[0]?.id??null;
   let visibleEntries=[...data.entries];
@@ -205,12 +211,14 @@
     contextLabel.textContent='Playback';
     contextRail.innerHTML=[
       '<span class="playback-status" aria-live="polite"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(range)+'</small></span>',
+      '<button class="rail-chip playback-chip" type="button" data-playback-action="video-play-toggle" aria-label="Play or pause video">▶ Play</button>',
       '<button class="rail-chip playback-chip" type="button" data-playback-action="previous-clip" aria-label="Previous Arcana">← Previous</button>',
       '<button class="rail-chip playback-chip" type="button" data-playback-action="next-clip" aria-label="Next Arcana">Next →</button>',
       '<button class="rail-chip playback-chip" type="button" data-playback-action="full-showcase">Full video</button>',
       '<button class="rail-chip playback-chip" type="button" data-playback-action="replay-clip" aria-label="Replay current clip">↻ Replay</button>',
       '<label class="rail-chip playback-speed-chip"><span>Speed</span><select data-playback-speed aria-label="Playback speed">'+speedOptions+'</select></label>'
     ].join('');
+    updatePlayControl();
     requestAnimationFrame(()=>{contextRail.scrollLeft=modeState.playback.visited?modeState.playback.scrollLeft:0;modeState.playback.visited=true;});
   }
   function renderContext(){
@@ -222,6 +230,56 @@
     contextRail.innerHTML=items.length?items.map(item=>`<button class="rail-chip" type="button" data-item="${escapeHtml(item.id)}" aria-pressed="${item.id===selected}">${escapeHtml(item.label)}${item.sub?`<small>${escapeHtml(item.sub)}</small>`:''}</button>`).join(''):'<span class="rail-empty">No matching detail options.</span>';
     requestAnimationFrame(()=>{contextRail.scrollLeft=modeState[mode.id].visited?modeState[mode.id].scrollLeft:0;modeState[mode.id].visited=true;});
   }
+
+  function activeClipBounds(){
+    const fallback=Number(data.video.duration)||0;
+    const mediaDuration=Number.isFinite(video.duration)&&video.duration>0?video.duration:fallback;
+    const start=Math.max(0,Number(activeStart)||0);
+    const requestedEnd=activeEnd===null?mediaDuration:Number(activeEnd);
+    const end=Math.max(start+0.001,Number.isFinite(requestedEnd)&&requestedEnd>start?requestedEnd:mediaDuration);
+    return{start,end};
+  }
+  function updatePlayControl(){
+    const playing=!video.paused&&!video.ended;
+    if(playToggle){
+      const icon=playToggle.querySelector('span[aria-hidden]');
+      const label=playToggle.querySelector('.video-control-label');
+      if(icon)icon.textContent=playing?'❚❚':'▶';
+      if(label)label.textContent=playing?'Pause':'Play';
+      playToggle.setAttribute('aria-label',playing?'Pause video':'Play video');
+      playToggle.title=playing?'Pause video':'Play video';
+    }
+    const railToggle=contextRail.querySelector('[data-playback-action="video-play-toggle"]');
+    if(railToggle){
+      railToggle.textContent=playing?'❚❚ Pause':'▶ Play';
+      railToggle.setAttribute('aria-label',playing?'Pause video':'Play video');
+    }
+  }
+  function updateMuteControl(){
+    if(!muteToggle)return;
+    const muted=video.muted||video.volume===0;
+    const icon=muteToggle.querySelector('span[aria-hidden]');
+    const label=muteToggle.querySelector('.video-control-label');
+    if(icon)icon.textContent=muted?'🔇':'🔊';
+    if(label)label.textContent=muted?'Unmute':'Mute';
+    muteToggle.setAttribute('aria-label',muted?'Unmute video':'Mute video');
+    muteToggle.title=muted?'Unmute video':'Mute video';
+  }
+  function updateCustomControls(){
+    const bounds=activeClipBounds();
+    const currentValue=Number(video.currentTime);
+    const current=Number.isFinite(currentValue)?Math.min(bounds.end,Math.max(bounds.start,currentValue)):bounds.start;
+    if(seekControl){
+      seekControl.min=String(bounds.start);
+      seekControl.max=String(bounds.end);
+      seekControl.value=String(current);
+      seekControl.setAttribute('aria-valuetext',formatTime(Math.max(0,current-bounds.start))+' of '+formatTime(Math.max(0,bounds.end-bounds.start)));
+    }
+    if(videoTime)videoTime.textContent=formatTime(Math.max(0,current-bounds.start))+' / '+formatTime(Math.max(0,bounds.end-bounds.start));
+    updatePlayControl();
+    updateMuteControl();
+  }
+
   function updateClipLabels(entry,clip,label){
     document.getElementById('video-name').textContent=entry?.name??'Full showcase';
     document.getElementById('video-range').textContent=entry?`${label} · ${formatTime(clip.start)}–${formatTime(clip.end)}${segmentSummary(entry)?` · ${segmentSummary(entry)}`:''}`:'22:09 complete source video';
@@ -242,8 +300,8 @@
     const clip=useReference?entry.referenceWindow:segment??showcaseClip(entry);
     activeEntry=entry;activeClipMode=useReference?'reference':segment?'segment':'showcase';activeSegmentIndex=segment?segmentIndex:0;activeStart=clip.start;activeEnd=clip.end;video.loop=true;
     const label=useReference?'Base reference lock':segment?`${segment.kind==='charged'?'Charged':'Base'} segment`:'Full showcase';
-    updateClipLabels(entry,clip,label);video.poster=entry.poster;
-    const seek=()=>{video.currentTime=clip.start;if(autoplay)attemptPlay(true);};
+    updateClipLabels(entry,clip,label);video.poster=entry.poster;updateCustomControls();
+    const seek=()=>{video.currentTime=clip.start;updateCustomControls();if(autoplay)attemptPlay(true);};
     if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{once:true});
   }
   function renderEntry(entry){
@@ -325,6 +383,31 @@
     rail.addEventListener('click',event=>{if(moved){event.preventDefault();event.stopPropagation();moved=false;}},true);
   }
 
+  playToggle?.addEventListener('click',()=>{if(video.paused||video.ended)attemptPlay(true);else video.pause();});
+  seekControl?.addEventListener('input',event=>{video.currentTime=Number(event.target.value);updateCustomControls();});
+  muteToggle?.addEventListener('click',()=>{video.muted=!video.muted;updateMuteControl();});
+  fullscreenToggle?.addEventListener('click',()=>{
+    if(document.fullscreenElement){document.exitFullscreen?.();return;}
+    const target=document.querySelector('.rail-video-card');
+    if(target?.requestFullscreen)target.requestFullscreen().catch(()=>{});
+    else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
+  });
+  video.addEventListener('click',()=>{if(video.paused||video.ended)attemptPlay(true);else video.pause();});
+  video.addEventListener('play',updateCustomControls);
+  video.addEventListener('pause',updateCustomControls);
+  video.addEventListener('ended',updateCustomControls);
+  video.addEventListener('loadedmetadata',updateCustomControls);
+  video.addEventListener('durationchange',updateCustomControls);
+  video.addEventListener('volumechange',updateMuteControl);
+  document.addEventListener('fullscreenchange',()=>{
+    if(fullscreenToggle){
+      const active=Boolean(document.fullscreenElement);
+      fullscreenToggle.setAttribute('aria-label',active?'Exit fullscreen':'Enter fullscreen');
+      fullscreenToggle.title=active?'Exit fullscreen':'Enter fullscreen';
+    }
+  });
+  updateCustomControls();
+
   renderModeRail();
   modeRail.addEventListener('click',event=>{const button=event.target.closest('[data-mode]');if(button)setMode(button.dataset.mode);});
   contextRail.addEventListener('click',handleContextClick);
@@ -351,12 +434,12 @@
   document.getElementById('previous-clip').addEventListener('click',()=>stepClip(-1));
   document.getElementById('next-clip').addEventListener('click',()=>stepClip(1));
   document.getElementById('replay-clip').addEventListener('click',()=>activeEntry?setClip(activeEntry,true,activeClipMode,activeSegmentIndex):attemptPlay(true));
-  document.getElementById('full-showcase').addEventListener('click',()=>{activeEntry=null;activeStart=0;activeEnd=null;activeClipMode='showcase';video.loop=true;video.poster='';updateClipLabels(null,null,'Full showcase');video.currentTime=0;attemptPlay(true);});
+  document.getElementById('full-showcase').addEventListener('click',()=>{activeEntry=null;activeStart=0;activeEnd=null;activeClipMode='showcase';video.loop=true;video.poster='';updateClipLabels(null,null,'Full showcase');video.currentTime=0;updateCustomControls();attemptPlay(true);});
   document.getElementById('playback-speed').addEventListener('change',event=>video.playbackRate=Number(event.target.value));
   document.getElementById('research-link').addEventListener('click',()=>{modeState.research.selected='construction';if(activeMode==='research'){renderContext();renderCurrentView();}else setMode('research');});
   document.getElementById('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{const incoming=JSON.parse(await file.text());if(incoming.schemaVersion!==1||!incoming.entries)throw new Error();progress=progressFromPayload(incoming);saveProgress();renderCurrentView();toast('Progress imported.');}catch{toast('That progress file is not valid.');}event.target.value='';});
   // Seek inside the already-playing media instead of calling play() again; repeated play() calls reopen Android's native overlay.
-  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd)video.currentTime=activeStart;});
+  video.addEventListener('timeupdate',()=>{if(activeEnd!==null&&video.currentTime>=activeEnd)video.currentTime=activeStart;updateCustomControls();});
   window.addEventListener('hashchange',()=>{const entry=data.entries.find(item=>`#arcana-${item.id}`===location.hash);if(entry){activeMode='arcana';modeRail.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode==='arcana')));selectedEntryId=entry.id;filterState.search='';searchInput.value='';filterState.element='all';filterState.category='all';filterState.lineage='all';filterState.status='all';filterState.sort='source';refresh();setClip(entry,false);}});
 
   document.getElementById('tracked-count').textContent=data.entries.length;
