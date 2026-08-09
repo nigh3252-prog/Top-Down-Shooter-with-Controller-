@@ -1,0 +1,8 @@
+name: temporary stance presentation validation marker
+on:
+  workflow_dispatch:
+jobs:
+  marker:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo marker
