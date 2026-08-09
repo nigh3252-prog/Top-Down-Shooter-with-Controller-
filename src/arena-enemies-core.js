@@ -17,6 +17,8 @@ import { createCombinedEncounterPlan } from './combined-encounter-director.js';
 import { setHadesNativeModeActive } from './hades-encounter-tuning.js';
 import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-base.js';
 import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
+import { createPlayerDamageInterceptorStack } from './player-damage-interceptors.js';
+import { createPlayerDamageRoute } from './player-damage-route.js';
 import { getArenaEnemyBySpawnKind, listArenaEnemies } from './arena-enemy-content-registry.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
@@ -94,6 +96,12 @@ export function createArenaEnemySystem(options={}){
   const hades=createHadesArenaEnemySystem({...options,factionService,systemKey:'hades',onEncounterCleared:childCleared('hades')});
   const systemsByKey={original,flare,hades};
   const systems=Object.values(systemsByKey);
+  const playerDamageRoute=createPlayerDamageRoute({
+    apply(route){for(const system of systems)system.setPlayerDamageInterceptor?.(route);},
+  });
+  const playerDamageInterceptors=createPlayerDamageInterceptorStack({
+    apply(interceptor){playerDamageRoute.setExternalInterceptor(interceptor);},
+  });
   for(const [key,system] of Object.entries(systemsByKey))factionService.registerEnemySystem(key,system);
   active=original;
   manualWaveSize=original.waveSize;
@@ -387,7 +395,10 @@ export function createArenaEnemySystem(options={}){
     globalPlayerHp=Math.max(0,globalPlayerHp-Math.max(0,before-after));hpSnapshots.set(active,after);return applied;
   }
 
-  function setPlayerDamageInterceptor(interceptor){for(const system of systems)system.setPlayerDamageInterceptor?.(interceptor);}
+  function setPlayerDefenseResolver(resolver){return playerDamageRoute.setDefenseResolver(resolver);}
+  function setPlayerDamageInterceptor(interceptor){playerDamageInterceptors.setLegacy(interceptor);}
+  function registerPlayerDamageInterceptor(id,interceptor,priority=0){return playerDamageInterceptors.register(id,interceptor,priority);}
+  function unregisterPlayerDamageInterceptor(id){return playerDamageInterceptors.unregister(id);}
   function applyStatus(enemy,kind,duration,statusOptions={}){return routeArenaEnemyStatus(systems,enemy,kind,duration,statusOptions);}
   function stunEnemy(enemy,...args){return owningSystem(enemy)?.stunEnemy?.(enemy,...args)??false;}
   function registerWizardDecoy(decoy){for(const system of visibleSystems())system.registerWizardDecoy?.(decoy);return decoy?.id||decoy?.stableId||null;}
@@ -446,7 +457,7 @@ export function createArenaEnemySystem(options={}){
     get hostileProjectiles(){return visibleSystems().flatMap(system=>system.hostileProjectiles||[]);},
     get group(){return active.group;},
     get director(){return active.director;},
-    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,setPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
+    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,setPlayerDefenseResolver,setPlayerDamageInterceptor,registerPlayerDamageInterceptor,unregisterPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
     registerAlliedTarget,unregisterAlliedTarget,registerDamageModifier,unregisterDamageModifier,charmEnemy,releaseCharmedEnemy,getNearestHostile,
     launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
     setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
