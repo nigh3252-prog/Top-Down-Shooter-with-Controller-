@@ -60,13 +60,43 @@ export const STANCE_MOVEMENT_PROFILES=Object.freeze({
   }),
 });
 
+const movementClassPairKey=(stanceClass,weaponClass)=>`${stanceClass}:${weaponClass}`;
+export const STANCE_MOVEMENT_CLASS_TEMPLATE_SOURCES=Object.freeze({
+  'Light:Light':'S24:dagger',
+  'Light:Medium':'S24:longsword',
+  'Light:Heavy':'S24:greatsword',
+  'Medium:Light':'S26:dagger',
+  'Medium:Medium':'S26:longsword',
+  'Medium:Heavy':'S26:greatsword',
+  'Heavy:Light':'S01:dagger',
+  'Heavy:Medium':'S01:longsword',
+  'Heavy:Heavy':'S01:greatsword',
+});
+export const STANCE_MOVEMENT_CLASS_TEMPLATES=Object.freeze(Object.fromEntries(
+  Object.entries(STANCE_MOVEMENT_CLASS_TEMPLATE_SOURCES).map(([key,sourcePair])=>[key,STANCE_MOVEMENT_PROFILES[sourcePair]]),
+));
+function materializeMovementTemplate(template,pilotProfile,stanceId,weaponId,gate2){
+  if(!template)return null;
+  if(pilotProfile)return pilotProfile;
+  return freezeProfile({
+    ...template,
+    id:`stance2-movement-${String(gate2?.compatibility?.stanceClass||'unknown').toLowerCase()}-${String(gate2?.compatibility?.weaponClass||'unknown').toLowerCase()}`,
+    sourceProfileId:template.id,
+    stanceId,weaponId,
+  });
+}
+
 export function resolveStanceMovementProfile({stance,weapon,weaponId=''}={}){
   const stanceId=String(stance?.id||stance||'');
   const resolvedWeaponId=String(weaponId||weapon?.id||'');
   const gate2=resolveGate2PilotProfile({stance,weapon,weaponId:resolvedWeaponId});
-  const profile=STANCE_MOVEMENT_PROFILES[pairKey(stanceId,resolvedWeaponId)]||null;
-  return Object.freeze({active:!!profile&&gate2.active,stanceId,weaponId:resolvedWeaponId,gate2,profile});
+  const pilotProfile=STANCE_MOVEMENT_PROFILES[pairKey(stanceId,resolvedWeaponId)]||null;
+  const templateKey=movementClassPairKey(gate2.compatibility.stanceClass,gate2.compatibility.weaponClass);
+  const template=STANCE_MOVEMENT_CLASS_TEMPLATES[templateKey]||null;
+  const profile=materializeMovementTemplate(template,pilotProfile,stanceId,resolvedWeaponId,gate2);
+  return Object.freeze({active:!!profile&&gate2.active,stanceId,weaponId:resolvedWeaponId,templateKey,gate2,profile});
 }
+
 
 export function movementMultiplierDuringAttack(profile,attack,t=0){
   if(!profile||profile.useBaseAttackMovement||!attack)return null;

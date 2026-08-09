@@ -1,5 +1,18 @@
 export const STANCE_CLASSES = Object.freeze(['Light', 'Medium', 'Heavy']);
 
+export const STANCE_CLASS_PRESENTATION = Object.freeze({
+  Light:Object.freeze({label:'Speed',short:'S'}),
+  Medium:Object.freeze({label:'Balanced',short:'B'}),
+  Heavy:Object.freeze({label:'Power',short:'P'}),
+});
+
+export function getStanceClassPresentation(value){
+  const normalized=normalizeStanceClass(value);
+  return normalized?STANCE_CLASS_PRESENTATION[normalized]||null:null;
+}
+export function stanceClassDisplayName(value){return getStanceClassPresentation(value)?.label||String(value||'');}
+export function stanceClassShort(value){return getStanceClassPresentation(value)?.short||'';}
+
 export const STANCE_CLASS_BY_ID = Object.freeze({
   S01:'Heavy',
   S02:'Heavy',
@@ -45,9 +58,9 @@ const validClass = value => Object.prototype.hasOwnProperty.call(CLASS_RANK, val
 
 export function normalizeStanceClass(value){
   const raw=String(value||'').trim().toLowerCase();
-  if(raw==='light')return'Light';
-  if(raw==='medium')return'Medium';
-  if(raw==='heavy')return'Heavy';
+  if(raw==='light'||raw==='speed')return'Light';
+  if(raw==='medium'||raw==='balanced')return'Medium';
+  if(raw==='heavy'||raw==='power')return'Heavy';
   return null;
 }
 

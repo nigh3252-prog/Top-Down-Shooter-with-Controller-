@@ -595,16 +595,19 @@ export function createArenaEnemySystem({
       if(p.__wizardDecoyId){strikeWizardDecoy(p.__wizardDecoyId,{enemyId:e.id,kind:e.kind,attack:e.attack.name,projectile:false});return;}
       if(factionService&&p.__arenaTargetKind){
         factionService.damageTarget(p,e.attack.damage,e.facing,{sourceEnemyId:e.wizardStableId,sourceFaction:e.wizardFaction,attack:e.attack.name},
-          (damage,dir)=>hitPlayer(damage,e.kind,e.attack.name,dir));
-      }else hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing);
+          (damage,dir)=>hitPlayer(damage,e.kind,e.attack.name,dir,{sourceEnemy:e,sourceEnemyId:e.wizardStableId}));
+      }else hitPlayer(e.attack.damage, e.kind, e.attack.name, e.facing,{sourceEnemy:e,sourceEnemyId:e.wizardStableId});
     }
   }
-  function hitPlayer(dmg, kind, name, dir = null, {ignoreInvulnerability=false} = {}){
+  function hitPlayer(dmg, kind, name, dir = null, {ignoreInvulnerability=false,sourceEnemy=null,sourceEnemyId=null} = {}){
     if(lastPlayer.invulnerable&&!ignoreInvulnerability) return 0;
     const requested=Math.max(0,Number(dmg)||0);
     let applied=requested;
     if(typeof playerDamageInterceptor==='function'){
-      const intercepted=playerDamageInterceptor({damage:requested,kind,name,dir:dir?{x:dir.x,z:dir.z}:null,playerHp:tuning.playerHp});
+      const intercepted=playerDamageInterceptor({
+        damage:requested,kind,name,dir:dir?{x:dir.x,z:dir.z}:null,playerHp:tuning.playerHp,
+        sourceEnemy,sourceEnemyId:String(sourceEnemyId||sourceEnemy?.wizardStableId||'')||null,
+      });
       if(intercepted===false)applied=0;
       else if(Number.isFinite(Number(intercepted)))applied=Math.max(0,Number(intercepted));
       else if(intercepted&&Number.isFinite(Number(intercepted.damage)))applied=Math.max(0,Number(intercepted.damage));
@@ -641,9 +644,9 @@ export function createArenaEnemySystem({
       const arenaTarget=pr.life>0&&pr.arenaTarget?factionService?.resolveCapturedTarget?.(pr.arenaTarget,p,{stale:false}):null;
       if(arenaTarget&&Math.hypot(pr.x-arenaTarget.x,pr.z-arenaTarget.z)<pr.r+(arenaTarget.radius||PLAYER_R)){
         factionService.damageTarget(arenaTarget,pr.damage,norm(pr.vx,pr.vz),{sourceEnemyId:pr.sourceEnemyId,sourceFaction:pr.sourceFaction,attack:'Rock Throw'},
-          (damage,dir)=>hitPlayer(damage,'rock','Rock Throw',dir));pr.life=0;
+          (damage,dir)=>hitPlayer(damage,'rock','Rock Throw',dir,{sourceEnemyId:pr.sourceEnemyId}));pr.life=0;
       }else if(!pr.arenaTarget&&pr.life>0&&p.targetable!==false&&Math.hypot(pr.x - p.x, pr.z - p.z) < pr.r + PLAYER_R && !p.invulnerable && !playerDead()){
-        hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz)); pr.life = 0;
+        hitPlayer(pr.damage, 'rock', 'Rock Throw', norm(pr.vx, pr.vz),{sourceEnemyId:pr.sourceEnemyId}); pr.life = 0;
       }
       if(pr.life <= 0){ pr.dead = true; if(pr.mesh) pr.mesh.visible = false; }
       else if(pr.mesh){ pr.mesh.position.set(pr.x, 1.0*S, pr.z); pr.mesh.rotation.x += dt*9; }

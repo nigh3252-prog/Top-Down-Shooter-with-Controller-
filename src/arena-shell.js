@@ -51,7 +51,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <p>MOVE <span>WASD / STICK</span></p>
     <p>LIGHT <span>J / □ / RT</span></p>
     <p>HEAVY <span>L / △</span></p>
-    <p>DODGE <span>K / × / LT</span></p>
+    <p>DEFENSE <span>K / × / LT</span></p>
     <p>CARDS <span>Q/E / LB/RB</span></p>
     <p>SHUFFLE <span>R / ○</span></p>
     <p>WEAPON <span>X / D-PAD ↑↓</span></p>
@@ -61,7 +61,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
 </div>
 <!-- Internal run-draft reset hook. It is never rendered as player-facing UI. -->
 <button id="resetBtn" type="button" hidden aria-hidden="true" tabindex="-1">RESET FIGHT</button>
-<div id="hint">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DODGE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>
+<div id="hint">stick/WASD move · LIGHT [J/Square/RT] · HEAVY hold [L/Triangle] · DEFENSE [K/Cross/LT] · LB/RB or Q/E play card · Circle/R shuffle · X weapon · M menu</div>
 <div id="err"></div>
 <div id="startGate">
   <div id="startCard">
