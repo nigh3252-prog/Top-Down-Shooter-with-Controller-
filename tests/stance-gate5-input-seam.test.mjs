@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const arena=readFileSync(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
+const backbone=readFileSync(new URL('../src/playstation-backbone-input.js',import.meta.url),'utf8');
+const weaponBalance=readFileSync(new URL('../src/weapon-balance.js',import.meta.url),'utf8');
+assert.match(arena,/createStanceGate5Runtime/);
+assert.match(arena,/readPlayStationBackboneInput/);
+assert.match(arena,/resolvePlayStationBackboneActions/);
+assert.match(arena,/if\(padActions\.defensePressed\)defenseDown/);
+assert.match(arena,/if\(padActions\.lightPressed\)lightDown/);
+assert.match(arena,/stanceGate5Runtime=createStanceGate5Runtime/);
+assert.match(backbone,/input\?\.pressed\?\.cross===true\|\|input\?\.pressed\?\.l2===true/);
+assert.match(backbone,/input\?\.pressed\?\.square===true\|\|input\?\.pressed\?\.r2===true/);
+assert.match(arena,/getPlayerForward\(\)\{return\{x:Math\.sin\(actorFacing\),z:Math\.cos\(actorFacing\)\};\}/);
+assert.doesNotMatch(arena,/__stance2Gate5Runtime|window\.__arena/);
+assert.doesNotMatch(weaponBalance,/stance-gate5-defense/);
+console.log('stance gate 5 shared-runtime input seam tests passed');
