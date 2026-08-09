@@ -388,7 +388,7 @@
   muteToggle?.addEventListener('click',()=>{video.muted=!video.muted;updateMuteControl();});
   fullscreenToggle?.addEventListener('click',()=>{
     if(document.fullscreenElement){document.exitFullscreen?.();return;}
-    const target=document.querySelector('.rail-video-card');
+    const target=document.querySelector('.rail-video-player');
     if(target?.requestFullscreen)target.requestFullscreen().catch(()=>{});
     else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();
   });
