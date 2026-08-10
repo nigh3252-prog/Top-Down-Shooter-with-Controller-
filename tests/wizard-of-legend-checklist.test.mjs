@@ -28,6 +28,26 @@ for(const entry of entries){
   assert.ok(entry.citations.includes(entry.onlineReference.sourceUrl),`${entry.name} online source must remain attached to its citations`);
 }
 
+for(const entry of entries){
+  assert.ok(entry.onlineReference?.documentedBehavior?.includes('[DOCUMENTED]'),'every entry must carry detailed documented behavior');
+  assert.match(entry.onlineReferenceMarkdown,/Wiki behavior/,'every entry must carry its wiki behavior field');
+}
+const wikiPrimary=entries.filter(entry=>entry.onlineReference.sourceUrl.includes('wizardoflegend.fandom.com'));
+assert.equal(wikiPrimary.length,144,'individual Wizard of Legend Wiki pages must be primary for 144 entries');
+assert.deepEqual(
+  entries.filter(entry=>!entry.onlineReference.sourceUrl.includes('wizardoflegend.fandom.com')).map(entry=>entry.name),
+  ['Gale-Force Alignment','Magnetic Follow-Up','Rock-Solid Tomahawk',"Rock N' Roll",'Cascading Blitz'],
+  'only the five explicitly labeled page-shell fallbacks may use the community catalog',
+);
+const airSpinner=entries.find(entry=>entry.name==='Air Spinner');
+assert.match(airSpinner.onlineReference.documentedBehavior,/orbits the player once/i,'Air Spinner must retain the wiki sequence detail');
+assert.match(airSpinner.onlineReference.documentedBehavior,/second disc spawns behind the player/i,'Air Spinner must retain the enhanced placement detail');
+assert.match(airSpinner.onlineReference.wikiStats,/Damage: 6, 10/,'Air Spinner must retain wiki infobox damage');
+const ripTide=entries.find(entry=>entry.name==='Rip Tide');
+assert.match(ripTide.onlineReference.documentedBehavior,/8, 7 and 5 damage/i,'Rip Tide must retain per-ripple wiki damage');
+assert.match(ripTide.onlineReference.documentedBehavior,/uninterruptable combo/i,'Rip Tide must retain its one-input combo rule');
+assert.match(ripTide.onlineReference.wikiStrategies,/pierce through all enemies/i,'Rip Tide must retain its documented piercing behavior');
+
 const inventoryOnly=entries.filter(entry=>entry.status==='inventory-only');
 const analyzed=entries.filter(entry=>entry.status!=='inventory-only');
 const improved=analyzed.filter(entry=>entry.status!=='legacy-replace');

@@ -99,13 +99,22 @@ function parseOnlineReference(text){
     const sourceUrl=fields.Source?.match(/\((https?:\/\/[^)]+)\)/)?.[1]??'';
     if(fields.Evidence!=='documented-online')throw new Error(`${name} online reference must use documented-online evidence`);
     if(!sourceUrl)throw new Error(`${name} online reference is missing a source URL`);
+    const documentedBehavior=fields['Wiki behavior']??fields['Documented behavior']??'';
+    const enhanced=fields['Wiki enhanced behavior']??fields.Enhanced??'';
     references.set(slugify(name),{
       markdown,
       fields,
       sourceUrl,
       evidence:fields.Evidence,
-      documentedBehavior:fields['Documented behavior']??'',
-      enhanced:fields.Enhanced??'',
+      documentedBehavior,
+      enhanced,
+      wikiElement:fields['Wiki element']??'',
+      wikiType:fields['Wiki type']??'',
+      wikiSubtypes:fields['Wiki subtypes']??'',
+      wikiStats:fields['Wiki stats']??'',
+      wikiEnhancedStats:fields['Wiki enhanced stats']??'',
+      wikiStrategies:fields['Wiki strategy notes']??'',
+      wikiAdditionalNotes:fields['Wiki additional notes']??'',
     });
   }
   if(references.size!==149)throw new Error(`Online Arcana reference names must be unique; found ${references.size}`);
@@ -525,6 +534,13 @@ for(const entry of entries){
     sourceUrl:online.sourceUrl,
     documentedBehavior:online.documentedBehavior,
     enhanced:online.enhanced,
+    wikiElement:online.wikiElement,
+    wikiType:online.wikiType,
+    wikiSubtypes:online.wikiSubtypes,
+    wikiStats:online.wikiStats,
+    wikiEnhancedStats:online.wikiEnhancedStats,
+    wikiStrategies:online.wikiStrategies,
+    wikiAdditionalNotes:online.wikiAdditionalNotes,
     fields:online.fields,
   };
   if(!entry.citations.includes(online.sourceUrl))entry.citations.push(online.sourceUrl);

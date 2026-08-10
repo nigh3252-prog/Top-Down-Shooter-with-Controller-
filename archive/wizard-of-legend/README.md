@@ -16,13 +16,16 @@ The checklist is the canonical working reference. The Markdown in
   demonstrations. It owns showcase order for every entry in the checklist, and
   the Arcana it lists without a source-first analysis appear as inventory-only
   records.
-- `gate2-online-reference.md` attaches a documented-online behavior, enhanced
-  behavior, catalog type, and stable identifier to every Gate 1 entry. It is a
-  separate reference layer and does not convert inventory-only records into
-  source-first analysis.
+- `gate2-online-reference.md` attaches a detailed `[DOCUMENTED]` behavior,
+  enhanced behavior, wiki metadata, stats, strategy notes, and source URL to
+  every Gate 1 entry. It is a separate reference layer and does not convert
+  inventory-only records into source-first analysis. Individual Wizard of Legend
+  Wiki pages are primary; five entries retain explicitly labeled community
+  catalog fallbacks because their Wiki routes returned title shells without
+  article content.
 - [`../../scripts/fetch-wol-online-reference.mjs`](../../scripts/fetch-wol-online-reference.mjs) refreshes that layer from the public
-  community catalog, retaining narrow wiki fallbacks for two legacy showcase
-  names that are absent from the current catalog snapshot.
+  Arcana pages on the Wizard of Legend Wiki and records any fallback source
+  explicitly.
 
 Do not implement an arcana directly from an initial-pass summary when the
 checklist marks it **legacy first-pass prototype — replacement required**.
