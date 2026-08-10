@@ -6,6 +6,8 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const htmlPath=path.join(root,'tools','wizard-of-legend-arcana-checklist.html');
 const html=fs.readFileSync(htmlPath,'utf8');
+const rail=fs.readFileSync(path.join(root,'tools','wizard-of-legend-arcana-rail.js'),'utf8');
+const uiSource=`${html}\n${rail}`;
 const dataMatch=html.match(/<script id="wol-data" type="application\/json">([\s\S]*?)<\/script>/);
 assert.ok(dataMatch,'checklist must embed its machine-readable dataset');
 const data=JSON.parse(dataMatch[1]);
@@ -15,6 +17,16 @@ assert.equal(data.schemaVersion,1,'dataset schema must remain explicitly version
 assert.equal(entries.length,149,'the checklist must track every distinct Arcana in the source video');
 assert.equal(new Set(entries.map(entry=>entry.id)).size,149,'arcana IDs must be unique');
 assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:149},(_,index)=>index+1),'showcase order must remain stable and contiguous');
+
+const onlineReferencePath=path.join(root,'archive','wizard-of-legend','source-notes','gate2-online-reference.md');
+const onlineReference=fs.readFileSync(onlineReferencePath,'utf8');
+assert.equal((onlineReference.match(/^## \d+\. /gm)??[]).length,149,'the online reference must cover every Gate 1 Arcana');
+for(const entry of entries){
+  assert.ok(entry.onlineReferenceMarkdown?.trim(),`${entry.name} must carry its documented-online reference in the generated entry`);
+  assert.equal(entry.onlineReference?.evidence,'documented-online',`${entry.name} online evidence label is incorrect`);
+  assert.ok(/^https?:\/\//.test(entry.onlineReference?.sourceUrl??''),`${entry.name} online reference must expose a source URL`);
+  assert.ok(entry.citations.includes(entry.onlineReference.sourceUrl),`${entry.name} online source must remain attached to its citations`);
+}
 
 const inventoryOnly=entries.filter(entry=>entry.status==='inventory-only');
 const analyzed=entries.filter(entry=>entry.status!=='inventory-only');
@@ -221,9 +233,11 @@ const requiredUi=[
   'Copy implementation brief','element-filter','category-filter','lineage-filter','status-filter','sort-order',
   'previous-clip','next-clip','full-showcase','playback-speed','video.addEventListener(\'timeupdate\'',
 ];
-for(const marker of requiredUi)assert.ok(html.includes(marker),`missing checklist UI behavior: ${marker}`);
-assert.ok(html.includes('<article class="arcana-card"'),'entries must render as semantic article elements');
-assert.ok(html.includes('about-large-files-on-github')&&html.includes('github-pages-limits'),'page must retain GitHub media-limit references');
+for(const marker of requiredUi)assert.ok(uiSource.includes(marker),`missing checklist UI behavior: ${marker}`);
+assert.ok(uiSource.includes('<article class="arcana-card"'),'entries must render as semantic article elements');
+assert.match(uiSource,/Documented online reference/,'cards must render the attached online reference layer');
+assert.match(uiSource,/entry\.onlineReferenceMarkdown/,'online reference text must participate in the catalog UI');
+assert.ok(uiSource.includes('about-large-files-on-github')&&uiSource.includes('github-pages-limits'),'page must retain GitHub media-limit references');
 
 const indexHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.ok(indexHtml.includes('href="archive/index.html"'),'the root launcher must route research tooling through Archive');

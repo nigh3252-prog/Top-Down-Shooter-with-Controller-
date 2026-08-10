@@ -28,6 +28,7 @@ const improvedText=[
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 const inventoryLedgerText=read('gate1-video-inventory.md');
+const onlineReferenceText=read('gate2-online-reference.md');
 
 function parseLedgerNumber(value,label){
   const parsed=Number(value);
@@ -81,6 +82,34 @@ function parseInventoryLedger(text){
   if(meta.chargedDemonstrations!==charged)throw new Error(`Inventory ledger claims ${meta.chargedDemonstrations} charged demonstrations but lists ${charged}`);
   if(meta.timestampedDemonstrations!==entries.length+charged)throw new Error(`Inventory ledger demonstration total must equal ${entries.length+charged}`);
   return{entries,meta};
+}
+
+function parseOnlineReference(text){
+  const headings=[...text.matchAll(/^## (\d+)\. ([^\n]+)$/gm)];
+  if(headings.length!==149)throw new Error(`Online Arcana reference must contain 149 entries; found ${headings.length}`);
+  const references=new Map();
+  for(let index=0;index<headings.length;index+=1){
+    const match=headings[index];
+    if(Number(match[1])!==index+1)throw new Error(`Online Arcana reference order must be contiguous; row ${index+1} declares ${match[1]}`);
+    const end=headings[index+1]?.index??text.length;
+    const markdown=text.slice(match.index,end).trim();
+    const name=match[2].trim();
+    const fields={};
+    for(const field of markdown.matchAll(/^- \*\*([^*]+):\*\* (.+)$/gm))fields[field[1].trim()]=field[2].trim();
+    const sourceUrl=fields.Source?.match(/\((https?:\/\/[^)]+)\)/)?.[1]??'';
+    if(fields.Evidence!=='documented-online')throw new Error(`${name} online reference must use documented-online evidence`);
+    if(!sourceUrl)throw new Error(`${name} online reference is missing a source URL`);
+    references.set(slugify(name),{
+      markdown,
+      fields,
+      sourceUrl,
+      evidence:fields.Evidence,
+      documentedBehavior:fields['Documented behavior']??'',
+      enhanced:fields.Enhanced??'',
+    });
+  }
+  if(references.size!==149)throw new Error(`Online Arcana reference names must be unique; found ${references.size}`);
+  return references;
 }
 
 function formatClock(seconds){
@@ -366,6 +395,7 @@ for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The so
 
 const inventory=parseInventoryLedger(inventoryLedgerText);
 const inventoryBySlug=new Map(inventory.entries.map(entry=>[slugify(entry.name),entry]));
+const onlineReferences=parseOnlineReference(onlineReferenceText);
 
 const improvedSections=extractNumberedH1(improvedText);
 const entries=sourceMeta.map((meta,index)=>{
@@ -485,6 +515,20 @@ for(const record of inventory.entries){
     poster:`media/wizard-of-legend/posters/${id}.webp`,
   });
 }
+
+for(const entry of entries){
+  const online=onlineReferences.get(entry.id);
+  if(!online)throw new Error(`${entry.name} is missing its documented-online reference`);
+  entry.onlineReferenceMarkdown=online.markdown;
+  entry.onlineReference={
+    evidence:online.evidence,
+    sourceUrl:online.sourceUrl,
+    documentedBehavior:online.documentedBehavior,
+    enhanced:online.enhanced,
+    fields:online.fields,
+  };
+  if(!entry.citations.includes(online.sourceUrl))entry.citations.push(online.sourceUrl);
+}
 entries.sort((first,second)=>first.order-second.order);
 
 const payload={
@@ -500,11 +544,17 @@ const payload={
   frameworkMarkdown:spellLanguage,
 };
 
-const template=fs.readFileSync(path.join(scriptDir,'wol-checklist-template.html'),'utf8');
+const generatedPath=path.join(root,'tools','wizard-of-legend-arcana-checklist.html');
+const fallbackTemplate=fs.readFileSync(path.join(scriptDir,'wol-checklist-template.html'),'utf8');
+// PR 122's generated page carries the newer fullscreen rail viewer. Preserve
+// that tracked shell when rebuilding; the older standalone template remains a
+// fallback for a clean artifact build.
+const existingTemplate=fs.existsSync(generatedPath)?fs.readFileSync(generatedPath,'utf8'):'';
+const template=existingTemplate.includes('id="rail-app"')?existingTemplate:fallbackTemplate;
 const safeJson=JSON.stringify(payload).replace(/</g,'\\u003c');
-const html=template
-  .replace('__WOL_DATA__',safeJson)
-  .replace('__GENERATED_AT__',new Date().toISOString());
-fs.writeFileSync(path.join(root,'tools','wizard-of-legend-arcana-checklist.html'),html);
+const html=template.includes('__WOL_DATA__')
+  ? template.replace('__WOL_DATA__',safeJson).replace('__GENERATED_AT__',new Date().toISOString())
+  : template.replace(/(<script id="wol-data" type="application\/json">)[\s\S]*?(<\/script>)/,`$1${safeJson}$2`);
+fs.writeFileSync(generatedPath,html);
 const inventoryOnly=entries.filter(entry=>entry.status==='inventory-only').length;
 console.log(`Generated Wizard of Legend checklist with ${entries.length} entries (${entries.length-inventoryOnly} analyzed, ${inventoryOnly} inventory-only).`);
