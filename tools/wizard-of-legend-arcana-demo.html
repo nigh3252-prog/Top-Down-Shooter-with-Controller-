@@ -150,9 +150,13 @@ import * as THREE from 'three';
      · gate2-online-reference.md     (wiki stats / behavior / enhanced behavior)
 
    Every damage value, hit count, beat count, carrier structure and enhancement
-   rewrite below is taken straight from those entries. Nothing is invented; the
-   only authored numbers are presentation timings (windup/active/recovery),
-   which the entries deliberately leave unspecified.
+   rewrite below is taken straight from those entries.
+
+   Beat cadence, sweep arc, reach ratio, palette and the impact sparkle were
+   then measured frame by frame off the showcase encode committed alongside
+   those notes, media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4
+   (854x480, 30fps), over its 38-43s and 46-51s windows. Absolute scale is
+   fitted to this scene's rig.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- constants */
@@ -164,7 +168,7 @@ const ENEMY_R = 0.46;
 const ARCANA = {
   vine: {
     key:'vine', name:'Bladed Vine', element:'Earth', category:'Basic', subtype:'Melee',
-    color:0xa9d84a, css:'#a9d84a', beats:3,
+    color:0xb9bb8a, css:'#c2c48f', beats:3,
     meta:'3 casts · 3 hits per combo', metaEnh:'3 casts · 5 hits per combo',
     expected:      [{d:7,l:'7'},{d:7,l:'7'},{d:15,l:'15',big:true}],
     expectedEnh:   [{d:7,l:'7'},{d:7,l:'7'},{d:9,l:'9'},{d:9,l:'9'},{d:9,l:'9'}],
@@ -172,7 +176,7 @@ const ARCANA = {
   },
   spark: {
     key:'spark', name:'Spark Contact', element:'Lightning', category:'Basic', subtype:'Melee',
-    color:0xffd94a, css:'#ffd94a', beats:4,
+    color:0xe6cc01, css:'#e8d43a', beats:4,
     meta:'4 casts · 5 hits per combo', metaEnh:'4 casts · 5 hits per combo (final arc shocks)',
     expected:      [{d:6,l:'6'},{d:7,l:'7'},{d:8,l:'8'},{d:9,l:'9'},{d:10,l:'10 arc',big:true}],
     expectedEnh:   [{d:6,l:'6'},{d:7,l:'7'},{d:8,l:'8'},{d:9,l:'9'},{d:10,l:'10 arc + shock',big:true,shock:true}],
@@ -191,7 +195,7 @@ scene.background = new THREE.Color(0x0b0f12);
 scene.fog = new THREE.Fog(0x0b0f12, 26, 46);
 
 const camera = new THREE.PerspectiveCamera(46, innerWidth/innerHeight, 0.1, 160);
-const CAM_OFFSET = new THREE.Vector3(0, 17.5, 12.5);
+const CAM_OFFSET = new THREE.Vector3(0, 13.5, 9.6);
 
 scene.add(new THREE.HemisphereLight(0xbcd8e8, 0x1b2418, 0.85));
 const key = new THREE.DirectionalLight(0xfff0d0, 1.15);
@@ -263,7 +267,7 @@ const shadow = new THREE.Mesh(
 shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.03; scene.add(shadow);
 
 const pstate = {
-  pos:new THREE.Vector3(0, 0, 4),
+  pos:new THREE.Vector3(0, 0, 3),
   facing:Math.PI,
   lunge:new THREE.Vector3(),
   lean:0,
@@ -300,12 +304,14 @@ function makeEnemy(x, z) {
 function layoutEnemies() {
   for (const e of enemies) { scene.remove(e.group); }
   enemies.length = 0;
-  makeEnemy(0, -3.2);
-  makeEnemy(-3.4, -4.6);
-  makeEnemy(3.4, -4.6);
-  makeEnemy(-6.2, -1.0);
-  makeEnemy(6.2, -1.0);
-  makeEnemy(0, -8.4);
+  // spaced for the measured reach: the close cluster sits inside the beat-1
+  // whip, the back post is only reachable by the finisher bundle
+  makeEnemy(0, -0.6);
+  makeEnemy(-2.4, -1.7);
+  makeEnemy(2.4, -1.7);
+  makeEnemy(-4.6, 0.7);
+  makeEnemy(4.6, 0.7);
+  makeEnemy(0, -4.2);
 }
 layoutEnemies();
 
@@ -319,7 +325,9 @@ const thornGeo = new THREE.ConeGeometry(1, 1, 5);
 thornGeo.translate(0, 0.5, 0);
 const leafGeo = new THREE.SphereGeometry(1, 6, 4);
 
-const VINE_BODY = 0x6f9c2c, VINE_TIP = 0xc4e46b, THORN = 0x415f1c, LEAF = 0x8cc23a;
+// sampled off the 480p showcase: the vine is a muted olive/khaki, not a
+// saturated lime (frame 38+2.97s, RGB cluster #777858 / #878767 / #979777)
+const VINE_BODY = 0x8a8c62, VINE_TIP = 0xb9bb8a, THORN = 0x5d5f3c, LEAF = 0x9a9c6e;
 const UP = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3();
 
@@ -468,7 +476,9 @@ function spawnFlash(pos, color, size, life) {
   const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.95,
     blending:THREE.AdditiveBlending, depthWrite:false });
   const m = new THREE.Mesh(flashGeo, mat);
-  m.position.copy(pos); scene.add(m);
+  m.position.copy(pos);
+  m.scale.set(size * 0.35, size * 0.245, size * 0.35);   // frame-zero pose
+  scene.add(m);
   addEffect({ t:0, update(dt) {
     this.t += dt; const u = this.t / life;
     if (u >= 1) { scene.remove(m); mat.dispose(); return false; }
@@ -479,13 +489,49 @@ function spawnFlash(pos, color, size, life) {
   }});
 }
 
+/* white four-point impact sparkle ------------------------------------------
+   Every landed hit in the showcase pops the same white star with two long
+   thin crossed rays and a bright core, regardless of the arcana's element. */
+const rayGeo = new THREE.PlaneGeometry(1, 1);
+const coreGeo = new THREE.CircleGeometry(1, 12);
+function spawnStar(pos, size, life) {
+  const mat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  const g = new THREE.Group();
+  const rays = [];
+  for (const rot of [0.62, -0.78]) {
+    const m = new THREE.Mesh(rayGeo, mat);
+    m.rotation.z = rot; g.add(m); rays.push(m);
+  }
+  const core = new THREE.Mesh(coreGeo, mat);
+  g.add(core);
+  g.position.copy(pos);
+  g.quaternion.copy(camera.quaternion);
+  for (const r of rays) r.scale.set(0.0001, size * 0.05, 1);   // frame-zero pose
+  core.scale.setScalar(0.0001);
+  scene.add(g);
+  addEffect({ t:0, update(dt) {
+    this.t += dt; const u = this.t / life;
+    if (u >= 1) { scene.remove(g); mat.dispose(); return false; }
+    g.quaternion.copy(camera.quaternion);            // billboard, sprite-style
+    const pop = u < 0.28 ? u / 0.28 : 1;
+    const fade = u < 0.28 ? 1 : 1 - (u - 0.28) / 0.72;
+    for (const r of rays) r.scale.set(size * 2.9 * pop, size * 0.1 * (0.5 + fade), 1);
+    core.scale.setScalar(size * 0.3 * pop * (0.6 + fade * 0.4));
+    mat.opacity = fade * 0.9;
+    return true;
+  }});
+}
+
 /* impact ring on the ground ------------------------------------------------ */
 const ringGeo = new THREE.RingGeometry(0.72, 1, 28);
 function spawnRing(pos, color, size, life) {
   const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.8,
     blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
   const m = new THREE.Mesh(ringGeo, mat);
-  m.rotation.x = -Math.PI/2; m.position.copy(pos); m.position.y = 0.06; scene.add(m);
+  m.rotation.x = -Math.PI/2; m.position.copy(pos); m.position.y = 0.06;
+  m.scale.setScalar(size * 0.25);                        // frame-zero pose
+  scene.add(m);
   addEffect({ t:0, update(dt) {
     this.t += dt; const u = this.t / life;
     if (u >= 1) { scene.remove(m); mat.dispose(); return false; }
@@ -569,8 +615,12 @@ function updateShockTags() {
 /*  Knockback from the wiki row: 6, 12, 8                                    */
 /* ======================================================================== */
 
-const WHIP_REACH = 5.6;      // "rather long range for a basic arcana"
-const BUNDLE_REACH = 7.6;    // "the footprint is longer and denser"
+// Measured off the showcase: the beat-1 whip tip sits ~58px from the caster
+// and the finisher strands reach ~125px, against a ~30px-wide caster sprite.
+// That 1 : 2.15 ratio is the faithful part; the absolute scale is fitted to
+// this scene's rig.
+const WHIP_REACH = 3.0;
+const BUNDLE_REACH = 5.6;
 
 function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
 function easeOutQuart(x) { return 1 - Math.pow(1 - x, 4); }
@@ -583,7 +633,7 @@ function spawnVineWhip({ root, angle, from, to, dmg, kb, life, event }) {
   const s = strands[0];
   const hitSet = new Set();
   return addEffect({
-    t:0,
+    t:0, prevAng:null,
     update(dt) {
       this.t += dt;
       const u = this.t / life;
@@ -607,19 +657,31 @@ function spawnVineWhip({ root, angle, from, to, dmg, kb, life, event }) {
       s.build(0.062);
       s.setOpacity(retract);
 
-      // hit window: the vine only bites while it is out and sweeping
-      if (u > 0.1 && u < 0.82) {
+      // Hit window: the vine only bites while it is out and sweeping. The test
+      // covers the whole fan swept since the previous frame, so a fast thin
+      // whip cannot tunnel past a target on a low frame rate.
+      const tipAng = angle + from + (to - from) * sweep;
+      if (this.prevAng === null) this.prevAng = angle + from;
+      if (u > 0.08 && u < 0.86) {
+        const lo = Math.min(this.prevAng, tipAng), hi = Math.max(this.prevAng, tipAng);
+        const span = hi - lo;
         for (const e of enemies) {
           if (hitSet.has(e)) continue;
-          if (!strandHits(s, e, 0.36)) continue;
+          const dx = e.pos.x - root.x, dz = e.pos.z - root.z;
+          const d = Math.hypot(dx, dz);
+          if (d < 0.15 || d > L + ENEMY_R) continue;
+          let delta = Math.atan2(dx, dz) - lo;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          const pad = Math.atan2(ENEMY_R + 0.18, d);
+          if (delta < -pad || delta > span + pad) continue;
           hitSet.add(e);
-          const dx = e.pos.x - pstate.pos.x, dz = e.pos.z - pstate.pos.z;
-          const d = Math.hypot(dx, dz) || 1;
           hitEnemy(e, dmg, kb, dx/d, dz/d);
-          spawnFlash(new THREE.Vector3(e.pos.x, 0.8, e.pos.z), 0xc4e46b, 0.5, 0.2);
+          spawnStar(new THREE.Vector3(e.pos.x, 0.95, e.pos.z), 0.3, 0.22);
           markEvent(event, true);
         }
       }
+      this.prevAng = tipAng;
       return true;
     }
   });
@@ -659,18 +721,25 @@ function spawnVineBundle({ root, angle, dmg, kb, life, event, seed }) {
         s.setOpacity(retract);
       }
 
-      if (u > 0.08 && u < 0.8) {
+      if (u > 0.06 && u < 0.86) {
         for (const e of enemies) {
           if (hitSet.has(e)) continue;
+          // closest-point-on-segment against each strand axis: exact, so a
+          // fast-extending tendril cannot skip a target between frames
+          const dx = e.pos.x - root.x, dz = e.pos.z - root.z;
           let touched = false;
-          for (const s of strands) { if (strandHits(s, e, 0.34)) { touched = true; break; } }
+          for (const off of offsets) {
+            const a2 = angle + off, ax = Math.sin(a2), az = Math.cos(a2);
+            const proj = Math.max(0, Math.min(L, dx * ax + dz * az));
+            const px = dx - ax * proj, pz = dz - az * proj;
+            const rad = ENEMY_R + 0.42;
+            if (px * px + pz * pz < rad * rad) { touched = true; break; }
+          }
           if (!touched) continue;
           hitSet.add(e);
-          const dx = e.pos.x - pstate.pos.x, dz = e.pos.z - pstate.pos.z;
           const d = Math.hypot(dx, dz) || 1;
           hitEnemy(e, dmg, kb, dx/d, dz/d, { big:dmg >= 15 });
-          spawnFlash(new THREE.Vector3(e.pos.x, 0.8, e.pos.z), 0xd8f08a, 0.62, 0.22);
-          spawnRing(new THREE.Vector3(e.pos.x, 0, e.pos.z), 0x9ccb3f, 1.0, 0.3);
+          spawnStar(new THREE.Vector3(e.pos.x, 0.95, e.pos.z), 0.44, 0.26);
           markEvent(event, true);
           hitstop = Math.max(hitstop, 0.045);
         }
@@ -678,16 +747,6 @@ function spawnVineBundle({ root, angle, dmg, kb, life, event, seed }) {
       return true;
     }
   });
-}
-
-function strandHits(s, e, pad) {
-  const r = ENEMY_R + pad;
-  for (let i = 1; i <= SEGS; i++) {
-    const p = s.pts[i];
-    const dx = p.x - e.pos.x, dz = p.z - e.pos.z;
-    if (dx*dx + dz*dz < r*r) return true;
-  }
-  return false;
 }
 
 /* ======================================================================== */
@@ -706,25 +765,38 @@ const STRIKE_HALF_WIDTH = 0.78;
 const ARC_R = 3.5;
 const ARC_HALF_ANGLE = 1.32;   // "covers more area than the preceding contact hits"
 
+/* In the showcase this is not a clean bolt: it is a dense crackling cluster
+   that clings to the caster's body and sprays a short way forward, in a
+   saturated lemon yellow (#e6cc01) with pale, near-white tips. */
+const SPARK_CORE = 0xe6cc01, SPARK_PALE = 0xf6e899;
 function spawnSparkStrike({ root, angle, dmg, kb, life, event }) {
-  const bolts = [takeBolt(), takeBolt(), takeBolt()];
+  const bolts = [];
+  for (let i = 0; i < 7; i++) { const b = takeBolt(); b.mat.color.setHex(i % 3 ? SPARK_CORE : SPARK_PALE); bolts.push(b); }
   const hitSet = new Set();
   const fx = Math.sin(angle), fz = Math.cos(angle);
+  const lx = Math.cos(angle), lz = -Math.sin(angle);
   const tip = new THREE.Vector3(root.x + fx * STRIKE_REACH, 0.85, root.z + fz * STRIKE_REACH);
-  spawnFlash(tip, 0xfff0a0, 0.7, 0.17);
-  spawnRing(new THREE.Vector3(tip.x, 0, tip.z), 0xffe680, 0.95, 0.18);
+  spawnFlash(tip, 0xfff0a0, 0.62, 0.14);
   return addEffect({
     t:0,
     update(dt) {
       this.t += dt;
       const u = this.t / life;
-      if (u >= 1) { for (const b of bolts) freeBolt(b); return false; }
-      const a = new THREE.Vector3(root.x + fx * 0.4, 0.92, root.z + fz * 0.4);
+      if (u >= 1) {
+        for (const b of bolts) { freeBolt(b); b.mat.color.setHex(0xfff3b0); }
+        return false;
+      }
+      // forward-biased spray, re-randomised every frame so it reads as crackle
       for (let i = 0; i < bolts.length; i++) {
-        const spread = (i - 1) * 0.34;
+        const spread = (Math.random() - 0.5) * 1.7;
+        const fwd = 0.15 + Math.random() * (STRIKE_REACH + 0.25);
+        const a = new THREE.Vector3(
+          root.x + fx * (0.1 + Math.random() * 0.3) + lx * (Math.random() - 0.5) * 0.5,
+          0.5 + Math.random() * 0.85,
+          root.z + fz * (0.1 + Math.random() * 0.3) + lz * (Math.random() - 0.5) * 0.5);
         const b2 = new THREE.Vector3(
-          tip.x + Math.cos(angle) * spread, 0.7 + i * 0.22, tip.z - Math.sin(angle) * spread);
-        bolts[i].draw(a, b2, 0.34, 0.085);
+          root.x + fx * fwd + lx * spread, 0.35 + Math.random() * 1.1, root.z + fz * fwd + lz * spread);
+        bolts[i].draw(a, b2, 0.3, 0.06 + Math.random() * 0.04);
         bolts[i].mat.opacity = (1 - u) * (1 - u);
       }
       if (u < 0.6) {
@@ -736,7 +808,7 @@ function spawnSparkStrike({ root, angle, dmg, kb, life, event }) {
           if (fd < -0.35 || fd > STRIKE_REACH + ENEMY_R || ld > STRIKE_HALF_WIDTH + ENEMY_R) continue;
           hitSet.add(e);
           hitEnemy(e, dmg, 10, fx, fz);
-          spawnFlash(new THREE.Vector3(e.pos.x, 0.9, e.pos.z), 0xfff6c0, 0.5, 0.16);
+          spawnStar(new THREE.Vector3(e.pos.x, 0.95, e.pos.z), 0.28, 0.2);
           markEvent(event, true);
         }
       }
@@ -759,24 +831,42 @@ function spawnSparkArc({ root, angle, dmg, shock, life, event }) {
   holder.add(spin);
   scene.add(holder);
 
-  const arcGeo = new THREE.RingGeometry(1.55, ARC_R, seg, 1, -ARC_HALF_ANGLE, ARC_HALF_ANGLE * 2);
-  const arcMat = new THREE.MeshBasicMaterial({ color: shock ? 0xbde9ff : 0xffe680, transparent:true,
-    opacity:0.2, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  // The clip shows a ragged mass of electricity filling a broad forward wedge,
+  // not a clean geometric band, so the sector is only a faint haze under a
+  // dense spray of jagged strands.
+  const arcGeo = new THREE.RingGeometry(0.5, ARC_R, seg, 4, -ARC_HALF_ANGLE, ARC_HALF_ANGLE * 2);
+  // Additive blending treats black as transparent, so painting the rim and the
+  // angular edges black gives the wash a soft falloff instead of the hard
+  // sector outline the source clearly does not have.
+  {
+    const pos = arcGeo.attributes.position;
+    const base = new THREE.Color(shock ? 0xbde9ff : SPARK_PALE);
+    const col = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i);
+      const r = Math.hypot(x, y);
+      const th = Math.abs(Math.atan2(y, x));
+      const radial = 1 - clamp01((r - 0.5) / (ARC_R - 0.5));
+      const angular = 1 - clamp01((th - ARC_HALF_ANGLE * 0.35) / (ARC_HALF_ANGLE * 0.65));
+      const k = radial * radial * angular;
+      col[i * 3] = base.r * k; col[i * 3 + 1] = base.g * k; col[i * 3 + 2] = base.b * k;
+    }
+    arcGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+  const arcMat = new THREE.MeshBasicMaterial({ vertexColors:true, transparent:true,
+    opacity:0.55, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
   const mesh = new THREE.Mesh(arcGeo, arcMat);
   mesh.rotation.x = -Math.PI/2; mesh.position.y = 0.09;
+  mesh.scale.set(0.28, 0.28, 1);                         // frame-zero pose
   spin.add(mesh);
 
-  const edgeGeo = new THREE.RingGeometry(ARC_R - 0.34, ARC_R, seg, 1, -ARC_HALF_ANGLE, ARC_HALF_ANGLE * 2);
-  const edgeMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.9,
-    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
-  const edge = new THREE.Mesh(edgeGeo, edgeMat);
-  edge.rotation.x = -Math.PI/2; edge.position.y = 0.11;
-  spin.add(edge);
-
-  const bolts = [takeBolt(), takeBolt(), takeBolt(), takeBolt(), takeBolt()];
-  for (const b of bolts) b.mat.color.setHex(shock ? 0xcdf1ff : 0xfff3b0);
+  const bolts = [];
+  for (let i = 0; i < 16; i++) {
+    const b = takeBolt();
+    b.mat.color.setHex(shock ? (i % 3 ? 0x9fe0ff : 0xdcf4ff) : (i % 3 ? SPARK_CORE : SPARK_PALE));
+    bolts.push(b);
+  }
   const hitSet = new Set();
-  spawnRing(new THREE.Vector3(root.x, 0, root.z), shock ? 0x9fe0ff : 0xffe680, 2.4, 0.34);
 
   return addEffect({
     t:0,
@@ -785,26 +875,28 @@ function spawnSparkArc({ root, angle, dmg, shock, life, event }) {
       const u = this.t / life;
       if (u >= 1) {
         scene.remove(holder);
-        arcGeo.dispose(); arcMat.dispose(); edgeGeo.dispose(); edgeMat.dispose();
+        arcGeo.dispose(); arcMat.dispose();
         for (const b of bolts) { freeBolt(b); b.mat.color.setHex(0xfff3b0); }
         return false;
       }
       const grow = easeOutQuart(clamp01(u / 0.3));
       const s = 0.28 + grow * 0.9;
-      mesh.scale.set(s, s, 1); edge.scale.set(s, s, 1);
-      arcMat.opacity = 0.24 * (1 - u);
-      edgeMat.opacity = 0.9 * (1 - u) * (1 - u);
+      mesh.scale.set(s, s, 1);
+      arcMat.opacity = 0.6 * (1 - u);
 
-      // crackle along the leading edge
+      // dense forward spray: strands at random angles and depths inside the
+      // wedge, redrawn every frame
       for (let i = 0; i < bolts.length; i++) {
-        const th = -ARC_HALF_ANGLE + (ARC_HALF_ANGLE * 2) * ((i + 0.5) / bolts.length);
+        const th = (Math.random() * 2 - 1) * ARC_HALF_ANGLE;
         const a1 = angle + th;
-        const inner = new THREE.Vector3(root.x + Math.sin(a1) * 0.7 * s, 0.35,
-                                        root.z + Math.cos(a1) * 0.7 * s);
-        const outer = new THREE.Vector3(root.x + Math.sin(a1) * ARC_R * s, 0.55,
-                                        root.z + Math.cos(a1) * ARC_R * s);
-        bolts[i].draw(inner, outer, 0.42, 0.07);
-        bolts[i].mat.opacity = (1 - u) * 0.95;
+        const r0 = (0.2 + Math.random() * 0.9) * s;
+        const r1 = (1.0 + Math.random() * (ARC_R - 1.0)) * s;
+        const inner = new THREE.Vector3(root.x + Math.sin(a1) * r0, 0.25 + Math.random() * 0.7,
+                                        root.z + Math.cos(a1) * r0);
+        const outer = new THREE.Vector3(root.x + Math.sin(a1) * r1, 0.25 + Math.random() * 0.9,
+                                        root.z + Math.cos(a1) * r1);
+        bolts[i].draw(inner, outer, 0.5, 0.055 + Math.random() * 0.05);
+        bolts[i].mat.opacity = (1 - u) * (0.7 + Math.random() * 0.3);
       }
 
       if (u < 0.55) {
@@ -821,7 +913,7 @@ function spawnSparkArc({ root, angle, dmg, shock, life, event }) {
           hitSet.add(e);
           const n = d || 1;
           hitEnemy(e, dmg, 10, dx/n, dz/n, { big:true, shock });
-          spawnFlash(new THREE.Vector3(e.pos.x, 0.9, e.pos.z), shock ? 0xbde9ff : 0xfff6c0, 0.7, 0.22);
+          spawnStar(new THREE.Vector3(e.pos.x, 0.95, e.pos.z), 0.46, 0.26);
           markEvent(event, true);
           hitstop = Math.max(hitstop, 0.05);
         }
@@ -839,12 +931,14 @@ function spawnSparkArc({ root, angle, dmg, shock, life, event }) {
    Bladed Vine reads as a deliberate whipping string; Spark Contact is
    "exceptionally fast" and steps the caster forward on every beat.          */
 const TIMING = {
+  // Frame-counted off the showcase clip: successive Bladed Vine beats land
+  // ~9 frames apart at 30fps, and each vine is on screen for ~5 frames.
   vine: [
-    { windup:0.10, active:0.30, recover:0.13, step:0 },
-    { windup:0.10, active:0.30, recover:0.13, step:0 },
-    { windup:0.13, active:0.40, recover:0.30, step:0 },   // base finisher
+    { windup:0.06, active:0.17, recover:0.07, step:0 },
+    { windup:0.06, active:0.17, recover:0.07, step:0 },
+    { windup:0.07, active:0.19, recover:0.22, step:0 },   // base finisher
   ],
-  vineEnhancedFinal: { windup:0.13, active:0.66, recover:0.30, step:0 },
+  vineEnhancedFinal: { windup:0.07, active:0.46, recover:0.22, step:0 },
   spark: [
     { windup:0.045, active:0.055, recover:0.075, step:0.62 },
     { windup:0.045, active:0.055, recover:0.075, step:0.62 },
@@ -899,29 +993,26 @@ function fireBeat(i) {
       const ev = logEvent(7, '7');
       spawnVineWhip({
         root:handWorld.clone().setY(0.95), angle:ang,
-        from: 0.66 * dir, to:-0.66 * dir,
-        dmg:7, kb:(i === 0 ? 6 : 12), life:beatTiming(i).active + 0.14, event:ev,
+        from: 0.79 * dir, to:-0.79 * dir,
+        dmg:7, kb:(i === 0 ? 6 : 12), life:beatTiming(i).active + 0.06, event:ev,
       });
       castGlow.position.copy((i % 2 === 0 ? handR : handL).position);
-      castGlow.material.color.setHex(0xa9d84a);
-      castGlow.material.opacity = 0.9;
-      spawnFlash(handWorld, 0x9ccb3f, 0.34, 0.16);
+      castGlow.material.color.setHex(0xb9bb8a);
+      castGlow.material.opacity = 0.55;
     } else if (!ui.enhanced) {
       // normal beat 3: three visible strands, ONE combined 15-damage event
       const ev = logEvent(15, '15', { big:true });
-      spawnVineBundle({ root, angle:ang, dmg:15, kb:8, life:0.52, event:ev, seed:0.4 });
+      spawnVineBundle({ root, angle:ang, dmg:15, kb:8, life:0.26, event:ev, seed:0.4 });
       castGlow.position.set(0, 0.95, 0.3);
-      castGlow.material.opacity = 1;
-      spawnFlash(new THREE.Vector3(root.x + Math.sin(ang), 0.7, root.z + Math.cos(ang)), 0xc4e46b, 0.6, 0.22);
+      castGlow.material.opacity = 0.7;
     } else {
       // enhanced beat 3: three tendril-bundle emissions, 9 damage each,
       // three temporally separate hit events
       for (let k = 0; k < 3; k++) {
         const ev = logEvent(9, '9');
-        scheduled.push({ t:k * 0.185, fn:() => {
+        scheduled.push({ t:k * 0.14, fn:() => {
           const r = new THREE.Vector3(pstate.pos.x, 0.95, pstate.pos.z);
-          spawnVineBundle({ root:r, angle:ang, dmg:9, kb:8, life:0.44, event:ev, seed:k * 1.7 });
-          spawnFlash(new THREE.Vector3(r.x + Math.sin(ang), 0.7, r.z + Math.cos(ang)), 0xc4e46b, 0.5, 0.2);
+          spawnVineBundle({ root:r, angle:ang, dmg:9, kb:8, life:0.24, event:ev, seed:k * 1.7 });
         }});
       }
       castGlow.position.set(0, 0.95, 0.3);
@@ -1184,7 +1275,7 @@ tabSpark.onclick = () => setArcana('spark');
 tabEnh.onclick = () => setEnhanced(!ui.enhanced);
 document.getElementById('tabReset').onclick = () => {
   for (const e of enemies) { e.hp = e.maxHp; e.pos.copy(e.anchor); e.vel.set(0,0,0); e.shock = 0; }
-  pstate.pos.set(0, 0, 4); pstate.facing = Math.PI;
+  pstate.pos.set(0, 0, 3); pstate.facing = Math.PI;
   combo.beat = -1; combo.phase = 'idle'; resetLedger();
 };
 
@@ -1249,6 +1340,18 @@ Full combo may be continued by holding attack</pre>
 <li>Those three sets can produce three separate 9-damage hits.</li>
 <li>The full enhanced combo therefore has five damage events.</li>
 </ol>
+<h3>Frame check against the clip</h3>
+<p>Counted off <code>media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4</code> at 30fps
+over the 38–43s window:</p>
+<ul>
+<li>Successive beats land about 9 frames apart (~0.30s); each vine is on screen for roughly 5 frames.</li>
+<li>Beats 1 and 2 are a single thin vine that lashes through about 90°, starting low and sweeping up
+across the front — the whip motion, not a straight thrust.</li>
+<li>The finisher throws three long strands forward together, slightly fanned and wavy, reaching about
+2.15× the whip's tip distance.</li>
+<li>The vine is a muted olive/khaki (sampled #777858 → #979777), not a saturated lime.</li>
+<li>Every landed hit pops the same white four-point sparkle with two long crossed rays.</li>
+</ul>
 <h3>Wiki row</h3>
 <p>Earth · Basic · Melee — Damage 7, 15 · Hit Count 5 per combo · Knockback 6, 12, 8 · Cooldown 0 ·
 Cost 12/50 · Pool 3. Enhanced: Damage 7, 9.</p>
@@ -1302,6 +1405,19 @@ No change to early beats</pre>
 <li>Enhancement does not modify beats 1–3.</li>
 <li>Enhancement adds shock specifically to the final arc.</li>
 </ol>
+<h3>Frame check against the clip</h3>
+<p>Counted off the same encode over the 46–51s window:</p>
+<ul>
+<li>Beats land about 5–6 frames apart (~0.18s), confirming the "exceptionally fast" note.</li>
+<li>Each strike is a dense crackling cluster that clings to the caster and sprays about a tile
+forward — not a clean bolt.</li>
+<li>The fourth beat fills a broad forward wedge with a ragged mass of strands roughly three times the
+depth of a single strike. There is no clean geometric edge to it.</li>
+<li>The lightning is a saturated lemon yellow (core #e6cc01) with pale, near-white tips (#f6e899).</li>
+<li>The white damage numbers step 6 → 7 → 8 → 9 with the 10 arriving alongside the last strike, exactly
+as documented. The clip also shows occasional red badge numbers that are not part of the documented
+ledger, so they are not reproduced here.</li>
+</ul>
 <h3>Wiki row</h3>
 <p>Lightning · Basic · Melee — Damage 6, 7, 8, 9, 10 · Hit Count 5 per combo · Knockback 10 ·
 Cooldown 0 · Cost 12/50 · Pool 3. Enhanced: the final 10-damage arc applies level-1 shock.</p>
@@ -1316,9 +1432,12 @@ function renderInfo() {
 <h3>About this reconstruction</h3>
 <p class="note">Built from the PR&nbsp;122 source-analysis entry
 (<code>wizard_of_legend_arcana_source_reference.md</code> §8 / §10, the Gate&nbsp;1 video inventory
-window, and the Gate&nbsp;2 wiki layer). Damage values, hit counts, beat counts, carrier structure
-and the enhancement rewrite are exactly as recorded there. Windup / active / recovery frame timings
-are authored for this demo, because the entries explicitly do not claim frame data yet.</p>`;
+window, and the Gate&nbsp;2 wiki layer), then checked frame by frame against the showcase encode
+committed in this repo. Damage values, hit counts, beat counts, carrier structure and the
+enhancement rewrite come from the entries; beat cadence, sweep arc, reach ratio, palette and impact
+sparkle were measured off the clip. The absolute scale is fitted to this scene's rig, and this is a
+3D reconstruction of a 2D pixel-art original, so silhouette and lighting are necessarily
+interpretations rather than copies.</p>`;
 }
 renderInfo();
 
