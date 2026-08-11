@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Air Dash Arcana Demo — Gust Burst &amp; Razor Burst</title>
+<style>
+:root{
+  color-scheme:dark;
+  --wind:#e8f4f4;--wind-enhanced:#54fcfc;--pop-red:#c8232b;
+  --stone:#50504a;--stone-alt:#464646;--grout:#3a3a38;
+  --text:#eef6ff;--muted:#9fb0c4;--line:rgba(255,255,255,.16);
+  --panel:rgba(8,12,19,.82);--card:#ded3bd;
+  --pad:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#05070d;color:var(--text);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;overscroll-behavior:none}
+#stage{position:fixed;inset:0;touch-action:none;user-select:none}
+#arena{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+
+/* ---- top HUD, mirroring the source video's showcase overlay ---- */
+.top{position:absolute;top:0;left:0;right:0;padding:var(--pad);pointer-events:none;
+  display:grid;gap:7px;justify-items:start}
+.hud{display:flex;gap:9px;align-items:flex-start;width:100%}
+.bars{display:grid;gap:3px;min-width:min(44vw,180px)}
+.bar{position:relative;height:11px;border:2px solid #14161c;background:#221016;overflow:hidden}
+.bar>i{display:block;height:100%;background:#c8232b;transition:width .18s}
+.bar.mana{height:8px;background:#0d1a2c}
+.bar.mana>i{background:#2f7fd6}
+.bar span{position:absolute;inset:0;display:grid;place-items:center;font-size:9px;letter-spacing:.06em;text-shadow:1px 1px 0 #000}
+.cardslot{width:46px;height:62px;border:2px solid #6d6350;border-radius:5px;background:var(--card);
+  display:grid;place-items:center;overflow:hidden;box-shadow:0 3px 0 #0008;flex:none}
+.cardslot img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+.arcana-name{font-weight:900;font-size:clamp(19px,5.6vw,30px);line-height:.94;letter-spacing:.03em;
+  color:#b8ecec;text-shadow:2px 2px 0 #0c1418;white-space:pre-line;padding-top:2px}
+.arcana-name.enhanced{color:var(--wind-enhanced);text-shadow:0 0 10px #54fcfc88,2px 2px 0 #0c1418}
+
+/* ---- payload readout, kept below the HUD so nothing overlaps ---- */
+.payload{display:grid;gap:5px;justify-items:start;text-align:left;width:100%}
+.pips{display:flex;gap:5px}
+.pip{width:15px;height:15px;border:2px solid #7f8c99;border-radius:50%;background:#0b1016;position:relative;overflow:hidden}
+.pip.full{background:var(--wind);border-color:var(--wind);box-shadow:0 0 8px #e8f4f480}
+.pip>i{position:absolute;left:0;right:0;bottom:0;background:#55707f}
+.readout{font-size:10px;line-height:1.5;color:var(--muted);letter-spacing:.04em;background:var(--panel);
+  border:1px solid var(--line);border-radius:7px;padding:4px 8px}
+.readout b{color:var(--wind)}
+.ledger{font-size:10px;color:#cfe3ea;display:flex;gap:4px;flex-wrap:wrap}
+.ledger div{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+
+/* ---- controls ---- */
+.controls{position:absolute;left:0;right:0;bottom:0;padding:var(--pad);display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+#stick{width:clamp(108px,30vw,146px);aspect-ratio:1;border-radius:50%;border:2px solid var(--line);
+  background:radial-gradient(circle,rgba(255,255,255,.09),rgba(255,255,255,.02));position:relative;touch-action:none}
+#stick i{position:absolute;left:50%;top:50%;width:42%;aspect-ratio:1;border-radius:50%;translate:-50% -50%;
+  background:rgba(232,244,244,.55);border:2px solid rgba(255,255,255,.5)}
+.right-pad{display:grid;gap:8px;justify-items:end}
+.btn{border:1px solid var(--line);background:rgba(12,18,28,.8);color:var(--text);border-radius:12px;
+  font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;padding:9px 12px;cursor:pointer;touch-action:manipulation}
+.btn[aria-pressed="true"]{background:rgba(84,252,252,.2);border-color:#54fcfc88;color:#d6ffff}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#dash{width:clamp(84px,23vw,112px);aspect-ratio:1;border-radius:50%;font-size:13px;
+  background:radial-gradient(circle at 40% 34%,rgba(232,244,244,.32),rgba(12,18,28,.9));border:2px solid rgba(232,244,244,.5)}
+#dash:disabled{opacity:.42;border-color:var(--line)}
+#dash .sub{display:block;font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+
+/* ---- source clip sheet ---- */
+.sheet{position:absolute;inset:auto 0 0 0;background:#070b12f2;border-top:1px solid var(--line);
+  border-radius:16px 16px 0 0;padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  transform:translateY(101%);transition:transform .22s ease;display:grid;gap:9px;max-height:82dvh;overflow:auto}
+.sheet[data-open="true"]{transform:none}
+.sheet video{width:100%;border-radius:9px;background:#000;display:block}
+.sheet h2{margin:0;font-size:13px;letter-spacing:.08em;color:var(--wind)}
+.sheet p{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
+.sheet dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px}
+.sheet dt{color:var(--wind);letter-spacing:.05em}
+.sheet dd{margin:0;color:#cfe0ee}
+.sheet .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.sheet a{color:var(--wind);font-size:11px}
+@media (orientation:landscape) and (max-height:460px){
+  .arcana-name{font-size:20px}
+  .cardslot{width:38px;height:52px}
+}
+@media (max-width:400px){
+  .btn{padding:8px 9px;font-size:10px;letter-spacing:.03em}
+  .bars{min-width:min(40vw,150px)}
+}
+</style>
+</head>
+<body>
+<main id="stage">
+  <canvas id="arena"></canvas>
+
+  <div class="top">
+    <div class="hud">
+      <div class="cardslot"><img id="card-art" alt="" src="../media/wizard-of-legend/posters/gust-burst.webp"></div>
+      <div class="bars">
+        <div class="bar"><i style="width:100%"></i><span>500/500</span></div>
+        <div class="bar mana"><i style="width:74%"></i></div>
+      </div>
+      <div class="arcana-name" id="arcana-name">GUST
+BURST</div>
+    </div>
+    <div class="payload">
+      <div class="pips" id="pips"></div>
+      <div class="readout" id="readout"></div>
+      <div class="ledger" id="ledger"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div id="stick"><i></i></div>
+    <div class="right-pad">
+      <div class="chips">
+        <button class="btn" id="pick-gust" aria-pressed="true">GUST</button>
+        <button class="btn" id="pick-razor" aria-pressed="false">RAZOR</button>
+      </div>
+      <div class="chips">
+        <button class="btn" id="toggle-enhanced" aria-pressed="false">ENHANCED</button>
+        <button class="btn" id="reset">RESET</button>
+        <button class="btn" id="open-source">SOURCE</button>
+      </div>
+      <button class="btn" id="dash">DASH<span class="sub" id="dash-sub">READY</span></button>
+    </div>
+  </div>
+
+  <section class="sheet" id="sheet" data-open="false" aria-label="Source clip and specification">
+    <div class="row">
+      <h2 id="sheet-title">GUST BURST · 1:54.7–2:04.7</h2>
+      <button class="btn" id="close-source">CLOSE</button>
+    </div>
+    <video id="clip" playsinline muted preload="metadata" src="../media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4"></video>
+    <div class="row">
+      <button class="btn" id="clip-play">▶ PLAY CLIP</button>
+      <button class="btn" id="clip-replay">↻ REPLAY</button>
+      <button class="btn" id="clip-sound" aria-pressed="false">SOUND</button>
+    </div>
+    <p id="sheet-note"></p>
+    <dl id="sheet-spec"></dl>
+    <p><a href="../index.html">← Launcher</a> · <a href="../archive/wizard-of-legend/source-notes/02-gust-razor.md">Source analysis 02-gust-razor.md</a> · <a href="wizard-of-legend-arcana-checklist.html">Arcana checklist</a></p>
+  </section>
+</main>
+
+<script type="module">
+import {
+  GUST_BURST_SOURCE,RAZOR_BURST_SOURCE,createAirDashDemo,razorTickSchedule,
+} from '../src/wol-air-dash-demo.js';
+
+const TAU=Math.PI*2;
+const demo=createAirDashDemo();
+const canvas=document.getElementById('arena');
+const ctx=canvas.getContext('2d');
+
+const SHEET_COPY={
+  'GUST-BURST':{
+    clipLabel:'1:54.7–2:04.7',
+    note:'The showcase dashes, drops a compact burst at the dash origin that gathers everything nearby into one group, then a separate draught carries that group to where the caster landed. The enhanced demonstration keeps both events and adds one more burst at the destination.',
+    spec:[
+      ['MOTION','Ordinary basic dash, current input direction'],
+      ['AMMO','2 stored charges · 3.5s recharge each'],
+      ['ORIGIN','5 damage · gathers targets inward'],
+      ['DRAUGHT','10 damage · transports the group to the endpoint'],
+      ['ENHANCED','+1 separate 5 damage burst at the endpoint'],
+    ],
+  },
+  'RAZOR-BURST':{
+    clipLabel:'2:04.8–2:12.3',
+    note:'The dash leaves one small cutting vortex behind in the space the caster just left. It stays put in world space, pulls targets to its centre, slows them, and strikes repeatedly until it fades. The enhanced demonstration changes nothing except how long the same vortex lives.',
+    spec:[
+      ['MOTION','Ordinary basic dash, current input direction'],
+      ['VORTEX','One stationary wake vortex · does not follow, does not travel'],
+      ['DAMAGE','5 hits × 4 damage over ~1s'],
+      ['CONTROL','Pull inward + slow'],
+      ['ENHANCED','Same vortex · ~1.5s · 7 hits × 4'],
+      ['COOLDOWN','5.12 seconds'],
+    ],
+  },
+};
+
+/* ------------------------------------------------------------------ view */
+let tile=32,viewWidth=0,viewHeight=0,camX=0,camZ=0;
+function resize(){
+  const ratio=Math.min(window.devicePixelRatio||1,2);
+  viewWidth=canvas.clientWidth;viewHeight=canvas.clientHeight;
+  canvas.width=Math.round(viewWidth*ratio);canvas.height=Math.round(viewHeight*ratio);
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  ctx.imageSmoothingEnabled=false;
+  // Zoom to roughly the showcase's tile size on the short axis, so a phone
+  // sees about the same amount of room as the source footage does.
+  tile=Math.max(22,Math.min(56,Math.min(viewWidth,viewHeight)/11.5));
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+const toScreenX=x=>(x-camX)*tile+viewWidth/2;
+const toScreenY=z=>(z-camZ)*tile+viewHeight/2;
+
+/* ------------------------------------------ presentation-only particles */
+const popups=[],slashes=[],trail=[];
+let consumed=0,trailClock=0;
+function pushPopup(x,z,text,style){popups.push({x,z,text,style,age:0,life:.8,drift:(Math.random()-.5)*.4});}
+
+function drainEvents(){
+  for(;consumed<demo.events.length;consumed++){
+    const event=demo.events[consumed];
+    if(!('damage' in event))continue;
+    // The showcase's enhanced demonstrations put their numbers on a red burst.
+    const style=demo.state.enhanced?'crit':'plain';
+    for(const id of event.targetIds||[]){
+      const enemy=demo.state.enemies.find(candidate=>candidate.id===id);
+      if(enemy)pushPopup(enemy.x,enemy.z-.4,String(event.damage),style);
+    }
+    if(event.type==='vortex-tick')for(let index=0;index<3;index++)
+      slashes.push({x:event.x,z:event.z,angle:Math.random()*TAU,age:0,life:.16});
+  }
+}
+
+/* ------------------------------------------------------------- drawing */
+function drawFloor(){
+  const left=Math.floor(camX-viewWidth/2/tile)-1,right=Math.ceil(camX+viewWidth/2/tile)+1;
+  const top=Math.floor(camZ-viewHeight/2/tile)-1,bottom=Math.ceil(camZ+viewHeight/2/tile)+1;
+  const size=Math.ceil(tile);
+  for(let x=left;x<=right;x++)for(let z=top;z<=bottom;z++){
+    const inside=Math.abs(x+.5)<demo.arena.halfWidth&&Math.abs(z+.5)<demo.arena.halfDepth;
+    const shade=((x*7+z*13)%3+3)%3;
+    const px=Math.round(toScreenX(x)),py=Math.round(toScreenY(z));
+    ctx.fillStyle=inside?(shade===0?'#54544d':shade===1?'#4b4b46':'#585851'):'#2a2b31';
+    ctx.fillRect(px,py,size,size);
+    ctx.fillStyle='rgba(24,25,28,.55)';
+    ctx.fillRect(px,py,size,1);
+    ctx.fillRect(px,py,1,size);
+    if(inside){                                    // flecks, so the stone reads as stone
+      const speck=((x*31+z*17)%5+5)%5;
+      if(speck===0){ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(px+size*.6,py+size*.35,Math.max(1,size*.12),Math.max(1,size*.12));}
+      if(speck===3){ctx.fillStyle='rgba(0,0,0,.14)';ctx.fillRect(px+size*.22,py+size*.66,Math.max(1,size*.16),Math.max(1,size*.1));}
+    }else{
+      ctx.fillStyle='rgba(255,255,255,.04)';
+      ctx.fillRect(px,py+size*.5,size,1);
+    }
+  }
+}
+
+function drawDummy(enemy){
+  const x=toScreenX(enemy.x),y=toScreenY(enemy.z),unit=tile/32;
+  ctx.save();ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,.32)';
+  ctx.beginPath();ctx.ellipse(0,4*unit,9*unit,4*unit,0,0,TAU);ctx.fill();
+  const flashing=enemy.flash>0;
+  ctx.fillStyle=flashing?'#ffffff':'#8c8c8c';
+  ctx.fillRect(-7*unit,1*unit,14*unit,5*unit);              // stone base
+  ctx.fillStyle=flashing?'#ffffff':'#b5813f';
+  ctx.fillRect(-2.5*unit,-16*unit,5*unit,18*unit);          // post
+  ctx.fillRect(-11*unit,-11*unit,22*unit,4.5*unit);         // arms
+  ctx.fillStyle=flashing?'#ffffff':'#cd9a55';
+  ctx.fillRect(-4.5*unit,-22*unit,9*unit,7*unit);           // head
+  if(!flashing){
+    ctx.fillStyle='#7d5323';
+    ctx.fillRect(-2.5*unit,-9*unit,5*unit,1.5*unit);
+    ctx.fillRect(-11*unit,-11*unit,3*unit,4.5*unit);
+    ctx.fillRect(8*unit,-11*unit,3*unit,4.5*unit);
+  }
+  if(enemy.slowRemaining>0){                                 // slow status ring
+    ctx.strokeStyle='rgba(200,232,240,.55)';ctx.lineWidth=Math.max(1,unit);
+    ctx.beginPath();ctx.ellipse(0,4*unit,10*unit,4.5*unit,0,0,TAU);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPlayer(){
+  const player=demo.state.player,unit=tile/32;
+  const x=toScreenX(player.x),y=toScreenY(player.z);
+  ctx.save();ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,.34)';
+  ctx.beginPath();ctx.ellipse(0,4*unit,7*unit,3*unit,0,0,TAU);ctx.fill();
+  const behind=player.facingX>=0?-1:1;
+  ctx.fillStyle='#c3b49b';                                                   // hood cloth, trailing behind the facing
+  ctx.fillRect(behind*8*unit,-20*unit,8*unit,7*unit);
+  ctx.fillStyle='#171717';ctx.fillRect(-4*unit,-3*unit,8*unit,7*unit);       // legs
+  ctx.fillStyle='#7a2530';ctx.fillRect(-5.5*unit,-13*unit,11*unit,11*unit);  // robe
+  ctx.fillStyle='#5c1a22';ctx.fillRect(-5.5*unit,-4.5*unit,11*unit,2.5*unit);// robe hem
+  ctx.fillStyle='#d9b58e';ctx.fillRect(-4*unit,-19*unit,8*unit,6*unit);      // head
+  ctx.fillStyle='#c3b49b';ctx.fillRect(-5*unit,-21*unit,10*unit,3*unit);     // hood brim
+  ctx.fillStyle='#241a16';                                                   // casting arm, pointing at the facing
+  ctx.fillRect((player.facingX>=0?4:-8)*unit,-11*unit,4*unit,2.5*unit);
+  ctx.restore();
+}
+
+// One pale wind crescent: the repeated building block of both Arcana's VFX.
+function crescent(x,y,radius,angle,thickness,alpha,tint,span=.85){
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+  ctx.strokeStyle=tint;ctx.globalAlpha=alpha;ctx.lineWidth=thickness;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(0,0,radius,-span,span);ctx.stroke();
+  ctx.restore();
+}
+
+// A staggered stack of crescents, which is how both Arcana draw their swirls.
+function swirl(x,y,radius,phase,alpha,tint,blades,span){
+  for(let blade=0;blade<blades;blade++){
+    const scale=1-blade*(.9/blades);
+    crescent(x,y,radius*scale,phase+blade*TAU/blades,
+      Math.max(1.6,tile*.14*scale),alpha*(1-blade*.12),tint,span);
+  }
+}
+
+function drawEffects(now){
+  // The showcase's dash leaves a pair of pale crescents flanking the caster.
+  for(const mark of trail){
+    const alpha=(1-mark.age/mark.life)*.45;
+    const x=toScreenX(mark.x),y=toScreenY(mark.z);
+    const reach=tile*(.5+mark.age*1.6);
+    crescent(x,y,reach,mark.angle+Math.PI/2,Math.max(1.4,tile*.08),alpha,GUST_BURST_SOURCE.baseTint,.5);
+    crescent(x,y,reach,mark.angle-Math.PI/2,Math.max(1.4,tile*.08),alpha,GUST_BURST_SOURCE.baseTint,.5);
+  }
+
+  for(const effect of demo.state.effects){
+    const progress=Math.min(1,effect.age/effect.life);
+    const tint=effect.enhanced?GUST_BURST_SOURCE.enhancedTint:GUST_BURST_SOURCE.baseTint;
+    const x=toScreenX(effect.x),y=toScreenY(effect.z);
+
+    if(effect.type==='gust-gather'||effect.type==='gust-endpoint'){
+      // Radial gathering: crescents sweep inward while a white core swells.
+      const radius=effect.radius*tile*(1-progress*.55);
+      swirl(x,y,radius,now*7,(1-progress)*.95,tint,3,1.15);
+      ctx.save();ctx.globalAlpha=(1-progress)*.95;ctx.fillStyle='#ffffff';
+      ctx.beginPath();ctx.arc(x,y,tile*.32*(1-progress*.35),0,TAU);ctx.fill();
+      ctx.globalAlpha=(1-progress)*.35;
+      ctx.beginPath();ctx.arc(x,y,radius*.55,0,TAU);ctx.fillStyle=tint;ctx.fill();
+      ctx.restore();
+    }
+
+    if(effect.type==='gust-draught'){
+      // Directional transport: streaks running origin → endpoint.
+      const ax=toScreenX(effect.x),ay=toScreenY(effect.z);
+      const bx=toScreenX(effect.toX),by=toScreenY(effect.toZ);
+      ctx.save();ctx.strokeStyle=tint;ctx.lineCap='round';
+      const dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy)||1;
+      const head=Math.min(1,progress*2.1);
+      for(let line=0;line<5;line++){
+        // Each streak is offset across the corridor and lags a little, so the
+        // draught reads as a body of moving air rather than five rails.
+        const offset=(line-2)*tile*.3*(1-progress*.5);
+        const nx=-dy/len*offset,ny=dx/len*offset;
+        const lag=Math.abs(line-2)*.07;
+        const front=Math.max(0,head-lag),tail=Math.max(0,front-.38);
+        ctx.globalAlpha=(1-progress)*.9*(1-Math.abs(line-2)*.16);
+        ctx.lineWidth=Math.max(1.5,tile*.08*(1-Math.abs(line-2)*.18));
+        ctx.beginPath();
+        ctx.moveTo(ax+dx*tail+nx,ay+dy*tail+ny);
+        ctx.lineTo(ax+dx*front+nx,ay+dy*front+ny);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if(effect.type==='razor-vortex'){
+      // Stationary cutting vortex: a tight spiral that tightens as it expires.
+      const radius=effect.radius*tile*(1-progress*.28);
+      ctx.save();
+      ctx.globalAlpha=(1-progress)*.22;ctx.fillStyle=tint;
+      ctx.beginPath();ctx.arc(x,y,radius*.85,0,TAU);ctx.fill();
+      ctx.restore();
+      swirl(x,y,radius,now*11,.9-progress*.4,tint,4,1.35);
+      ctx.save();ctx.globalAlpha=(1-progress)*.6;ctx.fillStyle='#ffffff';
+      ctx.beginPath();ctx.arc(x,y,tile*.16,0,TAU);ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Each vortex tick flickers thin cutting lines inside its own footprint.
+  for(const slash of slashes){
+    const alpha=1-slash.age/slash.life;
+    const x=toScreenX(slash.x),y=toScreenY(slash.z),reach=tile*RAZOR_BURST_SOURCE.radius*.9;
+    ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#ffffff';
+    ctx.lineWidth=Math.max(1,tile*.045);ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(x+Math.cos(slash.angle)*reach,y+Math.sin(slash.angle)*reach);
+    ctx.lineTo(x+Math.cos(slash.angle+2.4)*reach,y+Math.sin(slash.angle+2.4)*reach);
+    ctx.stroke();ctx.restore();
+  }
+}
+
+function drawPopups(){
+  for(const popup of popups){
+    const progress=popup.age/popup.life;
+    const x=toScreenX(popup.x)+popup.drift*tile,y=toScreenY(popup.z)-progress*tile*1.1;
+    const size=Math.max(11,tile*.46);
+    ctx.save();ctx.globalAlpha=Math.min(1,(1-progress)*2.2);
+    ctx.font=`900 ${size}px ui-monospace,monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    if(popup.style==='crit'){
+      // The enhanced demonstrations show their numbers on a red jagged burst.
+      ctx.fillStyle='#c8232b';ctx.beginPath();
+      for(let point=0;point<16;point++){
+        const angle=point/16*TAU,reach=size*(point%2?.62:1.02);
+        ctx.lineTo(x+Math.cos(angle)*reach,y+Math.sin(angle)*reach);
+      }
+      ctx.closePath();ctx.fill();
+    }
+    ctx.lineWidth=Math.max(2,size*.22);ctx.strokeStyle='#101216';
+    ctx.strokeText(popup.text,x,y);
+    ctx.fillStyle='#ffffff';ctx.fillText(popup.text,x,y);
+    ctx.restore();
+  }
+}
+
+/* -------------------------------------------------------------- overlay */
+const pipsEl=document.getElementById('pips');
+const readoutEl=document.getElementById('readout');
+const ledgerEl=document.getElementById('ledger');
+const dashButton=document.getElementById('dash');
+const dashSub=document.getElementById('dash-sub');
+const arcanaName=document.getElementById('arcana-name');
+const cardArt=document.getElementById('card-art');
+
+function refreshChrome(){
+  const spec=demo.selected==='GUST-BURST'?GUST_BURST_SOURCE:RAZOR_BURST_SOURCE;
+  arcanaName.textContent=spec.name.toUpperCase().replace(' ','\n');
+  arcanaName.classList.toggle('enhanced',demo.enhanced);
+  cardArt.src=`../media/wizard-of-legend/posters/${demo.selected.toLowerCase()}.webp`;
+  document.getElementById('pick-gust').setAttribute('aria-pressed',String(demo.selected==='GUST-BURST'));
+  document.getElementById('pick-razor').setAttribute('aria-pressed',String(demo.selected==='RAZOR-BURST'));
+  document.getElementById('toggle-enhanced').setAttribute('aria-pressed',String(demo.enhanced));
+  const copy=SHEET_COPY[demo.selected];
+  document.getElementById('sheet-title').textContent=`${spec.name.toUpperCase()} · ${copy.clipLabel}`;
+  document.getElementById('sheet-note').textContent=copy.note;
+  document.getElementById('sheet-spec').innerHTML=copy.spec
+    .map(([term,detail])=>`<dt>${term}</dt><dd>${detail}</dd>`).join('');
+  syncClip();
+}
+
+// The overlay is plain DOM, so only touch it when the rendered text changes.
+const lastHtml={pips:'',readout:'',ledger:'',dashSub:''};
+function setHtml(element,key,html){
+  if(lastHtml[key]===html)return;
+  lastHtml[key]=html;element.innerHTML=html;
+}
+
+function refreshPayload(){
+  const gust=demo.selected==='GUST-BURST';
+  let pipsHtml='',readoutHtml='';
+  if(gust){
+    const fraction=demo.state.gustCharges>=GUST_BURST_SOURCE.charges?0
+      :demo.state.gustRecharge/GUST_BURST_SOURCE.rechargeSeconds;
+    pipsHtml=Array.from({length:GUST_BURST_SOURCE.charges},(_,index)=>{
+      const full=index<demo.state.gustCharges;
+      const filling=index===demo.state.gustCharges;
+      return `<span class="pip${full?' full':''}"><i style="height:${filling?Math.round(fraction*100):0}%"></i></span>`;
+    }).join('');
+    readoutHtml=`<b>${demo.state.gustCharges}/2</b> charges · 3.5s recharge<br>origin <b>5</b> → draught <b>10</b>${demo.enhanced?' → endpoint <b>5</b>':''}`;
+  }else{
+    const ticks=razorTickSchedule(demo.enhanced);
+    const remaining=demo.state.razorCooldown;
+    pipsHtml=`<span class="pip${remaining<=0?' full':''}"><i style="height:${Math.round((1-remaining/RAZOR_BURST_SOURCE.cooldownSeconds)*100)}%"></i></span>`;
+    readoutHtml=remaining>0
+      ? `cooling <b>${remaining.toFixed(1)}s</b> / 5.12s<br>${ticks.length} × <b>4</b> over ${(demo.enhanced?1.5:1).toFixed(1)}s · pull + slow`
+      : `<b>READY</b> · 5.12s cooldown<br>${ticks.length} × <b>4</b> over ${(demo.enhanced?1.5:1).toFixed(1)}s · pull + slow`;
+  }
+  setHtml(pipsEl,'pips',pipsHtml);
+  setHtml(readoutEl,'readout',readoutHtml);
+  const ready=demo.ready();
+  dashButton.disabled=!ready;
+  const sub=ready?'READY':demo.readyReason()==='dashing'?'DASHING':gust?'NO CHARGE':`${demo.state.razorCooldown.toFixed(1)}s`;
+  if(lastHtml.dashSub!==sub){lastHtml.dashSub=sub;dashSub.textContent=sub;}
+}
+
+function refreshLedger(){
+  const recent=demo.events.filter(event=>'damage' in event).slice(-4).reverse();
+  setHtml(ledgerEl,'ledger',recent.map(event=>{
+    const label={gather:'ORIGIN BURST',draught:'DRAUGHT',endpoint:'ENDPOINT BURST',
+      'vortex-tick':`VORTEX ${event.tick}`}[event.type]||event.type.toUpperCase();
+    return `<div>${label} · ${event.damage} × ${event.targetIds.length}</div>`;
+  }).join(''));
+}
+
+/* ---------------------------------------------------------------- input */
+const stick=document.getElementById('stick'),knob=stick.querySelector('i');
+let stickId=null;
+function setStick(dx,dz){
+  const magnitude=Math.hypot(dx,dz);
+  const scaled=magnitude>1?{x:dx/magnitude,z:dz/magnitude}:{x:dx,z:dz};
+  demo.setMove(scaled.x,scaled.z);
+  knob.style.translate=`calc(-50% + ${scaled.x*38}%) calc(-50% + ${scaled.z*38}%)`;
+}
+function stickFrom(event){
+  const box=stick.getBoundingClientRect(),radius=box.width/2;
+  setStick((event.clientX-box.left-radius)/radius,(event.clientY-box.top-radius)/radius);
+}
+stick.addEventListener('pointerdown',event=>{stickId=event.pointerId;stick.setPointerCapture(stickId);stickFrom(event);});
+stick.addEventListener('pointermove',event=>{if(event.pointerId===stickId)stickFrom(event);});
+for(const type of ['pointerup','pointercancel'])stick.addEventListener(type,event=>{
+  if(event.pointerId!==stickId)return;stickId=null;setStick(0,0);
+});
+
+dashButton.addEventListener('click',()=>{demo.cast();refreshPayload();});
+document.getElementById('pick-gust').addEventListener('click',()=>{demo.select('GUST-BURST');refreshChrome();});
+document.getElementById('pick-razor').addEventListener('click',()=>{demo.select('RAZOR-BURST');refreshChrome();});
+document.getElementById('toggle-enhanced').addEventListener('click',()=>{demo.setEnhanced(!demo.enhanced);refreshChrome();});
+document.getElementById('reset').addEventListener('click',()=>{
+  demo.resetDummies();demo.resetPayloads();demo.clearEvents();
+  consumed=0;popups.length=0;slashes.length=0;trail.length=0;refreshLedger();
+});
+
+const keys=new Set();
+addEventListener('keydown',event=>{
+  const key=event.key.toLowerCase();
+  if(key===' '||key==='k'){demo.cast();event.preventDefault();}
+  if(key==='1'){demo.select('GUST-BURST');refreshChrome();}
+  if(key==='2'){demo.select('RAZOR-BURST');refreshChrome();}
+  if(key==='e'){demo.setEnhanced(!demo.enhanced);refreshChrome();}
+  keys.add(key);
+});
+addEventListener('keyup',event=>keys.delete(event.key.toLowerCase()));
+function keyboardMove(){
+  const x=(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0);
+  const z=(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0);
+  return x||z?{x,z}:null;
+}
+
+let padDashHeld=false,padSwapHeld=false;
+function readGamepad(){
+  const pad=navigator.getGamepads?.().find(Boolean);
+  if(!pad)return null;
+  const dashPressed=pad.buttons[0]?.pressed||pad.buttons[1]?.pressed;
+  if(dashPressed&&!padDashHeld)demo.cast();
+  padDashHeld=dashPressed;
+  const swap=pad.buttons[4]?.pressed||pad.buttons[5]?.pressed;
+  if(swap&&!padSwapHeld){demo.select(demo.selected==='GUST-BURST'?'RAZOR-BURST':'GUST-BURST');refreshChrome();}
+  padSwapHeld=swap;
+  const x=pad.axes[0]||0,z=pad.axes[1]||0;
+  return Math.hypot(x,z)>.22?{x,z}:{x:0,z:0};
+}
+
+/* ------------------------------------------------------------ clip sheet */
+const sheet=document.getElementById('sheet'),clip=document.getElementById('clip');
+let clipWindow=GUST_BURST_SOURCE.clip;
+function syncClip(){
+  clipWindow=demo.selected==='GUST-BURST'?GUST_BURST_SOURCE.clip:RAZOR_BURST_SOURCE.clip;
+  if(Number.isFinite(clip.duration))clip.currentTime=clipWindow[0];
+}
+clip.addEventListener('loadedmetadata',syncClip);
+clip.addEventListener('timeupdate',()=>{
+  if(clip.currentTime<clipWindow[0]-.4||clip.currentTime>=clipWindow[1])clip.currentTime=clipWindow[0];
+});
+document.getElementById('open-source').addEventListener('click',()=>{sheet.dataset.open='true';syncClip();});
+document.getElementById('close-source').addEventListener('click',()=>{sheet.dataset.open='false';clip.pause();});
+document.getElementById('clip-play').addEventListener('click',()=>{
+  if(clip.paused){clip.play().catch(()=>{});document.getElementById('clip-play').textContent='❚❚ PAUSE';}
+  else{clip.pause();document.getElementById('clip-play').textContent='▶ PLAY CLIP';}
+});
+document.getElementById('clip-replay').addEventListener('click',()=>{clip.currentTime=clipWindow[0];clip.play().catch(()=>{});});
+document.getElementById('clip-sound').addEventListener('click',event=>{
+  clip.muted=!clip.muted;event.currentTarget.setAttribute('aria-pressed',String(!clip.muted));
+});
+
+/* ----------------------------------------------------------------- loop */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  // The held thumbstick wins; otherwise a live gamepad, then the keyboard.
+  const pad=readGamepad(),keyboard=keyboardMove();
+  if(stickId===null){
+    if(pad&&(pad.x||pad.z))demo.setMove(pad.x,pad.z);
+    else if(keyboard)demo.setMove(keyboard.x,keyboard.z);
+    else demo.setMove(0,0);
+  }
+
+  demo.step(dt);
+  drainEvents();
+
+  for(let index=popups.length-1;index>=0;index--){
+    popups[index].age+=dt;
+    if(popups[index].age>=popups[index].life)popups.splice(index,1);
+  }
+  for(let index=slashes.length-1;index>=0;index--){
+    slashes[index].age+=dt;
+    if(slashes[index].age>=slashes[index].life)slashes.splice(index,1);
+  }
+  trailClock+=dt;
+  if(demo.state.player.dashing&&trailClock>=.028){
+    trailClock=0;
+    trail.push({x:demo.state.player.x,z:demo.state.player.z,
+      angle:Math.atan2(demo.state.player.dashDirZ,demo.state.player.dashDirX),age:0,life:.3});
+  }
+  for(let index=trail.length-1;index>=0;index--){
+    trail[index].age+=dt;
+    if(trail[index].age>=trail[index].life)trail.splice(index,1);
+  }
+
+  // Follow the caster, but never pan far enough to expose the void outside
+  // the room while the room is bigger than the viewport.
+  const player=demo.state.player;
+  camX+=(player.x-camX)*Math.min(1,dt*9);
+  camZ+=(player.z-camZ)*Math.min(1,dt*9);
+  const marginX=demo.arena.halfWidth-viewWidth/2/tile;
+  const marginZ=demo.arena.halfDepth-viewHeight/2/tile;
+  if(marginX>0)camX=Math.max(-marginX,Math.min(marginX,camX));else camX=0;
+  if(marginZ>0)camZ=Math.max(-marginZ,Math.min(marginZ,camZ));else camZ=0;
+
+  ctx.clearRect(0,0,viewWidth,viewHeight);
+  drawFloor();
+  const drawables=[...demo.state.enemies.map(enemy=>({z:enemy.z,draw:()=>drawDummy(enemy)})),
+    {z:player.z,draw:drawPlayer}];
+  drawables.sort((a,b)=>a.z-b.z);
+  drawEffects(now/1000);
+  for(const drawable of drawables)drawable.draw();
+  drawPopups();
+
+  refreshPayload();
+  refreshLedger();
+  requestAnimationFrame(frame);
+}
+refreshChrome();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
