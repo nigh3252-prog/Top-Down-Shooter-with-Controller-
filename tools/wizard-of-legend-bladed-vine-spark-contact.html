@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#07070a">
-<title>Thunder Line / Circuit Line — Wizard of Legend source lab</title>
+<title>Bladed Vine / Spark Contact — Wizard of Legend source lab</title>
 <style>
   :root{
     --gold:#ffd23a;
     --gold-hi:#fff0a8;
+    --vine:#a8d94a;
     --ink:#14100a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -35,21 +36,27 @@
     clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);position:relative}
   #cardart i:after{content:"";position:absolute;inset:0;background:var(--gold);
     clip-path:polygon(58% 8%,32% 48%,50% 48%,40% 92%,70% 44%,50% 44%)}
+  body.vine #arcana-title{color:var(--vine)}
+  body.vine #cardart i:after{background:var(--vine);
+    clip-path:polygon(50% 4%,58% 30%,52% 30%,60% 60%,50% 96%,40% 60%,48% 30%,42% 30%)}
   #arcana-title{font-size:30px;line-height:.94;font-weight:800;color:var(--gold);
     letter-spacing:.02em;text-shadow:3px 3px 0 var(--ink),-2px 0 0 var(--ink),0 -2px 0 var(--ink),0 2px 0 var(--ink),2px 0 0 var(--ink);
     white-space:pre-line;margin-top:2px}
   #arcana-meta{font-size:10px;color:#cfc6ae;letter-spacing:.14em;margin-top:6px;
     text-shadow:1px 1px 0 #000}
 
-  /* ---------- charges ---------- */
+  /* ---------- combo beat string ---------- */
   #chargebar{position:fixed;top:calc(96px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));
-    display:flex;align-items:center;gap:7px;z-index:10;pointer-events:none}
-  #charges{display:flex;align-items:center;gap:8px}
-  .pip{width:15px;height:15px;display:block;flex:0 0 auto;border:2px solid #6f6551;background:#221e17;
-    transform:rotate(45deg);box-shadow:inset 0 0 0 1px #000}
-  .pip.full{background:var(--gold);border-color:#fff2b0;box-shadow:0 0 8px rgba(255,210,58,.8),inset 0 0 0 1px #7a5c00}
-  body.circuit .pip.full{background:#ffe07a}
-  #cd{font-size:13px;color:#ffe9a8;text-shadow:1px 1px 0 #000;min-width:26px}
+    display:flex;align-items:center;gap:9px;z-index:10;pointer-events:none}
+  #beats{display:flex;align-items:center;gap:6px}
+  .beat{width:19px;height:19px;display:grid;place-items:center;flex:0 0 auto;
+    border:2px solid #6f6551;background:#221e17;color:#7d7462;font-size:10px;font-weight:700;
+    border-radius:3px;box-shadow:inset 0 0 0 1px #000}
+  .beat.fin{border-radius:50%}
+  .beat.done{background:var(--gold);border-color:#fff2b0;color:#3a2c00}
+  body.vine .beat.done{background:var(--vine);border-color:#e2f5a8;color:#26340a}
+  .beat.now{box-shadow:0 0 10px rgba(255,214,74,.9),inset 0 0 0 1px #000}
+  #ledger{font-size:11px;color:#ffe9a8;text-shadow:1px 1px 0 #000;white-space:nowrap}
 
   /* ---------- stats panel ---------- */
   #stats{position:fixed;top:calc(128px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));
@@ -78,9 +85,11 @@
     border-radius:10px;box-shadow:0 2px 0 rgba(0,0,0,.6)}
   .btn:active{background:rgba(255,210,58,.3);border-color:var(--gold-hi)}
   .btn.on{background:rgba(255,210,58,.22);border-color:var(--gold);color:#fff3c4}
-  #btn-dash{right:calc(22px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));
-    width:104px;height:104px;border-radius:50%;font-size:15px;color:var(--gold);border-color:var(--gold);
+  #btn-attack{right:calc(22px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));
+    width:104px;height:104px;border-radius:50%;font-size:14px;color:var(--gold);border-color:var(--gold);
     background:radial-gradient(circle at 50% 40%,rgba(255,210,58,.24),rgba(24,21,16,.85))}
+  body.vine #btn-attack{color:var(--vine);border-color:var(--vine);
+    background:radial-gradient(circle at 50% 40%,rgba(168,217,74,.24),rgba(24,21,16,.85))}
   #btn-swap{right:calc(140px + env(safe-area-inset-right));bottom:calc(96px + env(safe-area-inset-bottom));width:86px;height:40px;font-size:10px}
   #btn-enh{right:calc(140px + env(safe-area-inset-right));bottom:calc(48px + env(safe-area-inset-bottom));width:86px;height:40px;font-size:10px}
   #btn-reset{right:calc(22px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:62px;height:32px;font-size:9px}
@@ -95,7 +104,7 @@
     #stats{font-size:9px;max-width:52vw;top:calc(108px + env(safe-area-inset-top))}
     #chain{top:calc(74px + env(safe-area-inset-top));font-size:11px}
     #toast{bottom:calc(210px + env(safe-area-inset-bottom))}
-    #btn-dash{width:96px;height:96px}
+    #btn-attack{width:96px;height:96px}
     #btn-swap,#btn-enh{right:calc(128px + env(safe-area-inset-right));width:80px}
     #help{display:none}
   }
@@ -108,12 +117,12 @@
 <div id="card">
   <div id="cardart"><i></i></div>
   <div>
-    <div id="arcana-title">THUNDER LINE</div>
+    <div id="arcana-title">BLADED VINE</div>
     <div id="arcana-meta"></div>
   </div>
 </div>
 
-<div id="chargebar"><span id="charges"></span><span id="cd"></span></div>
+<div id="chargebar"><span id="beats"></span><span id="ledger"></span></div>
 <ul id="stats"></ul>
 <div id="chain"></div>
 <div id="toast"></div>
@@ -121,11 +130,11 @@
 <div id="touch"></div>
 <div id="stick"><div id="knob"></div></div>
 
-<button class="btn" id="btn-dash">DASH</button>
+<button class="btn" id="btn-attack">ATTACK<br><span style="font-size:8px;opacity:.75">hold</span></button>
 <button class="btn" id="btn-swap">SWAP ARCANA</button>
 <button class="btn" id="btn-enh">ENHANCED</button>
 <button class="btn" id="btn-reset">RESET</button>
-<div id="help">move: stick / WASD &nbsp;·&nbsp; dash: button / SPACE &nbsp;·&nbsp; 1-2 swap &nbsp;·&nbsp; E enhance &nbsp;·&nbsp; R reset</div>
+<div id="help">move: stick / WASD &nbsp;·&nbsp; attack: button / SPACE (hold) &nbsp;·&nbsp; 1-2 swap &nbsp;·&nbsp; E enhance &nbsp;·&nbsp; R reset</div>
 
 <div id="boot">LOADING…</div>
 
@@ -541,7 +550,7 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
   var UP = new T.Vector3(0, 1, 0);
   var _a = new T.Vector3(), _b = new T.Vector3(), _side = new T.Vector3(), _tan = new T.Vector3();
 
-  function makeRibbon(count, color, width, opacity) {
+  function makeRibbon(count, color, width, opacity, blendNormal) {
     var geo = new T.BufferGeometry();
     var pos = new Float32Array(count * 2 * 3);
     geo.setAttribute('position', new T.BufferAttribute(pos, 3));
@@ -553,7 +562,9 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
     geo.setIndex(idx);
     var mat = new T.MeshBasicMaterial({
       color: color, transparent: true, opacity: opacity,
-      blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide
+      // lightning is light and adds; a vine is an object and does not
+      blending: blendNormal ? T.NormalBlending : T.AdditiveBlending,
+      depthWrite: false, side: T.DoubleSide
     });
     var mesh = new T.Mesh(geo, mat);
     mesh.frustumCulled = false;
@@ -743,471 +754,617 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
     }
   }
 
-  /* ================= THUNDER LINE ================= */
 
-  function thunderStrike(x, z, enhanced) {
-    var A = ARCANA.thunder;
-    var radius = enhanced ? A.burstRadiusEnh : A.burstRadius;
-    var ticks = enhanced ? A.shockTicksEnh : A.shockTicks;
+  /* ================= basic-string arcana ================= */
 
-    /* ---- 1. the targeting spark left at the dash origin ---- */
-    var markPts = [];
-    var mark = makeRibbon(9, 0xffe14a, 0.13, 1);
-    scene.add(mark);
-    var camDir = new T.Vector3();
+  // white 4-point contact star, as the source draws every connecting hit
+  function starTexture() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    g.translate(64, 64);
+    var gr = g.createRadialGradient(0, 0, 0, 0, 0, 30);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.5, 'rgba(255,255,235,0.45)');
+    gr.addColorStop(1, 'rgba(255,250,210,0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(0, 0, 30, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    for (var k = 0; k < 4; k++) {
+      g.rotate(Math.PI / 2);
+      g.beginPath();
+      g.moveTo(0, -62); g.lineTo(7, -10); g.lineTo(0, 0); g.lineTo(-7, -10);
+      g.closePath(); g.fill();
+    }
+    var t = new T.CanvasTexture(c);
+    t.colorSpace = T.SRGBColorSpace;
+    return t;
+  }
+  var TEX_STAR = starTexture();
 
-    var telegraph = 0.20;                 // caster clears the spot first
-    var phase = 'mark';
+  function contactStar(x, y, z, size, dur) {
+    var m = new T.Sprite(new T.SpriteMaterial({
+      map: TEX_STAR, transparent: true, blending: T.AdditiveBlending, depthWrite: false, depthTest: false
+    }));
+    m.position.set(x, y, z);
+    m.scale.setScalar(size * 0.5);
+    m.renderOrder = 18;
+    scene.add(m);
     var life = 0;
-    var crackle = 0;
-
-    /* ---- 2. the vertical bolt ---- */
-    var BOLT_PTS = 44;
-    var boltPts = [];
-    var boltOuter = makeRibbon(BOLT_PTS, 0xffc823, enhanced ? 0.34 : 0.22, 0.85);
-    var boltCore = makeRibbon(BOLT_PTS, 0xfffdf0, enhanced ? 0.13 : 0.085, 1);
-    boltOuter.visible = boltCore.visible = false;
-    boltOuter.renderOrder = 8; boltCore.renderOrder = 9;
-    scene.add(boltOuter); scene.add(boltCore);
-
-    /* ---- 3. the ring of arcs around the burst ---- */
-    var ARCS = enhanced ? 34 : 24;
-    var ring = [];
-    for (var i = 0; i < ARCS; i++) {
-      var m = makeRibbon(9, i % 4 === 0 ? 0xfff6c0 : 0xffce28, 0.13, 1);
-      m.visible = false;
-      m.renderOrder = 7;
-      scene.add(m);
-      ring.push({ mesh: m, pts: [] });
-    }
-    var SPOKES = enhanced ? 8 : 5;
-    var spokes = [];
-    for (i = 0; i < SPOKES; i++) {
-      var s = makeRibbon(12, 0xffd94a, 0.09, 1);
-      s.visible = false; s.renderOrder = 7;
-      scene.add(s);
-      spokes.push({ mesh: s, pts: [], ang: (i / SPOKES) * Math.PI * 2 + Math.random() });
-    }
-
-    var ringScale = 0.34;
-    var top = new T.Vector3(x, 12, z);
-    var hit = new T.Vector3(x, 0.05, z);
-
-    function rebuildBolt() {
-      camera.getWorldDirection(camDir);
-      jagged(top, hit, BOLT_PTS, enhanced ? 1.15 : 0.8, boltPts, camDir);
-      writeRibbon(boltOuter, boltPts, camDir, false);
-      writeRibbon(boltCore, boltPts, camDir, false);
-    }
-
-    function rebuildRing() {
-      var r = radius * ringScale;
-      for (var i2 = 0; i2 < ARCS; i2++) {
-        // every third arc sits inside the ring, so the burst reads as a filled
-        // crackling disc rather than a clean circle
-        var band = (i2 % 3 === 2) ? 0.55 : 1.0;
-        var a0 = (i2 / ARCS) * Math.PI * 2 + (band < 1 ? 0.4 : 0);
-        var a1 = a0 + (Math.PI * 2 / ARCS) * (band < 1 ? 2.1 : 1.25);
-        var rr = r * band * (0.9 + Math.random() * 0.22);
-        var rr2 = r * band * (0.9 + Math.random() * 0.22);
-        _a.set(x + Math.cos(a0) * rr, GROUND_Y, z + Math.sin(a0) * rr);
-        _b.set(x + Math.cos(a1) * rr2, GROUND_Y, z + Math.sin(a1) * rr2);
-        jagged(_a, _b, 9, r * 0.16, ring[i2].pts, UP);
-        writeRibbon(ring[i2].mesh, ring[i2].pts, UP, false);
-      }
-      for (i2 = 0; i2 < SPOKES; i2++) {
-        var ang = spokes[i2].ang + Math.random() * 0.3;
-        _a.set(x, GROUND_Y, z);
-        _b.set(x + Math.cos(ang) * r * 0.98, GROUND_Y, z + Math.sin(ang) * r * 0.98);
-        jagged(_a, _b, 12, r * 0.14, spokes[i2].pts, UP);
-        writeRibbon(spokes[i2].mesh, spokes[i2].pts, UP, false);
-      }
-    }
-
-    function rebuildMark() {
-      camera.getWorldDirection(camDir);
-      var ang = Math.random() * Math.PI * 2;
-      _a.set(x + Math.cos(ang) * 0.4, 0.08 + Math.random() * 0.3, z + Math.sin(ang) * 0.3);
-      _b.set(x + Math.cos(ang + 2.2) * 0.45, 0.08 + Math.random() * 0.4, z + Math.sin(ang + 2.2) * 0.3);
-      jagged(_a, _b, 9, 0.22, markPts, camDir);
-      writeRibbon(mark, markPts, camDir, true);
-    }
-    rebuildMark();
-
-    function detonate() {
-      // --- damage, exactly as the entry describes it ---
-      for (var i3 = 0; i3 < dummies.length; i3++) {
-        var d = dummies[i3];
-        var dx = d.pos.x - x, dz = d.pos.z - z;
-        var dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist <= radius + d.radius) {
-          damage(d, A.burstDamage, 'big');          // circular burst
-          applyShock(d, ticks);                     // level 2 / level 4 shock
-          if (dist <= A.coreRadius + d.radius) {
-            damage(d, A.coreDamage, 'big');         // narrow strike core
-          }
-        }
-      }
-      // --- feel ---
-      camShake = enhanced ? 0.42 : 0.26;
-      flashDisc(x, z, radius * 0.85, 0.26, enhanced ? 0.5 : 0.4);
-      var n = enhanced ? 130 : 80;
-      for (var s2 = 0; s2 < n; s2++) {
-        var a2 = Math.random() * Math.PI * 2;
-        var sp = (2.5 + Math.random() * 5.5) * (enhanced ? 1.25 : 1);
-        emitSpark(x + Math.cos(a2) * 0.3, 0.15 + Math.random() * 0.4, z + Math.sin(a2) * 0.3,
-          Math.cos(a2) * sp, 2 + Math.random() * 5, Math.sin(a2) * sp,
-          0.45 + Math.random() * 0.6, Math.random() < 0.5);
-      }
-      screenFlash(enhanced ? 0.4 : 0.22);
-    }
-
-    var struck = false;
-    var strikeDur = enhanced ? 0.42 : 0.32;
-    var ringDur = enhanced ? 0.62 : 0.46;
-
-    return addEffect({
-      update: function (dt) {
-        life += dt;
-        crackle -= dt;
-
-        if (phase === 'mark') {
-          if (crackle <= 0) { crackle = 0.05; rebuildMark(); }
-          mark.material.opacity = 0.6 + Math.random() * 0.4;
-          if (Math.random() < 0.4) emitSpark(x + (Math.random() - 0.5) * 0.7, 0.1, z + (Math.random() - 0.5) * 0.7, 0, 1.2 + Math.random(), 0, 0.3, true);
-          if (life >= telegraph) {
-            phase = 'strike';
-            mark.visible = false;
-            boltOuter.visible = boltCore.visible = true;
-            for (var q = 0; q < ring.length; q++) ring[q].mesh.visible = true;
-            for (q = 0; q < spokes.length; q++) spokes[q].mesh.visible = true;
-            rebuildBolt(); rebuildRing();
-            if (!struck) { struck = true; detonate(); }
-          }
-          return true;
-        }
-
-        var t = life - telegraph;
-        if (crackle <= 0) {
-          crackle = 0.042;
-          if (t < strikeDur) rebuildBolt();
-          rebuildRing();
-        }
-
-        // bolt: full brightness then a fast fade
-        var bk = t / strikeDur;
-        var bAlpha = bk < 0.55 ? 1 : Math.max(0, 1 - (bk - 0.55) / 0.45);
-        boltOuter.material.opacity = 0.9 * bAlpha * (0.8 + Math.random() * 0.2);
-        boltCore.material.opacity = bAlpha;
-        if (bk >= 1) { boltOuter.visible = boltCore.visible = false; }
-
-        // ring: snaps outward, holds, fades
-        var rk = t / ringDur;
-        ringScale = rk < 0.16 ? 0.34 + (rk / 0.16) * 0.66 : 1 + (rk - 0.16) * 0.14;
-        var rAlpha = rk < 0.55 ? 1 : Math.max(0, 1 - (rk - 0.55) / 0.45);
-        for (var i4 = 0; i4 < ring.length; i4++) ring[i4].mesh.material.opacity = rAlpha * (0.65 + Math.random() * 0.35);
-        for (i4 = 0; i4 < spokes.length; i4++) spokes[i4].mesh.material.opacity = rAlpha * (0.5 + Math.random() * 0.5) * (rk < 0.5 ? 1 : 0.4);
-
-        return t < Math.max(strikeDur, ringDur);
-      },
-      dispose: function () {
-        disposeMesh(mark); disposeMesh(boltOuter); disposeMesh(boltCore);
-        for (var i5 = 0; i5 < ring.length; i5++) disposeMesh(ring[i5].mesh);
-        for (i5 = 0; i5 < spokes.length; i5++) disposeMesh(spokes[i5].mesh);
-      }
-    });
-  }
-
-  /* ================= CIRCUIT LINE ================= */
-
-  var circuit = {
-    nodes: [],        // pending orbs, in the order they were authored
-    timer: 0,         // arming delay
-    armed: false
-  };
-
-  function makeNode(x, z) {
-    var g = new T.Group();
-    var core = new T.Mesh(new T.SphereGeometry(0.17, 10, 8), new T.MeshBasicMaterial({ color: 0xfffbe0 }));
-    g.add(core);
-    var glow = new T.Sprite(new T.SpriteMaterial({ map: TEX_GLOW, transparent: true, blending: T.AdditiveBlending, depthWrite: false, color: 0xffd23a }));
-    glow.scale.set(1.5, 1.5, 1);
-    g.add(glow);
-    g.position.set(x, 0.42, z);
-    scene.add(g);
-    var node = { group: g, glow: glow, core: core, pos: new T.Vector3(x, 0.42, z), t: Math.random() * 6, alive: true };
-    return node;
-  }
-
-  function nodeSpark(n) {
-    for (var i = 0; i < 4; i++) {
-      var a = Math.random() * Math.PI * 2;
-      emitSpark(n.pos.x, n.pos.y, n.pos.z, Math.cos(a) * 1.4, 0.6 + Math.random(), Math.sin(a) * 1.4, 0.3, true);
-    }
-  }
-
-  function circuitPlace(x0, z0, x1, z1) {
-    var A = ARCANA.circuit;
-    var a = makeNode(x0, z0);
-    var b = makeNode(x1, z1);
-    // a start node landing on top of the previous end node merges, as in the source
-    var last = circuit.nodes[circuit.nodes.length - 1];
-    if (last && last.pos.distanceTo(a.pos) < 0.7) {
-      scene.remove(a.group);
-      a.alive = false;
-    } else {
-      circuit.nodes.push(a);
-    }
-    circuit.nodes.push(b);
-    nodeSpark(a.alive ? a : b); nodeSpark(b);
-    // adding a node restarts the arming delay
-    circuit.timer = A.armDelay;
-  }
-
-  function updateCircuit(dt, enhanced) {
-    var i;
-    if (!circuit.nodes.length) return;
-    circuit.timer -= dt;
-    var urgency = 1 - Math.max(0, circuit.timer) / ARCANA.circuit.armDelay;
-    for (i = 0; i < circuit.nodes.length; i++) {
-      var n = circuit.nodes[i];
-      n.t += dt * (6 + urgency * 26);
-      var pulse = 0.85 + Math.sin(n.t) * (0.18 + urgency * 0.4);
-      n.glow.scale.set(1.5 * pulse, 1.5 * pulse, 1);
-      n.core.scale.setScalar(pulse);
-      n.group.position.y = 0.42 + Math.sin(n.t * 0.35) * 0.05;
-      if (Math.random() < 0.06 + urgency * 0.2) nodeSpark(n);
-    }
-    if (circuit.timer <= 0) fireCircuit(enhanced);
-  }
-
-  function fireCircuit(enhanced) {
-    var A = ARCANA.circuit;
-    var nodes = circuit.nodes.slice();
-    circuit.nodes.length = 0;
-
-    // group nodes: a gap wider than the link range splits the network
-    var groups = [], cur = [nodes[0]];
-    for (var i = 1; i < nodes.length; i++) {
-      if (nodes[i].pos.distanceTo(nodes[i - 1].pos) <= A.linkRange) cur.push(nodes[i]);
-      else { groups.push(cur); cur = [nodes[i]]; }
-    }
-    groups.push(cur);
-
-    // edges: consecutive links, plus the final node linking back to the first
-    var edges = [];
-    for (i = 0; i < groups.length; i++) {
-      var g = groups[i];
-      for (var j = 0; j < g.length - 1; j++) edges.push([g[j], g[j + 1]]);
-      if (g.length >= 3 && g[g.length - 1].pos.distanceTo(g[0].pos) <= A.linkRange) {
-        edges.push([g[g.length - 1], g[0]]);   // automatic loop closure
-      }
-    }
-
-    if (!edges.length) {
-      for (i = 0; i < nodes.length; i++) scene.remove(nodes[i].group);
-      return;
-    }
-
-    // every extra chain makes ALL chains hit two more times
-    var hits = (enhanced ? A.baseHitsEnh : A.baseHits) + 2 * (edges.length - 1);
-    hudFlashChains(edges.length, hits);
-
-    for (i = 0; i < edges.length; i++) makeStream(edges[i][0], edges[i][1], hits, enhanced);
-
-    // nodes stay lit for the life of the streams, then pop
-    var dur = hits * CIRCUIT_TICK + 0.25;
-    var life = 0;
+    dur = dur || 0.2;
     addEffect({
       update: function (dt) {
         life += dt;
-        for (var k = 0; k < nodes.length; k++) {
-          var n = nodes[k];
-          n.t += dt * 22;
-          var p = 0.9 + Math.sin(n.t) * 0.25;
-          n.glow.scale.set(1.7 * p, 1.7 * p, 1);
-          if (Math.random() < 0.12) nodeSpark(n);
+        var k = life / dur;
+        m.scale.setScalar(size * (0.5 + k * 0.9));
+        m.material.opacity = Math.pow(1 - k, 1.5);
+        m.material.rotation += dt * 2;
+        return k < 1;
+      },
+      dispose: function () { scene.remove(m); m.material.dispose(); }
+    });
+  }
+
+  var ARCANA = {
+    vine: {
+      id: 'vine',
+      name: 'BLADED VINE',
+      element: 'Earth', type: 'Basic', subtype: 'Melee',
+      beats: 3,
+      comboWindow: 0.55,
+      whipDamage: 7,
+      finisherDamage: 15,
+      finisherDamageEnh: 9,
+      finisherEmissionsEnh: 3,
+      whipReach: 4.3,
+      whipHalfAngle: 0.72,        // long, narrow frontal sweep
+      bundleReach: 6.4,
+      bundleHalfWidth: 0.95
+    },
+    spark: {
+      id: 'spark',
+      name: 'SPARK CONTACT',
+      element: 'Lightning', type: 'Basic', subtype: 'Melee',
+      beats: 4,
+      comboWindow: 0.42,
+      damage: [6, 7, 8, 9],       // one compact contact hit per beat
+      step: 0.62,                 // authored forward step on every beat
+      reach: 1.5,                 // radius of the contact flash ahead of the caster
+      halfAngle: 0.85,
+      arcDamage: 10,              // final-beat overlay, resolved separately
+      arcRadius: 3.5,
+      arcHalfAngle: 1.35,
+      arcShockTicks: 4            // level 1 shock, enhanced only
+    }
+  };
+
+  /* ---------- shared footprint tests ---------- */
+
+  var _v = new T.Vector3();
+
+  function coneHits(origin, dir, reach, halfAngle) {
+    var out = [];
+    for (var i = 0; i < dummies.length; i++) {
+      var d = dummies[i];
+      _v.set(d.pos.x - origin.x, 0, d.pos.z - origin.z);
+      var dist = _v.length();
+      if (dist > reach + d.radius) continue;
+      if (dist > 0.001) {
+        _v.divideScalar(dist);
+        var dot = _v.x * dir.x + _v.z * dir.z;
+        // allow for the target's body radius at close range
+        var slack = Math.min(0.8, d.radius / Math.max(0.6, dist));
+        if (dot < Math.cos(halfAngle) - slack) continue;
+      }
+      out.push(d);
+    }
+    return out;
+  }
+
+  // compact footprint centred on a contact point, not on the caster's body
+  function radiusHits(x, z, r) {
+    var out = [];
+    for (var i = 0; i < dummies.length; i++) {
+      var d = dummies[i];
+      var dx = d.pos.x - x, dz = d.pos.z - z;
+      if (dx * dx + dz * dz <= (r + d.radius) * (r + d.radius)) out.push(d);
+    }
+    return out;
+  }
+
+  function laneHits(origin, dir, length, halfWidth) {
+    var out = [];
+    for (var i = 0; i < dummies.length; i++) {
+      var d = dummies[i];
+      var px = d.pos.x - origin.x, pz = d.pos.z - origin.z;
+      var along = px * dir.x + pz * dir.z;
+      if (along < -0.4 || along > length) continue;
+      var side = Math.abs(px * -dir.z + pz * dir.x);
+      if (side > halfWidth + d.radius) continue;
+      out.push(d);
+    }
+    return out;
+  }
+
+  /* ================= BLADED VINE ================= */
+
+  // one thorny vine that stays attached to the caster while its body sweeps
+  function vineWhip(anchor, baseAng, from, to, dmg) {
+    var A = ARCANA.vine;
+    var PTS = 22;
+    var body = makeRibbon(PTS, 0x86c22e, 0.28, 1, true);
+    var edge = makeRibbon(PTS, 0xdcf27a, 0.11, 1, true);
+    body.renderOrder = 6; edge.renderOrder = 7;
+    scene.add(body); scene.add(edge);
+
+    var THORNS = 7;
+    var thorns = [];
+    for (var i = 0; i < THORNS; i++) {
+      var th = makeRibbon(4, 0xc4e65e, 0.15, 1, true);
+      th.renderOrder = 7;
+      scene.add(th);
+      thorns.push({ mesh: th, pts: [new T.Vector3(), new T.Vector3(), new T.Vector3(), new T.Vector3()] });
+    }
+
+    var pts = [], epts = [];
+    for (i = 0; i < PTS; i++) { pts.push(new T.Vector3()); epts.push(new T.Vector3()); }
+
+    var dur = 0.30, hitAt = 0.13, life = 0, hit = false;
+
+    function shape(k) {
+      // the tip lags behind the hand, which is what makes it read as a whip
+      var lead = baseAng + from + (to - from) * k;
+      for (var i2 = 0; i2 < PTS; i2++) {
+        var t = i2 / (PTS - 1);
+        var lag = (to - from) * 0.55 * t * (1 - k);
+        var ang = lead - lag;
+        var r = A.whipReach * t * (0.35 + 0.65 * Math.min(1, k * 2.2));
+        var p = pts[i2];
+        p.set(anchor.x + Math.sin(ang) * r, 0.55 + Math.sin(Math.PI * t) * 0.3, anchor.z + Math.cos(ang) * r);
+        epts[i2].copy(p); epts[i2].y += 0.03;
+      }
+      writeRibbon(body, pts, UP, true);
+      writeRibbon(edge, epts, UP, true);
+      for (i2 = 0; i2 < THORNS; i2++) {
+        var idx = 4 + i2 * 2;
+        if (idx >= PTS - 1) idx = PTS - 2;
+        var a = pts[idx], b2 = pts[idx + 1];
+        _v.subVectors(b2, a).normalize();
+        _side.crossVectors(_v, UP).normalize();
+        var sgn = i2 % 2 ? 1 : -1;
+        var tp = thorns[i2].pts;
+        tp[0].copy(a);
+        tp[1].copy(a).addScaledVector(_side, sgn * 0.22).addScaledVector(_v, 0.16);
+        tp[2].copy(a).addScaledVector(_side, sgn * 0.44).addScaledVector(_v, 0.36);
+        tp[3].copy(tp[2]);
+        writeRibbon(thorns[i2].mesh, tp, UP, true);
+      }
+    }
+    shape(0);
+
+    addEffect({
+      update: function (dt) {
+        life += dt;
+        var k = Math.min(1, life / dur);
+        shape(k);
+        var fade = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+        body.material.opacity = fade;
+        edge.material.opacity = fade;
+        for (var i3 = 0; i3 < THORNS; i3++) thorns[i3].mesh.material.opacity = fade;
+
+        if (!hit && life >= hitAt) {
+          hit = true;
+          var dir = new T.Vector3(Math.sin(baseAng + (from + to) / 2), 0, Math.cos(baseAng + (from + to) / 2));
+          var targets = coneHits(anchor, dir, ARCANA.vine.whipReach, ARCANA.vine.whipHalfAngle);
+          for (var q = 0; q < targets.length; q++) {
+            damage(targets[q], dmg, 'big');
+            contactStar(targets[q].pos.x, 1.1, targets[q].pos.z, 2.1);
+            leafBurst(targets[q].pos.x, targets[q].pos.z);
+          }
+          if (targets.length) camShake = 0.1;
+          logHit(targets.length, dmg);
         }
-        return life < dur;
+        return k < 1;
       },
       dispose: function () {
-        for (var k = 0; k < nodes.length; k++) {
-          nodeSpark(nodes[k]); nodeSpark(nodes[k]);
-          scene.remove(nodes[k].group);
-        }
+        disposeMesh(body); disposeMesh(edge);
+        for (var i4 = 0; i4 < THORNS; i4++) disposeMesh(thorns[i4].mesh);
       }
     });
   }
 
-  function makeStream(na, nb, hits, enhanced) {
-    var A = ARCANA.circuit;
-    var a = new T.Vector3(na.pos.x, 0.22, na.pos.z);
-    var b = new T.Vector3(nb.pos.x, 0.22, nb.pos.z);
-    var len = a.distanceTo(b);
-    var segs = Math.max(12, Math.min(40, Math.round(len * 3.4)));
+  function leafBurst(x, z) {
+    for (var i = 0; i < 10; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var s = 1.5 + Math.random() * 3;
+      emitSpark(x, 0.7 + Math.random() * 0.5, z, Math.cos(a) * s, 1.5 + Math.random() * 3, Math.sin(a) * s, 0.4, true);
+    }
+  }
 
-    var outer = makeRibbon(segs, 0xffbe1e, enhanced ? 0.5 : 0.4, 0.85);
-    var core = makeRibbon(segs, 0xfffbe6, enhanced ? 0.17 : 0.13, 1);
-    outer.renderOrder = 6; core.renderOrder = 7;
-    scene.add(outer); scene.add(core);
-    var ptsO = [], ptsC = [];
+  // several long strands thrust forward together — one shared hit ledger
+  function vineBundle(anchor, ang, dmg) {
+    var A = ARCANA.vine;
+    var STRANDS = 3;
+    var dir = new T.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    var strands = [];
+    var PTS = 20;
+    for (var i = 0; i < STRANDS; i++) {
+      var mesh = makeRibbon(PTS, i === 1 ? 0xa8d63c : 0x7cb828, 0.3, 1, true);
+      mesh.renderOrder = 6;
+      scene.add(mesh);
+      var pts = [];
+      for (var j = 0; j < PTS; j++) pts.push(new T.Vector3());
+      strands.push({ mesh: mesh, pts: pts, fan: (i - 1) * 0.17, phase: Math.random() * 6 });
+    }
+    var THORNS = 9;
+    var thorns = [];
+    for (i = 0; i < THORNS; i++) {
+      var th = makeRibbon(4, 0xc4e65e, 0.16, 1, true);
+      th.renderOrder = 7; scene.add(th);
+      thorns.push({ mesh: th, pts: [new T.Vector3(), new T.Vector3(), new T.Vector3(), new T.Vector3()] });
+    }
+
+    var dur = 0.34, hitAt = 0.1, life = 0, hit = false;
+
+    function shape(k) {
+      var grow = Math.min(1, k * 3.2);
+      for (var s = 0; s < STRANDS; s++) {
+        var st = strands[s];
+        for (var i2 = 0; i2 < PTS; i2++) {
+          var t = i2 / (PTS - 1);
+          var a2 = ang + st.fan * t;
+          var r = A.bundleReach * t * grow;
+          var wob = Math.sin(t * 9 + st.phase + k * 4) * 0.13 * t;
+          var p = st.pts[i2];
+          p.set(
+            anchor.x + Math.sin(a2) * r - Math.cos(a2) * wob,
+            0.6 + Math.sin(Math.PI * t) * 0.12,
+            anchor.z + Math.cos(a2) * r + Math.sin(a2) * wob
+          );
+        }
+        writeRibbon(st.mesh, st.pts, UP, true);
+      }
+      for (var q = 0; q < THORNS; q++) {
+        var st2 = strands[q % STRANDS];
+        var idx = 3 + Math.floor(q / STRANDS) * 5 + (q % 3);
+        if (idx >= PTS - 1) idx = PTS - 2;
+        var a3 = st2.pts[idx], b3 = st2.pts[idx + 1];
+        _v.subVectors(b3, a3).normalize();
+        _side.crossVectors(_v, UP).normalize();
+        var sgn = q % 2 ? 1 : -1;
+        var tp = thorns[q].pts;
+        tp[0].copy(a3);
+        tp[1].copy(a3).addScaledVector(_side, sgn * 0.24).addScaledVector(_v, 0.18);
+        tp[2].copy(a3).addScaledVector(_side, sgn * 0.46).addScaledVector(_v, 0.4);
+        tp[3].copy(tp[2]);
+        writeRibbon(thorns[q].mesh, tp, UP, true);
+      }
+    }
+    shape(0);
+
+    addEffect({
+      update: function (dt) {
+        life += dt;
+        var k = Math.min(1, life / dur);
+        shape(k);
+        var fade = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
+        for (var s2 = 0; s2 < STRANDS; s2++) strands[s2].mesh.material.opacity = fade;
+        for (var q2 = 0; q2 < THORNS; q2++) thorns[q2].mesh.material.opacity = fade;
+
+        if (!hit && life >= hitAt) {
+          hit = true;
+          // three visible strands, one damage event per enemy
+          var targets = laneHits(anchor, dir, A.bundleReach, A.bundleHalfWidth);
+          for (var t2 = 0; t2 < targets.length; t2++) {
+            damage(targets[t2], dmg, 'big');
+            contactStar(targets[t2].pos.x, 1.1, targets[t2].pos.z, 2.6);
+            leafBurst(targets[t2].pos.x, targets[t2].pos.z);
+          }
+          camShake = 0.18;
+          logHit(targets.length, dmg);
+        }
+        return k < 1;
+      },
+      dispose: function () {
+        for (var i5 = 0; i5 < STRANDS; i5++) disposeMesh(strands[i5].mesh);
+        for (i5 = 0; i5 < THORNS; i5++) disposeMesh(thorns[i5].mesh);
+      }
+    });
+  }
+
+  /* ================= SPARK CONTACT ================= */
+
+  // yellow electricity wreathing the caster for the length of the string
+  var casterAura = null;
+  function ensureAura() {
+    if (casterAura) { casterAura.keep = 0.34; return; }
+    var arcs = [];
+    for (var i = 0; i < 5; i++) {
+      var m = makeRibbon(8, i % 2 ? 0xfff3b0 : 0xffd233, 0.1, 0.95);
+      m.renderOrder = 11;
+      scene.add(m);
+      arcs.push({ mesh: m, pts: [] });
+    }
     var camDir = new T.Vector3();
-
+    var timer = 0;
+    casterAura = { keep: 0.34 };
     function rebuild() {
       camera.getWorldDirection(camDir);
-      jagged(a, b, segs, 0.26, ptsO, UP);
-      writeRibbon(outer, ptsO, UP, false);
-      for (var i = 0; i < ptsO.length; i++) {
-        ptsC[i] = ptsC[i] || new T.Vector3();
-        ptsC[i].copy(ptsO[i]);
-        ptsC[i].y += 0.02;
+      for (var i2 = 0; i2 < arcs.length; i2++) {
+        var a = Math.random() * Math.PI * 2;
+        var y0 = 0.2 + Math.random() * 1.2;
+        _a.set(player.position.x + Math.cos(a) * 0.5, y0, player.position.z + Math.sin(a) * 0.35);
+        _b.set(player.position.x + Math.cos(a + 2.1) * 0.55, y0 + (Math.random() - 0.4) * 0.9, player.position.z + Math.sin(a + 2.1) * 0.35);
+        jagged(_a, _b, 8, 0.2, arcs[i2].pts, camDir);
+        writeRibbon(arcs[i2].mesh, arcs[i2].pts, camDir, true);
       }
-      writeRibbon(core, ptsC, UP, false);
+    }
+    rebuild();
+    addEffect({
+      update: function (dt) {
+        casterAura.keep -= dt;
+        timer -= dt;
+        if (timer <= 0) { timer = 0.05; rebuild(); }
+        var alive = casterAura.keep > 0;
+        for (var i3 = 0; i3 < arcs.length; i3++) {
+          arcs[i3].mesh.material.opacity = 0.95 * Math.max(0, Math.min(1, casterAura.keep * 4)) * (0.6 + Math.random() * 0.4);
+        }
+        if (Math.random() < 0.5 && alive) {
+          var a2 = Math.random() * Math.PI * 2;
+          emitSpark(player.position.x + Math.cos(a2) * 0.4, 0.6, player.position.z + Math.sin(a2) * 0.3,
+            Math.cos(a2) * 1.6, 1 + Math.random() * 2, Math.sin(a2) * 1.6, 0.3, true);
+        }
+        return alive;
+      },
+      dispose: function () {
+        for (var i4 = 0; i4 < arcs.length; i4++) disposeMesh(arcs[i4].mesh);
+        casterAura = null;
+      }
+    });
+  }
+
+  // one compact close-contact strike directly ahead
+  function sparkStrike(anchor, ang, dmg) {
+    var A = ARCANA.spark;
+    var dir = new T.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    var cx = anchor.x + dir.x * 1.15, cz = anchor.z + dir.z * 1.15;
+
+    var bolts = [];
+    for (var i = 0; i < 3; i++) {
+      var m = makeRibbon(11, i === 0 ? 0xfffbe0 : 0xffcf2a, 0.2, 1);
+      m.renderOrder = 10;
+      scene.add(m);
+      bolts.push({ mesh: m, pts: [] });
+    }
+    var camDir = new T.Vector3();
+    function rebuild() {
+      camera.getWorldDirection(camDir);
+      for (var i2 = 0; i2 < bolts.length; i2++) {
+        var spread = (i2 - 1) * 0.5;
+        _a.set(anchor.x + dir.x * 0.2, 0.9, anchor.z + dir.z * 0.2);
+        _b.set(cx + Math.cos(ang + spread) * 1.0, 0.55 + Math.random() * 0.9, cz - Math.sin(ang + spread) * 1.0);
+        jagged(_a, _b, 11, 0.32, bolts[i2].pts, camDir);
+        writeRibbon(bolts[i2].mesh, bolts[i2].pts, camDir, true);
+      }
     }
     rebuild();
 
-    // the segment lights up hard on activation
-    flashDisc((a.x + b.x) / 2, (a.z + b.z) / 2, len * 0.3, 0.2, 0.3);
-
-    var life = 0, crackle = 0, tick = 0, fired = 0;
-    var dur = hits * CIRCUIT_TICK + 0.18;
-    var seg = new T.Vector3().subVectors(b, a);
-    var segLenSq = seg.lengthSq();
-
-    function tickDamage() {
-      for (var i = 0; i < dummies.length; i++) {
-        var d = dummies[i];
-        var px = d.pos.x - a.x, pz = d.pos.z - a.z;
-        var t = (px * seg.x + pz * seg.z) / segLenSq;
-        t = Math.max(0, Math.min(1, t));
-        var cx = a.x + seg.x * t, cz = a.z + seg.z * t;
-        var dx = d.pos.x - cx, dz = d.pos.z - cz;
-        if (dx * dx + dz * dz <= Math.pow(A.streamRadius + d.radius, 2)) {
-          damage(d, A.tickDamage, 'small');
-        }
-      }
-      // sparks travelling along the wire
-      for (var s = 0; s < 3; s++) {
-        var t2 = Math.random();
-        var x = a.x + seg.x * t2, z = a.z + seg.z * t2;
-        emitSpark(x, 0.25, z, (Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2, 0.35, true);
-      }
+    var targets = radiusHits(cx, cz, A.reach);
+    for (var q = 0; q < targets.length; q++) {
+      damage(targets[q], dmg, 'big');
+      contactStar(targets[q].pos.x, 1.1, targets[q].pos.z, 2.4);
     }
+    contactStar(cx, 0.9, cz, 2.4, 0.18);
+    for (var s = 0; s < 14; s++) {
+      var a2 = Math.random() * Math.PI * 2;
+      var sp = 1.5 + Math.random() * 3.5;
+      emitSpark(cx, 0.5 + Math.random() * 0.5, cz, Math.cos(a2) * sp, 1 + Math.random() * 3, Math.sin(a2) * sp, 0.32, true);
+    }
+    camShake = Math.max(camShake, 0.09);
+    logHit(targets.length, dmg);
 
+    var life = 0, dur = 0.14, crackle = 0;
     addEffect({
       update: function (dt) {
-        life += dt; crackle -= dt; tick -= dt;
-        if (crackle <= 0) { crackle = 0.045; rebuild(); }
-        if (tick <= 0 && fired < hits) { tick += CIRCUIT_TICK; fired++; tickDamage(); }
+        life += dt; crackle -= dt;
+        if (crackle <= 0) { crackle = 0.04; rebuild(); }
+        var fade = 1 - life / dur;
+        for (var i3 = 0; i3 < bolts.length; i3++) bolts[i3].mesh.material.opacity = fade * (0.7 + Math.random() * 0.3);
+        return life < dur;
+      },
+      dispose: function () { for (var i4 = 0; i4 < bolts.length; i4++) disposeMesh(bolts[i4].mesh); }
+    });
+  }
+
+  // the large curved arc that sweeps forward alongside the fourth strike
+  function sparkArc(anchor, ang, enhanced) {
+    var A = ARCANA.spark;
+    var SEGS = 13;
+    var segs = [];
+    for (var i = 0; i < SEGS; i++) {
+      var m = makeRibbon(10, i % 3 === 0 ? 0xfff6c0 : 0xffc81e, 0.28, 1);
+      m.renderOrder = 9;
+      scene.add(m);
+      segs.push({ mesh: m, pts: [] });
+    }
+
+    function rebuild(reveal) {
+      for (var i2 = 0; i2 < SEGS; i2++) {
+        var f0 = i2 / SEGS, f1 = (i2 + 1) / SEGS;
+        var a0 = ang - A.arcHalfAngle + f0 * A.arcHalfAngle * 2;
+        var a1 = ang - A.arcHalfAngle + f1 * A.arcHalfAngle * 2 * 1.02;
+        var r0 = A.arcRadius * (0.9 + Math.random() * 0.16);
+        var r1 = A.arcRadius * (0.9 + Math.random() * 0.16);
+        _a.set(anchor.x + Math.sin(a0) * r0, 0.45, anchor.z + Math.cos(a0) * r0);
+        _b.set(anchor.x + Math.sin(a1) * r1, 0.45, anchor.z + Math.cos(a1) * r1);
+        jagged(_a, _b, 10, 0.4, segs[i2].pts, UP);
+        writeRibbon(segs[i2].mesh, segs[i2].pts, UP, false);
+        segs[i2].mesh.visible = f0 <= reveal;
+      }
+    }
+    rebuild(0);
+
+    var dir = new T.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    var targets = coneHits(anchor, dir, A.arcRadius + 0.4, A.arcHalfAngle);
+    for (var q = 0; q < targets.length; q++) {
+      damage(targets[q], A.arcDamage, 'big');
+      contactStar(targets[q].pos.x, 1.2, targets[q].pos.z, 2.4);
+      if (enhanced) applyShock(targets[q], A.arcShockTicks);   // level 1 shock
+    }
+    logHit(targets.length, A.arcDamage);
+    camShake = 0.26;
+    screenFlash(0.18);
+    for (var s = 0; s < 60; s++) {
+      var f = Math.random();
+      var a2 = ang - A.arcHalfAngle + f * A.arcHalfAngle * 2;
+      var r = A.arcRadius * (0.85 + Math.random() * 0.25);
+      emitSpark(anchor.x + Math.sin(a2) * r, 0.4 + Math.random() * 0.5, anchor.z + Math.cos(a2) * r,
+        Math.sin(a2) * 2.5, 1.5 + Math.random() * 3.5, Math.cos(a2) * 2.5, 0.5, Math.random() < 0.5);
+    }
+
+    var life = 0, dur = 0.36, crackle = 0;
+    addEffect({
+      update: function (dt) {
+        life += dt; crackle -= dt;
         var k = life / dur;
-        var fade = k < 0.82 ? 1 : Math.max(0, 1 - (k - 0.82) / 0.18);
-        outer.material.opacity = 0.85 * fade * (0.72 + Math.random() * 0.28);
-        core.material.opacity = fade * (0.85 + Math.random() * 0.15);
+        var reveal = Math.min(1, k / 0.3);
+        if (crackle <= 0) { crackle = 0.04; rebuild(reveal); }
+        var fade = k < 0.5 ? 1 : 1 - (k - 0.5) / 0.5;
+        for (var i3 = 0; i3 < SEGS; i3++) segs[i3].mesh.material.opacity = fade * (0.7 + Math.random() * 0.3);
         return k < 1;
       },
-      dispose: function () { disposeMesh(outer); disposeMesh(core); }
+      dispose: function () { for (var i4 = 0; i4 < SEGS; i4++) disposeMesh(segs[i4].mesh); }
     });
   }
 
-  /* ================= arcana state / casting ================= */
+  /* ================= combo driver ================= */
 
   var state = {
-    arcana: 'thunder',
+    arcana: 'vine',
     enhanced: false,
-    charges: { thunder: ARCANA.thunder.maxCharges, circuit: ARCANA.circuit.maxCharges },
-    recharge: { thunder: 0, circuit: 0 },
-    dash: null
+    beat: -1,          // index of the beat just played
+    active: 0,         // remaining lock time of the current beat
+    window: 0,         // remaining time to continue the string
+    step: null,        // authored forward movement for the current beat
+    events: 0,         // damage events produced by the current string
+    total: 0,
+    buffered: false    // a press during an active beat queues the next one
   };
 
-  function updateCharges(dt) {
-    ['thunder', 'circuit'].forEach(function (id) {
-      var A = ARCANA[id];
-      if (state.charges[id] < A.maxCharges) {
-        state.recharge[id] -= dt;
-        if (state.recharge[id] <= 0) {
-          state.charges[id]++;
-          state.recharge[id] = state.charges[id] < A.maxCharges ? A.cooldown : 0;
+  function beatCount() {
+    return ARCANA[state.arcana].beats;
+  }
+
+  function logHit(count, dmg) {
+    if (!count) return;          // an event that connects with nobody is not logged
+    state.events++;
+    state.total += dmg;          // one event deals its damage, however many it covers
+    hudLedger();
+  }
+
+  function playBeat(index) {
+    var A = ARCANA[state.arcana];
+    var ang = Math.atan2(playerFacing.x, playerFacing.z);
+    var anchor = player.position.clone();
+
+    if (state.arcana === 'vine') {
+      if (index < 2) {
+        // beats 1 and 2: one attached whip each, mirrored
+        var from = index === 0 ? -1.15 : 1.15;
+        var to = index === 0 ? 0.7 : -0.7;
+        vineWhip(anchor, ang, from, to, A.whipDamage);
+        state.active = 0.30;
+      } else if (!state.enhanced) {
+        // normal finisher: one bundled event behind three visible strands
+        vineBundle(anchor, ang, A.finisherDamage);
+        state.active = 0.42;
+      } else {
+        // enhanced finisher: the bundle is emitted three separate times
+        vineBundle(anchor, ang, A.finisherDamageEnh);
+        for (var e = 1; e < A.finisherEmissionsEnh; e++) {
+          (function (delay) {
+            var t = 0;
+            addEffect({
+              update: function (dt) {
+                t += dt;
+                if (t >= delay) { vineBundle(player.position.clone(), ang, A.finisherDamageEnh); return false; }
+                return true;
+              },
+              dispose: function () { }
+            });
+          })(e * 0.17);
         }
-      } else {
-        state.recharge[id] = 0;
-      }
-    });
-  }
-
-  function spendCharge(id) {
-    var A = ARCANA[id];
-    if (state.charges[id] <= 0) return false;
-    var wasFull = state.charges[id] === A.maxCharges;
-    state.charges[id]--;
-    if (wasFull || state.recharge[id] <= 0) state.recharge[id] = A.cooldown;
-    return true;
-  }
-
-  function castDash(dir) {
-    if (state.dash) return;
-    var id = state.arcana;
-    var magical = spendCharge(id);      // out of charges -> the dash still happens
-
-    var from = player.position.clone();
-    var to = from.clone().addScaledVector(dir, DASH_DIST);
-    to.x = Math.max(-ARENA + 1, Math.min(ARENA - 1, to.x));
-    to.z = Math.max(-ARENA + 1, Math.min(ARENA - 1, to.z));
-
-    state.dash = { from: from, to: to, t: 0, dur: DASH_TIME, magical: magical, trail: 0 };
-
-    if (magical) {
-      if (id === 'thunder') {
-        // the strike is anchored to the START of the dash and lands after the caster leaves
-        thunderStrike(from.x, from.z, state.enhanced);
-      } else {
-        circuitPlace(from.x, from.z, to.x, to.z);
+        state.active = 0.62;
       }
     } else {
-      toast('NO CHARGE — dash only');
+      // spark contact: every beat is a strike plus a small authored step
+      ensureAura();
+      sparkStrike(anchor, ang, A.damage[index]);
+      state.step = { dir: playerFacing.clone(), left: A.step, speed: A.step / 0.12 };
+      state.active = index < 3 ? 0.155 : 0.30;
+      if (index === 3) sparkArc(anchor, ang, state.enhanced);   // overlay alongside beat 4
     }
+
+    state.beat = index;
+    state.window = 0;
+    hudBeats();
   }
 
-  function dashTrail(pos) {
-    var m = new T.Mesh(new T.PlaneGeometry(0.8, 1.4), new T.MeshBasicMaterial({
-      color: state.arcana === 'thunder' ? 0xffd24a : 0xffe07a,
-      transparent: true, opacity: 0.5, blending: T.AdditiveBlending, depthWrite: false
-    }));
-    m.position.set(pos.x, 0.7, pos.z);
-    m.lookAt(camera.position);
-    scene.add(m);
-    var life = 0;
-    addEffect({
-      update: function (dt) { life += dt; m.material.opacity = 0.5 * (1 - life / 0.25); return life < 0.25; },
-      dispose: function () { disposeMesh(m); }
-    });
+  function attack() {
+    // a press mid-beat is remembered rather than dropped, so the string flows
+    if (state.active > 0) { state.buffered = true; return; }
+    var next = (state.window > 0 && state.beat < beatCount() - 1) ? state.beat + 1 : 0;
+    if (next === 0) { state.events = 0; state.total = 0; }
+    state.buffered = false;
+    playBeat(next);
   }
 
-  function updateDash(dt) {
-    if (!state.dash) return true;
-    var d = state.dash;
-    d.t += dt;
-    var k = Math.min(1, d.t / d.dur);
-    var e = 1 - Math.pow(1 - k, 2.4);
-    player.position.lerpVectors(d.from, d.to, e);
-    d.trail -= dt;
-    if (d.trail <= 0) { d.trail = 0.03; dashTrail(player.position); }
-    if (k >= 1) state.dash = null;
-    return false;
+  function updateCombo(dt, held) {
+    if (state.active > 0) {
+      state.active -= dt;
+      if (state.active <= 0) {
+        state.active = 0;
+        state.window = ARCANA[state.arcana].comboWindow;
+        if (state.buffered) { state.buffered = false; attack(); return; }
+      }
+    } else if (state.window > 0) {
+      state.window -= dt;
+      if (state.window <= 0) { state.beat = -1; hudBeats(); }
+    }
+    // holding attack performs the complete combo
+    if (held && state.active <= 0) attack();
+
+    if (state.step) {
+      var s = state.step;
+      var move = Math.min(s.left, s.speed * dt);
+      player.position.x += s.dir.x * move;
+      player.position.z += s.dir.z * move;
+      player.position.x = Math.max(-ARENA + 1, Math.min(ARENA - 1, player.position.x));
+      player.position.z = Math.max(-ARENA + 1, Math.min(ARENA - 1, player.position.z));
+      s.left -= move;
+      if (s.left <= 0.0001) state.step = null;
+    }
   }
 
   /* ================= input ================= */
 
-  var input = { mx: 0, mz: 0, dashPressed: false };
+  var input = { attackHeld: false, attackPressed: false };
   var keys = {};
   window.addEventListener('keydown', function (e) {
+    if (!keys[e.code]) {
+      if (e.code === 'Space' || e.code === 'KeyJ') { input.attackPressed = true; e.preventDefault(); }
+      if (e.code === 'Digit1') setArcana('vine');
+      if (e.code === 'Digit2') setArcana('spark');
+      if (e.code === 'KeyE') toggleEnhanced();
+      if (e.code === 'KeyR') { layoutDummies(); toast('DUMMIES RESET'); }
+    }
     keys[e.code] = true;
-    if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.dashPressed = true; e.preventDefault(); }
-    if (e.code === 'Digit1') setArcana('thunder');
-    if (e.code === 'Digit2') setArcana('circuit');
-    if (e.code === 'KeyE') toggleEnhanced();
-    if (e.code === 'KeyR') { layoutDummies(); toast('DUMMIES RESET'); }
+    if (e.code === 'Space' || e.code === 'KeyJ') input.attackHeld = true;
   });
-  window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+  window.addEventListener('keyup', function (e) {
+    keys[e.code] = false;
+    if (e.code === 'Space' || e.code === 'KeyJ') input.attackHeld = false;
+  });
 
   function readKeys() {
     var x = 0, z = 0;
@@ -1278,8 +1435,23 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
       e.preventDefault(); e.stopPropagation(); fn();
     });
   }
-  bindPress(document.getElementById('btn-dash'), function () { input.dashPressed = true; });
-  bindPress(document.getElementById('btn-swap'), function () { setArcana(state.arcana === 'thunder' ? 'circuit' : 'thunder'); });
+  // the attack button reports hold as well as press, so it can run the string
+  (function bindAttack() {
+    var el = document.getElementById('btn-attack');
+    var press = function () { input.attackPressed = true; input.attackHeld = true; };
+    var up = function () { input.attackHeld = false; };
+    el.addEventListener('touchstart', function (e) {
+      lastTouch = Date.now(); e.preventDefault(); e.stopPropagation(); press();
+    }, { passive: false });
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    el.addEventListener('mousedown', function (e) {
+      if (Date.now() - lastTouch < 700) return;
+      e.preventDefault(); e.stopPropagation(); press();
+    });
+    window.addEventListener('mouseup', up);
+  })();
+  bindPress(document.getElementById('btn-swap'), function () { setArcana(state.arcana === 'vine' ? 'spark' : 'vine'); });
   bindPress(document.getElementById('btn-enh'), toggleEnhanced);
   bindPress(document.getElementById('btn-reset'), function () { layoutDummies(); toast('DUMMIES RESET'); });
 
@@ -1293,9 +1465,10 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
       var x = p.axes[0] || 0, y = p.axes[1] || 0;
       if (Math.abs(x) < 0.2) x = 0;
       if (Math.abs(y) < 0.2) y = 0;
-      var dashBtn = (p.buttons[0] && p.buttons[0].pressed) || (p.buttons[5] && p.buttons[5].pressed) || (p.buttons[7] && p.buttons[7].value > 0.5);
-      if (dashBtn && !readGamepad.was) input.dashPressed = true;
-      readGamepad.was = dashBtn;
+      var atk = (p.buttons[2] && p.buttons[2].pressed) || (p.buttons[7] && p.buttons[7].value > 0.5);
+      if (atk && !readGamepad.was) input.attackPressed = true;
+      input.attackHeld = input.attackHeld || atk;
+      readGamepad.was = atk;
       return [x, y];
     }
     return null;
@@ -1305,27 +1478,21 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
 
   var elTitle = document.getElementById('arcana-title');
   var elMeta = document.getElementById('arcana-meta');
-  var elCharges = document.getElementById('charges');
-  var elCd = document.getElementById('cd');
+  var elBeats = document.getElementById('beats');
+  var elLedger = document.getElementById('ledger');
   var elEnh = document.getElementById('btn-enh');
   var elStats = document.getElementById('stats');
   var elToast = document.getElementById('toast');
   var elFlash = document.getElementById('flash');
-  var elChain = document.getElementById('chain');
 
   var toastTimer = 0;
   function toast(msg) { elToast.textContent = msg; elToast.style.opacity = '1'; toastTimer = 1.4; }
-  var chainTimer = 0;
-  function hudFlashChains(count, hits) {
-    elChain.textContent = count + ' CHAIN' + (count > 1 ? 'S' : '') + ' · ' + hits + ' HITS × 2 = ' + (hits * 2);
-    elChain.style.opacity = '1';
-    chainTimer = 1.6;
-  }
   var flashTimer = 0, flashPeak = 0;
   function screenFlash(a) { flashPeak = a; flashTimer = 0.22; }
 
   function setArcana(id) {
     state.arcana = id;
+    state.beat = -1; state.window = 0; state.active = 0; state.events = 0; state.total = 0;
     syncHud();
     toast(ARCANA[id].name);
   }
@@ -1335,38 +1502,54 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
     toast(state.enhanced ? 'ENHANCED' : 'BASE');
   }
 
+  function hudBeats() {
+    var n = beatCount();
+    var html = '';
+    for (var i = 0; i < n; i++) {
+      var cls = 'beat';
+      if (i <= state.beat) cls += ' done';
+      if (i === state.beat) cls += ' now';
+      if (i === n - 1) cls += ' fin';
+      html += '<span class="' + cls + '">' + (i + 1) + '</span>';
+    }
+    elBeats.innerHTML = html;
+  }
+
+  function hudLedger() {
+    elLedger.textContent = state.events
+      ? (state.events + ' event' + (state.events > 1 ? 's' : '') + ' · ' + state.total + ' dmg')
+      : '';
+  }
+
   function syncHud() {
     var A = ARCANA[state.arcana];
     elTitle.textContent = A.name;
     elMeta.textContent = A.element + ' · ' + A.type + ' · ' + A.subtype;
     elEnh.classList.toggle('on', state.enhanced);
-    document.body.classList.toggle('circuit', state.arcana === 'circuit');
+    document.body.classList.toggle('vine', state.arcana === 'vine');
 
     var s;
-    if (state.arcana === 'thunder') {
-      s = state.enhanced
-        ? ['strike at dash origin', 'burst 10 dmg · radius ' + ARCANA.thunder.burstRadiusEnh.toFixed(1), 'core +10 dmg', 'level 4 shock · 10 × 2 = 20']
-        : ['strike at dash origin', 'burst 10 dmg · radius ' + ARCANA.thunder.burstRadius.toFixed(1), 'core +10 dmg', 'level 2 shock · 6 × 2 = 12'];
-      s.push('2 charges · 5s each');
+    if (state.arcana === 'vine') {
+      s = ['3-beat string · hold to continue',
+        'beats 1-2: attached whip · 7 dmg'];
+      s = s.concat(state.enhanced
+        ? ['beat 3: bundle emitted 3×', '9 dmg per emission', '5 damage events in the string']
+        : ['beat 3: 3 strands, 1 event', '15 dmg finisher', '3 damage events in the string']);
     } else {
-      s = ['orb at dash start + end', 'links after 1.5s',
-        (state.enhanced ? '8' : '6') + ' hits × 2 dmg (min)',
-        'each extra chain: +2 hits on all',
-        '3 charges · 4s each'];
+      s = ['4-beat string · hold to continue',
+        'beats 1-4: 6 → 7 → 8 → 9 dmg',
+        'small forward step each beat',
+        'beat 4 also: arc · 10 dmg'];
+      s.push(state.enhanced ? 'arc applies level 1 shock' : 'enhance: shock on the arc');
+      s.push('4 casts · 5 damage events');
     }
     elStats.innerHTML = s.map(function (line) { return '<li>' + line + '</li>'; }).join('');
+    hudBeats();
+    hudLedger();
   }
 
   function updateHud(dt) {
-    var A = ARCANA[state.arcana];
-    var c = state.charges[state.arcana];
-    var html = '';
-    for (var i = 0; i < A.maxCharges; i++) html += '<span class="pip' + (i < c ? ' full' : '') + '"></span>';
-    elCharges.innerHTML = html;
-    elCd.textContent = c < A.maxCharges ? state.recharge[state.arcana].toFixed(1) : '';
-
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) elToast.style.opacity = '0'; }
-    if (chainTimer > 0) { chainTimer -= dt; if (chainTimer <= 0) elChain.style.opacity = '0'; }
     if (flashTimer > 0) {
       flashTimer -= dt;
       elFlash.style.opacity = String(Math.max(0, flashTimer / 0.22) * flashPeak);
@@ -1381,7 +1564,6 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     // a portrait phone sees far less of the arena horizontally, so pull back
-    // until an enhanced burst still fits comfortably on screen
     var zoom = Math.max(1, Math.min(2.0, 1.5 / camera.aspect));
     CAM_OFFSET.set(0, 16.4 * zoom, 8.6 * zoom);
     scene.fog.near = 30 * zoom;
@@ -1405,27 +1587,28 @@ return {ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnimationB
     if (gp) { mx += gp[0]; mz += gp[1]; }
     moveDir.set(mx, 0, mz);
     if (moveDir.lengthSq() > 1) moveDir.normalize();
-    if (moveDir.lengthSq() > 0.0001) playerFacing.copy(moveDir).normalize();
 
-    var dashing = !updateDash(dt);
-    if (!dashing) {
+    var swinging = state.active > 0;
+    if (moveDir.lengthSq() > 0.0001) {
+      if (!swinging) playerFacing.copy(moveDir).normalize();
+      player.rotation.y = Math.atan2(playerFacing.x, playerFacing.z);
+      playerBob += dt * 12;
+    } else playerBob += dt * 3;
+
+    // an attack beat owns the caster's movement for its duration
+    if (!swinging) {
       player.position.x += moveDir.x * MOVE_SPEED * dt;
       player.position.z += moveDir.z * MOVE_SPEED * dt;
       player.position.x = Math.max(-ARENA + 1, Math.min(ARENA - 1, player.position.x));
       player.position.z = Math.max(-ARENA + 1, Math.min(ARENA - 1, player.position.z));
     }
-    if (moveDir.lengthSq() > 0.0001) {
-      player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
-      playerBob += dt * 12;
-    } else playerBob += dt * 3;
     player.position.y = Math.abs(Math.sin(playerBob)) * 0.06;
     playerShadow.position.set(player.position.x, 0.02, player.position.z);
 
-    if (input.dashPressed) { input.dashPressed = false; castDash(playerFacing.clone()); }
+    if (input.attackPressed) { input.attackPressed = false; attack(); }
 
     // ---- systems ----
-    updateCharges(dt);
-    updateCircuit(dt, state.enhanced);
+    updateCombo(dt, input.attackHeld);
     updateDummies(dt);
     updateEffects(dt);
     updateSparks(dt);
