@@ -40,6 +40,6 @@ assert.deepEqual(readWorkingAbilityPool(storage),[stanceId,arcanaId,modifierId])
 
 data.set(ENEMY_LAB_WORKING_ABILITY_POOL_KEY,'not-json');
 assert.deepEqual(readWorkingAbilityPool(storage),[]);
-assert.equal(ARENA_ABILITY_CATALOG.length,79);
+assert.equal(ARENA_ABILITY_CATALOG.length,89);
 
 console.log('Working ability pool persistence: ok');

@@ -47,6 +47,16 @@ const ARCANA_HANDLER_ROWS = Object.freeze([
   ['BALL-LIGHTNING','wizardArcaneTypes'],
   ['AQUA-BEAM','wizardArcaneTypes'],
   ['ARCANE-INTERVENTION','wizardArcaneTypes'],
+  ['FLAME-BREATH','wizardVfxArcana'],
+  ['SEARING-CROWN','wizardVfxArcana'],
+  ['IGNITION-DRIVE','wizardVfxArcana'],
+  ['ENGULFING-FISSURE','wizardVfxArcana'],
+  ['DRAGON-BLAST','wizardVfxArcana'],
+  ['SHEARING-CHAIN','wizardVfxArcana'],
+  ['TECTONIC-DRILL','wizardVfxArcana'],
+  ['ROCK-SOLID-TOMAHAWK','wizardVfxArcana'],
+  ['AQUA-VORTEX','wizardVfxArcana'],
+  ['AQUA-BREAKER','wizardVfxArcana'],
 ]);
 
 const ARCANA_EFFECT_ROWS = Object.freeze(ARCANA_HANDLER_ROWS.map(([arcanaId,runtimeHandlerId])=>Object.freeze({

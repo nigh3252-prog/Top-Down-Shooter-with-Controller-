@@ -4,6 +4,7 @@ import { WIZARD_AIR_BASIC_CARDS } from '../src/wizard-air-basics-cards.js';
 import { WIZARD_NEXT_SOURCE_CARDS } from '../src/wizard-next-source-cards.js';
 import { WIZARD_NEXT_TWENTY_CARDS } from '../src/wizard-next-twenty-cards.js';
 import { WIZARD_ARCHETYPE_SAMPLER_CARDS } from '../src/wizard-archetype-sampler-cards.js';
+import { WIZARD_VFX_ARCANA_CARDS } from '../src/wizard-vfx-arcana-cards.js';
 import {
   WIZARD_ARCANA_CATALOG,
   WIZARD_ARCANA_CATALOG_BY_ARCANA_ID,
@@ -25,6 +26,10 @@ const nextTwentyIds=[
 const archetypeSamplerIds=[
   'FLAME-FUSION','RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM','HEROIC-LEAP',
   'CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION',
+];
+const vfxArcanaIds=[
+  'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST',
+  'SHEARING-CHAIN','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','AQUA-VORTEX','AQUA-BREAKER',
 ];
 
 assert.equal(WIZARD_NEXT_TWENTY_CARDS.length,20);
@@ -58,21 +63,27 @@ const canonicalIds=[
   'AIR-SPINNER','PERFORATING-JET','EARTH-KNUCKLES','BLADED-VINE',
   'STONE-SHOT','SPARK-CONTACT','BOLT-RAIL','VOLT-DISC',
   ...nextTwentyIds,
-  'HOMING-FLARES','DRAGON-ARC','FLAME-FUSION','RAPID-FIRE-AGENT','WARD-OF-FLAMES',
-  'WHIRLING-TORNADO','MENTIS-IMPERIUM','HEROIC-LEAP','CYCLONE-BOOMERANG',
-  'EARTHEN-AEGIS','BALL-LIGHTNING','WATER-PRISON','AQUA-BEAM','ARCANE-INTERVENTION',
+  'FLAME-BREATH','SEARING-CROWN','HOMING-FLARES','DRAGON-ARC','FLAME-FUSION','IGNITION-DRIVE','ENGULFING-FISSURE',
+  'RAPID-FIRE-AGENT','WARD-OF-FLAMES','DRAGON-BLAST','WHIRLING-TORNADO','MENTIS-IMPERIUM','HEROIC-LEAP','SHEARING-CHAIN',
+  'CYCLONE-BOOMERANG','EARTHEN-AEGIS','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','BALL-LIGHTNING','AQUA-VORTEX','WATER-PRISON',
+  'AQUA-BREAKER','AQUA-BEAM','ARCANE-INTERVENTION',
 ];
 assert.equal(WIZARD_ARCHETYPE_SAMPLER_CARDS.length,10);
 assert.deepEqual(WIZARD_ARCHETYPE_SAMPLER_CARDS.map(card=>card.arcanaId),archetypeSamplerIds);
 assert.ok(WIZARD_ARCHETYPE_SAMPLER_CARDS.every(card=>card.baseFormOnly===true&&card.playEvent==='wizard-arcana:play'));
 assert.ok(WIZARD_ARCHETYPE_SAMPLER_CARDS.every(card=>card.sourceClip.start<card.sourceClip.end));
 assert.equal(wizardArcanaCardById('AQUA-BEAM').chargedVariantEnabled,false,'only Aqua Beam base form ships in this pass');
+assert.equal(WIZARD_VFX_ARCANA_CARDS.length,10);
+assert.deepEqual(WIZARD_VFX_ARCANA_CARDS.map(card=>card.arcanaId),vfxArcanaIds);
+assert.ok(WIZARD_VFX_ARCANA_CARDS.every(card=>card.baseFormOnly===true&&card.playEvent==='wizard-arcana:play'));
+assert.ok(WIZARD_VFX_ARCANA_CARDS.every(card=>card.enhancedVariantEnabled===false&&card.chargedVariantEnabled===false));
+assert.ok(WIZARD_VFX_ARCANA_CARDS.every(card=>card.sourceClip.start<card.sourceClip.end));
 
-assert.equal(WIZARD_ARCANA_CATALOG.length,46);
-assert.equal(new Set(WIZARD_ARCANA_CATALOG.map(card=>card.id)).size,46);
+assert.equal(WIZARD_ARCANA_CATALOG.length,56);
+assert.equal(new Set(WIZARD_ARCANA_CATALOG.map(card=>card.id)).size,56);
 assert.deepEqual(WIZARD_ARCANA_CATALOG.map(card=>card.arcanaId),canonicalIds);
 assert.deepEqual(WIZARD_ARCANA_CATALOG.map(wizardArcanaSourceOrder),[
-  ...Array.from({length:32},(_,index)=>index+1),42,44,47,53,54,58,60,62,68,69,70,67,71,72,
+  ...Array.from({length:32},(_,index)=>index+1),34,35,42,44,47,49,52,53,54,57,58,60,62,64,68,69,86,88,70,123,67,131,71,72,
 ]);
 for(const id of archetypeSamplerIds){
   const card=wizardArcanaCardById(id);
@@ -82,7 +93,7 @@ for(const id of archetypeSamplerIds){
   assert.equal(wizardArcanaShowcaseStart(`WOL-${id}`),card.sourceClip.start,`${id} must retain its showcase timestamp through a card-ID lookup`);
 }
 
-const originalCards=[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS,...WIZARD_ARCHETYPE_SAMPLER_CARDS];
+const originalCards=[...WIZARD_ARCANA_CARDS,...WIZARD_AIR_BASIC_CARDS,...WIZARD_NEXT_SOURCE_CARDS,...WIZARD_ARCHETYPE_SAMPLER_CARDS,...WIZARD_VFX_ARCANA_CARDS];
 assert.ok(originalCards.every(card=>WIZARD_ARCANA_CATALOG_BY_ID.get(card.id)===card),'the catalog must preserve every existing frozen card object');
 assert.ok(WIZARD_ARCANA_CATALOG.every(card=>WIZARD_ARCANA_CATALOG_BY_ARCANA_ID.get(card.arcanaId)===card));
 assert.equal(wizardArcanaCardById('ice-dagger'),WIZARD_NEXT_TWENTY_CARDS[0]);

@@ -23,6 +23,7 @@ import { installWizardFusionLeapRuntime } from './wizard-fusion-leap-runtime.js'
 import { installWizardArcaneTypesRuntime } from './wizard-arcane-types-runtime.js';
 import { installWizardAlliedArcanaRuntime } from './wizard-allied-arcana-runtime.js';
 import { installWizardArcanaDamageScaler } from './wizard-arcana-damage-scaler.js';
+import { installWizardVfxArcanaRuntime } from './wizard-vfx-arcana-runtime.js';
 
 export function installPlayerCombat(api){
   const PC=installMainPlayerCombat(api);
@@ -59,7 +60,7 @@ export function installPlayerCombat(api){
   // Arcana were authored and validated through the embedded Enemy Lab. Every
   // runtime family now initializes under that same context in the full Combat
   // Arena, then the real URL is restored immediately. This keeps one authored
-  // implementation for all 46 cards without enabling Lab-only deck/editor UI.
+  // implementation for all 56 cards without enabling Lab-only deck/editor UI.
   const installArenaArcanaRuntime=factory=>factory();
 
   function getPlayerTransform(){
@@ -193,6 +194,13 @@ export function installPlayerCombat(api){
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
+  const wizardVfxArcanaRuntime=installArenaArcanaRuntime(()=>installWizardVfxArcanaRuntime({
+    THREE,scene:api.scene,
+    getPlayer:getPlayerTransform,
+    getEnemySystem:getArenaEnemySystem,
+    getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    translatePlayer:(dx,dz)=>getArenaRuntime()?.translateArcanaPlayer?.(dx,dz),
+  }));
 
   function arcanaIdFor(card){return String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();}
   function canPlayArcanaCard(card){
@@ -232,6 +240,7 @@ export function installPlayerCombat(api){
     wizardFusionLeap:makeArcanaHandler(wizardFusionLeapRuntime),
     wizardAlliedArcana:makeArcanaHandler(wizardAlliedArcanaRuntime),
     wizardArcaneTypes:makeArcanaHandler(wizardArcaneTypesRuntime),
+    wizardVfxArcana:makeArcanaHandler(wizardVfxArcanaRuntime),
   });
   const cardEffectDispatcher=createEffectDispatcher({runtimeHandlers:runtimeHandlerTable});
 
@@ -257,6 +266,7 @@ export function installPlayerCombat(api){
     wizardFusionLeapRuntime.reset?.();
     wizardArcaneTypesRuntime.reset?.();
     wizardAlliedArcanaRuntime.reset?.();
+    wizardVfxArcanaRuntime.reset?.();
     if(preserved?.dash&&wizardNextTwentyDashRuntime.state){
       wizardNextTwentyDashRuntime.state.resources=Object.fromEntries(
         Object.entries(preserved.dash).map(([id,value])=>[id,{...value}]),
@@ -292,6 +302,7 @@ export function installPlayerCombat(api){
     wizardFusionLeapRuntime.update(dt,now);
     wizardArcaneTypesRuntime.update(dt,now);
     wizardAlliedArcanaRuntime.update(dt,now);
+    wizardVfxArcanaRuntime.update(dt,now);
     return out;
   };
 
@@ -314,6 +325,7 @@ export function installPlayerCombat(api){
   Object.defineProperty(PC,'wizardFusionLeapRuntime',{value:wizardFusionLeapRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardArcaneTypesRuntime',{value:wizardArcaneTypesRuntime,enumerable:true});
   Object.defineProperty(PC,'wizardAlliedArcanaRuntime',{value:wizardAlliedArcanaRuntime,enumerable:true});
+  Object.defineProperty(PC,'wizardVfxArcanaRuntime',{value:wizardVfxArcanaRuntime,enumerable:true});
   Object.defineProperty(PC,'releaseArcanaInput',{value:releaseArcanaInput,enumerable:true});
   Object.defineProperty(PC,'interruptArcanaInput',{value:interruptArcanaInput,enumerable:true});
   Object.defineProperty(PC,'resetArcanaRuntimeState',{value:resetArcanaRuntimeState,enumerable:true});
