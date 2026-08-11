@@ -6,22 +6,58 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const htmlPath=path.join(root,'tools','wizard-of-legend-arcana-checklist.html');
 const html=fs.readFileSync(htmlPath,'utf8');
+const rail=fs.readFileSync(path.join(root,'tools','wizard-of-legend-arcana-rail.js'),'utf8');
+const uiSource=`${html}\n${rail}`;
 const dataMatch=html.match(/<script id="wol-data" type="application\/json">([\s\S]*?)<\/script>/);
 assert.ok(dataMatch,'checklist must embed its machine-readable dataset');
 const data=JSON.parse(dataMatch[1]);
 const entries=data.entries;
 
 assert.equal(data.schemaVersion,1,'dataset schema must remain explicitly versioned');
-assert.equal(entries.length,72,'the checklist must track 72 source-first analyses');
-assert.equal(new Set(entries.map(entry=>entry.id)).size,72,'arcana IDs must be unique');
-assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:72},(_,index)=>index+1),'analysis order must remain stable');
+assert.equal(entries.length,149,'the checklist must track every distinct Arcana in the source video');
+assert.equal(new Set(entries.map(entry=>entry.id)).size,149,'arcana IDs must be unique');
+assert.deepEqual(entries.map(entry=>entry.order),Array.from({length:149},(_,index)=>index+1),'showcase order must remain stable and contiguous');
 
-const improved=entries.filter(entry=>entry.status!=='legacy-replace');
+const onlineReferencePath=path.join(root,'archive','wizard-of-legend','source-notes','gate2-online-reference.md');
+const onlineReference=fs.readFileSync(onlineReferencePath,'utf8');
+assert.equal((onlineReference.match(/^## \d+\. /gm)??[]).length,149,'the online reference must cover every Gate 1 Arcana');
+for(const entry of entries){
+  assert.ok(entry.onlineReferenceMarkdown?.trim(),`${entry.name} must carry its documented-online reference in the generated entry`);
+  assert.equal(entry.onlineReference?.evidence,'documented-online',`${entry.name} online evidence label is incorrect`);
+  assert.ok(/^https?:\/\//.test(entry.onlineReference?.sourceUrl??''),`${entry.name} online reference must expose a source URL`);
+  assert.ok(entry.citations.includes(entry.onlineReference.sourceUrl),`${entry.name} online source must remain attached to its citations`);
+}
+
+for(const entry of entries){
+  assert.ok(entry.onlineReference?.documentedBehavior?.includes('[DOCUMENTED]'),'every entry must carry detailed documented behavior');
+  assert.match(entry.onlineReferenceMarkdown,/Wiki behavior/,'every entry must carry its wiki behavior field');
+}
+const wikiPrimary=entries.filter(entry=>entry.onlineReference.sourceUrl.includes('wizardoflegend.fandom.com'));
+assert.equal(wikiPrimary.length,144,'individual Wizard of Legend Wiki pages must be primary for 144 entries');
+assert.deepEqual(
+  entries.filter(entry=>!entry.onlineReference.sourceUrl.includes('wizardoflegend.fandom.com')).map(entry=>entry.name),
+  ['Gale-Force Alignment','Magnetic Follow-Up','Rock-Solid Tomahawk',"Rock N' Roll",'Cascading Blitz'],
+  'only the five explicitly labeled page-shell fallbacks may use the community catalog',
+);
+const airSpinner=entries.find(entry=>entry.name==='Air Spinner');
+assert.match(airSpinner.onlineReference.documentedBehavior,/orbits the player once/i,'Air Spinner must retain the wiki sequence detail');
+assert.match(airSpinner.onlineReference.documentedBehavior,/second disc spawns behind the player/i,'Air Spinner must retain the enhanced placement detail');
+assert.match(airSpinner.onlineReference.wikiStats,/Damage: 6, 10/,'Air Spinner must retain wiki infobox damage');
+const ripTide=entries.find(entry=>entry.name==='Rip Tide');
+assert.match(ripTide.onlineReference.documentedBehavior,/8, 7 and 5 damage/i,'Rip Tide must retain per-ripple wiki damage');
+assert.match(ripTide.onlineReference.documentedBehavior,/uninterruptable combo/i,'Rip Tide must retain its one-input combo rule');
+assert.match(ripTide.onlineReference.wikiStrategies,/pierce through all enemies/i,'Rip Tide must retain its documented piercing behavior');
+
+const inventoryOnly=entries.filter(entry=>entry.status==='inventory-only');
+const analyzed=entries.filter(entry=>entry.status!=='inventory-only');
+const improved=analyzed.filter(entry=>entry.status!=='legacy-replace');
 const implemented=entries.filter(entry=>entry.status==='source-first-implemented');
 const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
 const replacement=entries.filter(entry=>entry.status==='replacement-in-progress');
-assert.equal(improved.length,72,'all 72 entries must use the improved source-first analysis');
+assert.equal(analyzed.length,72,'the 72 source-first analyses must survive the Gate 1 inventory expansion');
+assert.equal(inventoryOnly.length,77,'Gate 1 must add 77 inventory-only records');
+assert.equal(improved.length,72,'all 72 analyzed entries must use the improved source-first analysis');
 assert.equal(implemented.length,46,'the archetype sampler must join the source-first implementation count');
 assert.equal(pending.length,26,'26 source-first analyses must remain implementation-pending');
 assert.deepEqual(legacy,[],'no legacy entry should remain after the Water Prison reanalysis');
@@ -44,7 +80,7 @@ assert.match(dragonArc?.revisionHistory,/metric-validated deterministic double-h
 assert.match(dragonArc?.revisionHistory,/final visual source comparison remains pending user review/i,'Dragon Arc must leave final visual approval open');
 assert.match(dragonArc?.revisionHistory,/articulated segmented dragon silhouette/i,'Dragon Arc must record the completed visual carrier');
 assert.match(dragonArc?.analysisMarkdown,/Working motion calibration \[INFERENCE/i,'Dragon Arc must keep measured calibration separate from observed evidence');
-assert.match(html,/const CATALOG_REVISION=4/,'completed implementations must migrate older device-local checklist defaults once');
+assert.match(html,/const CATALOG_REVISION=5/,'the Gate 1 catalog expansion must bump the stored progress revision');
 assert.match(html,/payload\.catalogRevision\?\?1/,'progress migration must preserve newer user choices');
 assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\},3:/,'revision two must preserve the Dragon Arc completion migration');
 assert.match(html,/3:Object\.fromEntries\(NEXT_TWENTY_IMPLEMENTED\.map/,'revision three must migrate the next-twenty implementation defaults');
@@ -77,7 +113,9 @@ for(const [name,window] of referenceLockWindows){
 assert.match(html,/Five-card reference-lock:/,'the checklist must explain the pending five-card review batch');
 assert.match(html,/Next-twenty reference-lock:/,'the checklist must explain the pending twenty-card review batch');
 assert.match(html,/Archetype sampler:/,'the checklist must explain the varied ten-card review batch');
-assert.match(html,/entry\.referenceWindow\?\?entry/,'clip playback must prefer the audited base-form window');
+assert.match(html,/data-action="watch-reference"/,'a card must offer its audited base-form reference lock when one exists');
+assert.match(html,/data-action="watch-segment"/,'a card must offer its individual base and charged showcase segments');
+assert.match(html,/function showcaseClip\(entry\)\{return entry\.showcaseWindow\?\?entry;\}/,'default playback must use the full Gate 1 showcase window');
 
 const nextTwentyNames=['Ice Dagger','Rip Tide','Aqua Arc','Chaos Crusher','Searing Rush','Flare Rush','Ignition Rush','Air Burst','Gust Burst','Razor Burst','Spike Track','Toxic Trap','Snare Track','Thunder Line','Circuit Line','Shock Line','Wave Front','Frost Feint','Frost Wing','Chaotic Rift'];
 for(const name of nextTwentyNames){
@@ -105,7 +143,6 @@ for(const name of archetypeSamplerNames){
 }
 for(const name of ['Cyclone Boomerang','Earthen Aegis','Ball Lightning','Aqua Beam','Arcane Intervention']){
   const entry=entries.find(item=>item.name===name);
-  assert.ok(entry?.order>=68&&entry?.order<=72,`${name} must retain its appended analysis order`);
   assert.ok(entry?.units.length>=2,`${name} must extract reusable construction units`);
 }
 assert.match(entries.find(entry=>entry.name==='Aqua Beam')?.analysisMarkdown,/five-beam[\s\S]*(?:not included|remain(?:s)? disabled)/i,'Aqua Beam must remain base-form only');
@@ -124,12 +161,41 @@ for(const entry of entries){
   assert.ok(entry.end<=data.video.duration,`${entry.name} clip must fit inside the source video`);
   assert.ok(entry.summary.trim(),`${entry.name} needs an observed-behavior summary`);
   assert.ok(entry.analysisMarkdown.trim(),`${entry.name} needs preserved analysis detail`);
-  assert.ok(entry.recipe.trim(),`${entry.name} needs an exact or historical construction recipe`);
-  assert.ok(entry.acceptance.trim(),`${entry.name} needs acceptance criteria`);
+  if(entry.status!=='inventory-only'){
+    assert.ok(entry.recipe.trim(),`${entry.name} needs an exact or historical construction recipe`);
+    assert.ok(entry.acceptance.trim(),`${entry.name} needs acceptance criteria`);
+  }
   assert.ok(entry.citations.length>0&&entry.citations.every(url=>/^https?:\/\//.test(url)),`${entry.name} needs at least one citation`);
   assert.deepEqual(Object.keys(entry.defaults).sort(),['analysis','comparison','implementation'],'each entry must define all three checklist stages');
   assert.ok(html.includes('id="arcana-${entry.id}"'),'runtime card template must create semantic stable anchors');
-  if(entry.status==='legacy-replace'){
+
+  const segments=entry.showcaseSegments;
+  assert.ok(Array.isArray(segments)&&segments.length>0,`${entry.name} must carry its Gate 1 showcase segments`);
+  assert.equal(segments[0].kind,'base','the first demonstration of an Arcana must be its base form');
+  assert.deepEqual(segments.map(segment=>segment.kind).slice(1),segments.length>1?['charged']:[],`${entry.name} may only add a charged demonstration`);
+  for(const segment of segments){
+    assert.ok(segment.end>segment.start,`${entry.name} showcase segment must advance in time`);
+    assert.ok(segment.end<=data.video.duration,`${entry.name} showcase segment must fit inside the source video`);
+  }
+  assert.deepEqual(entry.showcaseWindow,{
+    start:Math.min(...segments.map(segment=>segment.start)),
+    end:Math.max(...segments.map(segment=>segment.end)),
+  },`${entry.name} showcase window must span its demonstrations`);
+  if(entry.referenceWindow){
+    // The ledger stores whole-second showcase boundaries, so a frame-audited
+    // lock may sit up to one rounded second outside them, but never further.
+    assert.ok(entry.referenceWindow.start>=entry.showcaseWindow.start-1&&entry.referenceWindow.end<=entry.showcaseWindow.end+1,
+      `${entry.name} frame-audited lock must track its showcase window`);
+  }
+
+  if(entry.status==='inventory-only'){
+    assert.equal(entry.lineage,'inventory',`${entry.name} must declare video-inventory lineage`);
+    assert.deepEqual(entry.defaults,{analysis:false,implementation:false,comparison:false},`${entry.name} must not claim analysis or implementation credit`);
+    assert.match(entry.analysisMarkdown,/^# Gate 1 video inventory/,`${entry.name} must state that only the inventory gate is complete`);
+    assert.equal(entry.recipe,'',`${entry.name} must not invent a construction recipe before analysis`);
+    assert.equal(entry.acceptance,'',`${entry.name} must not invent acceptance criteria before analysis`);
+    assert.equal(entry.units.length,0,`${entry.name} must not claim extracted construction units`);
+  }else if(entry.status==='legacy-replace'){
     assert.deepEqual(entry.defaults,{analysis:false,implementation:false,comparison:false},`${entry.name} legacy prototype must not inflate source-first totals`);
     assert.ok(entry.currentImplementation?.trim(),`${entry.name} must document the current game prototype`);
     assert.match(entry.replacementChecklist,/do not polish/i,`${entry.name} must explicitly direct replacement rather than polishing`);
@@ -149,14 +215,49 @@ for(const entry of entries){
   assert.equal(poster.subarray(8,12).toString('ascii'),'WEBP',`${entry.name} poster must have a WebP signature`);
 }
 
+const ledgerPath=path.join(root,'archive','wizard-of-legend','source-notes','gate1-video-inventory.md');
+const ledger=fs.readFileSync(ledgerPath,'utf8').replace(/\r\n/g,'\n');
+const ledgerRows=[...ledger.matchAll(/^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$/gm)];
+assert.equal(ledgerRows.length,149,'the Gate 1 ledger must list every distinct Arcana exactly once');
+assert.deepEqual(
+  ledgerRows.map(row=>[Number(row[1]),row[2].trim(),row[3].trim(),row[4].trim()]),
+  entries.map(entry=>[entry.order,entry.name,entry.element,entry.category]),
+  'the published catalog must stay in lockstep with the Gate 1 ledger',
+);
+for(const row of ledgerRows){
+  const entry=entries[Number(row[1])-1];
+  const base=entry.showcaseSegments[0];
+  assert.equal(Number(row[5]),base.start,`${entry.name} base start must match the ledger`);
+  assert.equal(Number(row[6]),base.end,`${entry.name} base end must match the ledger`);
+  const charged=entry.showcaseSegments[1];
+  assert.equal(row[7].trim()==='—'?undefined:Number(row[7]),charged?.start,`${entry.name} charged start must match the ledger`);
+  assert.equal(row[8].trim()==='—'?undefined:Number(row[8]),charged?.end,`${entry.name} charged end must match the ledger`);
+}
+
+const chargedCount=entries.filter(entry=>entry.showcaseSegments.length>1).length;
+assert.deepEqual(data.video.inventory,{
+  distinctArcana:149,
+  timestampedDemonstrations:149+chargedCount,
+  chargedDemonstrations:chargedCount,
+  auditedAt:'2026-08-08',
+  authority:'Uploader timestamps cross-checked against every on-screen title card',
+},'the dataset must publish auditable Gate 1 inventory provenance');
+assert.equal(chargedCount,48,'48 Arcana must record a separate charged demonstration');
+assert.match(html,/Gate 1 complete-video inventory:/,'the checklist must explain the inventory-only records');
+assert.match(html,/149 of 149 Arcana inventoried/,'progress reporting must separate inventory coverage from source-first stages');
+assert.match(html,/inventoryOnly\?'disabled':''/,'inventory-only records must not offer source-first checkboxes yet');
+assert.match(html,/sourceEntries=data\.entries\.filter\(entry=>entry\.status!=='inventory-only'\)/,'inventory-only records must stay out of the source-first metrics');
+
 const requiredUi=[
   'playsinline preload="metadata"','wol.arcanaChecklist.v1','Export progress','Import progress','Reset progress',
   'Copy implementation brief','element-filter','category-filter','lineage-filter','status-filter','sort-order',
   'previous-clip','next-clip','full-showcase','playback-speed','video.addEventListener(\'timeupdate\'',
 ];
-for(const marker of requiredUi)assert.ok(html.includes(marker),`missing checklist UI behavior: ${marker}`);
-assert.ok(html.includes('<article class="arcana-card"'),'entries must render as semantic article elements');
-assert.ok(html.includes('about-large-files-on-github')&&html.includes('github-pages-limits'),'page must retain GitHub media-limit references');
+for(const marker of requiredUi)assert.ok(uiSource.includes(marker),`missing checklist UI behavior: ${marker}`);
+assert.ok(uiSource.includes('<article class="arcana-card"'),'entries must render as semantic article elements');
+assert.match(uiSource,/Documented online reference/,'cards must render the attached online reference layer');
+assert.match(uiSource,/entry\.onlineReferenceMarkdown/,'online reference text must participate in the catalog UI');
+assert.ok(uiSource.includes('about-large-files-on-github')&&uiSource.includes('github-pages-limits'),'page must retain GitHub media-limit references');
 
 const indexHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.ok(indexHtml.includes('href="archive/index.html"'),'the root launcher must route research tooling through Archive');

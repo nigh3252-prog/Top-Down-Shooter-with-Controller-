@@ -27,6 +27,104 @@ const improvedText=[
   read('14-archetype-sampler.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
+const inventoryLedgerText=read('gate1-video-inventory.md');
+const onlineReferenceText=read('gate2-online-reference.md');
+
+function parseLedgerNumber(value,label){
+  const parsed=Number(value);
+  if(!Number.isFinite(parsed))throw new Error(`Inventory ledger has a non-numeric ${label}: ${value}`);
+  return parsed;
+}
+
+function parseInventoryLedger(text){
+  const rows=[...text.matchAll(/^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$/gm)];
+  if(rows.length===0)throw new Error('Inventory ledger contains no Arcana rows');
+  const entries=rows.map(row=>{
+    const [,order,name,element,category,baseStart,baseEnd,chargedStart,chargedEnd]=row.map(value=>value.trim());
+    const segments=[{kind:'base',start:parseLedgerNumber(baseStart,'base start'),end:parseLedgerNumber(baseEnd,'base end')}];
+    if(chargedStart!=='—'||chargedEnd!=='—'){
+      segments.push({kind:'charged',start:parseLedgerNumber(chargedStart,'charged start'),end:parseLedgerNumber(chargedEnd,'charged end')});
+    }
+    return{
+      order:Number(order),name,element,category,segments,
+      showcaseWindow:{
+        start:Math.min(...segments.map(segment=>segment.start)),
+        end:Math.max(...segments.map(segment=>segment.end)),
+      },
+    };
+  });
+  entries.forEach((entry,index)=>{
+    if(entry.order!==index+1)throw new Error(`Inventory ledger order must be contiguous showcase order; row ${index+1} declares ${entry.order}`);
+    for(const segment of entry.segments){
+      if(!(segment.end>segment.start))throw new Error(`${entry.name} inventory window must advance in time`);
+    }
+    const previous=entries[index-1];
+    if(previous&&entry.showcaseWindow.start<previous.showcaseWindow.start){
+      throw new Error(`Inventory ledger must stay in showcase order; ${entry.name} precedes ${previous.name}`);
+    }
+  });
+  const readMeta=(label,pattern)=>{
+    const match=new RegExp(`^- \\*\\*${label}:\\*\\* (.+)$`,'m').exec(text);
+    if(!match)throw new Error(`Inventory ledger is missing its ${label} header`);
+    const value=match[1].trim();
+    if(pattern&&!pattern.test(value))throw new Error(`Inventory ledger ${label} is malformed: ${value}`);
+    return value;
+  };
+  const meta={
+    distinctArcana:Number(readMeta('Distinct Arcana',/^\d+$/)),
+    timestampedDemonstrations:Number(readMeta('Timestamped demonstrations',/^\d+$/)),
+    chargedDemonstrations:Number(readMeta('Arcana with a separate charged demonstration',/^\d+$/)),
+    auditedAt:readMeta('Audited',/^\d{4}-\d{2}-\d{2}$/),
+    authority:readMeta('Authority'),
+  };
+  const charged=entries.filter(entry=>entry.segments.length>1).length;
+  if(meta.distinctArcana!==entries.length)throw new Error(`Inventory ledger claims ${meta.distinctArcana} Arcana but lists ${entries.length}`);
+  if(meta.chargedDemonstrations!==charged)throw new Error(`Inventory ledger claims ${meta.chargedDemonstrations} charged demonstrations but lists ${charged}`);
+  if(meta.timestampedDemonstrations!==entries.length+charged)throw new Error(`Inventory ledger demonstration total must equal ${entries.length+charged}`);
+  return{entries,meta};
+}
+
+function parseOnlineReference(text){
+  const headings=[...text.matchAll(/^## (\d+)\. ([^\n]+)$/gm)];
+  if(headings.length!==149)throw new Error(`Online Arcana reference must contain 149 entries; found ${headings.length}`);
+  const references=new Map();
+  for(let index=0;index<headings.length;index+=1){
+    const match=headings[index];
+    if(Number(match[1])!==index+1)throw new Error(`Online Arcana reference order must be contiguous; row ${index+1} declares ${match[1]}`);
+    const end=headings[index+1]?.index??text.length;
+    const markdown=text.slice(match.index,end).trim();
+    const name=match[2].trim();
+    const fields={};
+    for(const field of markdown.matchAll(/^- \*\*([^*]+):\*\* (.+)$/gm))fields[field[1].trim()]=field[2].trim();
+    const sourceUrl=fields.Source?.match(/\((https?:\/\/[^)]+)\)/)?.[1]??'';
+    if(fields.Evidence!=='documented-online')throw new Error(`${name} online reference must use documented-online evidence`);
+    if(!sourceUrl)throw new Error(`${name} online reference is missing a source URL`);
+    const documentedBehavior=fields['Wiki behavior']??fields['Documented behavior']??'';
+    const enhanced=fields['Wiki enhanced behavior']??fields.Enhanced??'';
+    references.set(slugify(name),{
+      markdown,
+      fields,
+      sourceUrl,
+      evidence:fields.Evidence,
+      documentedBehavior,
+      enhanced,
+      wikiElement:fields['Wiki element']??'',
+      wikiType:fields['Wiki type']??'',
+      wikiSubtypes:fields['Wiki subtypes']??'',
+      wikiStats:fields['Wiki stats']??'',
+      wikiEnhancedStats:fields['Wiki enhanced stats']??'',
+      wikiStrategies:fields['Wiki strategy notes']??'',
+      wikiAdditionalNotes:fields['Wiki additional notes']??'',
+    });
+  }
+  if(references.size!==149)throw new Error(`Online Arcana reference names must be unique; found ${references.size}`);
+  return references;
+}
+
+function formatClock(seconds){
+  const minutes=Math.floor(seconds/60);
+  return `${minutes}:${String(Math.floor(seconds-minutes*60)).padStart(2,'0')}`;
+}
 
 function extractNumberedH1(text){
   const headings=[...text.matchAll(/^# ([^\n]+)$/gm)];
@@ -304,6 +402,10 @@ const revisionHistory=new Map([
 for(const name of samplerReferenceNotes.keys())revisionHistory.set(name,'The base-form source analysis was converted into a deterministic Enemy Lab implementation through contract, source-render, and final-style gates. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
 for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The source-first analysis was converted into a deterministic base-form Enemy Lab implementation through contract, source-render, and final-style gates. ${card.dashMotion?'The payload is layered onto the already approved Top Down Game dash locomotion, with Chaotic Rift retaining its required teleport exception.':'The full authored Basic sequence is scheduled by one card activation.'} Source comparison remains pending user review; enhanced variants remain documented but disabled.`);
 
+const inventory=parseInventoryLedger(inventoryLedgerText);
+const inventoryBySlug=new Map(inventory.entries.map(entry=>[slugify(entry.name),entry]));
+const onlineReferences=parseOnlineReference(onlineReferenceText);
+
 const improvedSections=extractNumberedH1(improvedText);
 const entries=sourceMeta.map((meta,index)=>{
   const [name,element,category,start,end,posterTime]=meta;
@@ -377,18 +479,98 @@ for(const entry of entries){
   if(entry.citations.length===0)entry.citations.push(showcaseUrl);
 }
 
+// The Gate 1 ledger owns showcase order and the whole-second clip boundaries for
+// every Arcana in the video, including the ones that already carry a full
+// source-first analysis. Frame-audited reference locks stay separate.
+for(const entry of entries){
+  const record=inventoryBySlug.get(entry.id);
+  if(!record)throw new Error(`${entry.name} is analyzed but missing from the Gate 1 video inventory ledger`);
+  if(record.element!==entry.element||record.category!==entry.category){
+    throw new Error(`${entry.name} classification disagrees with the inventory ledger: ${record.element}/${record.category}`);
+  }
+  entry.order=record.order;
+  entry.name=record.name;
+  entry.showcaseWindow=record.showcaseWindow;
+  entry.showcaseSegments=record.segments;
+}
+
+const analyzedSlugs=new Set(entries.map(entry=>entry.id));
+for(const record of inventory.entries){
+  const id=slugify(record.name);
+  if(analyzedSlugs.has(id))continue;
+  const [base]=record.segments;
+  const charged=record.segments.find(segment=>segment.kind==='charged');
+  const window=`${formatClock(record.showcaseWindow.start)}–${formatClock(record.showcaseWindow.end)}`;
+  const chargedNote=charged?` A separate charged demonstration begins at ${formatClock(charged.start)}.`:'';
+  entries.push({
+    id,order:record.order,name:record.name,element:record.element,category:record.category,
+    start:record.showcaseWindow.start,end:record.showcaseWindow.end,
+    showcaseWindow:record.showcaseWindow,showcaseSegments:record.segments,
+    lineage:'inventory',status:'inventory-only',
+    defaults:{analysis:false,implementation:false,comparison:false},
+    summary:`Gate 1 video inventory record. ${record.name} appears in the source showcase from ${formatClock(record.showcaseWindow.start)} to ${formatClock(record.showcaseWindow.end)}.${chargedNote} Behavioral classification and detailed analysis are intentionally pending later gates.`,
+    recipe:'',acceptance:'',issues:'',units:[],
+    citations:[`https://www.youtube.com/watch?v=cDyS1-SM2zc&t=${Math.floor(record.showcaseWindow.start)}s`],
+    analysisMarkdown:[
+      '# Gate 1 video inventory',
+      '',
+      `- **On-screen title:** ${record.name}`,
+      `- **Showcase window:** ${window}`,
+      ...(charged?[`- **Charged demonstration:** begins at ${formatClock(charged.start)}`]:[]),
+      '- **Gate status:** Inventoried from the video; behavioral alignment and detailed analysis have not started.',
+    ].join('\n'),
+    supplementMarkdown:'',revisionHistory:'',
+    posterTime:base.start+1.5,
+    poster:`media/wizard-of-legend/posters/${id}.webp`,
+  });
+}
+
+for(const entry of entries){
+  const online=onlineReferences.get(entry.id);
+  if(!online)throw new Error(`${entry.name} is missing its documented-online reference`);
+  entry.onlineReferenceMarkdown=online.markdown;
+  entry.onlineReference={
+    evidence:online.evidence,
+    sourceUrl:online.sourceUrl,
+    documentedBehavior:online.documentedBehavior,
+    enhanced:online.enhanced,
+    wikiElement:online.wikiElement,
+    wikiType:online.wikiType,
+    wikiSubtypes:online.wikiSubtypes,
+    wikiStats:online.wikiStats,
+    wikiEnhancedStats:online.wikiEnhancedStats,
+    wikiStrategies:online.wikiStrategies,
+    wikiAdditionalNotes:online.wikiAdditionalNotes,
+    fields:online.fields,
+  };
+  if(!entry.citations.includes(online.sourceUrl))entry.citations.push(online.sourceUrl);
+}
+entries.sort((first,second)=>first.order-second.order);
+
 const payload={
   schemaVersion:1,
   generatedFrom:'Archived Wizard of Legend source-first research notes',
-  video:{src:'media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4',duration:1329.296,sourceUrl:showcaseUrl},
+  video:{
+    src:'media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4',
+    duration:1329.296,
+    sourceUrl:showcaseUrl,
+    inventory:inventory.meta,
+  },
   entries,
   frameworkMarkdown:spellLanguage,
 };
 
-const template=fs.readFileSync(path.join(scriptDir,'wol-checklist-template.html'),'utf8');
+const generatedPath=path.join(root,'tools','wizard-of-legend-arcana-checklist.html');
+const fallbackTemplate=fs.readFileSync(path.join(scriptDir,'wol-checklist-template.html'),'utf8');
+// PR 122's generated page carries the newer fullscreen rail viewer. Preserve
+// that tracked shell when rebuilding; the older standalone template remains a
+// fallback for a clean artifact build.
+const existingTemplate=fs.existsSync(generatedPath)?fs.readFileSync(generatedPath,'utf8'):'';
+const template=existingTemplate.includes('id="rail-app"')?existingTemplate:fallbackTemplate;
 const safeJson=JSON.stringify(payload).replace(/</g,'\\u003c');
-const html=template
-  .replace('__WOL_DATA__',safeJson)
-  .replace('__GENERATED_AT__',new Date().toISOString());
-fs.writeFileSync(path.join(root,'wizard-of-legend-arcana-checklist.html'),html);
-console.log(`Generated Wizard of Legend checklist with ${entries.length} entries.`);
+const html=template.includes('__WOL_DATA__')
+  ? template.replace('__WOL_DATA__',safeJson).replace('__GENERATED_AT__',new Date().toISOString())
+  : template.replace(/(<script id="wol-data" type="application\/json">)[\s\S]*?(<\/script>)/,`$1${safeJson}$2`);
+fs.writeFileSync(generatedPath,html);
+const inventoryOnly=entries.filter(entry=>entry.status==='inventory-only').length;
+console.log(`Generated Wizard of Legend checklist with ${entries.length} entries (${entries.length-inventoryOnly} analyzed, ${inventoryOnly} inventory-only).`);
