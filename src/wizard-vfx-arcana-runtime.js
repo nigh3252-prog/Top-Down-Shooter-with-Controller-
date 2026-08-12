@@ -145,6 +145,7 @@ function pointInCone({origin,forward,target,reach,halfAngle,radius=0}){
 
 function positionAlong(origin,direction,distance){return{x:origin.x+direction.x*distance,z:origin.z+direction.z*distance};}
 function distance2D(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
+const STANDALONE_SOURCE_BASE_SCALE=2;
 
 export function installWizardVfxArcanaRuntime({
   THREE,scene,camera,getPlayer,getEnemySystem,getMazeSegments=()=>[],startDashMotion=()=>null,translatePlayer=()=>false,
@@ -193,7 +194,7 @@ export function installWizardVfxArcanaRuntime({
     const anchor=effect.mesh;
     const dx=(Number(enemy?.x)||0)-(Number(anchor?.position?.x)||0);
     const dz=(Number(enemy?.z)||0)-(Number(anchor?.position?.z)||0);
-    const frame=effect.frame,size=Math.max(.0001,Number(effect.size)||1);
+    const frame=effect.frame,size=Math.max(.0001,Number(effect.sourceSize??effect.size)||1);
     const cache=effect.sourceTargets??(effect.sourceTargets=new Map());
     let target=cache.get(enemy);
     if(!target){
@@ -243,19 +244,23 @@ export function installWizardVfxArcanaRuntime({
     sourcePort.update(effect.source,effect.age,localCameraQuaternion,{anchor:effect.mesh});
   }
   function createStandaloneSource(id,frame,size){
-    // Arcana Size scales the source visual and collision footprint only; source
-    // damage, speed, range, timing, knockback, and cooldown stay unchanged.
+    // These four supplied demos were authored visibly smaller than the other
+    // source ports in the game. Keep that as a per-source base factor, then
+    // let the shared Arcana Size multiplier apply on top of it.
+    // Arcana Size scales the source visual and collision footprint only;
+    // source damage, speed, range, timing, knockback, and cooldown stay unchanged.
+    const sourceSize=size*STANDALONE_SOURCE_BASE_SCALE;
     const anchor=sourceAnchor(frame,0,1,false);
     const factory=id==='STAR-BOLT'||id==='SHOCK-NOVA'
       ?createWizardLightningSourcePort
       :createWizardEarthArcanaSourcePort;
-    const source=factory({THREE,scene,camera,parent:anchor,size});
+    const source=factory({THREE,scene,camera,parent:anchor,size:sourceSize});
     if(!source.cast(id)){
       source.dispose?.();
       anchor.parent?.remove(anchor);
       return null;
     }
-    return{anchor,source};
+    return{anchor,source,sourceSize};
   }
   function updateStandaloneSource(effect,system,dt){
     if(!effect.source)return;
@@ -583,7 +588,7 @@ export function installWizardVfxArcanaRuntime({
   function startTerraRing(){
     const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('TERRA-RING',frame,size);
     if(!visual)return null;
-    return add({type:'terraRing',arcanaId:'TERRA-RING',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['TERRA-RING'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+    return add({type:'terraRing',arcanaId:'TERRA-RING',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['TERRA-RING'].life,frame,size,sourceSize:visual.sourceSize,mesh:visual.anchor,source:visual.source,standaloneSource:true});
   }
   function updateTerraRing(effect,dt,system){
     advance(effect,dt);updateStandaloneSource(effect,system,dt);
@@ -593,7 +598,7 @@ export function installWizardVfxArcanaRuntime({
   function startGraspingEarth(){
     const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('GRASPING-EARTH',frame,size);
     if(!visual)return null;
-    return add({type:'graspingEarth',arcanaId:'GRASPING-EARTH',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['GRASPING-EARTH'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+    return add({type:'graspingEarth',arcanaId:'GRASPING-EARTH',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['GRASPING-EARTH'].life,frame,size,sourceSize:visual.sourceSize,mesh:visual.anchor,source:visual.source,standaloneSource:true});
   }
   function updateGraspingEarth(effect,dt,system){
     advance(effect,dt);updateStandaloneSource(effect,system,dt);
@@ -603,7 +608,7 @@ export function installWizardVfxArcanaRuntime({
   function startShockNova(){
     const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('SHOCK-NOVA',frame,size);
     if(!visual)return null;
-    return add({type:'shockNova',arcanaId:'SHOCK-NOVA',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['SHOCK-NOVA'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+    return add({type:'shockNova',arcanaId:'SHOCK-NOVA',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['SHOCK-NOVA'].life,frame,size,sourceSize:visual.sourceSize,mesh:visual.anchor,source:visual.source,standaloneSource:true});
   }
   function updateShockNova(effect,dt,system){
     advance(effect,dt);updateStandaloneSource(effect,system,dt);
@@ -613,7 +618,7 @@ export function installWizardVfxArcanaRuntime({
   function startStarBolt(){
     const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('STAR-BOLT',frame,size);
     if(!visual)return null;
-    return add({type:'starBolt',arcanaId:'STAR-BOLT',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['STAR-BOLT'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+    return add({type:'starBolt',arcanaId:'STAR-BOLT',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['STAR-BOLT'].life,frame,size,sourceSize:visual.sourceSize,mesh:visual.anchor,source:visual.source,standaloneSource:true});
   }
   function updateStarBolt(effect,dt,system){
     advance(effect,dt);updateStandaloneSource(effect,system,dt);

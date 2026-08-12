@@ -74,6 +74,11 @@ assert.match(runtime,/Arcana Size scales the source visual and collision footpri
 
 assert.match(runtime,/createWizardVfxSourcePort/);
 assert.match(runtime,/function updateSourceVisual\(effect,system\)/);
+assert.match(runtime,/const STANDALONE_SOURCE_BASE_SCALE=2/,'the four supplied Earth/Lightning demos must use the requested 2x authored base size');
+assert.match(runtime,/const sourceSize=size\*STANDALONE_SOURCE_BASE_SCALE/,'the standalone source size must remain separate from the shared Arcana Size value');
+assert.match(runtime,/Number\(effect\.sourceSize\?\?effect\.size\)/,'standalone target coordinates must use the effective authored-plus-global source scale');
+for(const id of ['TERRA-RING','GRASPING-EARTH','SHOCK-NOVA','STAR-BOLT'])
+  assert.match(runtime,new RegExp(`sourceSize:visual\.sourceSize`),`${id} must retain the effective source scale for collision coordinates`);
 assert.match(runtime,/startDashMotion/,'Shearing Chain must use the shared dash controller');
 assert.match(runtime,/distanceMultiplier:\(SHEARING_CHAIN_SOURCE_ROUTE\/dashDistance\(\)\)\*size/,'Shearing Chain travel must scale with Arcana Size');
 assert.doesNotMatch(runtime,/const travel=Math\.min\(3\.8/,'Shearing Chain must not use the former fixed manual translation');
