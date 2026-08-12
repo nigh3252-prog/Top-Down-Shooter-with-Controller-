@@ -4,23 +4,13 @@ import {
   readArcanaTweaks,
 } from './wizard-arcana-settings.js';
 import { getArenaRuntimeConfig } from './arena-runtime-context.js';
+import { createWizardVfxSourcePort } from './wizard-vfx-arcana-source-port.js';
 
-const TAU=Math.PI*2;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const sat=value=>clamp(Number(value)||0,0,1);
 const lerp=(a,b,t)=>a+(b-a)*t;
 const smooth=value=>{const t=sat(value);return t*t*(3-2*t);};
 const easeOut=value=>1-Math.pow(1-sat(value),3);
-const rnd=(index,salt)=>{const value=Math.sin(index*127.1+salt*311.7)*43758.5453;return value-Math.floor(value);};
-
-const PAL=Object.freeze({
-  water:Object.freeze({deep:0x164e78,mid:0x2e86b7,base:0x65bddd,hi:0xb7f1f1,foam:0xf4ffff}),
-  breaker:Object.freeze({deep:0x425a69,mid:0x759dad,base:0xa5cbd0,hi:0xd8f2ed,foam:0xffffff}),
-  fire:Object.freeze({deep:0x7b2415,mid:0xc84b20,base:0xf0782b,hi:0xffc34d,foam:0xffffd2}),
-  air:Object.freeze({deep:0x536e78,mid:0x8faeb4,base:0xc8eef0,hi:0xf4ffff,foam:0xffffff}),
-  earth:Object.freeze({deep:0x4a3316,mid:0x63481f,base:0x74562a,hi:0x9b7a47,foam:0xf6e6b5}),
-  stone:Object.freeze({deep:0x302b22,mid:0x655942,base:0xa49470,hi:0xe3d2a5,foam:0xffffff}),
-});
 
 const VFX_IDS=Object.freeze(new Set([
   'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST',
@@ -28,16 +18,16 @@ const VFX_IDS=Object.freeze(new Set([
 ]));
 
 export const WIZARD_VFX_ARCANA_SPECS=Object.freeze({
-  'FLAME-BREATH':Object.freeze({life:.82,damage:18,hits:3}),
-  'SEARING-CROWN':Object.freeze({life:1.34,tickDamage:5,ticks:5,finisherDamage:20}),
-  'IGNITION-DRIVE':Object.freeze({life:1.45,beats:5,carryDamage:10,finisherDamage:30}),
-  'ENGULFING-FISSURE':Object.freeze({life:8.35,trapCount:3,tickDamage:5,ticks:5}),
-  'DRAGON-BLAST':Object.freeze({life:1.45,pullDamage:8,pulls:5,finisherDamage:24}),
-  'SHEARING-CHAIN':Object.freeze({life:1.28,slashes:6,slashDamage:7,finisherDamage:15}),
-  'TECTONIC-DRILL':Object.freeze({life:1.42,damage:10,speed:9.4}),
-  'ROCK-SOLID-TOMAHAWK':Object.freeze({life:1.86,damage:15}),
-  'AQUA-VORTEX':Object.freeze({life:.78,damage:8,ticks:3}),
-  'AQUA-BREAKER':Object.freeze({life:3.60,charge:1.90,entryDamage:15,passDamage:10,finisherDamage:35}),
+  'FLAME-BREATH':Object.freeze({life:.95,damage:18,hits:3}),
+  'SEARING-CROWN':Object.freeze({life:1.60,tickDamage:5,ticks:5,finisherDamage:20}),
+  'IGNITION-DRIVE':Object.freeze({life:1.30,beats:5,carryDamage:10,finisherDamage:30}),
+  'ENGULFING-FISSURE':Object.freeze({life:3.20,trapCount:3,tickDamage:5,ticks:5}),
+  'DRAGON-BLAST':Object.freeze({life:1.55,pullDamage:8,pulls:5,finisherDamage:24}),
+  'SHEARING-CHAIN':Object.freeze({life:1.35,slashes:6,slashDamage:7,finisherDamage:15}),
+  'TECTONIC-DRILL':Object.freeze({life:1.60,damage:10,speed:9.4}),
+  'ROCK-SOLID-TOMAHAWK':Object.freeze({life:2.10,damage:15}),
+  'AQUA-VORTEX':Object.freeze({life:.80,damage:12,ticks:1}),
+  'AQUA-BREAKER':Object.freeze({life:3.50,charge:1.90,entryDamage:15,passDamage:10,finisherDamage:35}),
 });
 
 function isEnemyLabRuntime(){
@@ -129,213 +119,8 @@ function disposeObject(root){
   });
 }
 
-function material(THREE,color,opacity=.8,{additive=true,depthWrite=false}={}){
-  return new THREE.MeshBasicMaterial({
-    color,transparent:opacity<1,opacity,depthWrite,side:THREE.DoubleSide,
-    blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,
-  });
-}
-
-function setMaterialOpacity(value,alpha){
-  const mat=value?.material;
-  if(!mat)return;
-  if(mat.uniforms?.uAlpha)mat.uniforms.uAlpha.value=alpha;
-  else mat.opacity=(value.userData?.baseOpacity??1)*alpha;
-}
-
-function setGroupOpacity(root,alpha){
-  root?.traverse?.(object=>setMaterialOpacity(object,alpha));
-}
-
-function makeRing(THREE,inner,outer,color,opacity=.7,start=0,length=TAU){
-  const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.01,inner),Math.max(inner+.01,outer),48,1,start,length),material(THREE,color,opacity));
-  ring.rotation.x=-Math.PI/2;ring.userData.baseOpacity=opacity;return ring;
-}
-
-function makeImpact(THREE,scene,color=0xffffff,size=1){
-  const group=new THREE.Group();group.name='Wizard VFX Arcana impact';
-  const core=new THREE.Mesh(new THREE.SphereGeometry(.22*size,12,8),material(THREE,color,.96));core.userData.baseOpacity=.96;group.add(core);
-  const ring=makeRing(THREE,.28*size,.42*size,color,.78);group.add(ring);
-  group.renderOrder=12;scene.add(group);return group;
-}
-
-function updateImpact(impact,age,life){
-  const alpha=1-sat(age/life);
-  setGroupOpacity(impact,alpha);
-  impact.scale.setScalar(1+sat(age/life)*1.8);
-}
-
-const NOISE_GLSL=`
-  float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-  float vnoise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),u.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),u.x),u.y);}
-  float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*vnoise(p);p*=2.03;a*=.5;}return s;}
-`;
-
-const WATER_VERT=`
-  varying vec2 vUv;varying float vEdge;attribute float aEdge;
-  void main(){vUv=uv;vEdge=aEdge;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}
-`;
-const WATER_FRAG=`
-  precision highp float;uniform vec3 uDeep,uMid,uBase,uHi,uFoam;
-  uniform float uTime,uAlpha,uFlow,uRag,uBands,uFoamAmt,uNoiseScale;varying vec2 vUv;varying float vEdge;
-  ${NOISE_GLSL}
-  void main(){vec2 np=vec2(vUv.x*uNoiseScale,vUv.y*1.6)+vec2(-uTime*uFlow,uTime*uFlow*.35);float n=fbm(np),n2=fbm(np*2.7+11.3);float body=1.-abs(vEdge);float cut=body-uRag*(.55*n+.45*n2)-.06;float a=smoothstep(0.,.16,cut);a*=smoothstep(0.,.10,vUv.x)*smoothstep(0.,.22,1.-vUv.x);if(a<=.004)discard;float shade=clamp(.42+.44*vEdge+(n-.5)*1.10+(.5-vUv.x)*.26,0.,1.);shade=floor(shade*uBands)/(uBands-1.);vec3 col=shade<.34?mix(uDeep,uMid,shade/.34):shade<.68?mix(uMid,uBase,(shade-.34)/.34):mix(uBase,uHi,(shade-.68)/.32);float edgeBand=smoothstep(.42,.04,body),crest=edgeBand*smoothstep(.44,.78,n2)*uFoamAmt;col=mix(col,uFoam,crest*.8);gl_FragColor=vec4(col,a*uAlpha);}
-`;
-
-function painterlyMaterial(THREE,pal,options={}){
-  return new THREE.ShaderMaterial({
-    uniforms:{
-      uDeep:{value:new THREE.Color(pal.deep)},uMid:{value:new THREE.Color(pal.mid)},uBase:{value:new THREE.Color(pal.base)},
-      uHi:{value:new THREE.Color(pal.hi)},uFoam:{value:new THREE.Color(pal.foam)},uTime:{value:0},uAlpha:{value:1},
-      uFlow:{value:options.flow??.9},uRag:{value:options.rag??.3},uBands:{value:options.bands??4},
-      uFoamAmt:{value:options.foam??.55},uNoiseScale:{value:options.noiseScale??5},
-    },
-    vertexShader:WATER_VERT,fragmentShader:WATER_FRAG,transparent:true,depthWrite:false,side:THREE.DoubleSide,
-  });
-}
-
-function ribbon(THREE,fn,segs=36){
-  const positions=[],uvs=[],edges=[],indices=[];
-  const up=new THREE.Vector3(0,1,0);let previous=null;
-  for(let index=0;index<=segs;index++){
-    const t=index/segs,current=fn(t),next=fn(Math.min(1,t+1/segs));
-    const direction=new THREE.Vector3().subVectors(next.p,current.p);
-    if(direction.lengthSq()<1e-9&&previous)direction.copy(previous);
-    direction.normalize();previous=direction.clone();
-    const side=new THREE.Vector3().crossVectors(up,direction).normalize().multiplyScalar(current.w);
-    if(side.lengthSq()<1e-9)side.set(current.w,0,0);
-    positions.push(current.p.x-side.x,current.p.y,current.p.z-side.z,current.p.x+side.x,current.p.y,current.p.z+side.z);
-    uvs.push(t,0,t,1);edges.push(-1,1);
-    if(index<segs){const base=index*2;indices.push(base,base+1,base+2,base+1,base+3,base+2);}
-  }
-  const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
-  geometry.setAttribute('aEdge',new THREE.Float32BufferAttribute(edges,1));
-  geometry.setIndex(indices);return geometry;
-}
-
-function addWaterSpiral(THREE,root,pal,{arms=6,radius=2.5,height=.12,width=.3,phase=0}={}){
-  for(let index=0;index<arms;index++){
-    const mesh=new THREE.Mesh(ribbon(THREE,t=>{
-      const angle=index/arms*TAU+phase+t*2.1;
-      const r=.36+(radius-.36)*Math.pow(t,.78);
-      return{p:new THREE.Vector3(Math.cos(angle)*r,height+.16*Math.pow(t,1.8),Math.sin(angle)*r),w:width*Math.pow(Math.sin(Math.PI*Math.pow(t,1.2)),.48)};
-    },42),painterlyMaterial(THREE,pal,{flow:1.05,rag:.32,bands:4,foam:.56,noiseScale:5.4}));
-    mesh.userData.baseOpacity=.78;mesh.renderOrder=5;root.add(mesh);
-  }
-}
-
-function makeFlameBreathVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Flame Breath';
-  const cone=new THREE.Mesh(new THREE.ConeGeometry(1.18,3.5,24,1,true),material(THREE,0xf0782b,.58));
-  cone.rotation.z=-Math.PI/2;cone.position.x=1.7;cone.scale.set(1,.72,1);cone.userData.baseOpacity=.58;group.add(cone);
-  const inner=new THREE.Mesh(new THREE.ConeGeometry(.72,2.8,20,1,true),material(THREE,0xffc34d,.46));
-  inner.rotation.z=-Math.PI/2;inner.position.x=1.38;inner.userData.baseOpacity=.46;group.add(inner);
-  const glow=makeRing(THREE,.40,1.0,0xfff6b6,.68);glow.position.set(.28,.04,0);group.add(glow);
-  group.scale.setScalar(size);group.renderOrder=5;scene.add(group);return group;
-}
-
-function makeCrownVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Searing Crown';
-  const ring=makeRing(THREE,.45,1.1,0xf0782b,.9);ring.userData.crownRing=true;group.add(ring);
-  const inner=makeRing(THREE,.15,.47,0xffc34d,.7);group.add(inner);
-  for(let index=0;index<12;index++){
-    const angle=index/12*TAU,flame=new THREE.Mesh(new THREE.SphereGeometry(.22+(index%3)*.06,9,7),material(THREE,index%2?0xf0782b:0xffc34d,.78));
-    flame.position.set(Math.cos(angle)*1.2,.28+rnd(index,2.7)*.7,Math.sin(angle)*1.1);flame.userData.baseOpacity=.78;flame.userData.crownIndex=index;group.add(flame);
-  }
-  group.scale.setScalar(size);group.renderOrder=5;scene.add(group);return group;
-}
-
-function makeFireBurst(THREE,scene,size=1,finisher=false){
-  const group=new THREE.Group();group.name=finisher?'Wizard VFX Ignition finisher':'Wizard VFX Ignition beat';
-  const radius=finisher?1.42:1.0;
-  const core=new THREE.Mesh(new THREE.SphereGeometry(finisher?.55:.38,12,8),material(THREE,0xffffc7,.96));core.userData.baseOpacity=.96;group.add(core);
-  for(let index=0;index<(finisher?16:10);index++){
-    const angle=index/(finisher?16:10)*TAU,blob=new THREE.Mesh(new THREE.SphereGeometry(.22+(index%3)*.06,9,7),material(THREE,index%2?0xf0782b:0xffc34d,.76));
-    blob.position.set(Math.cos(angle)*radius*(.56+rnd(index,3.1)*.42),.25+Math.sin(index*1.7)*.18,Math.sin(angle)*radius*(.56+rnd(index,4.6)*.42));blob.userData.baseOpacity=.76;group.add(blob);
-  }
-  const scorch=makeRing(THREE,.6,radius+0.35,0x632317,.55);scorch.userData.baseOpacity=.55;group.add(scorch);
-  group.scale.setScalar(size);group.visible=false;group.renderOrder=6;scene.add(group);return group;
-}
-
-function makeFissureTrap(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Engulfing Fissure trap';
-  const crack=makeRing(THREE,.25,1.05,0xe86524,.62);crack.userData.baseOpacity=.62;group.add(crack);
-  const inner=makeRing(THREE,.06,.32,0xffbd45,.75);inner.userData.baseOpacity=.75;group.add(inner);
-  for(let index=0;index<4;index++){
-    const line=new THREE.Mesh(new THREE.BoxGeometry(1.65,.025,.035),material(THREE,index%2?0x7b2415:0xf0782b,.58,{additive:false}));
-    line.rotation.y=index/4*TAU;line.position.y=.025;line.userData.baseOpacity=.58;group.add(line);
-  }
-  group.scale.setScalar(size);group.renderOrder=3;scene.add(group);return group;
-}
-
-function makeDragonVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Dragon Blast';
-  addWaterSpiral(THREE,group,PAL.air,{arms:9,radius:2.15,height:.28,width:.26});
-  const mouth=new THREE.Mesh(new THREE.SphereGeometry(.43,12,8),material(THREE,0xf4ffff,.72));mouth.position.x=.15;mouth.userData.baseOpacity=.72;group.add(mouth);
-  const ring=makeRing(THREE,.45,2.6,0xc8eef0,.28);ring.position.y=.05;ring.userData.baseOpacity=.28;group.add(ring);
-  group.scale.setScalar(size);group.renderOrder=5;scene.add(group);return group;
-}
-
-function makeSlashVisual(THREE,scene,size,finisher=false){
-  const group=new THREE.Group();group.name=finisher?'Wizard VFX Shearing Chain finisher':'Wizard VFX Shearing Chain slash';
-  const outer=finisher?2.55:1.9,inner=outer-(finisher?.58:.46),length=finisher?2.15:1.72;
-  const blade=new THREE.Mesh(new THREE.RingGeometry(inner,outer,42,1,-length/2,length),material(THREE,0xe9fbfb,.92));
-  blade.rotation.x=-Math.PI/2;blade.userData.baseOpacity=.92;group.add(blade);
-  const edge=makeRing(THREE,outer-.12,outer+.03,0xffffff,.98,-length/2,length);group.add(edge);
-  group.scale.setScalar(size);group.renderOrder=7;scene.add(group);return group;
-}
-
-function makeDrillVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Tectonic Drill';
-  const core=new THREE.Mesh(new THREE.ConeGeometry(.92,2.9,10,1,true),material(THREE,0x74562a,.94,{additive:false}));
-  core.rotation.z=-Math.PI/2;core.position.x=.25;group.add(core);
-  for(let index=0;index<7;index++){
-    const u=index/6,r=lerp(.98,.20,Math.pow(u,.9));
-    const fin=new THREE.Mesh(new THREE.TorusGeometry(r,lerp(.18,.07,u),6,18),material(THREE,index%2?0x9b7a47:0x63481f,.92,{additive:false}));
-    fin.rotation.y=Math.PI/2;fin.rotation.z=index*1.02;fin.position.x=lerp(-1.18,1.28,u);group.add(fin);
-  }
-  const tip=new THREE.Mesh(new THREE.ConeGeometry(.24,.78,8),material(THREE,0xf6e6b5,.88,{additive:false}));tip.rotation.z=-Math.PI/2;tip.position.x=1.72;group.add(tip);
-  const track=makeRing(THREE,.55,1.25,0x5a4326,.42);track.scale.set(1.8,1,1);track.userData.baseOpacity=.42;group.add(track);
-  group.scale.setScalar(size);group.renderOrder=6;scene.add(group);return group;
-}
-
-function makeTomahawkVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Rock Solid Tomahawk';
-  const haft=new THREE.Mesh(new THREE.CylinderGeometry(.075,.085,.98,7),material(THREE,0x8a5a30,.98,{additive:false}));haft.rotation.x=Math.PI/2;group.add(haft);
-  for(const sign of [1,-1]){
-    const blade=new THREE.Mesh(new THREE.BoxGeometry(.45,.14,.62),material(THREE,0xa49470,.98,{additive:false}));blade.position.x=sign*.34;blade.rotation.y=sign>0?.35:-.35;group.add(blade);
-  }
-  const binding=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,.20,7),material(THREE,0x6f7a3a,.98,{additive:false}));binding.rotation.x=Math.PI/2;group.add(binding);
-  const shadow=makeRing(THREE,.12,.36,0x000000,.28);shadow.userData.baseOpacity=.28;group.add(shadow);
-  group.scale.setScalar(size);group.renderOrder=7;scene.add(group);return group;
-}
-
-function makeBreakerVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Aqua Breaker';
-  const coil=new THREE.Group();addWaterSpiral(THREE,coil,PAL.breaker,{arms:7,radius:1.12,height:.05,width:.22});group.add(coil);group.userData.coil=coil;
-  const fan=new THREE.Mesh(new THREE.ConeGeometry(2.6,.65,32,1,true),material(THREE,0xd8f2ed,.78));fan.rotation.z=-Math.PI/2;fan.position.x=1.4;fan.userData.baseOpacity=.78;fan.visible=false;group.add(fan);group.userData.fan=fan;
-  const trail=makeRing(THREE,.1,1.2,0x759dad,.34);trail.scale.set(2.8,1,1);trail.userData.baseOpacity=.34;group.add(trail);group.userData.trail=trail;
-  group.scale.setScalar(size);group.renderOrder=6;scene.add(group);return group;
-}
-
-function makeChargeBar(THREE,scene){
-  const group=new THREE.Group();group.name='Wizard VFX Aqua Breaker charge';
-  const back=new THREE.Mesh(new THREE.PlaneGeometry(1.8,.22),material(THREE,0x0a1119,.88,{additive:false}));back.userData.baseOpacity=.88;group.add(back);
-  const fill=new THREE.Mesh(new THREE.PlaneGeometry(1.64,.13),material(THREE,0x59a8ff,.96,{additive:false}));fill.position.z=.01;fill.userData.baseOpacity=.96;group.add(fill);
-  group.renderOrder=20;scene.add(group);return{group,fill};
-}
-
-function makeVortexVisual(THREE,scene,size){
-  const group=new THREE.Group();group.name='Wizard VFX Aqua Vortex';
-  addWaterSpiral(THREE,group,PAL.water,{arms:6,radius:3.05,height:.08,width:.40});
-  const wash=new THREE.Mesh(new THREE.CircleGeometry(1.18,48),material(THREE,0x65bddd,.28));wash.rotation.x=-Math.PI/2;wash.position.y=.04;wash.userData.baseOpacity=.28;group.add(wash);
-  const sheet=makeRing(THREE,.2,1.35,0x65bddd,.42);sheet.userData.baseOpacity=.42;sheet.visible=false;group.add(sheet);group.userData.sheet=sheet;
-  const decal=makeRing(THREE,1.8,3.05,0x2e86b7,.22);decal.userData.baseOpacity=.22;group.add(decal);
-  group.scale.setScalar(size);group.renderOrder=5;scene.add(group);return group;
-}
-
+// The authoritative visual implementation lives in wizard-vfx-arcana-source-port.js.
+// This runtime owns only game-service adapters and card lifecycle.
 function pointInCone({origin,forward,target,reach,halfAngle,radius=0}){
   const dx=target.x-origin.x,dz=target.z-origin.z,distance=Math.hypot(dx,dz);
   if(distance>reach+radius||distance<.01)return false;
@@ -347,20 +132,20 @@ function pointInCone({origin,forward,target,reach,halfAngle,radius=0}){
 function positionAlong(origin,direction,distance){return{x:origin.x+direction.x*distance,z:origin.z+direction.z*distance};}
 function distance2D(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
 
-function setFacing(root,direction){if(root)root.rotation.y=Math.atan2(direction.x,direction.z);}
-
 export function installWizardVfxArcanaRuntime({
-  THREE,scene,getPlayer,getEnemySystem,getMazeSegments=()=>[],translatePlayer=()=>false,
+  THREE,scene,camera,getPlayer,getEnemySystem,getMazeSegments=()=>[],translatePlayer=()=>false,
 }={}){
   const initialTweaks=readArcanaTweaks();
   const empty={state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},snapshot(){return[];},dispose(){}};
   if(!THREE||!scene||!isEnemyLabRuntime())return empty;
 
+  const sourcePort=createWizardVfxSourcePort({THREE,scene});
   const state={effects:[],castSerial:0,lastCast:null,sizeMultiplier:initialTweaks.sizeMultiplier};
   const currentSize=()=>clampArcanaSize(state.sizeMultiplier);
   const add=effect=>{state.effects.push(effect);return effect;};
   function remove(effect){
     effect.onRemove?.();
+    if(effect.source)sourcePort.dispose(effect.source);
     if(effect.mesh)disposeObject(effect.mesh);
     for(const mesh of effect.meshes||[])disposeObject(mesh);
     for(const impact of effect.impacts||[])disposeObject(impact.mesh||impact);
@@ -370,25 +155,74 @@ export function installWizardVfxArcanaRuntime({
   function crossed(effect,time){return effect.previousAge<time&&effect.age>=time;}
   function advance(effect,dt){effect.previousAge=effect.age;effect.age+=Math.max(0,Number(dt)||0);}
   function intercept(position,radius,system){destroyProjectiles(system,position,radius);}
-  function effectImpact(effect,position,color=0xffffff,size=1){
-    const impact=makeImpact(THREE,scene,color,size);impact.position.set(position.x,.72,position.z);
-    effect.impacts??=[];effect.impacts.push({mesh:impact,age:0,life:.28});
+  const fallbackCameraQuaternion=new THREE.Quaternion();
+  function sourceAnchor(frame,casterOffset,size){
+    const anchor=new THREE.Group();
+    anchor.position.set(
+      frame.x-frame.forward.x*casterOffset*size,
+      0,
+      frame.z-frame.forward.z*casterOffset*size,
+    );
+    // The lab authors every effect along local +X; rotate that axis onto the
+    // game aim vector without changing any source geometry or choreography.
+    anchor.rotation.y=Math.atan2(-frame.forward.z,frame.forward.x);
+    scene.add(anchor);
+    return anchor;
   }
-  function updateImpacts(effect,dt){
-    for(const impact of effect.impacts||[]){impact.age+=dt;updateImpact(impact.mesh,impact.age,impact.life);}
-    effect.impacts=(effect.impacts||[]).filter(impact=>{
-      if(impact.age<impact.life)return true;disposeObject(impact.mesh);return false;
-    });
+  function sourceTarget(enemy,effect){
+    const anchor=effect.mesh;
+    const dx=(Number(enemy?.x)||0)-(Number(anchor?.position?.x)||0);
+    const dz=(Number(enemy?.z)||0)-(Number(anchor?.position?.z)||0);
+    const frame=effect.frame,size=Math.max(.0001,Number(effect.size)||1);
+    const cache=effect.sourceTargets??(effect.sourceTargets=new Map());
+    let target=cache.get(enemy);
+    if(!target){
+      target={
+        enemy,
+        position:{x:0,z:0,set(x,y,z){this.x=x;this.z=z;}},
+        userData:{},
+      };
+      cache.set(enemy,target);
+    }
+    target.enemy=enemy;
+    target.position.x=(dx*frame.forward.x+dz*frame.forward.z)/size;
+    target.position.z=(dx*(-frame.forward.z)+dz*frame.forward.x)/size;
+    return target;
   }
+  function sourcePoint(frame,localX,localZ,size,casterOffset){
+    const left={x:-frame.forward.z,z:frame.forward.x};
+    return{
+      x:frame.x+frame.forward.x*(localX-casterOffset)*size+left.x*localZ*size,
+      z:frame.z+frame.forward.z*(localX-casterOffset)*size+left.z*localZ*size,
+    };
+  }
+  function createSourceVisual(id,frame,size,casterOffset=0){
+    const anchor=sourceAnchor(frame,casterOffset,size);
+    anchor.scale.setScalar(size);
+    const source=sourcePort.create(id,anchor);
+    return{anchor,source};
+  }
+  function updateSourceVisual(effect,system){
+    if(!effect.source)return;
+    const proxies=aliveEnemies(system).map(enemy=>sourceTarget(enemy,effect));
+    sourcePort.setTargets(proxies);
+    // The source lab owns its hit flashes and damage-number choreography. The
+    // game adapter consumes gameplay through the native enemy services below.
+    sourcePort.setCallbacks({onHits:()=>{}});
+    sourcePort.update(effect.source,effect.age,camera?.quaternion||fallbackCameraQuaternion,{anchor:effect.mesh});
+  }
+  // Source-class hit stars, foam, and debris are rendered by the copied lab
+  // implementation. There is deliberately no second approximate impact mesh.
+  function effectImpact(){}
+  function updateImpacts(){}
 
   function startFlameBreath(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeFlameBreathVisual(THREE,scene,size);
-    mesh.position.set(frame.x+frame.forward.x*.45,.42,frame.z+frame.forward.z*.45);setFacing(mesh,frame.forward);
-    return add({type:'flameBreath',arcanaId:'FLAME-BREATH',age:0,previousAge:0,life:.82,frame,size,mesh,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('FLAME-BREATH',frame,size,-2.95);
+    return add({type:'flameBreath',arcanaId:'FLAME-BREATH',age:0,previousAge:0,life:.95,frame,size,mesh:visual.anchor,source:visual.source,impacts:[]});
   }
   function updateFlameBreath(effect,dt,system){
-    advance(effect,dt);const progress=sat(effect.age/effect.life),grow=smooth(effect.age/.16),fade=smooth((effect.age-.45)/.18);
-    effect.mesh.scale.setScalar(effect.size*(.72+grow*.34));setGroupOpacity(effect.mesh,Math.max(0,(1-fade)*.92));
+    advance(effect,dt);updateSourceVisual(effect,system);
+    const grow=smooth(effect.age/.16),fade=smooth((effect.age-.45)/.18);
     const origin={x:effect.frame.x+effect.frame.forward.x*.5,z:effect.frame.z+effect.frame.forward.z*.5};
     const reach=3.4*effect.size*grow*(1-fade*.25);
     for(const projectile of hostileProjectiles(system)){
@@ -407,12 +241,11 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startSearingCrown(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeCrownVisual(THREE,scene,size);
-    mesh.position.set(frame.x,0,frame.z);return add({type:'searingCrown',arcanaId:'SEARING-CROWN',age:0,previousAge:0,life:1.34,frame,size,mesh,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('SEARING-CROWN',frame,size);
+    return add({type:'searingCrown',arcanaId:'SEARING-CROWN',age:0,previousAge:0,life:1.60,frame,size,mesh:visual.anchor,source:visual.source,impacts:[]});
   }
   function updateSearingCrown(effect,dt,system){
-    advance(effect,dt);const radius=(.72+2.55*easeOut(effect.age/.98))*effect.size,alpha=(1-smooth((effect.age-1.0)/.32))*.94;
-    effect.mesh.scale.setScalar(radius/2.6);setGroupOpacity(effect.mesh,Math.max(0,alpha));
+    advance(effect,dt);updateSourceVisual(effect,system);const radius=(.72+2.55*easeOut(effect.age/.98))*effect.size;
     for(let tick=0;tick<5;tick++)if(crossed(effect,.18+tick*.12)){
       for(const enemy of aliveEnemies(system)){
         const distance=distance2D(enemy,effect.frame);
@@ -435,16 +268,16 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startIgnitionDrive(){
-    const frame=playerFrame(getPlayer),size=currentSize(),root=new THREE.Group();root.name='Wizard VFX Ignition Drive';scene.add(root);
-    const times=[.08,.155,.23,.305,.40],bursts=times.map((time,index)=>{const mesh=makeFireBurst(THREE,scene,size,index===4);root.add(mesh);return{time,finisher:index===4,position:positionAlong(frame,frame.forward,1.2+index*1.75),mesh,resolved:false};});
-    return add({type:'ignitionDrive',arcanaId:'IGNITION-DRIVE',age:0,previousAge:0,life:1.45,frame,size,mesh:root,bursts,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('IGNITION-DRIVE',frame,size,-5.10);
+    const times=[.08,.155,.23,.305,.40],bursts=times.map((time,index)=>({
+      time,finisher:index===4,
+      position:positionAlong(frame,frame.forward,(.5+1.75*(index+1))*size),
+    }));
+    return add({type:'ignitionDrive',arcanaId:'IGNITION-DRIVE',age:0,previousAge:0,life:1.30,frame,size,mesh:visual.anchor,source:visual.source,bursts,impacts:[]});
   }
   function updateIgnitionDrive(effect,dt,system){
-    advance(effect,dt);
+    advance(effect,dt);updateSourceVisual(effect,system);
     for(const beat of effect.bursts){
-      const local=effect.age-beat.time,life=beat.finisher?.48:.32;
-      beat.mesh.visible=local>=0&&local<life;
-      if(beat.mesh.visible){beat.mesh.position.set(beat.position.x,.12,beat.position.z);beat.mesh.scale.setScalar(effect.size*(beat.finisher?1.15:1)*(1+easeOut(local/life)*.12));setGroupOpacity(beat.mesh,1-sat(local/life));}
       if(crossed(effect,beat.time)){
         const radius=(beat.finisher?2.15:1.25)*effect.size;
         for(const enemy of aliveEnemies(system)){
@@ -462,20 +295,18 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startEngulfingFissure(){
-    const frame=playerFrame(getPlayer),size=currentSize(),offsets=[[1.9,-1.5],[3.1,1.4],[.5,2.2]];
-    const root=new THREE.Group();root.name='Wizard VFX Engulfing Fissure';scene.add(root);
+    const frame=playerFrame(getPlayer),size=currentSize(),offsets=[[1.9,-1.5],[3.1,1.4],[.5,2.2]],visual=createSourceVisual('ENGULFING-FISSURE',frame,size,1.70);
     const traps=offsets.map((offset,index)=>{
       const center={x:frame.x+frame.forward.x*offset[0]+frame.right.x*offset[1],z:frame.z+frame.forward.z*offset[0]+frame.right.z*offset[1]};
-      const mesh=makeFissureTrap(THREE,scene,size);root.add(mesh);mesh.position.set(center.x,0,center.z);
-      return{index,center,mesh,triggered:false,consumed:false,target:null,age:0,nextHit:0};
+      return{index,center,triggered:false,consumed:false,target:null,age:0,nextHit:0};
     });
-    return add({type:'engulfingFissure',arcanaId:'ENGULFING-FISSURE',age:0,previousAge:0,life:8.35,frame,size,mesh:root,traps,impacts:[]});
+    return add({type:'engulfingFissure',arcanaId:'ENGULFING-FISSURE',age:0,previousAge:0,life:3.20,frame,size,mesh:visual.anchor,source:visual.source,traps,impacts:[]});
   }
   function updateEngulfingFissure(effect,dt,system){
-    advance(effect,dt);let finished=0;
+    advance(effect,dt);updateSourceVisual(effect,system);let finished=0;
     for(const trap of effect.traps){
       trap.age=effect.age-(trap.triggerAt??Infinity);
-      if(!trap.triggered&&!trap.consumed&&effect.age<8){
+      if(!trap.triggered&&!trap.consumed&&effect.age<3.2){
         const target=aliveEnemies(system).find(enemy=>distance2D(enemy,trap.center)<=.92*effect.size+enemyRadius(enemy,system));
         if(target){trap.triggered=true;trap.target=target;trap.triggerAt=effect.age;trap.age=0;trap.nextHit=.16;}
       }
@@ -492,22 +323,18 @@ export function installWizardVfxArcanaRuntime({
           }
         }
       }
-      if(!trap.triggered&&!trap.consumed&&effect.age>=8)trap.consumed=true;
-      const active=!trap.consumed,triggered=trap.triggered;
-      setGroupOpacity(trap.mesh,active?(triggered?.95:(.46+.16*Math.sin(effect.age*5+trap.index))):Math.max(0,1-sat((effect.age-(trap.triggerAt??effect.age+1))/.24)));
-      trap.mesh.scale.setScalar(effect.size*(triggered?1.08:1));
+      if(!trap.triggered&&!trap.consumed&&effect.age>=3.2)trap.consumed=true;
       if(trap.consumed)finished++;
     }
     updateImpacts(effect,dt);if(finished===effect.traps.length||effect.age>=effect.life)remove(effect);
   }
 
   function startDragonBlast(){
-    const frame=playerFrame(getPlayer),size=currentSize(),head=positionAlong(frame,frame.forward,1.5),mesh=makeDragonVisual(THREE,scene,size);
-    mesh.position.set(head.x,0,head.z);setFacing(mesh,frame.forward);
-    return add({type:'dragonBlast',arcanaId:'DRAGON-BLAST',age:0,previousAge:0,life:1.45,frame,head,size,mesh,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),head=positionAlong(frame,frame.forward,2.70*size),visual=createSourceVisual('DRAGON-BLAST',frame,size,-1.20);
+    return add({type:'dragonBlast',arcanaId:'DRAGON-BLAST',age:0,previousAge:0,life:1.55,frame,head,size,mesh:visual.anchor,source:visual.source,impacts:[]});
   }
   function updateDragonBlast(effect,dt,system){
-    advance(effect,dt);const form=smooth(effect.age/.16),fade=1-smooth((effect.age-.90)/.35);effect.mesh.rotation.y=-effect.age*TAU*.85;setGroupOpacity(effect.mesh,form*fade);
+    advance(effect,dt);updateSourceVisual(effect,system);
     intercept(effect.head,4.3*effect.size,system);
     for(let pull=0;pull<5;pull++)if(crossed(effect,.20+pull*.14)){
       for(const enemy of aliveEnemies(system)){
@@ -531,20 +358,19 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startShearingChain(){
-    const frame=playerFrame(getPlayer),size=currentSize(),root=new THREE.Group();root.name='Wizard VFX Shearing Chain';scene.add(root);
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('SHEARING-CHAIN',frame,size,-4.20);
     const slashTimes=Array.from({length:7},(_,index)=>index<6?.18+index*.10:.82);
-    const slashes=slashTimes.map((time,index)=>{const mesh=makeSlashVisual(THREE,scene,size,index===6);root.add(mesh);return{time,finisher:index===6,mesh,resolved:false};});
-    return add({type:'shearingChain',arcanaId:'SHEARING-CHAIN',age:0,previousAge:0,life:1.28,frame,size,mesh:root,slashes,travel:0,impacts:[]});
+    const slashes=slashTimes.map((time,index)=>({time,finisher:index===6}));
+    return add({type:'shearingChain',arcanaId:'SHEARING-CHAIN',age:0,previousAge:0,life:1.35,frame,size,mesh:visual.anchor,source:visual.source,slashes,travel:0,impacts:[]});
   }
   function updateShearingChain(effect,dt,system){
-    advance(effect,dt);
+    advance(effect,dt);updateSourceVisual(effect,system);
     const travel=Math.min(3.8,effect.age/.90*3.8),delta=Math.max(0,travel-effect.travel);effect.travel=travel;
     if(delta>0)translatePlayer(effect.frame.forward.x*delta,effect.frame.forward.z*delta);
     for(const slash of effect.slashes){
-      const local=effect.age-slash.time,life=slash.finisher?.38:.28,progress=clamp((slash.time-.18)/.72,0,1);
-      const side=slash.finisher?0:(slash.mesh.userData.side??(effect.slashes.indexOf(slash)%2?1:-1));slash.mesh.userData.side=side;
+      const life=slash.finisher?.38:.28,progress=clamp((slash.time-.18)/.72,0,1);
+      const side=slash.finisher?0:(effect.slashes.indexOf(slash)%2?1:-1);
       const position={x:effect.frame.x+effect.frame.forward.x*(.55+progress*3.2)+effect.frame.right.x*side*.62,z:effect.frame.z+effect.frame.forward.z*(.55+progress*3.2)+effect.frame.right.z*side*.62};
-      slash.mesh.position.set(position.x,.30,position.z);setFacing(slash.mesh,effect.frame.forward);slash.mesh.visible=local>=0&&local<life;setGroupOpacity(slash.mesh,slash.mesh.visible?1-sat(local/life):0);
       if(crossed(effect,slash.time)){
         const radius=(slash.finisher?2.6:1.9)*effect.size;
         for(const enemy of aliveEnemies(system)){
@@ -560,14 +386,13 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startTectonicDrill(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeDrillVisual(THREE,scene,size),start=positionAlong(frame,frame.forward,.65);
-    setFacing(mesh,frame.forward);return add({type:'tectonicDrill',arcanaId:'TECTONIC-DRILL',age:0,previousAge:0,life:1.42,frame,start,size,mesh,distance:0,playerDistance:0,hitAt:new Map(),impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('TECTONIC-DRILL',frame,size,-6.20),start=positionAlong(frame,frame.forward,1.20*size);
+    return add({type:'tectonicDrill',arcanaId:'TECTONIC-DRILL',age:0,previousAge:0,life:1.60,frame,start,size,mesh:visual.anchor,source:visual.source,distance:0,playerDistance:0,hitAt:new Map(),impacts:[]});
   }
   function updateTectonicDrill(effect,dt,system){
-    advance(effect,dt);const targetDistance=Math.min(7.6,Math.max(0,effect.age-.18)*9.4),position=positionAlong(effect.start,effect.frame.forward,targetDistance);
+    advance(effect,dt);updateSourceVisual(effect,system);const targetDistance=Math.min(7.8*effect.size,Math.max(0,effect.age-.32)*9.4*effect.size),position=positionAlong(effect.start,effect.frame.forward,targetDistance);
     const delta=Math.max(0,targetDistance-effect.distance);effect.distance=targetDistance;
     if(delta>0&&effect.playerDistance<2.6){const move=Math.min(delta*.36,2.6-effect.playerDistance);effect.playerDistance+=move;translatePlayer(effect.frame.forward.x*move,effect.frame.forward.z*move);}
-    effect.mesh.position.set(position.x,.25+smooth(effect.age/.22)*.32,position.z);effect.mesh.rotation.x=effect.age*TAU*3.2;setGroupOpacity(effect.mesh,effect.age<1.2?1:1-smooth((effect.age-1.2)/.22));
     for(const enemy of aliveEnemies(system)){
       const distance=distance2D(enemy,position),last=effect.hitAt.get(enemy)||-Infinity;
       if(distance>1.35*effect.size+enemyRadius(enemy,system)||effect.age-last<.18)continue;
@@ -578,19 +403,19 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startTomahawk(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeTomahawkVisual(THREE,scene,size),home=positionAlong(frame,frame.forward,.55),out=positionAlong(home,frame.forward,7.4);
-    return add({type:'rockSolidTomahawk',arcanaId:'ROCK-SOLID-TOMAHAWK',age:0,previousAge:0,life:1.86,frame,home,out,size,mesh,hit:new Set(),impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('ROCK-SOLID-TOMAHAWK',frame,size,-2.90),home=sourcePoint(frame,-2.60,.20,size,-2.90),out=sourcePoint(frame,6.40,-.50,size,-2.90);
+    return add({type:'rockSolidTomahawk',arcanaId:'ROCK-SOLID-TOMAHAWK',age:0,previousAge:0,life:2.10,frame,home,out,size,mesh:visual.anchor,source:visual.source,hit:new Set(),impacts:[]});
   }
   function tomahawkPosition(effect){
-    if(effect.age<.35){const k=smooth(effect.age/.35);return{x:lerp(effect.home.x,effect.home.x+.18,k),z:lerp(effect.home.z,effect.home.z+.18,k),y:.65+k*.28};}
-    if(effect.age<1.05){const k=easeOut((effect.age-.35)/.70);return{x:lerp(effect.home.x,effect.out.x,k),z:lerp(effect.home.z,effect.out.z,k),y:1.0+Math.sin(k*Math.PI)*.4};}
-    if(effect.age<1.86){const k=smooth((effect.age-1.05)/.81);return{x:lerp(effect.out.x,effect.home.x,k),z:lerp(effect.out.z,effect.home.z,k)+Math.sin(k*Math.PI)*1.9,y:1.0+Math.sin(k*Math.PI)*.25};}
-    return{x:effect.home.x,z:effect.home.z,y:.8};
+    const HOME={x:-2.60,y:1.25,z:.20},THROW=.35,OUT_END=1.05,BACK_END=1.85;
+    if(effect.age<THROW){const k=smooth(effect.age/THROW),p={x:lerp(HOME.x,HOME.x+.10,k),y:lerp(HOME.y,HOME.y+.55,k),z:HOME.z};return{...sourcePoint(effect.frame,p.x,p.z,effect.size,-2.90),y:p.y*effect.size};}
+    if(effect.age<OUT_END){const k=(effect.age-THROW)/(OUT_END-THROW),e=easeOut(k),p={x:lerp(HOME.x,6.40,e),y:1.05+Math.sin(k*Math.PI)*.42,z:lerp(HOME.z,-.50,e)};return{...sourcePoint(effect.frame,p.x,p.z,effect.size,-2.90),y:p.y*effect.size};}
+    if(effect.age<BACK_END){const k=(effect.age-OUT_END)/(BACK_END-OUT_END),e=smooth(k),ang=lerp(0,Math.PI,e),p={x:lerp(6.40,HOME.x,e),y:1.05+Math.sin(e*Math.PI)*.25,z:lerp(-.50,HOME.z,e)+Math.sin(ang)*1.9};return{...sourcePoint(effect.frame,p.x,p.z,effect.size,-2.90),y:p.y*effect.size};}
+    return{...sourcePoint(effect.frame,HOME.x,HOME.z,effect.size,-2.90),y:HOME.y*effect.size};
   }
   function updateTomahawk(effect,dt,system){
-    advance(effect,dt);const position=tomahawkPosition(effect);effect.mesh.position.set(position.x,position.y,position.z);
-    effect.mesh.rotation.y=effect.age<.35?-.4:effect.age<1.86?effect.age*TAU*6.2:-1.05;setGroupOpacity(effect.mesh,effect.age<1.72?1:1-sat((effect.age-1.72)/.14));
-    if(effect.age>=.35&&effect.age<1.86)for(const enemy of aliveEnemies(system)){
+    advance(effect,dt);updateSourceVisual(effect,system);const position=tomahawkPosition(effect);
+    if(effect.age>=.35&&effect.age<1.85)for(const enemy of aliveEnemies(system)){
       if(effect.hit.has(enemy)||distance2D(enemy,position)>.95*effect.size+enemyRadius(enemy,system))continue;
       effect.hit.add(enemy);damageEnemy(system,enemy,15,{x:effect.frame.forward.x*1.18,z:effect.frame.forward.z*1.18},{rockSolidTomahawk:true});effectImpact(effect,{x:enemy.x,z:enemy.z},0xffffff,effect.size*.82);
     }
@@ -598,38 +423,29 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startAquaVortex(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeVortexVisual(THREE,scene,size);
-    mesh.position.set(frame.x,0,frame.z);return add({type:'aquaVortex',arcanaId:'AQUA-VORTEX',age:0,previousAge:0,life:.78,frame,size,mesh,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('AQUA-VORTEX',frame,size);
+    return add({type:'aquaVortex',arcanaId:'AQUA-VORTEX',age:0,previousAge:0,life:.80,frame,size,mesh:visual.anchor,source:visual.source,impacts:[]});
   }
   function updateAquaVortex(effect,dt,system){
-    advance(effect,dt);const bloom=smooth((effect.age-.045)/.155),collapse=smooth((effect.age-.42)/.18),scale=lerp(.18,1.08,bloom)*(1-collapse*.88),alpha=sat(bloom*1.2)*(1-smooth((effect.age-.44)/.17));
-    effect.mesh.scale.setScalar(effect.size*scale);effect.mesh.rotation.y=-effect.age*TAU*2.5;setGroupOpacity(effect.mesh,alpha);
+    advance(effect,dt);updateSourceVisual(effect,system);
     const position=effect.frame;
-    intercept(position,3.1*effect.size*scale,system);
-    for(let tick=0;tick<3;tick++)if(crossed(effect,.205+tick*.145)){
+    intercept(position,3.1*effect.size,system);
+    if(crossed(effect,.205)){
       for(const enemy of aliveEnemies(system)){
-        const distance=distance2D(enemy,position);if(distance>3.1*effect.size*scale+enemyRadius(enemy,system))continue;
-        const inward=normalize2(position.x-enemy.x,position.z-enemy.z);
-        damageEnemy(system,enemy,8,{x:inward.x*.42,z:inward.z*.42},{aquaVortex:true,tick:tick+1});
-        moveEnemy(system,enemy,{x:lerp(enemy.x,position.x,.10),z:lerp(enemy.z,position.z,.10)});effectImpact(effect,{x:enemy.x,z:enemy.z},0xffffff,effect.size*.48);
+        const distance=distance2D(enemy,position);if(distance>3.1*effect.size+enemyRadius(enemy,system))continue;
+        damageEnemy(system,enemy,12,{x:0,z:0},{aquaVortex:true,tick:1});
       }
     }
-    if(effect.mesh.userData.sheet){effect.mesh.userData.sheet.visible=collapse>.02;setMaterialOpacity(effect.mesh.userData.sheet,collapse*(1-smooth((effect.age-.60)/.16)));}
     updateImpacts(effect,dt);if(effect.age>=effect.life)remove(effect);
   }
 
   function startAquaBreaker(){
-    const frame=playerFrame(getPlayer),size=currentSize(),mesh=makeBreakerVisual(THREE,scene,size),bar=makeChargeBar(THREE,scene),origin=positionAlong(frame,frame.forward,1.35);
-    mesh.add(bar.group);
-    return add({type:'aquaBreaker',arcanaId:'AQUA-BREAKER',age:0,previousAge:0,life:3.60,frame,origin,size,mesh,bar,hit:new Map(),finisher:false,impacts:[]});
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('AQUA-BREAKER',frame,size,-7.40),origin=positionAlong(frame,frame.forward,1.35*size);
+    return add({type:'aquaBreaker',arcanaId:'AQUA-BREAKER',age:0,previousAge:0,life:3.50,frame,origin,size,mesh:visual.anchor,source:visual.source,hit:new Map(),finisher:false,impacts:[]});
   }
   function updateAquaBreaker(effect,dt,system){
-    advance(effect,dt);const charge=1.90,rollEnd=2.65,breakEnd=3.15,charging=effect.age<charge,chargeK=sat(effect.age/charge),rollK=sat((effect.age-charge)/(rollEnd-charge)),breakK=sat((effect.age-rollEnd)/(breakEnd-rollEnd));
-    const grow=easeOut((effect.age-.10)/1.55),size=charging?lerp(.18,1,grow):lerp(1,1.22,easeOut(rollK))*(1-.9*breakK),distance=charging?0:11*(effect.age-charge)*(1-.35*breakK),position=positionAlong(effect.origin,effect.frame.forward,distance);
-    effect.mesh.position.set(position.x,.20+.05*Math.sin(effect.age*22),position.z);effect.mesh.userData.coil.scale.setScalar(Math.max(.01,effect.size*size*1.55));effect.mesh.userData.coil.rotation.y=-effect.age*(charging?TAU*.85:TAU*2.6);setGroupOpacity(effect.mesh,charging?1:(1-smooth((breakK-.35)/.65)));
-    effect.mesh.userData.trail.scale.set(Math.max(.6,distance+2.4),3.1*size,1);effect.mesh.userData.trail.position.set(-distance/2,0,0);
-    effect.bar.group.visible=charging;effect.bar.group.position.set(0,2.5,0);effect.bar.fill.scale.x=Math.max(.001,chargeK);effect.bar.fill.position.x=-.82*(1-chargeK);effect.bar.fill.material.color.setHex(chargeK<.55?0x59a8ff:0x63e07a);
-    if(effect.mesh.userData.fan){effect.mesh.userData.fan.visible=breakK>.01&&breakK<1;effect.mesh.userData.fan.scale.set(lerp(.35,1.5,easeOut(breakK)),lerp(.5,1.25,easeOut(breakK)),lerp(.35,1.5,easeOut(breakK)));setMaterialOpacity(effect.mesh.userData.fan,1-smooth((breakK-.45)/.55));}
+    advance(effect,dt);updateSourceVisual(effect,system);const charge=1.90,rollEnd=2.65,breakEnd=3.15,charging=effect.age<charge,rollK=sat((effect.age-charge)/(rollEnd-charge)),breakK=sat((effect.age-rollEnd)/(breakEnd-rollEnd));
+    const size=charging?lerp(.18,1,easeOut((effect.age-.10)/1.55)):lerp(1,1.22,easeOut(rollK))*(1-.9*breakK),distance=charging?0:11*(effect.age-charge)*(1-.35*breakK)*effect.size,position=positionAlong(effect.origin,effect.frame.forward,distance);
     if(!charging){
       const ballRadius=1.55*size;
       for(const enemy of aliveEnemies(system)){

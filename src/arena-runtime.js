@@ -249,7 +249,7 @@ function applySwingFeel(s){
 }
 
 const PC = installPlayerCombat({
-  THREE, scene, controlRegistry,
+  THREE, scene, camera, controlRegistry,
   get WEAPONS(){ return WEAPONS; },
   get WEAPON_ORDER(){ return WEAPON_ORDER; },
   materials: StoneWanderer.materials,

@@ -195,7 +195,7 @@ export function installPlayerCombat(api){
     getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
   }));
   const wizardVfxArcanaRuntime=installArenaArcanaRuntime(()=>installWizardVfxArcanaRuntime({
-    THREE,scene:api.scene,
+    THREE,scene:api.scene,camera:api.camera,
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
