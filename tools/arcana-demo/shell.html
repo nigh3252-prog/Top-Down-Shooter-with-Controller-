@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Arcana Demo — Rock N' Roll &amp; Earth Stomp Agent</title>
+<style>
+:root{
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --green:#4aa528;
+  --green-lit:#7ede43;
+  --blue:#3aa0ee;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;
+  background:#0a0c0d;color:#e8e2d4;
+  overflow:hidden;overscroll-behavior:none;touch-action:none;
+  -webkit-user-select:none;user-select:none;
+  font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+#view{position:fixed;inset:0;display:block;width:100%;height:100%}
+
+/* ---------- boot ---------- */
+#boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:#0a0c0d;z-index:90;transition:opacity .35s ease}
+#boot.gone{opacity:0;pointer-events:none}
+#boot .b{text-align:center;padding:24px}
+#boot h1{font-size:15px;letter-spacing:.22em;color:var(--green-lit);margin:0 0 10px;text-transform:uppercase}
+#boot p{font-size:12px;color:#7f7a6d;margin:0;letter-spacing:.06em}
+
+/* ---------- showcase title card (mirrors the source video overlay) ---------- */
+#titlecard{
+  position:absolute;left:calc(10px + var(--safe-l));top:calc(10px + var(--safe-t));
+  display:flex;gap:9px;align-items:flex-start;pointer-events:none;
+  opacity:0;transition:opacity .18s ease;z-index:20;
+}
+#titlecard.on{opacity:1}
+#titlecard .card{
+  width:44px;height:60px;border-radius:5px;flex:0 0 auto;
+  background:linear-gradient(160deg,#3b3352,#241f36);
+  border:2px solid #d8b34a;box-shadow:0 2px 0 rgba(0,0,0,.55);
+  display:flex;align-items:center;justify-content:center;
+}
+#titlecard .card svg{width:26px;height:26px;display:block}
+#titlecard .txt{padding-top:2px}
+#titlecard .name{
+  font-weight:900;font-size:23px;line-height:.96;letter-spacing:.01em;
+  color:var(--green);text-transform:uppercase;max-width:8.6em;
+  text-shadow:0 2px 0 #16260c,2px 0 0 #16260c,-2px 0 0 #16260c,0 -2px 0 #16260c,0 3px 4px rgba(0,0,0,.6);
+}
+#titlecard .name b{color:var(--green-lit);font-weight:900}
+#titlecard .charged{
+  margin-top:3px;font-weight:900;font-size:19px;line-height:1;letter-spacing:.02em;
+  color:var(--blue);text-transform:uppercase;display:none;
+  text-shadow:0 2px 0 #06263f,2px 0 0 #06263f,-2px 0 0 #06263f,0 -2px 0 #06263f;
+}
+#titlecard.chg .charged{display:block}
+
+/* ---------- top-right utility rail ---------- */
+#rail{position:absolute;top:calc(9px + var(--safe-t));right:calc(9px + var(--safe-r));
+  display:flex;gap:7px;z-index:25}
+.util{
+  width:38px;height:38px;border-radius:10px;border:1px solid #3a4145;
+  background:rgba(16,20,22,.72);color:#cfc9ba;font-size:16px;line-height:1;
+  display:flex;align-items:center;justify-content:center;touch-action:none;
+  backdrop-filter:blur(3px);cursor:pointer;
+}
+.util:active{background:rgba(46,54,58,.9)}
+.util.on{border-color:var(--green-lit);color:var(--green-lit)}
+
+/* ---------- readout ---------- */
+#readout{
+  position:absolute;left:calc(10px + var(--safe-l));bottom:calc(10px + var(--safe-b));
+  font-size:10px;letter-spacing:.09em;color:#6e6a5f;z-index:15;pointer-events:none;
+  text-transform:uppercase;line-height:1.5;
+}
+#readout b{color:#9d9787;font-weight:700}
+#fps{color:#8b8676;font-variant-numeric:tabular-nums}
+
+/* ---------- virtual stick ---------- */
+#stick{position:absolute;width:118px;height:118px;margin:-59px 0 0 -59px;left:0;top:0;
+  border-radius:50%;border:2px solid rgba(226,220,203,.22);
+  background:radial-gradient(circle,rgba(226,220,203,.07),rgba(226,220,203,.02) 70%,transparent);
+  opacity:0;transition:opacity .12s ease;pointer-events:none;z-index:18}
+#stick.on{opacity:1}
+#stick i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;
+  border-radius:50%;background:rgba(226,220,203,.3);border:2px solid rgba(226,220,203,.55)}
+
+/* ---------- ability buttons ---------- */
+#pad{position:absolute;right:calc(14px + var(--safe-r));bottom:calc(20px + var(--safe-b));
+  display:flex;flex-direction:column;gap:14px;align-items:center;z-index:22}
+.ab{
+  position:relative;width:86px;height:86px;border-radius:50%;
+  border:2px solid #545c60;background:rgba(18,22,24,.8);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  touch-action:none;cursor:pointer;backdrop-filter:blur(3px);
+  transition:transform .07s ease,border-color .12s ease;
+}
+.ab svg{width:34px;height:34px;display:block;pointer-events:none}
+.ab .lbl{font-size:8.5px;font-weight:800;letter-spacing:.06em;color:#b9b3a4;text-transform:uppercase;
+  line-height:1;text-align:center;pointer-events:none;padding:0 3px}
+.ab.held{transform:scale(.94);border-color:#d8d2c0}
+.ab .cd{position:absolute;inset:-2px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(rgba(6,8,9,.78) var(--p,0turn), transparent 0);
+  display:none}
+.ab.cool .cd{display:block}
+.ab .cdn{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  font-size:20px;font-weight:900;color:#e8e2d4;pointer-events:none;text-shadow:0 2px 3px #000}
+.ab.cool .cdn{display:flex}
+.ab.cool svg,.ab.cool .lbl{opacity:.25}
+.ab .chg{position:absolute;inset:-6px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(var(--blue) var(--c,0turn), transparent 0);
+  -webkit-mask:radial-gradient(circle, transparent 0 46px, #000 46px);
+  mask:radial-gradient(circle, transparent 0 46px, #000 46px);
+  opacity:0}
+.ab.charging .chg{opacity:.95}
+.ab.ready{border-color:var(--blue);box-shadow:0 0 14px rgba(58,160,238,.55)}
+
+/* ---------- info sheet ---------- */
+#info{
+  position:absolute;inset:0;z-index:60;display:none;
+  background:rgba(6,8,9,.93);backdrop-filter:blur(6px);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+  padding:calc(18px + var(--safe-t)) calc(18px + var(--safe-r)) calc(28px + var(--safe-b)) calc(18px + var(--safe-l));
+}
+#info.on{display:block}
+#info .wrap{max-width:640px;margin:0 auto}
+#info h2{font-size:13px;letter-spacing:.2em;color:var(--green-lit);text-transform:uppercase;margin:0 0 4px}
+#info h3{font-size:14px;letter-spacing:.1em;color:#e8e2d4;text-transform:uppercase;margin:22px 0 6px;
+  border-top:1px solid #262c2f;padding-top:14px}
+#info p,#info li{font-size:13px;line-height:1.62;color:#a8a396;margin:0 0 8px}
+#info ul{margin:0 0 8px;padding-left:18px}
+#info b{color:#d5cfbf;font-weight:700}
+#info .t{color:var(--blue);font-variant-numeric:tabular-nums}
+#info .src{font-size:11px;color:#6a665c;letter-spacing:.04em;margin-top:18px;line-height:1.7}
+#info .close{position:sticky;top:0;float:right;margin:-4px -4px 0 0}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="titlecard">
+  <div class="card" id="tc-card"></div>
+  <div class="txt">
+    <div class="name" id="tc-name"></div>
+    <div class="charged">Charged</div>
+  </div>
+</div>
+
+<div id="rail">
+  <div class="util" id="btn-show" title="Run the source showcase sequence">&#9654;</div>
+  <div class="util" id="btn-full" title="Fullscreen">&#9974;</div>
+  <div class="util" id="btn-info" title="Source notes">i</div>
+</div>
+
+<div id="readout"><span id="fps">--</span> FPS &nbsp;·&nbsp; DRAG LEFT TO MOVE &nbsp;·&nbsp; HOLD <b>ROCK N' ROLL</b> TO CHARGE</div>
+
+<div id="stick"><i></i></div>
+
+<div id="pad">
+  <div class="ab" id="ab-agent" data-arc="earth-stomp-agent">
+    <div class="cd"></div><div class="chg"></div>
+    <span class="ico"></span><span class="lbl">Earth Stomp<br>Agent</span>
+    <div class="cdn"></div>
+  </div>
+  <div class="ab" id="ab-rock" data-arc="rock-n-roll">
+    <div class="cd"></div><div class="chg"></div>
+    <span class="ico"></span><span class="lbl">Rock N'<br>Roll</span>
+    <div class="cdn"></div>
+  </div>
+</div>
+
+<div id="info">
+  <div class="wrap">
+    <div class="util close" id="btn-info-close">&times;</div>
+    <h2>Source analysis · Wizard of Legend arcana showcase</h2>
+    <p>Every beat below was read frame-by-frame off
+    <b>media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4</b>, the
+    archived showcase in this repository, at the windows the Gate&nbsp;1 video
+    inventory assigns to each arcana. The 3D reconstruction reproduces the
+    choreography, counts, cadence, and damage read off those frames.</p>
+
+    <h3>Rock N' Roll <span class="t">— 12:05 to 12:17</span></h3>
+    <p><b>Earth · Signature ·</b> catalog id <b>UseEarthWheel</b>. Documented
+    behaviour: &ldquo;Form rocky buzzsaws that tear forward!&rdquo; Enhanced:
+    &ldquo;Forms an additional buzzsaw!&rdquo;</p>
+    <ul>
+      <li><b>Base cast <span class="t">(12:05–12:11)</span>.</b> Short crouch, then rock erupts
+      at the caster's feet and <b>two</b> buzzsaws tear forward in parallel lanes,
+      slightly splayed apart.</li>
+      <li>Each saw is a half-buried churning rock wheel. It carves a dark scorched
+      furrow that lingers a beat and fades, throwing dirt backwards the whole way.</li>
+      <li>Saws <b>pass straight through</b> targets rather than stopping — repeated
+      <b>4</b>-damage ticks with a white star spark per hit, and light knockback.</li>
+      <li>Travel runs roughly two thirds of the screen before the saws break apart.</li>
+      <li><b>Charged cast <span class="t">(12:11–12:17)</span>.</b> Holding the cast plants the
+      caster and rings them with long, flickering white spikes lying flat on the
+      floor, growing as the charge builds.</li>
+      <li>On release the ground erupts into a <b>tall stacked fan of five</b> saws
+      that roll forward together, ticking <b>5</b> damage each and shredding a whole
+      column of dummies at once.</li>
+    </ul>
+
+    <h3>Earth Stomp Agent <span class="t">— 12:41 to 12:53</span></h3>
+    <p><b>Earth · Standard · Melee, summon.</b> Documented: 15 damage, ~9 hits,
+    knockback 20/10, 15s cooldown, pool 4. Enhanced adds an immediate second
+    10-damage stomp.</p>
+    <ul>
+      <li><b>Summon.</b> Rock bursts beside the caster and leaves a hovering agent —
+      a glowing olive core inside a ring of tan rock shards, with its own small
+      health bar.</li>
+      <li>It idles with a bob and <b>loosely follows the caster</b>, teleporting back
+      if left too far behind.</li>
+      <li><b>Stomp cadence ≈ 1.1s.</b> The agent leaps at the nearest enemy; airborne
+      it flares its shards into a wide spinning star while its shadow stays and
+      shrinks on the floor.</li>
+      <li><b>Impact.</b> Radial cracks split the stone in a wide ring, dust and rock
+      chunks fly out, everything in radius takes <b>15</b> and is shoved hard away.
+      The crack decal stays on the floor and fades slowly.</li>
+      <li>The agent lives <b>10 seconds</b>, then crumbles.</li>
+    </ul>
+
+    <h3>Controls</h3>
+    <ul>
+      <li><b>Drag anywhere on the left</b> to move. Facing follows movement.</li>
+      <li><b>Tap</b> an arcana to cast. <b>Hold Rock N' Roll</b> to charge, release to fire.</li>
+      <li><b>&#9654;</b> replays the source showcase order: three base casts, then two charged casts, then the agent summon.</li>
+      <li>Gamepad: left stick moves, <b>&#9633;/X</b> is Rock N' Roll (hold to charge), <b>&#9651;/Y</b> is Earth Stomp Agent.</li>
+      <li>Keyboard: WASD or arrows, <b>J</b> and <b>K</b>.</li>
+    </ul>
+
+    <p class="src">Source clip: archived Wizard of Legend arcana showcase, entries
+    92 (Rock N' Roll) and 97 (Earth Stomp Agent) of the 149-arcana Gate&nbsp;1
+    inventory. Documented behaviour strings quoted from the community catalog and
+    the Wizard of Legend Wiki as recorded in
+    archive/wizard-of-legend/source-notes/. Names and presentation are source
+    references for prototyping and should be replaced before any public release.</p>
+  </div>
+</div>
+
+<div id="boot"><div class="b">
+  <h1>Loading Arcana</h1>
+  <p>Rock N' Roll &nbsp;·&nbsp; Earth Stomp Agent</p>
+</div></div>
+
+<script>/*__THREE__*/</script>
+<script>/*__APP__*/</script>
+</body>
+</html>
