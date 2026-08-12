@@ -65,7 +65,7 @@
     "IGNITION-RUSH": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "burnApplied", "metric": "captureDerived.eventCounts.status-applied", "op": "exact", "value": 1 }, { "id": "burnTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 2 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 16 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
     "AIR-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "rearHit", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 15 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
     "GUST-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "damageBeats", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 2 }, { "id": "transport", "metric": "captureDerived.eventCounts.transport", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 15 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
-    "RAZOR-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "ticks", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 4 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
+    "RAZOR-BURST": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "ticks", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 5 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
     "SPIKE-TRACK": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "spikes", "metric": "captureDerived.eventCounts.spike-erupted", "op": "minimum", "min": 4 }, { "id": "singleLedger", "metric": "captureDerived.eventCounts.damage", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 30 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
     "TOXIC-TRAP": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "puddle", "metric": "captureDerived.eventCounts.puddle-opened", "op": "exact", "value": 1 }, { "id": "poisonTicks", "metric": "captureDerived.eventCounts.status-tick", "op": "exact", "value": 5 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 25 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
     "SNARE-TRACK": { "mode": "required", "checks": [{ "id": "dash", "metric": "captureDerived.dashDistancePlayerFootprints", "op": "range", "min": 3.95, "max": 4.05 }, { "id": "vines", "metric": "captureDerived.eventDeclaredCounts.payload-emitted", "op": "exact", "value": 3 }, { "id": "resolved", "metric": "captureDerived.resolvedProjectiles", "op": "exact", "value": 3 }, { "id": "entangle", "metric": "captureDerived.eventCounts.status-applied", "op": "exact", "value": 1 }, { "id": "damage", "metric": "captureDerived.targetDamageTotal", "op": "exact", "value": 20 }, { "id": "cleanup", "metric": "captureDerived.cleanedUp", "op": "truthy" }] },
@@ -172,6 +172,24 @@
       { "abilityId": "BALL-LIGHTNING", "scenario": "source-base" },
       { "abilityId": "AQUA-BEAM", "scenario": "source-base" },
       { "abilityId": "ARCANE-INTERVENTION", "scenario": "source-base" }
+    ],
+    "curated-demo": [
+      { "abilityId": "BLADED-VINE", "scenario": "source-base" },
+      { "abilityId": "SPARK-CONTACT", "scenario": "source-base" },
+      { "abilityId": "GUST-BURST", "scenario": "source-base" },
+      { "abilityId": "RAZOR-BURST", "scenario": "source-base" },
+      { "abilityId": "THUNDER-LINE", "scenario": "source-base" },
+      { "abilityId": "CIRCUIT-LINE", "scenario": "source-base" },
+      { "abilityId": "BLAZING-LARIAT", "scenario": "source-base" },
+      { "abilityId": "EXPLOSIVE-CHARGE", "scenario": "source-base" },
+      { "abilityId": "STORM-DRAFT", "scenario": "source-base" },
+      { "abilityId": "BLURRING-FALCONRY", "scenario": "source-base" },
+      { "abilityId": "WHIRLING-WIND-AGENT", "scenario": "source-base" },
+      { "abilityId": "KNOCKOUT-BOULDER", "scenario": "source-base" },
+      { "abilityId": "TOXIC-BOLAS", "scenario": "source-base" },
+      { "abilityId": "ROCK-N-ROLL", "scenario": "source-base" },
+      { "abilityId": "EARTH-STOMP-AGENT", "scenario": "source-base" },
+      { "abilityId": "BUBBLE-BARRAGE", "scenario": "source-base" }
     ]
   },
   "batchCoverage": {
@@ -185,6 +203,10 @@
     },
     "archetype-sampler": {
       "abilities": ["FLAME-FUSION", "RAPID-FIRE-AGENT", "WARD-OF-FLAMES", "MENTIS-IMPERIUM", "HEROIC-LEAP", "CYCLONE-BOOMERANG", "EARTHEN-AEGIS", "BALL-LIGHTNING", "AQUA-BEAM", "ARCANE-INTERVENTION"],
+      "includeAllScenarios": true
+    },
+    "curated-demo": {
+      "abilities": ["BLADED-VINE", "SPARK-CONTACT", "GUST-BURST", "RAZOR-BURST", "THUNDER-LINE", "CIRCUIT-LINE", "BLAZING-LARIAT", "EXPLOSIVE-CHARGE", "STORM-DRAFT", "BLURRING-FALCONRY", "WHIRLING-WIND-AGENT", "KNOCKOUT-BOULDER", "TOXIC-BOLAS", "ROCK-N-ROLL", "EARTH-STOMP-AGENT", "BUBBLE-BARRAGE"],
       "includeAllScenarios": true
     }
   },
@@ -850,11 +872,11 @@
       "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 110, "end": 114.7, "timelineStart": 110, "timelineEnd": 111.5 }, "reset": { "fixtures": { "targets": [{ "id": "air-target", "forward": -1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "AIR-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "GUST-BURST": {
-      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "GUST-BURST", "layout": "none" },
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "GUST-BURST", "layout": "none" },
       "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 20, 45, 75, 120], "sourceClip": { "start": 114.7, "end": 124.7, "timelineStart": 114.7, "timelineEnd": 116.7 }, "reset": { "fixtures": { "targets": [{ "id": "gust-target", "forward": 1, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "GUST-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "RAZOR-BURST": {
-      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "RAZOR-BURST", "layout": "none" },
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "RAZOR-BURST", "layout": "none" },
       "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 15, 30, 60, 90], "sourceClip": { "start": 124.8, "end": 132.3, "timelineStart": 124.8, "timelineEnd": 126.3 }, "reset": { "fixtures": { "targets": [{ "id": "razor-target", "forward": 1, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "RAZOR-BURST" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "SPIKE-TRACK": {
@@ -870,11 +892,11 @@
       "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 20, 40, 70, 100], "sourceClip": { "start": 147.4, "end": 151.3, "timelineStart": 147.4, "timelineEnd": 149.9 }, "reset": { "fixtures": { "targets": [{ "id": "snare-target", "forward": -6, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "SNARE-TRACK" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "THUNDER-LINE": {
-      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "THUNDER-LINE", "layout": "none" },
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "THUNDER-LINE", "layout": "none" },
       "scenarios": { "source-base": { "durationFrames": 120, "checkpointFrames": [1, 20, 45, 75, 120], "sourceClip": { "start": 151.4, "end": 157.8, "timelineStart": 151.4, "timelineEnd": 153.4 }, "reset": { "fixtures": { "targets": [{ "id": "thunder-target", "forward": 0, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "THUNDER-LINE" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "CIRCUIT-LINE": {
-      "defaultScenario": "source-base", "runtimeId": "wizardNextTwentyDash", "telemetryAdapter": "generic", "query": { "arcana": "CIRCUIT-LINE", "layout": "none" },
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "CIRCUIT-LINE", "layout": "none" },
       "scenarios": { "source-base": { "durationFrames": 340, "checkpointFrames": [1, 15, 30, 50, 85, 180], "sourceClip": { "start": 157.9, "end": 165.8, "timelineStart": 157.9, "timelineEnd": 163.5666666667 }, "reset": { "fixtures": { "targets": [{ "id": "circuit-target", "forward": 4, "lateral": 1, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "setMove", "move": { "x": 1, "z": 0 } }, { "frame": 0, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 1, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 35, "op": "setMove", "move": { "x": 0, "z": 1 } }, { "frame": 35, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 36, "op": "setMove", "move": { "x": 0, "z": 0 } }, { "frame": 70, "op": "setMove", "move": { "x": -1, "z": 0 } }, { "frame": 70, "op": "cast", "arcanaId": "CIRCUIT-LINE" }, { "frame": 71, "op": "setMove", "move": { "x": 0, "z": 0 } }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "SHOCK-LINE": {
@@ -1045,6 +1067,54 @@
           "stages": { "contract": {}, "source": {}, "style": {} }
         }
       }
+    },
+    "BLADED-VINE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "BLADED-VINE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 5, 12, 24, 45, 90], "sourceClip": { "start": 38.6, "end": 43, "timelineStart": 38.6, "timelineEnd": 43 }, "reset": { "fixtures": { "targets": [{ "id": "vine-target", "forward": 2.5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "BLADED-VINE" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "SPARK-CONTACT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "SPARK-CONTACT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 90, "checkpointFrames": [1, 4, 9, 18, 36, 90], "sourceClip": { "start": 46, "end": 51, "timelineStart": 46, "timelineEnd": 51 }, "reset": { "fixtures": { "targets": [{ "id": "spark-target", "forward": 1.4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "SPARK-CONTACT" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "BLAZING-LARIAT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "BLAZING-LARIAT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 180, "checkpointFrames": [1, 10, 20, 35, 75, 180], "sourceClip": { "start": 244, "end": 255, "timelineStart": 244, "timelineEnd": 249 }, "reset": { "fixtures": { "targets": [{ "id": "lariat-target", "forward": 3, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "BLAZING-LARIAT" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "EXPLOSIVE-CHARGE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "EXPLOSIVE-CHARGE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 9, 30, 60, 75, 150], "sourceClip": { "start": 259, "end": 265, "timelineStart": 259, "timelineEnd": 265 }, "reset": { "fixtures": { "targets": [{ "id": "charge-target", "forward": 2.5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "EXPLOSIVE-CHARGE" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "STORM-DRAFT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "STORM-DRAFT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 12, 30, 60, 90, 150], "sourceClip": { "start": 485, "end": 496, "timelineStart": 485, "timelineEnd": 490 }, "reset": { "fixtures": { "targets": [{ "id": "draft-target", "forward": 3.5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "STORM-DRAFT" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "BLURRING-FALCONRY": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "BLURRING-FALCONRY", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 180, "checkpointFrames": [1, 15, 35, 60, 120, 180], "sourceClip": { "start": 522, "end": 540, "timelineStart": 522, "timelineEnd": 533 }, "reset": { "fixtures": { "targets": [{ "id": "falcon-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "BLURRING-FALCONRY" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "WHIRLING-WIND-AGENT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "WHIRLING-WIND-AGENT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 660, "checkpointFrames": [1, 60, 180, 360, 600, 660], "sourceClip": { "start": 552, "end": 563, "timelineStart": 552, "timelineEnd": 563 }, "reset": { "fixtures": { "targets": [{ "id": "wind-agent-target", "forward": 5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "WHIRLING-WIND-AGENT" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "KNOCKOUT-BOULDER": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "KNOCKOUT-BOULDER", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 240, "checkpointFrames": [1, 8, 20, 45, 120, 240], "sourceClip": { "start": 686, "end": 690, "timelineStart": 686, "timelineEnd": 690 }, "reset": { "fixtures": { "targets": [{ "id": "boulder-target", "forward": 6, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "KNOCKOUT-BOULDER" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "TOXIC-BOLAS": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "TOXIC-BOLAS", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 360, "checkpointFrames": [1, 20, 60, 180, 300, 360], "sourceClip": { "start": 690, "end": 716, "timelineStart": 690, "timelineEnd": 699 }, "reset": { "fixtures": { "targets": [{ "id": "bolas-target", "forward": 5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "TOXIC-BOLAS" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "ROCK-N-ROLL": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "ROCK-N-ROLL", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 150, "checkpointFrames": [1, 10, 30, 60, 100, 150], "sourceClip": { "start": 725, "end": 737, "timelineStart": 725, "timelineEnd": 731 }, "reset": { "fixtures": { "targets": [{ "id": "saw-target", "forward": 5, "lateral": 0.85, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "ROCK-N-ROLL" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "EARTH-STOMP-AGENT": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "EARTH-STOMP-AGENT", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 660, "checkpointFrames": [1, 60, 180, 360, 600, 660], "sourceClip": { "start": 761, "end": 773, "timelineStart": 761, "timelineEnd": 773 }, "reset": { "fixtures": { "targets": [{ "id": "stomp-target", "forward": 5, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "EARTH-STOMP-AGENT" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
+    },
+    "BUBBLE-BARRAGE": {
+      "defaultScenario": "source-base", "runtimeId": "wizardVfxArcana", "telemetryAdapter": "generic", "query": { "arcana": "BUBBLE-BARRAGE", "layout": "none" },
+      "scenarios": { "source-base": { "durationFrames": 330, "checkpointFrames": [1, 10, 30, 90, 240, 330], "sourceClip": { "start": 1091, "end": 1097, "timelineStart": 1091, "timelineEnd": 1097 }, "reset": { "fixtures": { "targets": [{ "id": "bubble-target", "forward": 4, "lateral": 0, "hp": 9999 }] } }, "actions": [{ "frame": 0, "op": "cast", "arcanaId": "BUBBLE-BARRAGE" }], "acceptance": { "mode": "advisory", "checks": [] }, "stages": { "contract": {}, "source": {}, "style": {} } } }
     },
     "ARCANE-INTERVENTION": {
       "defaultScenario": "source-base", "runtimeId": "wizardArcaneTypes", "telemetryAdapter": "generic", "query": { "arcana": "ARCANE-INTERVENTION", "layout": "none" },

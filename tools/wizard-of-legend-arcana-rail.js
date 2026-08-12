@@ -7,11 +7,12 @@
   data.entries.forEach(entry=>{entry.poster=assetPrefix+entry.poster;});
 
   const STORAGE_KEY='wol.arcanaChecklist.v1';
-  const CATALOG_REVISION=7;
+  const CATALOG_REVISION=8;
   const NEXT_TWENTY_IMPLEMENTED=['ice-dagger','rip-tide','aqua-arc','chaos-crusher','searing-rush','flare-rush','ignition-rush','air-burst','gust-burst','razor-burst','spike-track','toxic-trap','snare-track','thunder-line','circuit-line','shock-line','wave-front','frost-feint','frost-wing','chaotic-rift'];
   const ARCHETYPE_SAMPLER_IMPLEMENTED=['rapid-fire-agent','ward-of-flames','mentis-imperium','flame-fusion','heroic-leap','cyclone-boomerang','earthen-aegis','ball-lightning','aqua-beam','arcane-intervention'];
   const VFX_LAB_IMPLEMENTED=['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','terra-ring','grasping-earth','tectonic-drill','rock-solid-tomahawk','shock-nova','star-bolt','aqua-vortex','aqua-breaker'];
-  const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};
+  const CURATED_DEMO_IMPLEMENTED=['bladed-vine','spark-contact','gust-burst','razor-burst','thunder-line','circuit-line','blazing-lariat','explosive-charge','storm-draft','blurring-falconry','whirling-wind-agent','knockout-boulder','toxic-bolas','rock-n-roll','earth-stomp-agent','bubble-barrage'];
+  const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),8:Object.fromEntries(CURATED_DEMO_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};
   const elements={Fire:'var(--fire)',Air:'var(--air)',Earth:'var(--earth)',Lightning:'var(--lightning)',Water:'var(--water)',Ice:'var(--ice)',Chaos:'var(--chaos)'};
   const lineageLabels={
     'source-first':'Source-first from outset',

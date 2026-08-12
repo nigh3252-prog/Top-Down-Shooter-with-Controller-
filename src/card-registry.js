@@ -6,6 +6,7 @@ import { STANCE_CARD_DEFINITIONS } from './stance-card-definitions.js';
 import { WIZARD_AIR_BASIC_CARDS } from './wizard-air-basics-cards.js';
 import { WIZARD_ARCANA_CARDS } from './wizard-arcana-cards.js';
 import { WIZARD_ARCHETYPE_SAMPLER_CARDS } from './wizard-archetype-sampler-cards.js';
+import { WIZARD_CURATED_DEMO_CARDS } from './wizard-curated-demo-cards.js';
 import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { WIZARD_NEXT_TWENTY_CARDS } from './wizard-next-twenty-cards.js';
 import { WIZARD_VFX_ARCANA_CARDS } from './wizard-vfx-arcana-cards.js';
@@ -21,6 +22,7 @@ const CONTRIBUTIONS = Object.freeze([
     ...WIZARD_NEXT_TWENTY_CARDS,
     ...WIZARD_ARCHETYPE_SAMPLER_CARDS,
     ...WIZARD_VFX_ARCANA_CARDS,
+    ...WIZARD_CURATED_DEMO_CARDS,
   ])}),
 ]);
 

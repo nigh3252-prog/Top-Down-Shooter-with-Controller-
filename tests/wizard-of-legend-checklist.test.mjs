@@ -55,11 +55,11 @@ const implemented=entries.filter(entry=>entry.status==='source-first-implemented
 const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
 const replacement=entries.filter(entry=>entry.status==='replacement-in-progress');
-assert.equal(analyzed.length,80,'the 80 source-first analyses must survive the Gate 1 inventory expansion');
-assert.equal(inventoryOnly.length,69,'the eight additional VFX-lab ports must leave 69 inventory-only records');
-assert.equal(improved.length,80,'all 80 analyzed entries must use the improved source-first analysis');
-assert.equal(implemented.length,60,'the fourteen VFX-lab cards must join the source-first implementation count');
-assert.equal(pending.length,20,'20 source-first analyses must remain implementation-pending');
+assert.equal(analyzed.length,88,'the curated demo ports must promote their eight inventory-only records');
+assert.equal(inventoryOnly.length,61,'61 records must remain inventory-only');
+assert.equal(improved.length,88,'all 88 analyzed entries must use the improved source-first analysis');
+assert.equal(implemented.length,70,'the ten new curated cards must join the source-first implementation count');
+assert.equal(pending.length,18,'18 source-first analyses must remain implementation-pending');
 assert.deepEqual(legacy,[],'no legacy entry should remain after the Water Prison reanalysis');
 assert.deepEqual(replacement,[],'the completed Dragon Arc design must leave no active replacement queue');
 assert.deepEqual(entries.filter(entry=>entry.currentImplementation),[],'completed replacements must not retain an active prototype notice');
@@ -80,8 +80,8 @@ assert.match(dragonArc?.revisionHistory,/metric-validated deterministic double-h
 assert.match(dragonArc?.revisionHistory,/final visual source comparison remains pending user review/i,'Dragon Arc must leave final visual approval open');
 assert.match(dragonArc?.revisionHistory,/articulated segmented dragon silhouette/i,'Dragon Arc must record the completed visual carrier');
 assert.match(dragonArc?.analysisMarkdown,/Working motion calibration \[INFERENCE/i,'Dragon Arc must keep measured calibration separate from observed evidence');
-assert.match(html,/const CATALOG_REVISION=7/,'the VFX-lab card expansion must bump the stored progress revision');
-assert.match(rail,/const CATALOG_REVISION=7/,'the tools rail must share the VFX-lab catalog revision');
+assert.match(html,/const CATALOG_REVISION=8/,'the curated demo expansion must bump the stored progress revision');
+assert.match(rail,/const CATALOG_REVISION=8/,'the tools rail must share the curated demo catalog revision');
 assert.match(html,/payload\.catalogRevision\?\?1/,'progress migration must preserve newer user choices');
 assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\},3:/,'revision two must preserve the Dragon Arc completion migration');
 assert.match(html,/3:Object\.fromEntries\(NEXT_TWENTY_IMPLEMENTED\.map/,'revision three must migrate the next-twenty implementation defaults');
@@ -89,6 +89,9 @@ assert.match(html,/4:Object\.fromEntries\(ARCHETYPE_SAMPLER_IMPLEMENTED\.map/,'r
 assert.match(html,/const VFX_LAB_IMPLEMENTED=\['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','terra-ring','grasping-earth','tectonic-drill','rock-solid-tomahawk','shock-nova','star-bolt','aqua-vortex','aqua-breaker'\]/,'the checklist must name every VFX-lab card in its migration set');
 assert.match(html,/7:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'revision seven must migrate the VFX-lab implementation defaults');
 assert.match(rail,/7:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'the tools rail must migrate the VFX-lab implementation defaults');
+assert.match(html,/const CURATED_DEMO_IMPLEMENTED=\['bladed-vine','spark-contact','gust-burst','razor-burst','thunder-line','circuit-line','blazing-lariat','explosive-charge','storm-draft','blurring-falconry','whirling-wind-agent','knockout-boulder','toxic-bolas','rock-n-roll','earth-stomp-agent','bubble-barrage'\]/,'the checklist must name all sixteen curated replacements and additions');
+assert.match(html,/8:Object\.fromEntries\(CURATED_DEMO_IMPLEMENTED\.map/,'revision eight must migrate curated demo defaults');
+assert.match(rail,/8:Object\.fromEntries\(CURATED_DEMO_IMPLEMENTED\.map/,'the tools rail must migrate curated demo defaults');
 assert.match(html,/progress=progressFromPayload\(incoming\)/,'imported older progress must receive the same catalog migration as local progress');
 assert.doesNotMatch(html,/for\(const entry of data\.entries\).*?entry\.defaults\.implementation/s,'catalog migration must not overwrite unrelated user checklist choices');
 
@@ -106,6 +109,14 @@ for(const name of ['Flame Breath','Searing Crown','Ignition Drive','Engulfing Fi
   assert.ok(entry?.recipe?.trim()&&entry?.acceptance?.trim()&&entry?.units?.length,`${name} must retain a playable recipe and acceptance gate`);
   assert.match(entry?.analysisMarkdown,/VFX lab/i,`${name} must retain uploaded VFX-lab evidence`);
   assert.match(entry?.revisionHistory,/VFX lab port/i,`${name} must record the implementation migration`);
+}
+
+for(const name of ['Bladed Vine','Spark Contact','Gust Burst','Razor Burst','Thunder Line','Circuit Line','Blazing Lariat','Explosive Charge','Storm Draft','Blurring Falconry','Whirling Wind Agent','Knockout Boulder','Toxic Bolas',"Rock N' Roll",'Earth Stomp Agent','Bubble Barrage']){
+  const entry=entries.find(item=>item.name===name);
+  assert.equal(entry?.status,'source-first-implemented',`${name} curated demo must show as implemented`);
+  assert.deepEqual(entry?.defaults,{analysis:true,implementation:true,comparison:false},`${name} curated defaults are incorrect`);
+  assert.match(entry?.revisionHistory,/Curated demo port/,`${name} must record the curated source replacement`);
+  assert.match(entry?.analysisMarkdown,/exact uploaded source/i,`${name} must retain exact-demo evidence`);
 }
 
 const referenceLockWindows=new Map([
@@ -132,6 +143,7 @@ assert.match(html,/data-action="watch-segment"/,'a card must offer its individua
 assert.match(html,/function showcaseClip\(entry\)\{return entry\.showcaseWindow\?\?entry;\}/,'default playback must use the full Gate 1 showcase window');
 
 const nextTwentyNames=['Ice Dagger','Rip Tide','Aqua Arc','Chaos Crusher','Searing Rush','Flare Rush','Ignition Rush','Air Burst','Gust Burst','Razor Burst','Spike Track','Toxic Trap','Snare Track','Thunder Line','Circuit Line','Shock Line','Wave Front','Frost Feint','Frost Wing','Chaotic Rift'];
+const curatedNextTwenty=new Set(['Gust Burst','Razor Burst','Thunder Line','Circuit Line']);
 for(const name of nextTwentyNames){
   const entry=entries.find(item=>item.name===name);
   assert.equal(entry?.status,'source-first-implemented',`${name} must count as source-first implemented`);
@@ -141,7 +153,7 @@ for(const name of nextTwentyNames){
   assert.match(entry?.analysisMarkdown,/Reference-lock frame audit/i,`${name} must retain its audit addendum`);
   assert.match(entry?.analysisMarkdown,/\[EVIDENCE[^\]]*\]/i,`${name} must separate evidence`);
   assert.match(entry?.analysisMarkdown,/\[INFERENCE[^\]]*\]/i,`${name} must separate Top Down integration inference`);
-  assert.match(entry?.revisionHistory,/contract, source-render, and final-style gates/i,`${name} must record the durable workflow`);
+  assert.match(entry?.revisionHistory,curatedNextTwenty.has(name)?/Curated demo port/:/contract, source-render, and final-style gates/i,`${name} must record the durable workflow`);
 }
 
 const archetypeSamplerNames=['Rapid Fire Agent','Ward of Flames','Mentis Imperium','Flame Fusion','Heroic Leap','Cyclone Boomerang','Earthen Aegis','Ball Lightning','Aqua Beam','Arcane Intervention'];

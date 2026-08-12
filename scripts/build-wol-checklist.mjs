@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WIZARD_NEXT_TWENTY_CARDS } from '../src/wizard-next-twenty-cards.js';
+import { WIZARD_CURATED_DEMO_CARDS } from '../src/wizard-curated-demo-cards.js';
 
 const scriptDir=path.dirname(fileURLToPath(import.meta.url));
 const root=path.resolve(scriptDir,'..');
@@ -301,6 +302,8 @@ const implementedNames=new Set([
   'Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain',
   'Tectonic Drill','Rock-Solid Tomahawk','Aqua Vortex','Aqua Breaker',
   'Terra Ring','Grasping Earth','Shock Nova','Star Bolt',
+  'Blazing Lariat','Explosive Charge','Storm Draft','Blurring Falconry','Whirling Wind Agent',
+  'Knockout Boulder','Toxic Bolas',"Rock N' Roll",'Earth Stomp Agent','Bubble Barrage',
   ...WIZARD_NEXT_TWENTY_CARDS.map(card=>card.name),
 ]);
 const referenceLockWindows=new Map([
@@ -396,6 +399,12 @@ for(const card of WIZARD_NEXT_TWENTY_CARDS){
 **[INFERENCE — Top Down Game construction]** ${dashNote} Procedural geometry, particles, glow falloff, and harmless wall fizzles are authored approximations; they must not change the documented payload or invent damage through scenery.`);
 }
 const vfxLabReferenceLocks=new Map([
+  ['Bladed Vine',{start:38.6,end:43,note:'The curated later-revision demo replaces the previous game version with its exact attached thorn-vine palette, measured whip reach, three-strand finisher bundle, impact stars, timing, and cleanup.'}],
+  ['Spark Contact',{start:46,end:51,note:'The curated later-revision demo replaces the previous game version with its exact compact lightning contact, forward step, wedge footprint, dense branches, endpoint reactions, three-beat timing, and cleanup.'}],
+  ['Gust Burst',{start:114.8,end:124.7,note:'The curated air-dash demo replaces the previous game version with its exact gather, compress, shared dash route, draught emissions, endpoint burst, target carry, and cleanup.'}],
+  ['Razor Burst',{start:124.8,end:132.3,note:'The curated air-dash demo replaces the previous game version with its exact dash endpoint vortex, five four-damage contacts, pull/slow behavior, brushstroke carrier, and cleanup.'}],
+  ['Thunder Line',{start:151.4,end:153.4,note:'The curated circuit demo replaces the previous game version with its exact forward dash, endpoint burst and core, source lightning geometry, shock ticks, and cleanup.'}],
+  ['Circuit Line',{start:157.9,end:163.5666666667,note:'The curated circuit demo replaces the previous game version with its exact three armed nodes, seven-unit links, stream radius, six two-damage contacts, lightning construction, and cleanup.'}],
   ['Flame Breath',{start:217,end:227,note:'The base clip retains the rounded close flame cone, discrete three-hit schedule, projectile interception, and compact smoke/ember cleanup. Charged steerable breath remains disabled.'}],
   ['Searing Crown',{start:227,end:233,note:'The base clip retains the caster-centered crown, five timed ticks, stronger finisher handoff, and smoke/heat buildup. Enhanced and charged rewrites remain disabled.'}],
   ['Ignition Drive',{start:353,end:357,note:'The base clip retains the ordered forward explosion route, carry beats, endpoint finisher, and source smoke/ember aftermath. Enhanced lingering fire remains disabled.'}],
@@ -410,6 +419,16 @@ const vfxLabReferenceLocks=new Map([
   ['Star Bolt',{start:869,end:875,note:'The base clip retains the compact spinning star, bright core, source trail, single contact flash, and delayed shock. The enhanced longer-shock branch remains disabled.'}],
   ['Aqua Vortex',{start:1007,end:1013,note:'The base clip retains the caster-centered six-arm water spiral, source tick schedule, pull, projectile interception, and low-sheet collapse. Extra charges and enhanced ice remain disabled.'}],
   ['Aqua Breaker',{start:1083,end:1091,note:'The base clip retains the growing coiled charge, rolling carrier, bounded pass contacts, and wide deluge finisher. Extra charges and enhanced branches remain disabled.'}],
+  ['Blazing Lariat',{start:244,end:249,note:'The curated base demo retains the 2.4-unit slide, two enormous 330-degree sampled fire-whip sweeps, their 0.30-second offset, source fire pool, burn, hit ledgers, and cleanup.'}],
+  ['Explosive Charge',{start:259,end:265,note:'The curated base demo retains the three-charge short dash, swept contact test, independent one-second markers, source blast, saved dash-direction knockback, and cleanup.'}],
+  ['Storm Draft',{start:485,end:490,note:'The curated base demo retains the deliberate point-blank gap, tall crescent curtain, source carry ownership, wall-slam transition, cyan impact reaction, and cleanup.'}],
+  ['Blurring Falconry',{start:522,end:533,note:'The curated base demo retains the pale falcon sprite, seek-to-mark handoff, six target-owned orbiting passes, source streaks, impact flashes, and cleanup.'}],
+  ['Whirling Wind Agent',{start:552,end:563,note:'The curated base demo retains two independently owned agents, two-part bars, follow/leash behavior, one-second piercing charge cadence, wall-slam reaction, and ten-second expiry.'}],
+  ['Knockout Boulder',{start:686,end:690,note:'The curated base demo retains the exact large boulder mesh, cast-origin crater, loft, spin, dust arc, contact debris, stun, knockback, and cleanup.'}],
+  ['Toxic Bolas',{start:690,end:699,note:'The curated base demo retains the twin-stone bola and cord, source flight, impact vines, five-second root, five poison ticks, particles, and cleanup.'}],
+  ["Rock N' Roll",{start:725,end:731,note:'The curated base demo retains two parallel rock buzzsaws, exact tooth/axle silhouette, source lane spread and splay, repeated contact cadence, dark furrows, ground churn, debris, and cleanup.'}],
+  ['Earth Stomp Agent',{start:761,end:773,note:'The curated base demo retains the olive core and shard ring, summon burst, hover/follow/leash motion, target leap, shrinking shadow, radial crack/debris stomp, and ten-second expiry.'}],
+  ['Bubble Barrage',{start:1091,end:1097,note:'The curated base demo retains the canvas bubble art, stored-charge stream, source spread/drag/drift/wobble, light wall bounce, contact pop, and five-second self-detonation.'}],
 ]);
 for(const [name,window] of vfxLabReferenceLocks){
   referenceLockAddenda.set(name,`## Reference-lock frame audit
@@ -439,6 +458,7 @@ const revisionHistory=new Map([
 for(const name of samplerReferenceNotes.keys())revisionHistory.set(name,'The base-form source analysis was converted into a deterministic Enemy Lab implementation through contract, source-render, and final-style gates. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
 for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The source-first analysis was converted into a deterministic base-form Enemy Lab implementation through contract, source-render, and final-style gates. ${card.dashMotion?'The payload is layered onto the already approved Top Down Game dash locomotion, with Chaotic Rift retaining its required teleport exception.':'The full authored Basic sequence is scheduled by one card activation.'} Source comparison remains pending user review; enhanced variants remain documented but disabled.`);
 for(const name of ['Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain','Tectonic Drill','Rock-Solid Tomahawk','Aqua Vortex','Aqua Breaker','Terra Ring','Grasping Earth','Shock Nova','Star Bolt'])revisionHistory.set(name,'VFX lab port (2026-08-11): the exact supplied source was ported into the Enemy Lab with native card, target, status, and cleanup adapters. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
+for(const name of ['Bladed Vine','Spark Contact','Gust Burst','Razor Burst','Thunder Line','Circuit Line','Blazing Lariat','Explosive Charge','Storm Draft','Blurring Falconry','Whirling Wind Agent','Knockout Boulder','Toxic Bolas',"Rock N' Roll",'Earth Stomp Agent','Bubble Barrage'])revisionHistory.set(name,'Curated demo port (2026-08-12): the selected standalone demo is now the visual and behavior source of truth. Its source palette, geometry, particles, timeline, carrier/contact choreography, and cleanup are copied into the Enemy Lab; only scene coordinates, native target/status services, shared dash locomotion, and card lifecycle are adapted. Enhanced and charged branches remain disabled until the game exposes those card states.');
 
 const inventory=parseInventoryLedger(inventoryLedgerText);
 const inventoryBySlug=new Map(inventory.entries.map(entry=>[slugify(entry.name),entry]));
@@ -563,6 +583,37 @@ for(const record of inventory.entries){
   });
 }
 
+// Eight curated-demo Arcana previously existed only as Gate 1 inventory rows.
+// Promote all ten newly installed cards to source-first records using the card
+// contracts copied from the selected standalone demos. Blazing Lariat and
+// Explosive Charge already have long-form source notes, so this only fills the
+// fields that the inventory-only records did not have.
+for(const card of WIZARD_CURATED_DEMO_CARDS){
+  const entry=entries.find(item=>item.id===slugify(card.name));
+  if(!entry)throw new Error(`Missing curated-demo checklist entry for ${card.name}`);
+  entry.lineage='source-first';
+  entry.status='source-first-implemented';
+  entry.defaults={analysis:true,implementation:true,comparison:false};
+  entry.summary=card.details.summary;
+  entry.recipe=['## Exact source recipe','',...card.details.rows.map(([label,value])=>`- **${label}:** ${value}`)].join('\n');
+  entry.acceptance=[
+    '## Source-faithful acceptance test','',
+    '- The copied demo palette, geometry, emission order, carrier/contact choreography, and cleanup remain visible without substitute shapes.',
+    '- The source constants above remain unchanged at every Arcana Size; only the parent visual and collision footprint scale.',
+    '- Native target, damage, status, movement, and lifecycle adapters do not add a second approximate hit schedule.',
+    '- Enhanced and charged branches remain disabled.',
+  ].join('\n');
+  entry.issues='## Integration boundary\n\nOnly scene coordinates, live target proxies, native damage/status calls, shared dash collision, camera space, and card cleanup are game-owned adapters.';
+  entry.units=card.details.rows.map(([label,value])=>`${label}: ${value}`);
+  entry.analysisMarkdown=[
+    '# Curated standalone demo source-first analysis','',
+    `**[EVIDENCE — exact uploaded source]** ${card.details.summary}`,'',
+    card.details.rows.map(([label,value])=>`- **${label}:** ${value}`).join('\n'),'',
+    referenceLockAddenda.get(card.name)||'',
+  ].join('\n');
+  entry.revisionHistory=revisionHistory.get(card.name)||'';
+}
+
 for(const entry of entries){
   const online=onlineReferences.get(entry.id);
   if(!online)throw new Error(`${entry.name} is missing its documented-online reference`);
@@ -606,8 +657,10 @@ const fallbackTemplate=fs.readFileSync(path.join(scriptDir,'wol-checklist-templa
 const existingTemplate=fs.existsSync(generatedPath)?fs.readFileSync(generatedPath,'utf8'):'';
 const template=(existingTemplate.includes('id="rail-app"')?existingTemplate:fallbackTemplate)
   .replaceAll('const CATALOG_REVISION=6','const CATALOG_REVISION=7')
+  .replaceAll('const CATALOG_REVISION=7','const CATALOG_REVISION=8')
   .replaceAll("const VFX_LAB_IMPLEMENTED=['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','tectonic-drill','rock-solid-tomahawk','aqua-vortex','aqua-breaker'];", "const VFX_LAB_IMPLEMENTED=['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','terra-ring','grasping-earth','tectonic-drill','rock-solid-tomahawk','shock-nova','star-bolt','aqua-vortex','aqua-breaker'];")
   .replaceAll('6:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))','7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))')
+  .replaceAll("const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};", "const CURATED_DEMO_IMPLEMENTED=['bladed-vine','spark-contact','gust-burst','razor-burst','thunder-line','circuit-line','blazing-lariat','explosive-charge','storm-draft','blurring-falconry','whirling-wind-agent','knockout-boulder','toxic-bolas','rock-n-roll','earth-stomp-agent','bubble-barrage'];\n  const CATALOG_MIGRATIONS={2:{'dragon-arc':{analysis:true,implementation:true}},3:Object.fromEntries(NEXT_TWENTY_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),4:Object.fromEntries(ARCHETYPE_SAMPLER_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}])),8:Object.fromEntries(CURATED_DEMO_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))};")
   .replaceAll('The 77 newly added records are intentionally inventory-only','The 73 newly added records are intentionally inventory-only');
 const safeJson=JSON.stringify(payload).replace(/</g,'\\u003c');
 const html=template.includes('__WOL_DATA__')

@@ -29,17 +29,17 @@ if(typeof globalThis.CustomEvent==='undefined')globalThis.CustomEvent=class Cust
 };
 
 assert.deepEqual(CARD_FAMILIES,['stance','special-stance','non-stance','arcana']);
-assert.equal(CARD_DEFINITIONS.length,93,'the registry inventory must include every current card');
+assert.equal(CARD_DEFINITIONS.length,103,'the registry inventory must include every current card');
 assert.equal(CARD_REGISTRY_ENTRIES.length,CARD_DEFINITIONS.length);
 assert.equal(new Set(CARD_IDS).size,CARD_IDS.length,'card IDs must be unique');
 assert.equal(listCards({family:'stance'}).length,30);
 assert.equal(listCards({family:'special-stance'}).length,1);
 assert.equal(listCards({family:'non-stance'}).length,2);
-assert.equal(listCards({family:'arcana'}).length,60);
+assert.equal(listCards({family:'arcana'}).length,70);
 const effectCards=[...listCards({family:'non-stance'}),...listCards({family:'arcana'})];
-assert.equal(effectCards.length,62,'the canonical non-stance inventory is Pilebunker, Blood Slash, and 60 Arcana');
+assert.equal(effectCards.length,72,'the canonical non-stance inventory is Pilebunker, Blood Slash, and 70 Arcana');
 assert.ok(effectCards.every(card=>card.effectId),'every canonical non-stance card must own an effectId');
-assert.equal(ARCANA_EFFECT_DEFINITIONS.length,60);
+assert.equal(ARCANA_EFFECT_DEFINITIONS.length,70);
 for(const entry of CARD_REGISTRY_ENTRIES){
   assert.equal(CARD_REGISTRY.get(entry.id),entry.card);
   assert.equal(Object.isFrozen(entry),true);
@@ -56,7 +56,7 @@ assert.throws(()=>STANCE_CARDS.push(STANCE_CARDS[0]),TypeError);
 assert.equal(POW_BUNKER_CARD.playEvent,'powbunker:play');
 assert.equal(BLOOD_SLASH_CARD.playEvent,'bloodslash:play');
 assert.equal(BING_BONG_CARD.effectId,'bingBong');
-assert.equal(EFFECT_DEFINITIONS.length,63,'Bing Bong plus 62 non-stance effects must be registered');
+assert.equal(EFFECT_DEFINITIONS.length,73,'Bing Bong plus 72 non-stance effects must be registered');
 assert.equal(EFFECT_IDS.length,EFFECT_DEFINITIONS.length);
 assert.equal(RUNTIME_HANDLER_IDS.length,15);
 for(const definition of EFFECT_DEFINITIONS){
@@ -96,7 +96,7 @@ const productionTable=createRuntimeHandlerTable(productionHandlers);
 const productionDispatcher=createEffectDispatcher({runtimeHandlers:productionTable});
 assert.equal(productionTable.size,15,'the deterministic runtime table must contain every runtime handler');
 assert.equal(productionDispatcher.handlers.size,15,'dispatcher construction must preserve a readonly runtime table');
-assert.equal(productionDispatcher.list().length,63);
+assert.equal(productionDispatcher.list().length,73);
 assert.ok(productionDispatcher.list().every(entry=>entry.handler===productionTable.get(entry.runtimeHandlerId)),'each effect must resolve to exactly one table handler');
 productionCalls.length=0;
 assert.equal(productionDispatcher.canPlay(POW_BUNKER_CARD,{slot:0}),true);

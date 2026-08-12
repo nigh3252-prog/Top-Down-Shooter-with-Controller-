@@ -777,7 +777,7 @@ function chainMove(slot){
   const att = PC.ATTACKS[key];
   return att ? { key, slot, att } : null;
 }
-function arcanaDashBusy(){return !!(PC.basicDashRuntime?.busy||PC.wizardNextTwentyDashRuntime?.busy);}
+function arcanaDashBusy(){return !!(PC.basicDashRuntime?.busy||PC.wizardNextTwentyDashRuntime?.busy||PC.wizardVfxArcanaRuntime?.busy);}
 function heroicLeapCommitted(){return !!(arena.arcanaAirborne||PC.wizardFusionLeapRuntime?.busy);}
 function canUseCombatInput(){ return arena.deadT < 0 && arena.dodge.t < 0 && !arcanaDashBusy() && !heroicLeapCommitted() && !arena.arcanaMovementLocked && arena.chain.inputLockT <= 0 && !!arena.stance; }
 function chargeCap(att){ return att.phases[0].t1 * .98; }
@@ -1801,6 +1801,7 @@ function captureRuntimes(){
     wizardFusionLeap:PC.wizardFusionLeapRuntime,
     wizardArcaneTypes:PC.wizardArcaneTypesRuntime,
     wizardAlliedArcana:PC.wizardAlliedArcanaRuntime,
+    wizardVfxArcana:PC.wizardVfxArcanaRuntime,
   };
 }
 function resetCaptureRuntimes(config={}){

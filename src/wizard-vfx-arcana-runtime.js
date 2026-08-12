@@ -8,6 +8,13 @@ import { dashDistance } from './basic-dash-logic.js';
 import { createWizardVfxSourcePort } from './wizard-vfx-arcana-source-port.js';
 import { createWizardLightningSourcePort } from './wizard-lightning-arcana-source-port.js';
 import { createWizardEarthArcanaSourcePort } from './wizard-earth-arcana-source-port.js';
+import { createWizardCuratedBasicSourcePort } from './wizard-curated-basic-source-port.js';
+import { createWizardCuratedDashSourcePort } from './wizard-curated-dash-source-port.js';
+import { createWizardCuratedFireSourcePort } from './wizard-curated-fire-source-port.js';
+import { createWizardCuratedAirSourcePort } from './wizard-curated-air-source-port.js';
+import { createWizardCuratedBubbleFalconSourcePort } from './wizard-curated-bubble-falcon-source-port.js';
+import { createWizardCuratedEarthAgentSourcePort } from './wizard-curated-earth-agent-source-port.js';
+import { createWizardCuratedEarthProjectileSourcePort } from './wizard-curated-earth-projectile-source-port.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const sat=value=>clamp(Number(value)||0,0,1);
@@ -19,7 +26,30 @@ const VFX_IDS=Object.freeze(new Set([
   'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST',
   'SHEARING-CHAIN','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','AQUA-VORTEX','AQUA-BREAKER',
   'TERRA-RING','GRASPING-EARTH','SHOCK-NOVA','STAR-BOLT',
+  'BLADED-VINE','SPARK-CONTACT','GUST-BURST','RAZOR-BURST','THUNDER-LINE','CIRCUIT-LINE',
+  'BLAZING-LARIAT','EXPLOSIVE-CHARGE','STORM-DRAFT','BLURRING-FALCONRY','WHIRLING-WIND-AGENT',
+  'KNOCKOUT-BOULDER','TOXIC-BOLAS','ROCK-N-ROLL','EARTH-STOMP-AGENT','BUBBLE-BARRAGE',
 ]));
+
+const CURATED_SOURCE_FAMILY=Object.freeze(new Map([
+  ['BLADED-VINE','basic'],['SPARK-CONTACT','basic'],
+  ['GUST-BURST','dash'],['RAZOR-BURST','dash'],['THUNDER-LINE','dash'],['CIRCUIT-LINE','dash'],
+  ['BLAZING-LARIAT','fire'],['EXPLOSIVE-CHARGE','fire'],
+  ['STORM-DRAFT','air'],['WHIRLING-WIND-AGENT','air'],
+  ['BUBBLE-BARRAGE','bubbleFalcon'],['BLURRING-FALCONRY','bubbleFalcon'],
+  ['ROCK-N-ROLL','earthAgent'],['EARTH-STOMP-AGENT','earthAgent'],
+  ['KNOCKOUT-BOULDER','earthProjectile'],['TOXIC-BOLAS','earthProjectile'],
+]));
+const CURATED_SOURCE_FACTORIES=Object.freeze({
+  basic:createWizardCuratedBasicSourcePort,
+  dash:createWizardCuratedDashSourcePort,
+  fire:createWizardCuratedFireSourcePort,
+  air:createWizardCuratedAirSourcePort,
+  bubbleFalcon:createWizardCuratedBubbleFalconSourcePort,
+  earthAgent:createWizardCuratedEarthAgentSourcePort,
+  earthProjectile:createWizardCuratedEarthProjectileSourcePort,
+});
+const CURATED_DASH_IDS=Object.freeze(new Set(['BLAZING-LARIAT','EXPLOSIVE-CHARGE','GUST-BURST','RAZOR-BURST','THUNDER-LINE','CIRCUIT-LINE']));
 
 // The copied Shearing Chain source moves its caster from local X -4.2 to
 // +2.4. The shared dash controller still owns the actual collision-checked
@@ -155,7 +185,8 @@ export function installWizardVfxArcanaRuntime({
   if(!THREE||!scene||!isEnemyLabRuntime())return empty;
 
   const sourcePort=createWizardVfxSourcePort({THREE,scene});
-  const state={effects:[],castSerial:0,lastCast:null,sizeMultiplier:initialTweaks.sizeMultiplier};
+  const curatedPorts=new Map();
+  const state={effects:[],castSerial:0,lastCast:null,sizeMultiplier:initialTweaks.sizeMultiplier,curatedDashTime:0};
   const currentSize=()=>clampArcanaSize(state.sizeMultiplier);
   const add=effect=>{state.effects.push(effect);return effect;};
   function remove(effect){
@@ -169,10 +200,84 @@ export function installWizardVfxArcanaRuntime({
     for(const impact of effect.impacts||[])disposeObject(impact.mesh||impact);
     const index=state.effects.indexOf(effect);if(index>=0)state.effects.splice(index,1);
   }
-  function reset(){for(const effect of[...state.effects])remove(effect);state.castSerial=0;state.lastCast=null;}
+  function reset(){for(const effect of[...state.effects])remove(effect);resetCurated();state.castSerial=0;state.lastCast=null;}
   function crossed(effect,time){return effect.previousAge<time&&effect.age>=time;}
   function advance(effect,dt){effect.previousAge=effect.age;effect.age+=Math.max(0,Number(dt)||0);}
   function intercept(position,radius,system){destroyProjectiles(system,position,radius);}
+  function curatedTargets(){return aliveEnemies(getEnemySystem?.());}
+  function curatedMoveTarget(enemy,value,meta={}){
+    if(!enemy||Number(enemy.hp)<=0)return false;
+    const deltaLike=Boolean(value?.delta||value?.meta||String(meta?.source||'').startsWith('wizard-curated-earth'));
+    const delta=deltaLike?(value?.delta||value):null;
+    const position=delta
+      ?{x:(Number(enemy.x)||0)+(Number(delta.x)||0),z:(Number(enemy.z)||0)+(Number(delta.z)||0)}
+      :{x:Number(value?.x)||0,z:Number(value?.z)||0};
+    return moveEnemy(getEnemySystem?.(),enemy,position);
+  }
+  function curatedKnockback(enemy,value={}){
+    if(!enemy||Number(enemy.hp)<=0)return false;
+    const vector=value?.delta||value;
+    const x=Number(vector?.x)||0,z=Number(vector?.z)||0;
+    if('knockX'in enemy||'knockZ'in enemy){enemy.knockX=(Number(enemy.knockX)||0)+x*.72;enemy.knockZ=(Number(enemy.knockZ)||0)+z*.72;return true;}
+    return moveEnemy(getEnemySystem?.(),enemy,{x:(Number(enemy.x)||0)+x*.08,z:(Number(enemy.z)||0)+z*.08});
+  }
+  function curatedCallbacks(){
+    return{
+      onDamage(enemy,amount,meta={}){
+        if(amount&&typeof amount==='object'){meta=amount;amount=Number(meta.damage)||0;}
+        // Copied ports own their exact knock/carry movement and report it via
+        // onMoveTarget/onKnockback. Keep native damage from applying a second
+        // approximate displacement.
+        damageEnemy(getEnemySystem?.(),enemy,amount,{x:0,z:0},{sourceArcana:state.lastCast?.arcanaId,curatedDemo:true,...meta});
+      },
+      onStatus(enemy,kind,meta={}){
+        if(kind&&typeof kind==='object'){meta=kind;kind=meta.kind||meta.status;}
+        const duration=Number(meta?.duration??meta?.time??meta)||0;
+        if(duration>0)applyStatus(getEnemySystem?.(),enemy,String(kind||'').toLowerCase(),duration,{source:state.lastCast?.arcanaId?.toLowerCase(),...meta});
+      },
+      onMoveTarget:curatedMoveTarget,
+      onKnockback:curatedKnockback,
+      onMovePlayer(value){const delta=value?.delta||value||{};return translatePlayer(Number(delta.x)||0,Number(delta.z)||0);},
+      onProjectileCleanup(){},onPopup(){},onAudio(){},onCameraShake(){},onCast(){},onWallSlam(){},
+    };
+  }
+  function curatedContext(){
+    const player=getPlayer?.()||{},frame=playerFrame(getPlayer),targets=curatedTargets(),callbacks=curatedCallbacks();
+    return{player,targets,forward:frame.forward,direction:frame.forward,origin:{x:frame.x,z:frame.z},cameraQuaternion:camera?.quaternion,callbacks};
+  }
+  function ensureCuratedPort(family){
+    if(curatedPorts.has(family))return curatedPorts.get(family);
+    const factory=CURATED_SOURCE_FACTORIES[family];if(typeof factory!=='function')return null;
+    const callbacks=curatedCallbacks();
+    const port=factory({
+      THREE,scene,camera,size:currentSize(),
+      getPlayer,getTargets:curatedTargets,
+      player:getPlayer?.(),targets:curatedTargets(),callbacks,
+      onDamage:callbacks.onDamage,onStatus:callbacks.onStatus,onMoveTarget:callbacks.onMoveTarget,
+      onKnockback:callbacks.onKnockback,onMovePlayer:callbacks.onMovePlayer,
+      startDashMotion(options={}){
+        const from=options.from,to=options.to;
+        const distance=from&&to?Math.hypot((Number(to.x)||0)-(Number(from.x)||0),(Number(to.z)||0)-(Number(from.z)||0)):dashDistance();
+        return startDashMotion?.({...options,direction:options.direction,distanceMultiplier:distance/dashDistance(),grantIframes:false,applyDodgeCooldown:false});
+      },
+      translatePlayer,
+    });
+    if(!port||typeof port.cast!=='function')return null;
+    curatedPorts.set(family,port);return port;
+  }
+  function castCurated(id){
+    const family=CURATED_SOURCE_FAMILY.get(id),port=ensureCuratedPort(family);if(!port)return false;
+    const played=port.cast(id,curatedContext());
+    if(played&&CURATED_DASH_IDS.has(id))state.curatedDashTime=Math.max(state.curatedDashTime,(id==='GUST-BURST'||id==='RAZOR-BURST') ? .22 : .17);
+    return played!==false;
+  }
+  function updateCurated(dt){
+    state.curatedDashTime=Math.max(0,state.curatedDashTime-dt);
+    const context=curatedContext();
+    for(const port of curatedPorts.values())port.update?.(dt,context);
+  }
+  function resetCurated(){for(const port of curatedPorts.values())port.reset?.();state.curatedDashTime=0;}
+  function disposeCurated(){for(const port of curatedPorts.values())port.dispose?.();curatedPorts.clear();state.curatedDashTime=0;}
   const fallbackCameraQuaternion=new THREE.Quaternion();
   const sourceWorldQuaternion=new THREE.Quaternion();
   const sourceLocalCameraQuaternion=new THREE.Quaternion();
@@ -628,7 +733,8 @@ export function installWizardVfxArcanaRuntime({
   function cast(card){
     const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();if(!VFX_IDS.has(id))return false;
     state.castSerial++;state.lastCast={serial:state.castSerial,cardId:card?.id||`WOL-${id}`,arcanaId:id};
-    if(id==='FLAME-BREATH')startFlameBreath();
+    if(CURATED_SOURCE_FAMILY.has(id)&&!castCurated(id))return false;
+    else if(id==='FLAME-BREATH')startFlameBreath();
     else if(id==='SEARING-CROWN')startSearingCrown();
     else if(id==='IGNITION-DRIVE')startIgnitionDrive();
     else if(id==='ENGULFING-FISSURE')startEngulfingFissure();
@@ -649,6 +755,7 @@ export function installWizardVfxArcanaRuntime({
   function play(card){return canPlay(card)?cast(card):false;}
   function update(dt,now=0){
     const frameDt=Math.max(0,Number(dt)||0),system=getEnemySystem?.();
+    updateCurated(frameDt);
     for(const effect of[...state.effects]){
       if(effect.type==='flameBreath')updateFlameBreath(effect,frameDt,system);
       else if(effect.type==='searingCrown')updateSearingCrown(effect,frameDt,system);
@@ -666,13 +773,18 @@ export function installWizardVfxArcanaRuntime({
       else if(effect.type==='starBolt')updateStarBolt(effect,frameDt,system);
     }
   }
-  function snapshot(){return state.effects.map(effect=>({type:effect.type,arcanaId:effect.arcanaId,age:Number(effect.age.toFixed(4)),life:effect.life}));}
+  function snapshot(){
+    const effects=state.effects.map(effect=>({type:effect.type,arcanaId:effect.arcanaId,age:Number(effect.age.toFixed(4)),life:effect.life}));
+    const curated=Object.fromEntries([...curatedPorts.entries()].map(([family,port])=>[family,port.snapshot?.()??null]));
+    return{effects,curated,curatedDashTime:state.curatedDashTime};
+  }
 
   const onPlay=event=>play(event?.detail?.card,event?.detail||{});
-  const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);};
+  const onTweaks=event=>{state.sizeMultiplier=clampArcanaSize(event?.detail?.sizeMultiplier);disposeCurated();};
   window.addEventListener('wizard-arcana:play',onPlay);window.addEventListener(ARCANA_TWEAKS_EVENT,onTweaks);
   return{
     state,canPlay,play,reset,snapshot,update,
-    dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();},
+    get busy(){return state.curatedDashTime>0;},
+    dispose(){window.removeEventListener('wizard-arcana:play',onPlay);window.removeEventListener(ARCANA_TWEAKS_EVENT,onTweaks);reset();disposeCurated();},
   };
 }
