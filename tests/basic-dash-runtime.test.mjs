@@ -123,4 +123,12 @@ const replayToken=arcana.runtime.startDashMotion({source:'arcana',direction:{x:1
 assert.equal(replayToken.snapshot().id,1,'capture reset should restore deterministic motion ids');
 assert.deepEqual(replayToken.snapshot().start,{x:4,z:-3},'a dash starting after a room/respawn relocation must sample the new authoritative player position');
 
+const scaled=makeScenario();
+scaled.runtime.update(.016);
+const scaledToken=scaled.runtime.startDashMotion({source:'arcana',direction:{x:0,z:1},distanceMultiplier:2});
+assert.ok(scaledToken,'a scaled authored motion should be accepted');
+for(let frame=0;frame<60;frame++)scaled.runtime.update(.016);
+assert.ok(Math.abs(scaledToken.snapshot().end.z-16.8)<1e-8,'authored motion should scale the shared dash route without changing its curve');
+assert.equal(scaledToken.snapshot().distanceMultiplier,2);
+
 console.log('basic dash runtime tests passed');

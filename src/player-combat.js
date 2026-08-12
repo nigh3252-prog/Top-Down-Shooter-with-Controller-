@@ -199,6 +199,7 @@ export function installPlayerCombat(api){
     getPlayer:getPlayerTransform,
     getEnemySystem:getArenaEnemySystem,
     getMazeSegments:()=>getArenaRuntime()?.mazeWorld?.getCollisionSegments?.()||[],
+    startDashMotion:(options)=>basicDashRuntime.startDashMotion(options),
     translatePlayer:(dx,dz)=>getArenaRuntime()?.translateArcanaPlayer?.(dx,dz),
   }));
 

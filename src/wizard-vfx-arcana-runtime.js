@@ -4,6 +4,7 @@ import {
   readArcanaTweaks,
 } from './wizard-arcana-settings.js';
 import { getArenaRuntimeConfig } from './arena-runtime-context.js';
+import { dashDistance } from './basic-dash-logic.js';
 import { createWizardVfxSourcePort } from './wizard-vfx-arcana-source-port.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -16,6 +17,12 @@ const VFX_IDS=Object.freeze(new Set([
   'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST',
   'SHEARING-CHAIN','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','AQUA-VORTEX','AQUA-BREAKER',
 ]));
+
+// The copied Shearing Chain source moves its caster from local X -4.2 to
+// +2.4. The shared dash controller still owns the actual collision-checked
+// locomotion; this multiplier maps that authored 6.6-tile source route onto
+// the current four-diameter dash distance and then applies Arcana Size.
+const SHEARING_CHAIN_SOURCE_ROUTE=2.4-(-4.2);
 
 export const WIZARD_VFX_ARCANA_SPECS=Object.freeze({
   'FLAME-BREATH':Object.freeze({life:.95,damage:18,hits:3}),
@@ -133,7 +140,7 @@ function positionAlong(origin,direction,distance){return{x:origin.x+direction.x*
 function distance2D(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
 
 export function installWizardVfxArcanaRuntime({
-  THREE,scene,camera,getPlayer,getEnemySystem,getMazeSegments=()=>[],translatePlayer=()=>false,
+  THREE,scene,camera,getPlayer,getEnemySystem,getMazeSegments=()=>[],startDashMotion=()=>null,translatePlayer=()=>false,
 }={}){
   const initialTweaks=readArcanaTweaks();
   const empty={state:{effects:[],sizeMultiplier:initialTweaks.sizeMultiplier},canPlay(){return false;},play(){return false;},update(){},reset(){},snapshot(){return[];},dispose(){}};
@@ -156,6 +163,8 @@ export function installWizardVfxArcanaRuntime({
   function advance(effect,dt){effect.previousAge=effect.age;effect.age+=Math.max(0,Number(dt)||0);}
   function intercept(position,radius,system){destroyProjectiles(system,position,radius);}
   const fallbackCameraQuaternion=new THREE.Quaternion();
+  const sourceWorldQuaternion=new THREE.Quaternion();
+  const sourceLocalCameraQuaternion=new THREE.Quaternion();
   function sourceAnchor(frame,casterOffset,size){
     const anchor=new THREE.Group();
     anchor.position.set(
@@ -209,7 +218,19 @@ export function installWizardVfxArcanaRuntime({
     // The source lab owns its hit flashes and damage-number choreography. The
     // game adapter consumes gameplay through the native enemy services below.
     sourcePort.setCallbacks({onHits:()=>{}});
-    sourcePort.update(effect.source,effect.age,camera?.quaternion||fallbackCameraQuaternion,{anchor:effect.mesh});
+    // The copied source passes the camera quaternion to its BlobPool sprites.
+    // In the standalone lab each effect root lives in world space; in-game it
+    // is under the aim anchor, so convert the world camera orientation into
+    // the source root's local space before the source code applies it.
+    const cameraQuaternion=camera?.quaternion||fallbackCameraQuaternion;
+    const sourceRoot=effect.source.root;
+    effect.mesh?.updateMatrixWorld?.(true);
+    sourceRoot.updateMatrixWorld?.(true);
+    sourceRoot.getWorldQuaternion?.(sourceWorldQuaternion);
+    const localCameraQuaternion=sourceRoot.getWorldQuaternion
+      ? sourceLocalCameraQuaternion.copy(sourceWorldQuaternion).invert().multiply(cameraQuaternion)
+      : cameraQuaternion;
+    sourcePort.update(effect.source,effect.age,localCameraQuaternion,{anchor:effect.mesh});
   }
   // Source-class hit stars, foam, and debris are rendered by the copied lab
   // implementation. There is deliberately no second approximate impact mesh.
@@ -358,15 +379,22 @@ export function installWizardVfxArcanaRuntime({
   }
 
   function startShearingChain(){
-    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('SHEARING-CHAIN',frame,size,-4.20);
+    const frame=playerFrame(getPlayer),size=currentSize();
+    const dashHandle=startDashMotion?.({
+      source:'arcana',
+      direction:frame.forward,
+      grantIframes:false,
+      applyDodgeCooldown:false,
+      distanceMultiplier:(SHEARING_CHAIN_SOURCE_ROUTE/dashDistance())*size,
+    });
+    if(!dashHandle)return null;
+    const visual=createSourceVisual('SHEARING-CHAIN',frame,size,-4.20);
     const slashTimes=Array.from({length:7},(_,index)=>index<6?.18+index*.10:.82);
     const slashes=slashTimes.map((time,index)=>({time,finisher:index===6}));
-    return add({type:'shearingChain',arcanaId:'SHEARING-CHAIN',age:0,previousAge:0,life:1.35,frame,size,mesh:visual.anchor,source:visual.source,slashes,travel:0,impacts:[]});
+    return add({type:'shearingChain',arcanaId:'SHEARING-CHAIN',age:0,previousAge:0,life:1.35,frame,size,mesh:visual.anchor,source:visual.source,dashHandle,slashes,impacts:[]});
   }
   function updateShearingChain(effect,dt,system){
     advance(effect,dt);updateSourceVisual(effect,system);
-    const travel=Math.min(3.8,effect.age/.90*3.8),delta=Math.max(0,travel-effect.travel);effect.travel=travel;
-    if(delta>0)translatePlayer(effect.frame.forward.x*delta,effect.frame.forward.z*delta);
     for(const slash of effect.slashes){
       const life=slash.finisher?.38:.28,progress=clamp((slash.time-.18)/.72,0,1);
       const side=slash.finisher?0:(effect.slashes.indexOf(slash)%2?1:-1);
@@ -469,7 +497,7 @@ export function installWizardVfxArcanaRuntime({
     else if(id==='IGNITION-DRIVE')startIgnitionDrive();
     else if(id==='ENGULFING-FISSURE')startEngulfingFissure();
     else if(id==='DRAGON-BLAST')startDragonBlast();
-    else if(id==='SHEARING-CHAIN')startShearingChain();
+    else if(id==='SHEARING-CHAIN'&&!startShearingChain())return false;
     else if(id==='TECTONIC-DRILL')startTectonicDrill();
     else if(id==='ROCK-SOLID-TOMAHAWK')startTomahawk();
     else if(id==='AQUA-VORTEX')startAquaVortex();

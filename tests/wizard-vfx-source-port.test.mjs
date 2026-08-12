@@ -46,6 +46,11 @@ for(const id of [
 
 assert.match(runtime,/createWizardVfxSourcePort/);
 assert.match(runtime,/function updateSourceVisual\(effect,system\)/);
+assert.match(runtime,/startDashMotion/,'Shearing Chain must use the shared dash controller');
+assert.match(runtime,/distanceMultiplier:\(SHEARING_CHAIN_SOURCE_ROUTE\/dashDistance\(\)\)\*size/,'Shearing Chain travel must scale with Arcana Size');
+assert.doesNotMatch(runtime,/const travel=Math\.min\(3\.8/,'Shearing Chain must not use the former fixed manual translation');
+assert.match(runtime,/sourceLocalCameraQuaternion\.copy\(sourceWorldQuaternion\)\.invert\(\)\.multiply\(cameraQuaternion\)/,'source billboards must receive camera orientation in their local parent space');
+assert.match(source,/m\.quaternion\.copy\(camQuat\)/,'the copied source BlobPool must retain its camera-facing quad behavior');
 assert.doesNotMatch(runtime,/function make(?:FlameBreath|Crown|FireBurst|FissureTrap|Dragon|Slash|Drill|Tomahawk|Breaker|Vortex)Visual/,'the old approximate VFX builders must stay removed');
 assert.match(cards,/one 12-damage contact tick/);
 assert.match(cards,/3\.2-second authored window/);

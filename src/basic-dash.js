@@ -28,6 +28,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     postElapsed:0,
     plannedDistance:0,
     actualDistance:0,
+    distanceMultiplier:1,
     blocked:false,
     direction:{ x:0, z:1 },
     resolvedDirection:{ x:0, z:1 },
@@ -197,6 +198,10 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     state.postElapsed = 0;
     state.plannedDistance = 0;
     state.actualDistance = 0;
+    const requestedMultiplier=Number(options.distanceMultiplier);
+    state.distanceMultiplier=Number.isFinite(requestedMultiplier)&&requestedMultiplier>0
+      ? requestedMultiplier
+      : 1;
     state.blocked = false;
     state.direction = direction;
     state.resolvedDirection = {...direction};
@@ -219,7 +224,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
 
   function updateActiveDash(handle, dt){
     state.elapsed = Math.min(config.duration, state.elapsed + dt);
-    const targetDistance = dashDistanceAt(state.elapsed, config);
+    const targetDistance = dashDistanceAt(state.elapsed, config) * state.distanceMultiplier;
     const stepDistance = Math.max(0, targetDistance - state.plannedDistance);
     state.previous={...state.position};
     const movement=moveFrom(handle, state.position, state.direction, stepDistance);
@@ -303,6 +308,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
       elapsed:current?state.elapsed:0,
       postElapsed:current?state.postElapsed:0,
       plannedDistance:current?state.plannedDistance:0,
+      distanceMultiplier:current?state.distanceMultiplier:1,
       distance:current?state.actualDistance:0,
       blocked:current&&state.blocked,
       path:current?state.path.map(point=>({...point})):[],
@@ -334,6 +340,7 @@ export function installBasicDashRuntime(api, config = BASIC_DASH){
     state.postElapsed=0;
     state.plannedDistance=0;
     state.actualDistance=0;
+    state.distanceMultiplier=1;
     state.blocked=false;
     state.resolvedDirection={x:0,z:1};
     state.start=null;
