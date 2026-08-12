@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f12" />
+<title>Bladed Vine &amp; Spark Contact — source-faithful arcana demo</title>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"}}
+</script>
+<style>
+  :root{
+    --bg:#0b0f12;
+    --panel:rgba(10,15,19,.82);
+    --panel-line:rgba(150,190,210,.22);
+    --ink:#dceaf2;
+    --ink-dim:#8ea5b3;
+    --earth:#a9d84a;
+    --lightning:#ffd94a;
+    --accent:var(--earth);
+    --miss:#54636d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    touch-action:none; overscroll-behavior:none; user-select:none;}
+  canvas{display:block; position:fixed; inset:0; z-index:0;}
+
+  #ui{position:fixed; inset:0; pointer-events:none; z-index:3;
+    padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px)
+            calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);}
+  .pane{pointer-events:auto;}
+
+  /* ---- top bar ---- */
+  #top{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+  .pill{pointer-events:auto; border:1px solid var(--panel-line); background:var(--panel);
+    color:var(--ink); border-radius:999px; padding:7px 12px; font-size:12px; font-weight:600;
+    letter-spacing:.02em; backdrop-filter:blur(8px); cursor:pointer; white-space:nowrap;}
+  .pill[data-on="1"]{background:var(--accent); border-color:var(--accent); color:#0b0f12;}
+  .pill.ghost{opacity:.85; font-weight:500;}
+  .pill small{display:block; font-size:9px; font-weight:500; opacity:.7; letter-spacing:.06em;}
+
+  /* ---- ledger ---- */
+  #ledger{margin-top:8px; max-width:min(520px, 96vw); border:1px solid var(--panel-line);
+    background:var(--panel); backdrop-filter:blur(8px); border-radius:12px; padding:8px 10px; cursor:pointer;}
+  #ledger[data-collapsed="1"] .rowlab,
+  #ledger[data-collapsed="1"] #expected,
+  #ledger[data-collapsed="1"] #last{display:none;}
+  #ledgerHead{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  #ledgerHead::after{content:'▾'; font-size:10px; color:var(--ink-dim); margin-left:2px;}
+  #ledger[data-collapsed="1"] #ledgerHead::after{content:'▸';}
+  #ledgerName{font-size:12px; font-weight:700; letter-spacing:.03em;}
+  #ledgerMeta{font-size:10px; color:var(--ink-dim); letter-spacing:.04em;}
+  .row{display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-top:6px;}
+  .rowlab{font-size:9px; color:var(--ink-dim); letter-spacing:.1em; width:100%; margin-top:4px;}
+  .chip{font-size:11px; font-weight:700; border-radius:6px; padding:3px 7px; line-height:1;
+    border:1px solid var(--panel-line); color:var(--ink-dim); background:rgba(255,255,255,.03);}
+  .chip.exp{opacity:.55; font-weight:600;}
+  .chip.exp.done{opacity:1; color:var(--accent); border-color:var(--accent);}
+  .chip.hit{color:#0b0f12; background:var(--accent); border-color:var(--accent);}
+  .chip.whiff{color:var(--miss); border-style:dashed;}
+  .chip.arc{box-shadow:0 0 0 1px var(--accent) inset;}
+  .chip.shock{color:#0b0f12; background:#8fd6ff; border-color:#8fd6ff;}
+  #total{font-size:11px; color:var(--ink-dim); margin-left:auto;}
+
+  /* ---- info sheet ---- */
+  #info{position:fixed; inset:auto 0 0 0; max-height:82vh; overflow:auto; display:none;
+    background:#0c1216; border-top:1px solid var(--panel-line); padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);
+    pointer-events:auto; z-index:20;}
+  #info.open{display:block;}
+  #info h2{font-size:14px; margin:0 0 4px; letter-spacing:.04em;}
+  #info h3{font-size:12px; margin:16px 0 4px; color:var(--accent); letter-spacing:.06em; text-transform:uppercase;}
+  #info p,#info li{font-size:12px; line-height:1.5; color:#b9ccd7; margin:4px 0;}
+  #info ol{padding-left:18px; margin:4px 0;}
+  #info pre{font-size:11px; line-height:1.45; background:#070b0e; border:1px solid var(--panel-line);
+    border-radius:8px; padding:10px; overflow-x:auto; color:#c8dbe6;}
+  #info .close{position:sticky; top:0; float:right;}
+  .note{font-size:11px; color:#7f95a3; border-left:2px solid var(--panel-line); padding-left:8px;}
+
+  /* ---- controls ---- */
+  #stickL,#stickR{position:fixed; width:112px; height:112px; border-radius:50%; display:none;
+    border:1px solid rgba(180,210,225,.28); background:rgba(140,175,195,.08); pointer-events:none; z-index:5;}
+  .knob{position:absolute; left:50%; top:50%; width:48px; height:48px; margin:-24px 0 0 -24px;
+    border-radius:50%; background:rgba(200,225,240,.28); border:1px solid rgba(220,240,250,.5);}
+  #attack{position:fixed; right:calc(env(safe-area-inset-right) + 18px); bottom:calc(env(safe-area-inset-bottom) + 26px);
+    width:104px; height:104px; border-radius:50%; pointer-events:auto; z-index:6;
+    border:2px solid var(--accent); background:rgba(12,18,22,.55); backdrop-filter:blur(4px);
+    color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.12em;
+    display:flex; align-items:center; justify-content:center; text-align:center;}
+  #attack[data-held="1"]{background:var(--accent); color:#0b0f12;}
+  #hint{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 10px);
+    font-size:10px; color:#5f727d; letter-spacing:.06em; text-align:center; pointer-events:none;}
+
+  /* ---- floating numbers ---- */
+  #fx{position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:4;}
+  .dmg{position:absolute; font-size:15px; font-weight:800; letter-spacing:-.01em; transform:translate(-50%,-50%);
+    text-shadow:0 2px 0 rgba(0,0,0,.65); will-change:transform,opacity;}
+  .dmg.big{font-size:21px;}
+  .dmg.status{font-size:11px; font-weight:700; color:#8fd6ff; letter-spacing:.1em;}
+  .tag{position:absolute; transform:translate(-50%,-50%); font-size:9px; font-weight:700;
+    letter-spacing:.12em; color:#8fd6ff; text-shadow:0 1px 0 #000;}
+</style>
+</head>
+<body>
+<div id="fx"></div>
+
+<div id="ui">
+  <div id="top">
+    <button class="pill" id="tabVine" data-on="1">Bladed Vine<small>EARTH · BASIC · 3-BEAT</small></button>
+    <button class="pill" id="tabSpark">Spark Contact<small>LIGHTNING · BASIC · 4-BEAT</small></button>
+    <button class="pill ghost" id="tabEnh">Enhanced<small>OFF</small></button>
+    <button class="pill ghost" id="tabInfo">Entry</button>
+    <button class="pill ghost" id="tabReset">Reset</button>
+  </div>
+
+  <div id="ledger" class="pane">
+    <div id="ledgerHead">
+      <span id="ledgerName">Bladed Vine</span>
+      <span id="ledgerMeta">3 casts · 3 hits per combo</span>
+    </div>
+    <div class="rowlab">SOURCE LEDGER (expected)</div>
+    <div class="row" id="expected"></div>
+    <div class="rowlab">THIS COMBO (live)</div>
+    <div class="row" id="live"><span class="chip whiff">idle</span><span id="total"></span></div>
+    <div class="rowlab">LAST COMPLETED COMBO</div>
+    <div class="row" id="last"><span class="chip whiff">—</span></div>
+  </div>
+</div>
+
+<div id="stickL"><div class="knob"></div></div>
+<div id="stickR"><div class="knob"></div></div>
+<button id="attack">ATTACK</button>
+<div id="hint">left half: move &nbsp;·&nbsp; right half: aim &nbsp;·&nbsp; hold ATTACK for the full combo</div>
+
+<div id="info">
+  <button class="pill close" id="infoClose">Close</button>
+  <h2 id="infoTitle">Bladed Vine</h2>
+  <div id="infoBody"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ==========================================================================
+   Source-faithful reconstruction of two Wizard of Legend basic arcana.
+
+   Reference: PR 122 — archive/wizard-of-legend/source-notes/
+     · wizard_of_legend_arcana_source_reference.md  §8 Bladed Vine, §10 Spark Contact
+     · gate1-video-inventory.md      (showcase windows 38–43s and 46–51s)
+     · gate2-online-reference.md     (wiki stats / behavior / enhanced behavior)
+
+   Every damage value, hit count, beat count, carrier structure and enhancement
+   rewrite below is taken straight from those entries. Nothing is invented; the
+   only authored numbers are presentation timings (windup/active/recovery),
+   which the entries deliberately leave unspecified.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- constants */
+const ARENA_R = 17;
+const PLAYER_SPEED = 6.2;
+const COMBO_RESET = 0.62;      // idle time before the string returns to beat 1
+const ENEMY_R = 0.46;
+
+const ARCANA = {
+  vine: {
+    key:'vine', name:'Bladed Vine', element:'Earth', category:'Basic', subtype:'Melee',
+    color:0xa9d84a, css:'#a9d84a', beats:3,
+    meta:'3 casts · 3 hits per combo', metaEnh:'3 casts · 5 hits per combo',
+    expected:      [{d:7,l:'7'},{d:7,l:'7'},{d:15,l:'15',big:true}],
+    expectedEnh:   [{d:7,l:'7'},{d:7,l:'7'},{d:9,l:'9'},{d:9,l:'9'},{d:9,l:'9'}],
+    window:'showcase 38–43s',
+  },
+  spark: {
+    key:'spark', name:'Spark Contact', element:'Lightning', category:'Basic', subtype:'Melee',
+    color:0xffd94a, css:'#ffd94a', beats:4,
+    meta:'4 casts · 5 hits per combo', metaEnh:'4 casts · 5 hits per combo (final arc shocks)',
+    expected:      [{d:6,l:'6'},{d:7,l:'7'},{d:8,l:'8'},{d:9,l:'9'},{d:10,l:'10 arc',big:true}],
+    expectedEnh:   [{d:6,l:'6'},{d:7,l:'7'},{d:8,l:'8'},{d:9,l:'9'},{d:10,l:'10 arc + shock',big:true,shock:true}],
+    window:'showcase 46–51s',
+  },
+};
+
+/* -------------------------------------------------------------- three setup */
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio || 1));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f12);
+scene.fog = new THREE.Fog(0x0b0f12, 26, 46);
+
+const camera = new THREE.PerspectiveCamera(46, innerWidth/innerHeight, 0.1, 160);
+const CAM_OFFSET = new THREE.Vector3(0, 17.5, 12.5);
+
+scene.add(new THREE.HemisphereLight(0xbcd8e8, 0x1b2418, 0.85));
+const key = new THREE.DirectionalLight(0xfff0d0, 1.15);
+key.position.set(9, 18, 7); scene.add(key);
+const rim = new THREE.DirectionalLight(0x6fa8c8, 0.45);
+rim.position.set(-8, 6, -9); scene.add(rim);
+
+// floor
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(ARENA_R + 1.5, 72),
+  new THREE.MeshStandardMaterial({ color:0x2a3339, roughness:0.98, metalness:0.0 })
+);
+floor.rotation.x = -Math.PI/2; scene.add(floor);
+
+const grid = new THREE.GridHelper(40, 40, 0x3d4a52, 0x2f3a41);
+grid.position.y = 0.01; grid.material.transparent = true; grid.material.opacity = 0.5; scene.add(grid);
+
+const ring = new THREE.Mesh(
+  new THREE.RingGeometry(ARENA_R, ARENA_R + 0.14, 96),
+  new THREE.MeshBasicMaterial({ color:0x4a5c66, transparent:true, opacity:0.85, side:THREE.DoubleSide })
+);
+ring.rotation.x = -Math.PI/2; ring.position.y = 0.02; scene.add(ring);
+
+/* -------------------------------------------------------------- player rig */
+const player = new THREE.Group(); scene.add(player);
+const robeMat  = new THREE.MeshStandardMaterial({ color:0x2f4f74, roughness:0.85 });
+const trimMat  = new THREE.MeshStandardMaterial({ color:0x8fb8dd, roughness:0.6 });
+const skinMat  = new THREE.MeshStandardMaterial({ color:0xd9b08a, roughness:0.9 });
+const hatMat   = new THREE.MeshStandardMaterial({ color:0x27405f, roughness:0.9 });
+
+const robe = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.18, 10), robeMat);
+robe.position.y = 0.59; player.add(robe);
+const sash = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.055, 6, 14), trimMat);
+sash.rotation.x = Math.PI/2; sash.position.y = 0.86; player.add(sash);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), skinMat);
+head.position.y = 1.24; player.add(head);
+const hat = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.62, 12), hatMat);
+hat.position.set(0, 1.6, -0.02); hat.rotation.x = -0.12; player.add(hat);
+const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.045, 14), hatMat);
+brim.position.y = 1.34; player.add(brim);
+
+const handL = new THREE.Group(); handL.position.set(-0.34, 0.92, 0.16); player.add(handL);
+const handR = new THREE.Group(); handR.position.set( 0.34, 0.92, 0.16); player.add(handR);
+for (const h of [handL, handR]) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.115, 10, 8), skinMat);
+  h.add(m);
+}
+// glow that rides the casting hand
+const castGlow = new THREE.Mesh(
+  new THREE.SphereGeometry(0.2, 12, 10),
+  new THREE.MeshBasicMaterial({ color:0xa9d84a, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false })
+);
+player.add(castGlow);
+
+// flat facing chevron so aim stays readable from a top-down camera
+const aimMat = new THREE.MeshBasicMaterial({ color:0xa9d84a, transparent:true, opacity:0.7,
+  side:THREE.DoubleSide, depthWrite:false });
+const aimGeo = new THREE.BufferGeometry();
+aimGeo.setAttribute('position', new THREE.Float32BufferAttribute(
+  [0, 0, 1.72,  -0.33, 0, 0.98,  0.33, 0, 0.98], 3));
+const aimMark = new THREE.Mesh(aimGeo, aimMat);
+aimMark.position.y = 0.06;
+player.add(aimMark);
+
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.46, 20),
+  new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.34 })
+);
+shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.03; scene.add(shadow);
+
+const pstate = {
+  pos:new THREE.Vector3(0, 0, 4),
+  facing:Math.PI,
+  lunge:new THREE.Vector3(),
+  lean:0,
+};
+
+/* --------------------------------------------------------------- enemies */
+const dummyMat = () => new THREE.MeshStandardMaterial({ color:0x9aa7ad, roughness:0.85, emissive:0x000000 });
+const enemies = [];
+function makeEnemy(x, z) {
+  const g = new THREE.Group();
+  const mat = dummyMat();
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.62, 4, 10), mat);
+  body.position.y = 0.79; g.add(body);
+  const hd = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), mat);
+  hd.position.y = 1.42; g.add(hd);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color:0x5b4a38, roughness:1 }));
+  post.position.y = 0.25; g.add(post);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.12, 14),
+    new THREE.MeshStandardMaterial({ color:0x4a4038, roughness:1 }));
+  base.position.y = 0.06; g.add(base);
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.44, 16),
+    new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.3 }));
+  sh.rotation.x = -Math.PI/2; sh.position.y = 0.035; g.add(sh);
+  scene.add(g);
+  const e = {
+    group:g, mat, pos:new THREE.Vector3(x, 0, z), anchor:new THREE.Vector3(x, 0, z),
+    vel:new THREE.Vector3(), hp:400, maxHp:400, flash:0, lean:new THREE.Vector2(),
+    shock:0, shockTick:0,
+  };
+  enemies.push(e);
+  return e;
+}
+function layoutEnemies() {
+  for (const e of enemies) { scene.remove(e.group); }
+  enemies.length = 0;
+  makeEnemy(0, -3.2);
+  makeEnemy(-3.4, -4.6);
+  makeEnemy(3.4, -4.6);
+  makeEnemy(-6.2, -1.0);
+  makeEnemy(6.2, -1.0);
+  makeEnemy(0, -8.4);
+}
+layoutEnemies();
+
+/* ------------------------------------------------------------- vine strands
+   "A line-shaped attack remains attached to the caster while its endpoint and
+    body sweep through space."  — Attached Flexible Strike unit                */
+const SEGS = 16;
+const segGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
+segGeo.translate(0, 0.5, 0);
+const thornGeo = new THREE.ConeGeometry(1, 1, 5);
+thornGeo.translate(0, 0.5, 0);
+const leafGeo = new THREE.SphereGeometry(1, 6, 4);
+
+const VINE_BODY = 0x6f9c2c, VINE_TIP = 0xc4e46b, THORN = 0x415f1c, LEAF = 0x8cc23a;
+const UP = new THREE.Vector3(0, 1, 0);
+const _q = new THREE.Quaternion(), _v = new THREE.Vector3();
+
+class Strand {
+  constructor() {
+    this.group = new THREE.Group();
+    this.pts = []; for (let i = 0; i <= SEGS; i++) this.pts.push(new THREE.Vector3());
+    this.mat = new THREE.MeshStandardMaterial({ color:VINE_BODY, roughness:0.7, emissive:0x1c2c08, emissiveIntensity:0.6 });
+    this.tipMat = new THREE.MeshStandardMaterial({ color:VINE_TIP, roughness:0.6, emissive:0x2c4410, emissiveIntensity:0.8 });
+    this.thornMat = new THREE.MeshStandardMaterial({ color:THORN, roughness:0.6 });
+    this.leafMat = new THREE.MeshStandardMaterial({ color:LEAF, roughness:0.75, side:THREE.DoubleSide });
+    this.segs = []; this.thorns = []; this.leaves = [];
+    for (let i = 0; i < SEGS; i++) {
+      const m = new THREE.Mesh(segGeo, i > SEGS - 5 ? this.tipMat : this.mat);
+      this.group.add(m); this.segs.push(m);
+      if (i % 3 === 1) {
+        const t = new THREE.Mesh(thornGeo, this.thornMat);
+        t.userData.i = i; t.userData.roll = (i * 1.9) % (Math.PI * 2);
+        this.group.add(t); this.thorns.push(t);
+      }
+      if (i % 5 === 3) {
+        const l = new THREE.Mesh(leafGeo, this.leafMat);
+        l.userData.i = i; l.userData.roll = (i * 2.7) % (Math.PI * 2);
+        this.group.add(l); this.leaves.push(l);
+      }
+    }
+    this.group.visible = false;
+    scene.add(this.group);
+  }
+  setOpacity(o) {
+    for (const m of [this.mat, this.tipMat, this.thornMat, this.leafMat]) {
+      m.transparent = o < 1; m.opacity = o;
+    }
+  }
+  /** lay the rendered body out along this.pts (already filled in world space) */
+  build(radius) {
+    for (let i = 0; i < SEGS; i++) {
+      const a = this.pts[i], b = this.pts[i + 1];
+      _v.subVectors(b, a);
+      const len = _v.length() || 0.0001;
+      const u = i / SEGS;
+      const r = radius * (1 - 0.62 * u) * (u < 0.08 ? 0.55 + u * 5.6 : 1);
+      const m = this.segs[i];
+      m.position.copy(a);
+      _q.setFromUnitVectors(UP, _v.divideScalar(len));
+      m.quaternion.copy(_q);
+      m.scale.set(r, len * 1.06, r);
+    }
+    for (const t of this.thorns) {
+      const i = t.userData.i;
+      const a = this.pts[i], b = this.pts[i + 1];
+      _v.subVectors(b, a).normalize();
+      const u = i / SEGS;
+      const r = radius * (1 - 0.62 * u);
+      t.position.copy(a);
+      _q.setFromUnitVectors(UP, _v);
+      t.quaternion.copy(_q);
+      t.rotateY(t.userData.roll);
+      t.rotateX(2.25);                       // thorns rake backwards along the vine
+      t.scale.set(r * 0.85, r * 3.6, r * 0.85);
+    }
+    for (const l of this.leaves) {
+      const i = l.userData.i;
+      const a = this.pts[i], b = this.pts[i + 1];
+      _v.subVectors(b, a).normalize();
+      const u = i / SEGS;
+      const r = radius * (1 - 0.5 * u);
+      l.position.copy(a);
+      _q.setFromUnitVectors(UP, _v);
+      l.quaternion.copy(_q);
+      l.rotateY(l.userData.roll);
+      l.scale.set(r * 2.6, r * 0.4, r * 1.5);
+    }
+  }
+}
+const strandPool = [];
+function takeStrands(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    let s = strandPool.find(x => !x.busy);
+    if (!s) { s = new Strand(); strandPool.push(s); }
+    s.busy = true; s.group.visible = true; s.setOpacity(1);
+    out.push(s);
+  }
+  return out;
+}
+function freeStrands(list) {
+  for (const s of list) { s.busy = false; s.group.visible = false; }
+}
+
+/* -------------------------------------------------------------- spark bolts */
+const boltGeo = new THREE.BoxGeometry(1, 1, 1);
+class Bolt {
+  constructor(segments = 7) {
+    this.group = new THREE.Group();
+    this.mat = new THREE.MeshBasicMaterial({ color:0xfff3b0, transparent:true, opacity:1,
+      blending:THREE.AdditiveBlending, depthWrite:false });
+    this.segs = [];
+    for (let i = 0; i < segments; i++) {
+      const m = new THREE.Mesh(boltGeo, this.mat);
+      this.group.add(m); this.segs.push(m);
+    }
+    this.group.visible = false;
+    scene.add(this.group);
+  }
+  draw(a, b, jag, width) {
+    const n = this.segs.length;
+    const dir = _v.subVectors(b, a).clone();
+    const len = dir.length() || 0.0001;
+    dir.divideScalar(len);
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const up = new THREE.Vector3(0, 1, 0);
+    let prev = a.clone();
+    for (let i = 1; i <= n; i++) {
+      const u = i / n;
+      const wob = (i === n) ? 0 : (Math.random() - 0.5) * jag;
+      const wobY = (i === n) ? 0 : (Math.random() - 0.5) * jag * 0.7;
+      const p = a.clone().addScaledVector(dir, len * u)
+        .addScaledVector(side, wob).addScaledVector(up, wobY);
+      const m = this.segs[i - 1];
+      const d = p.clone().sub(prev);
+      const dl = d.length() || 0.0001;
+      m.position.copy(prev).addScaledVector(d, 0.5);
+      m.quaternion.setFromUnitVectors(UP, d.divideScalar(dl));
+      m.scale.set(width, dl, width);
+      prev = p;
+    }
+  }
+}
+const boltPool = [];
+function takeBolt() {
+  let b = boltPool.find(x => !x.busy);
+  if (!b) { b = new Bolt(6 + ((boltPool.length * 3) % 4)); boltPool.push(b); }
+  b.busy = true; b.group.visible = true; b.mat.opacity = 1;
+  return b;
+}
+function freeBolt(b) { b.busy = false; b.group.visible = false; }
+
+/* --------------------------------------------------------------- effects list */
+const effects = [];
+function addEffect(e) { effects.push(e); return e; }
+
+/* additive flash sprite --------------------------------------------------- */
+const flashGeo = new THREE.SphereGeometry(1, 12, 10);
+function spawnFlash(pos, color, size, life) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.95,
+    blending:THREE.AdditiveBlending, depthWrite:false });
+  const m = new THREE.Mesh(flashGeo, mat);
+  m.position.copy(pos); scene.add(m);
+  addEffect({ t:0, update(dt) {
+    this.t += dt; const u = this.t / life;
+    if (u >= 1) { scene.remove(m); mat.dispose(); return false; }
+    const s = size * (0.35 + u * 1.5);
+    m.scale.set(s, s * 0.7, s);
+    mat.opacity = 0.95 * (1 - u) * (1 - u);
+    return true;
+  }});
+}
+
+/* impact ring on the ground ------------------------------------------------ */
+const ringGeo = new THREE.RingGeometry(0.72, 1, 28);
+function spawnRing(pos, color, size, life) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.8,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  const m = new THREE.Mesh(ringGeo, mat);
+  m.rotation.x = -Math.PI/2; m.position.copy(pos); m.position.y = 0.06; scene.add(m);
+  addEffect({ t:0, update(dt) {
+    this.t += dt; const u = this.t / life;
+    if (u >= 1) { scene.remove(m); mat.dispose(); return false; }
+    const s = size * (0.25 + u * 1.1);
+    m.scale.set(s, s, s); mat.opacity = 0.8 * (1 - u);
+    return true;
+  }});
+}
+
+/* --------------------------------------------------------------- hit resolve */
+let hitstop = 0;
+
+function hitEnemy(e, dmg, kb, dirX, dirZ, opts = {}) {
+  e.hp -= dmg;
+  e.flash = 1;
+  e.vel.x += dirX * kb * 0.10;
+  e.vel.z += dirZ * kb * 0.10;
+  e.lean.x += dirX * 0.28; e.lean.y += dirZ * 0.28;
+  if (opts.shock) { e.shock = Math.max(e.shock, 4.0); }
+  popDamage(e, dmg, opts);
+  if (e.hp <= 0) { e.hp = e.maxHp; popStatus(e, 'DUMMY RESET'); }
+}
+
+/* damage numbers (DOM, projected) ----------------------------------------- */
+const fxLayer = document.getElementById('fx');
+const floaters = [];
+function popDamage(e, dmg, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'dmg' + (opts.big ? ' big' : '');
+  el.textContent = String(dmg);
+  el.style.color = opts.shock ? '#8fd6ff' : (currentArc().css);
+  fxLayer.appendChild(el);
+  floaters.push({ el, world:new THREE.Vector3(e.pos.x, 1.55, e.pos.z), t:0, life:0.9,
+    drift:(Math.random() - 0.5) * 26 });
+}
+function popStatus(e, text) {
+  const el = document.createElement('div');
+  el.className = 'dmg status'; el.textContent = text;
+  fxLayer.appendChild(el);
+  floaters.push({ el, world:new THREE.Vector3(e.pos.x, 1.85, e.pos.z), t:0, life:1.1, drift:0 });
+}
+function updateFloaters(dt) {
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.t += dt;
+    if (f.t >= f.life) { f.el.remove(); floaters.splice(i, 1); continue; }
+    const u = f.t / f.life;
+    const p = f.world.clone(); p.y += u * 1.15;
+    p.project(camera);
+    f.el.style.left = ((p.x * 0.5 + 0.5) * innerWidth + f.drift * u) + 'px';
+    f.el.style.top  = ((-p.y * 0.5 + 0.5) * innerHeight) + 'px';
+    f.el.style.opacity = String(u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3);
+  }
+}
+
+/* shock status tags -------------------------------------------------------- */
+const shockTags = new Map();
+function updateShockTags() {
+  for (const e of enemies) {
+    let tag = shockTags.get(e);
+    if (e.shock > 0) {
+      if (!tag) { tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = 'SHOCK 1';
+        fxLayer.appendChild(tag); shockTags.set(e, tag); }
+      const p = new THREE.Vector3(e.pos.x, 2.0, e.pos.z).project(camera);
+      tag.style.left = ((p.x * 0.5 + 0.5) * innerWidth) + 'px';
+      tag.style.top  = ((-p.y * 0.5 + 0.5) * innerHeight) + 'px';
+      tag.style.opacity = String(Math.min(1, e.shock));
+    } else if (tag) { tag.remove(); shockTags.delete(e); }
+  }
+}
+
+/* ======================================================================== */
+/*  BLADED VINE                                                             */
+/*  §8 recipe:                                                              */
+/*    Beats 1 and 2 : one attached vine whip, 7 damage each, long narrow     */
+/*                    frontal sweep                                          */
+/*    Normal beat 3 : one forward tendril-bundle attack, three visible long  */
+/*                    strands, ONE combined 15-damage event                  */
+/*    Enhanced      : three tendril-bundle emissions, 9 damage per emission, */
+/*                    three separate hit events (beats 1-2 unchanged)        */
+/*  Knockback from the wiki row: 6, 12, 8                                    */
+/* ======================================================================== */
+
+const WHIP_REACH = 5.6;      // "rather long range for a basic arcana"
+const BUNDLE_REACH = 7.6;    // "the footprint is longer and denser"
+
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeOutQuart(x) { return 1 - Math.pow(1 - x, 4); }
+function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
+/** One attached whip: root stays on the caster's hand, the tip sweeps a long
+ *  narrow arc in front. One hit event, one shared hit ledger. */
+function spawnVineWhip({ root, angle, from, to, dmg, kb, life, event }) {
+  const strands = takeStrands(1);
+  const s = strands[0];
+  const hitSet = new Set();
+  return addEffect({
+    t:0,
+    update(dt) {
+      this.t += dt;
+      const u = this.t / life;
+      if (u >= 1) { freeStrands(strands); return false; }
+
+      const extend = easeOutQuart(clamp01(u / 0.24));
+      const retract = u > 0.74 ? 1 - (u - 0.74) / 0.26 : 1;
+      const L = WHIP_REACH * extend * retract;
+      const sweep = easeOutCubic(clamp01(u / 0.62));
+
+      for (let i = 0; i <= SEGS; i++) {
+        const t = i / SEGS;
+        // the body lags behind the tip: that lag is what makes it read as a whip
+        const lag = clamp01((sweep - (1 - t) * 0.34) / 0.66);
+        const a = angle + from + (to - from) * lag;
+        const r = L * t;
+        const p = s.pts[i];
+        p.set(root.x + Math.sin(a) * r, 0, root.z + Math.cos(a) * r);
+        p.y = root.y + (0.34 - root.y) * t + 0.3 * Math.sin(Math.PI * t) * (1 - t * 0.4);
+      }
+      s.build(0.062);
+      s.setOpacity(retract);
+
+      // hit window: the vine only bites while it is out and sweeping
+      if (u > 0.1 && u < 0.82) {
+        for (const e of enemies) {
+          if (hitSet.has(e)) continue;
+          if (!strandHits(s, e, 0.36)) continue;
+          hitSet.add(e);
+          const dx = e.pos.x - pstate.pos.x, dz = e.pos.z - pstate.pos.z;
+          const d = Math.hypot(dx, dz) || 1;
+          hitEnemy(e, dmg, kb, dx/d, dz/d);
+          spawnFlash(new THREE.Vector3(e.pos.x, 0.8, e.pos.z), 0xc4e46b, 0.5, 0.2);
+          markEvent(event, true);
+        }
+      }
+      return true;
+    }
+  });
+}
+
+/** Tendril bundle: three long strands thrust forward together.
+ *  Base finisher = many visual strands, ONE shared hit ledger. */
+function spawnVineBundle({ root, angle, dmg, kb, life, event, seed }) {
+  const strands = takeStrands(3);
+  const hitSet = new Set();     // shared across all three strands -> one hit event
+  const offsets = [-0.2, 0, 0.2];
+  return addEffect({
+    t:0,
+    update(dt) {
+      this.t += dt;
+      const u = this.t / life;
+      if (u >= 1) { freeStrands(strands); return false; }
+
+      const extend = easeOutQuart(clamp01(u / 0.3));
+      const retract = u > 0.78 ? 1 - (u - 0.78) / 0.22 : 1;
+      const L = BUNDLE_REACH * extend * (0.35 + 0.65 * retract);
+
+      for (let k = 0; k < 3; k++) {
+        const s = strands[k];
+        const a = angle + offsets[k];
+        const fx = Math.sin(a), fz = Math.cos(a);
+        const lx = Math.cos(a), lz = -Math.sin(a);
+        for (let i = 0; i <= SEGS; i++) {
+          const t = i / SEGS;
+          const r = L * t;
+          const w = Math.sin(t * 6.2 + seed + k * 2.1 + u * 7.5) * 0.26 * t;
+          const p = s.pts[i];
+          p.set(root.x + fx * r + lx * w, 0, root.z + fz * r + lz * w);
+          p.y = root.y + (0.3 - root.y) * t + 0.22 * Math.sin(Math.PI * t * 1.2) + (k - 1) * 0.05 * t;
+        }
+        s.build(0.056);
+        s.setOpacity(retract);
+      }
+
+      if (u > 0.08 && u < 0.8) {
+        for (const e of enemies) {
+          if (hitSet.has(e)) continue;
+          let touched = false;
+          for (const s of strands) { if (strandHits(s, e, 0.34)) { touched = true; break; } }
+          if (!touched) continue;
+          hitSet.add(e);
+          const dx = e.pos.x - pstate.pos.x, dz = e.pos.z - pstate.pos.z;
+          const d = Math.hypot(dx, dz) || 1;
+          hitEnemy(e, dmg, kb, dx/d, dz/d, { big:dmg >= 15 });
+          spawnFlash(new THREE.Vector3(e.pos.x, 0.8, e.pos.z), 0xd8f08a, 0.62, 0.22);
+          spawnRing(new THREE.Vector3(e.pos.x, 0, e.pos.z), 0x9ccb3f, 1.0, 0.3);
+          markEvent(event, true);
+          hitstop = Math.max(hitstop, 0.045);
+        }
+      }
+      return true;
+    }
+  });
+}
+
+function strandHits(s, e, pad) {
+  const r = ENEMY_R + pad;
+  for (let i = 1; i <= SEGS; i++) {
+    const p = s.pts[i];
+    const dx = p.x - e.pos.x, dz = p.z - e.pos.z;
+    if (dx*dx + dz*dz < r*r) return true;
+  }
+  return false;
+}
+
+/* ======================================================================== */
+/*  SPARK CONTACT                                                           */
+/*  §10 recipe:                                                             */
+/*    Four-beat basic combo, hold performs the complete combo                */
+/*    Carrier    : caster-anchored close-contact strike                      */
+/*    Movement   : small authored forward step on every beat                 */
+/*    Damage     : 6 -> 7 -> 8 -> 9                                          */
+/*    Final beat : large electric arc, +10 damage, alongside the 4th strike   */
+/*    Enhanced   : final arc applies shock; no extra carrier, beats 1-3 same  */
+/* ======================================================================== */
+
+const STRIKE_REACH = 1.75;
+const STRIKE_HALF_WIDTH = 0.78;
+const ARC_R = 3.5;
+const ARC_HALF_ANGLE = 1.32;   // "covers more area than the preceding contact hits"
+
+function spawnSparkStrike({ root, angle, dmg, kb, life, event }) {
+  const bolts = [takeBolt(), takeBolt(), takeBolt()];
+  const hitSet = new Set();
+  const fx = Math.sin(angle), fz = Math.cos(angle);
+  const tip = new THREE.Vector3(root.x + fx * STRIKE_REACH, 0.85, root.z + fz * STRIKE_REACH);
+  spawnFlash(tip, 0xfff0a0, 0.7, 0.17);
+  spawnRing(new THREE.Vector3(tip.x, 0, tip.z), 0xffe680, 0.95, 0.18);
+  return addEffect({
+    t:0,
+    update(dt) {
+      this.t += dt;
+      const u = this.t / life;
+      if (u >= 1) { for (const b of bolts) freeBolt(b); return false; }
+      const a = new THREE.Vector3(root.x + fx * 0.4, 0.92, root.z + fz * 0.4);
+      for (let i = 0; i < bolts.length; i++) {
+        const spread = (i - 1) * 0.34;
+        const b2 = new THREE.Vector3(
+          tip.x + Math.cos(angle) * spread, 0.7 + i * 0.22, tip.z - Math.sin(angle) * spread);
+        bolts[i].draw(a, b2, 0.34, 0.085);
+        bolts[i].mat.opacity = (1 - u) * (1 - u);
+      }
+      if (u < 0.6) {
+        for (const e of enemies) {
+          if (hitSet.has(e)) continue;
+          const dx = e.pos.x - root.x, dz = e.pos.z - root.z;
+          const fd = dx * fx + dz * fz;              // forward distance
+          const ld = Math.abs(dx * Math.cos(angle) - dz * Math.sin(angle));
+          if (fd < -0.35 || fd > STRIKE_REACH + ENEMY_R || ld > STRIKE_HALF_WIDTH + ENEMY_R) continue;
+          hitSet.add(e);
+          hitEnemy(e, dmg, 10, fx, fz);
+          spawnFlash(new THREE.Vector3(e.pos.x, 0.9, e.pos.z), 0xfff6c0, 0.5, 0.16);
+          markEvent(event, true);
+        }
+      }
+      return true;
+    }
+  });
+}
+
+/** The fourth beat's overlay: one large curved arc of electricity that sweeps
+ *  forward around the struck area. Independently resolved, 10 damage. */
+function spawnSparkArc({ root, angle, dmg, shock, life, event }) {
+  const seg = 30;
+  // holder->spin nesting keeps ring theta=0 pointing along the caster's facing:
+  // geometry +X --(rot.x -90)--> local +X --(rot.y -90)--> local +Z --(holder)--> facing
+  const holder = new THREE.Group();
+  holder.position.set(root.x, 0, root.z);
+  holder.rotation.y = angle;
+  const spin = new THREE.Group();
+  spin.rotation.y = -Math.PI/2;
+  holder.add(spin);
+  scene.add(holder);
+
+  const arcGeo = new THREE.RingGeometry(1.55, ARC_R, seg, 1, -ARC_HALF_ANGLE, ARC_HALF_ANGLE * 2);
+  const arcMat = new THREE.MeshBasicMaterial({ color: shock ? 0xbde9ff : 0xffe680, transparent:true,
+    opacity:0.2, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  const mesh = new THREE.Mesh(arcGeo, arcMat);
+  mesh.rotation.x = -Math.PI/2; mesh.position.y = 0.09;
+  spin.add(mesh);
+
+  const edgeGeo = new THREE.RingGeometry(ARC_R - 0.34, ARC_R, seg, 1, -ARC_HALF_ANGLE, ARC_HALF_ANGLE * 2);
+  const edgeMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.9,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  const edge = new THREE.Mesh(edgeGeo, edgeMat);
+  edge.rotation.x = -Math.PI/2; edge.position.y = 0.11;
+  spin.add(edge);
+
+  const bolts = [takeBolt(), takeBolt(), takeBolt(), takeBolt(), takeBolt()];
+  for (const b of bolts) b.mat.color.setHex(shock ? 0xcdf1ff : 0xfff3b0);
+  const hitSet = new Set();
+  spawnRing(new THREE.Vector3(root.x, 0, root.z), shock ? 0x9fe0ff : 0xffe680, 2.4, 0.34);
+
+  return addEffect({
+    t:0,
+    update(dt) {
+      this.t += dt;
+      const u = this.t / life;
+      if (u >= 1) {
+        scene.remove(holder);
+        arcGeo.dispose(); arcMat.dispose(); edgeGeo.dispose(); edgeMat.dispose();
+        for (const b of bolts) { freeBolt(b); b.mat.color.setHex(0xfff3b0); }
+        return false;
+      }
+      const grow = easeOutQuart(clamp01(u / 0.3));
+      const s = 0.28 + grow * 0.9;
+      mesh.scale.set(s, s, 1); edge.scale.set(s, s, 1);
+      arcMat.opacity = 0.24 * (1 - u);
+      edgeMat.opacity = 0.9 * (1 - u) * (1 - u);
+
+      // crackle along the leading edge
+      for (let i = 0; i < bolts.length; i++) {
+        const th = -ARC_HALF_ANGLE + (ARC_HALF_ANGLE * 2) * ((i + 0.5) / bolts.length);
+        const a1 = angle + th;
+        const inner = new THREE.Vector3(root.x + Math.sin(a1) * 0.7 * s, 0.35,
+                                        root.z + Math.cos(a1) * 0.7 * s);
+        const outer = new THREE.Vector3(root.x + Math.sin(a1) * ARC_R * s, 0.55,
+                                        root.z + Math.cos(a1) * ARC_R * s);
+        bolts[i].draw(inner, outer, 0.42, 0.07);
+        bolts[i].mat.opacity = (1 - u) * 0.95;
+      }
+
+      if (u < 0.55) {
+        const reach = ARC_R * s;
+        for (const e of enemies) {
+          if (hitSet.has(e)) continue;
+          const dx = e.pos.x - root.x, dz = e.pos.z - root.z;
+          const d = Math.hypot(dx, dz);
+          if (d > reach + ENEMY_R) continue;
+          let da = Math.atan2(dx, dz) - angle;
+          while (da > Math.PI) da -= Math.PI * 2;
+          while (da < -Math.PI) da += Math.PI * 2;
+          if (Math.abs(da) > ARC_HALF_ANGLE + 0.16) continue;
+          hitSet.add(e);
+          const n = d || 1;
+          hitEnemy(e, dmg, 10, dx/n, dz/n, { big:true, shock });
+          spawnFlash(new THREE.Vector3(e.pos.x, 0.9, e.pos.z), shock ? 0xbde9ff : 0xfff6c0, 0.7, 0.22);
+          markEvent(event, true);
+          hitstop = Math.max(hitstop, 0.05);
+        }
+      }
+      return true;
+    }
+  });
+}
+
+/* ======================================================================== */
+/*  Combo state machine                                                     */
+/* ======================================================================== */
+
+/* Beat timing is authored (the entries deliberately do not claim frame data).
+   Bladed Vine reads as a deliberate whipping string; Spark Contact is
+   "exceptionally fast" and steps the caster forward on every beat.          */
+const TIMING = {
+  vine: [
+    { windup:0.10, active:0.30, recover:0.13, step:0 },
+    { windup:0.10, active:0.30, recover:0.13, step:0 },
+    { windup:0.13, active:0.40, recover:0.30, step:0 },   // base finisher
+  ],
+  vineEnhancedFinal: { windup:0.13, active:0.66, recover:0.30, step:0 },
+  spark: [
+    { windup:0.045, active:0.055, recover:0.075, step:0.62 },
+    { windup:0.045, active:0.055, recover:0.075, step:0.62 },
+    { windup:0.045, active:0.055, recover:0.075, step:0.62 },
+    { windup:0.055, active:0.090, recover:0.300, step:0.72 },
+  ],
+};
+
+const combo = {
+  beat:-1, phase:'idle', t:0, idle:0, queued:false, angle:0, events:[],
+};
+
+function currentArc() { return ARCANA[ui.arcana]; }
+function beatCount() { return currentArc().beats; }
+
+function beatTiming(i) {
+  const a = currentArc();
+  if (a.key === 'vine') {
+    if (i === 2 && ui.enhanced) return TIMING.vineEnhancedFinal;
+    return TIMING.vine[i];
+  }
+  return TIMING.spark[i];
+}
+
+function pressAttack() {
+  if (combo.phase === 'idle') startBeat(combo.beat + 1 >= beatCount() || combo.beat < 0 ? 0 : combo.beat + 1);
+  else combo.queued = true;
+}
+
+function startBeat(i) {
+  if (i === 0) resetLedger(true);
+  combo.beat = i; combo.phase = 'windup'; combo.t = 0; combo.queued = false;
+  combo.angle = pstate.facing;
+  const tm = beatTiming(i);
+  if (tm.step) {
+    pstate.lunge.set(Math.sin(combo.angle) * tm.step * 9, 0, Math.cos(combo.angle) * tm.step * 9);
+  }
+  pstate.lean = 1;
+}
+
+function fireBeat(i) {
+  const a = currentArc();
+  const handWorld = new THREE.Vector3();
+  (i % 2 === 0 ? handR : handL).getWorldPosition(handWorld);
+  const root = new THREE.Vector3(pstate.pos.x, 0.95, pstate.pos.z);
+  const ang = combo.angle;
+
+  if (a.key === 'vine') {
+    if (i < 2) {
+      // beats 1 and 2: one attached whip each, 7 damage, alternating sweep
+      const dir = (i === 0) ? 1 : -1;
+      const ev = logEvent(7, '7');
+      spawnVineWhip({
+        root:handWorld.clone().setY(0.95), angle:ang,
+        from: 0.66 * dir, to:-0.66 * dir,
+        dmg:7, kb:(i === 0 ? 6 : 12), life:beatTiming(i).active + 0.14, event:ev,
+      });
+      castGlow.position.copy((i % 2 === 0 ? handR : handL).position);
+      castGlow.material.color.setHex(0xa9d84a);
+      castGlow.material.opacity = 0.9;
+      spawnFlash(handWorld, 0x9ccb3f, 0.34, 0.16);
+    } else if (!ui.enhanced) {
+      // normal beat 3: three visible strands, ONE combined 15-damage event
+      const ev = logEvent(15, '15', { big:true });
+      spawnVineBundle({ root, angle:ang, dmg:15, kb:8, life:0.52, event:ev, seed:0.4 });
+      castGlow.position.set(0, 0.95, 0.3);
+      castGlow.material.opacity = 1;
+      spawnFlash(new THREE.Vector3(root.x + Math.sin(ang), 0.7, root.z + Math.cos(ang)), 0xc4e46b, 0.6, 0.22);
+    } else {
+      // enhanced beat 3: three tendril-bundle emissions, 9 damage each,
+      // three temporally separate hit events
+      for (let k = 0; k < 3; k++) {
+        const ev = logEvent(9, '9');
+        scheduled.push({ t:k * 0.185, fn:() => {
+          const r = new THREE.Vector3(pstate.pos.x, 0.95, pstate.pos.z);
+          spawnVineBundle({ root:r, angle:ang, dmg:9, kb:8, life:0.44, event:ev, seed:k * 1.7 });
+          spawnFlash(new THREE.Vector3(r.x + Math.sin(ang), 0.7, r.z + Math.cos(ang)), 0xc4e46b, 0.5, 0.2);
+        }});
+      }
+      castGlow.position.set(0, 0.95, 0.3);
+      castGlow.material.opacity = 1;
+    }
+    return;
+  }
+
+  // Spark Contact ---------------------------------------------------------
+  const dmg = [6, 7, 8, 9][i];
+  const ev = logEvent(dmg, String(dmg));
+  spawnSparkStrike({ root, angle:ang, dmg, kb:10, life:0.16, event:ev });
+  castGlow.position.copy((i % 2 === 0 ? handR : handL).position);
+  castGlow.material.color.setHex(0xffd94a);
+  castGlow.material.opacity = 0.95;
+
+  if (i === 3) {
+    // the fourth beat still contains its own ordinary strike; the arc is an
+    // additional, independently resolved footprint alongside it
+    const arcEv = logEvent(10, ui.enhanced ? '10 arc + shock' : '10 arc',
+      { big:true, shock:ui.enhanced });
+    spawnSparkArc({ root, angle:ang, dmg:10, shock:ui.enhanced, life:0.42, event:arcEv });
+  }
+}
+
+const scheduled = [];
+
+function updateCombo(dt) {
+  for (let i = scheduled.length - 1; i >= 0; i--) {
+    scheduled[i].t -= dt;
+    if (scheduled[i].t <= 0) { scheduled[i].fn(); scheduled.splice(i, 1); }
+  }
+
+  if (combo.phase === 'idle') {
+    combo.idle += dt;
+    if (combo.beat >= 0 && combo.idle > COMBO_RESET) { combo.beat = -1; }
+    if (input.attack) {
+      // holding the attack button performs the complete combo
+      startBeat(combo.beat + 1 >= beatCount() || combo.beat < 0 ? 0 : combo.beat + 1);
+    }
+    return;
+  }
+
+  const tm = beatTiming(combo.beat);
+  combo.t += dt;
+  if (input.attack) combo.queued = true;
+
+  if (combo.phase === 'windup' && combo.t >= tm.windup) {
+    combo.t -= tm.windup; combo.phase = 'active';
+    fireBeat(combo.beat);
+  } else if (combo.phase === 'active' && combo.t >= tm.active) {
+    combo.t -= tm.active; combo.phase = 'recover';
+  } else if (combo.phase === 'recover' && combo.t >= tm.recover) {
+    combo.phase = 'idle'; combo.t = 0; combo.idle = 0;
+    if (combo.queued || input.attack) {
+      startBeat(combo.beat + 1 >= beatCount() ? 0 : combo.beat + 1);
+    }
+  }
+}
+
+/* ======================================================================== */
+/*  Ledger UI                                                               */
+/* ======================================================================== */
+const elExpected = document.getElementById('expected');
+const elLive = document.getElementById('live');
+const elTotal = document.getElementById('total');
+const elName = document.getElementById('ledgerName');
+const elMeta = document.getElementById('ledgerMeta');
+
+function renderExpected() {
+  const a = currentArc();
+  const list = ui.enhanced ? a.expectedEnh : a.expected;
+  elExpected.innerHTML = '';
+  list.forEach((x, i) => {
+    const c = document.createElement('span');
+    c.className = 'chip exp' + (i < combo.events.length ? ' done' : '');
+    c.textContent = x.l;
+    elExpected.appendChild(c);
+  });
+  elName.textContent = a.name + (ui.enhanced ? ' — enhanced' : '');
+  elMeta.textContent = (ui.enhanced ? a.metaEnh : a.meta) + ' · ' + a.window;
+}
+
+function expectedList() {
+  const a = currentArc();
+  return ui.enhanced ? a.expectedEnh : a.expected;
+}
+
+/** Snapshot a finished string so the full hit ledger stays readable while the
+ *  attack button is held and the combo loops. */
+function resetLedger(snapshot) {
+  if (snapshot && combo.events.length === expectedList().length) {
+    renderLast(combo.events.slice());
+  }
+  combo.events.length = 0; renderLive(); renderExpected();
+}
+
+const elLast = document.getElementById('last');
+function renderLast(events) {
+  elLast.innerHTML = '';
+  let total = 0;
+  for (const ev of events) {
+    const c = document.createElement('span');
+    c.className = 'chip ' + (ev.landed ? (ev.opts.shock ? 'shock' : 'hit') : 'whiff');
+    c.textContent = ev.label;
+    elLast.appendChild(c);
+    if (ev.landed) total += ev.dmg;
+  }
+  const t = document.createElement('span');
+  t.id = 'lastTotal'; t.style.cssText = 'font-size:11px;color:var(--ink-dim);margin-left:auto';
+  t.textContent = `${events.length} hit events · ${total} dealt`;
+  elLast.appendChild(t);
+}
+
+function logEvent(dmg, label, opts = {}) {
+  const ev = { dmg, label, landed:false, opts };
+  combo.events.push(ev);
+  renderLive(); renderExpected();
+  return ev;
+}
+function markEvent(ev, landed) {
+  if (!ev || ev.landed === landed) return;
+  ev.landed = landed; renderLive();
+}
+function renderLive() {
+  elLive.innerHTML = '';
+  if (!combo.events.length) {
+    const c = document.createElement('span'); c.className = 'chip whiff'; c.textContent = 'idle';
+    elLive.appendChild(c);
+  }
+  let total = 0;
+  for (const ev of combo.events) {
+    const c = document.createElement('span');
+    c.className = 'chip ' + (ev.landed ? (ev.opts.shock ? 'shock' : 'hit') : 'whiff');
+    c.textContent = ev.label;
+    elLive.appendChild(c);
+    if (ev.landed) total += ev.dmg;
+  }
+  elTotal.textContent = combo.events.length
+    ? `${combo.events.length} hit event${combo.events.length > 1 ? 's' : ''} · ${total} dealt`
+    : '';
+  elLive.appendChild(elTotal);
+}
+
+/* ======================================================================== */
+/*  Input — phone first, keyboard + gamepad as a bonus                      */
+/* ======================================================================== */
+const input = {
+  move:{ x:0, y:0 }, aim:{ x:0, y:0 }, aimActive:false, attack:false, keys:new Set(),
+};
+const stickL = document.getElementById('stickL');
+const stickR = document.getElementById('stickR');
+const touches = new Map();     // pointerId -> {kind, ox, oy, el}
+const STICK_R = 52;
+
+function beginStick(kind, id, x, y) {
+  const el = kind === 'move' ? stickL : stickR;
+  el.style.display = 'block';
+  el.style.left = (x - 56) + 'px';
+  el.style.top  = (y - 56) + 'px';
+  el.firstElementChild.style.transform = 'translate(0px,0px)';
+  touches.set(id, { kind, ox:x, oy:y, el });
+}
+function moveStick(id, x, y) {
+  const t = touches.get(id); if (!t) return;
+  let dx = x - t.ox, dy = y - t.oy;
+  const d = Math.hypot(dx, dy);
+  if (d > STICK_R) { dx = dx / d * STICK_R; dy = dy / d * STICK_R; }
+  t.el.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`;
+  const nx = dx / STICK_R, ny = dy / STICK_R;
+  if (t.kind === 'move') { input.move.x = nx; input.move.y = ny; }
+  else { input.aim.x = nx; input.aim.y = ny; input.aimActive = Math.hypot(nx, ny) > 0.28; }
+}
+function endStick(id) {
+  const t = touches.get(id); if (!t) return;
+  t.el.style.display = 'none';
+  if (t.kind === 'move') { input.move.x = 0; input.move.y = 0; }
+  else { input.aim.x = 0; input.aim.y = 0; input.aimActive = false; }
+  touches.delete(id);
+}
+
+addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button') || e.target.closest('#info') || e.target.closest('#ledger')) return;
+  e.preventDefault();
+  beginStick(e.clientX < innerWidth * 0.5 ? 'move' : 'aim', e.pointerId, e.clientX, e.clientY);
+}, { passive:false });
+addEventListener('pointermove', (e) => { if (touches.has(e.pointerId)) moveStick(e.pointerId, e.clientX, e.clientY); });
+addEventListener('pointerup', (e) => endStick(e.pointerId));
+addEventListener('pointercancel', (e) => endStick(e.pointerId));
+
+const btnAttack = document.getElementById('attack');
+const setAttack = (v) => { input.attack = v; btnAttack.dataset.held = v ? '1' : '0'; if (v) pressAttack(); };
+btnAttack.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); setAttack(true); });
+btnAttack.addEventListener('pointerup',   (e) => { e.preventDefault(); setAttack(false); });
+btnAttack.addEventListener('pointerleave',()  => setAttack(false));
+btnAttack.addEventListener('pointercancel',() => setAttack(false));
+btnAttack.addEventListener('contextmenu', (e) => e.preventDefault());
+
+addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  input.keys.add(e.code);
+  if (e.code === 'Space' || e.code === 'KeyJ') { e.preventDefault(); setAttack(true); }
+  if (e.code === 'KeyQ') setArcana(ui.arcana === 'vine' ? 'spark' : 'vine');
+  if (e.code === 'KeyE') setEnhanced(!ui.enhanced);
+});
+addEventListener('keyup', (e) => {
+  input.keys.delete(e.code);
+  if (e.code === 'Space' || e.code === 'KeyJ') setAttack(false);
+});
+
+// desktop mouse aim
+let mouseAim = null;
+addEventListener('mousemove', (e) => { mouseAim = { x:e.clientX, y:e.clientY }; });
+
+function readGamepad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const p of pads) {
+    if (!p) continue;
+    const dz = (v) => Math.abs(v) < 0.22 ? 0 : v;
+    const lx = dz(p.axes[0] || 0), ly = dz(p.axes[1] || 0);
+    if (lx || ly) { input.move.x = lx; input.move.y = ly; }
+    const rx = dz(p.axes[2] || 0), ry = dz(p.axes[3] || 0);
+    if (Math.hypot(rx, ry) > 0.3) { input.aim.x = rx; input.aim.y = ry; input.aimActive = true; }
+    const pressed = (p.buttons[0] && p.buttons[0].pressed) || (p.buttons[2] && p.buttons[2].pressed)
+      || (p.buttons[7] && p.buttons[7].value > 0.4);
+    if (pressed && !input.attack) setAttack(true);
+    else if (!pressed && input.attack) setAttack(false);
+    return;
+  }
+}
+
+/* ======================================================================== */
+/*  UI wiring                                                               */
+/* ======================================================================== */
+const ui = { arcana:'vine', enhanced:false };
+const tabVine = document.getElementById('tabVine');
+const tabSpark = document.getElementById('tabSpark');
+const tabEnh = document.getElementById('tabEnh');
+
+function setArcana(k) {
+  ui.arcana = k;
+  tabVine.dataset.on = k === 'vine' ? '1' : '0';
+  tabSpark.dataset.on = k === 'spark' ? '1' : '0';
+  document.documentElement.style.setProperty('--accent', ARCANA[k].css);
+  aimMat.color.setHex(ARCANA[k].color);
+  combo.beat = -1; combo.phase = 'idle'; combo.t = 0;
+  elLast.innerHTML = '<span class="chip whiff">—</span>';
+  resetLedger(); renderInfo();
+}
+function setEnhanced(v) {
+  ui.enhanced = v;
+  tabEnh.dataset.on = v ? '1' : '0';
+  tabEnh.innerHTML = 'Enhanced<small>' + (v ? 'ON' : 'OFF') + '</small>';
+  combo.beat = -1; combo.phase = 'idle';
+  elLast.innerHTML = '<span class="chip whiff">—</span>';
+  resetLedger();
+}
+tabVine.onclick = () => setArcana('vine');
+tabSpark.onclick = () => setArcana('spark');
+tabEnh.onclick = () => setEnhanced(!ui.enhanced);
+document.getElementById('tabReset').onclick = () => {
+  for (const e of enemies) { e.hp = e.maxHp; e.pos.copy(e.anchor); e.vel.set(0,0,0); e.shock = 0; }
+  pstate.pos.set(0, 0, 4); pstate.facing = Math.PI;
+  combo.beat = -1; combo.phase = 'idle'; resetLedger();
+};
+
+const ledgerEl = document.getElementById('ledger');
+ledgerEl.addEventListener('click', () => {
+  ledgerEl.dataset.collapsed = ledgerEl.dataset.collapsed === '1' ? '0' : '1';
+});
+
+const infoEl = document.getElementById('info');
+const infoTitle = document.getElementById('infoTitle');
+const infoBody = document.getElementById('infoBody');
+document.getElementById('tabInfo').onclick = () => { renderInfo(); infoEl.classList.toggle('open'); };
+document.getElementById('infoClose').onclick = () => infoEl.classList.remove('open');
+
+const INFO = {
+  vine:`
+<h3>Concrete source form — showcase 38–43s</h3>
+<p>Bladed Vine is a three-beat whipping string. The first two beats produce a thin thorny vine
+attached to the caster, sweeping or snapping through a long, narrow area in front — a green-yellow
+segmented line with visible thorns and leaves, behaving like a flexible melee extension rather than
+an autonomous projectile.</p>
+<p>The third beat changes the visual structure: several longer vine strands are thrust forward
+together, the footprint is longer and denser, and the bundle resolves as the stronger finisher hit.
+The enhanced finisher visibly repeats the forward tendril emission several times rather than simply
+enlarging the one bundle.</p>
+<h3>Exact source recipe</h3>
+<pre>BLADED VINE
+
+Input structure:
+Three-beat basic string
+
+Beats 1 and 2:
+One attached vine whip
+7 damage each
+long narrow frontal sweep
+
+Normal Beat 3:
+One forward tendril-bundle attack
+Three visible long strands
+One combined 15-damage event
+
+Enhanced Beat 3:
+Three tendril-bundle emissions
+9 damage per emission
+Three separate hit events
+
+Contact:
+Flexible melee footprint
+Can cover several aligned or grouped enemies
+
+Hold behavior:
+Full combo may be continued by holding attack</pre>
+<h3>Source-faithful acceptance test</h3>
+<ol>
+<li>The string contains three beats.</li>
+<li>Beats 1 and 2 are individual attached vine whips.</li>
+<li>The vines remain visually connected to the caster.</li>
+<li>The ordinary third beat has greater range and multiple visible strands.</li>
+<li>The normal finisher deals one combined hit, not one hit per visible strand.</li>
+<li>Enhancement does not change the first two beats.</li>
+<li>The enhanced finisher emits three temporally separate vine sets.</li>
+<li>Those three sets can produce three separate 9-damage hits.</li>
+<li>The full enhanced combo therefore has five damage events.</li>
+</ol>
+<h3>Wiki row</h3>
+<p>Earth · Basic · Melee — Damage 7, 15 · Hit Count 5 per combo · Knockback 6, 12, 8 · Cooldown 0 ·
+Cost 12/50 · Pool 3. Enhanced: Damage 7, 9.</p>
+<p class="note">Watch for it: three visible strands do not mean three damage events. The base
+finisher's bundle shares one hit ledger — walk a dummy into all three strands and it still takes a
+single 15.</p>`,
+  spark:`
+<h3>Concrete source form — showcase 46–51s</h3>
+<p>Spark Contact is an extremely fast close-range lightning string. Each strike produces a compact
+yellow electrical flash at contact, the player advances slightly with each beat, and the footprint is
+narrow and focused directly ahead. The strikes read as electrically empowered punches rather than
+projectiles.</p>
+<p>The final beat has two simultaneous layers: the ordinary close contact strike, and a noticeably
+larger curved arc of electricity that sweeps forward around the struck area. The enhanced version
+appears nearly identical until the finisher, where the large arc gains the shock effect.</p>
+<h3>Exact source recipe</h3>
+<pre>SPARK CONTACT
+
+Input structure:
+Four-beat basic combo
+Hold performs complete combo
+
+Carrier:
+Caster-anchored close-contact strike
+
+Movement:
+Small authored forward step on every beat
+
+Damage progression:
+6 → 7 → 8 → 9
+
+Final-beat overlay:
+Large electric arc
+10 additional damage
+Occurs alongside the fourth strike
+
+Enhanced mutation:
+Final arc applies shock
+No additional carrier
+No change to early beats</pre>
+<h3>Source-faithful acceptance test</h3>
+<ol>
+<li>The combo has four visible attack motions.</li>
+<li>It produces five possible damage events.</li>
+<li>The first three beats each produce one compact contact hit.</li>
+<li>The player moves forward slightly on every beat.</li>
+<li>The fourth beat still contains its own ordinary strike.</li>
+<li>The large electrical arc occurs alongside that fourth strike.</li>
+<li>The arc covers more area than the preceding contact hits.</li>
+<li>The sequence is exceptionally fast.</li>
+<li>Enhancement does not modify beats 1–3.</li>
+<li>Enhancement adds shock specifically to the final arc.</li>
+</ol>
+<h3>Wiki row</h3>
+<p>Lightning · Basic · Melee — Damage 6, 7, 8, 9, 10 · Hit Count 5 per combo · Knockback 10 ·
+Cooldown 0 · Cost 12/50 · Pool 3. Enhanced: the final 10-damage arc applies level-1 shock.</p>
+<p class="note">Shock is shown here as a status marker only. The entry states that enhancement adds
+level-1 shock to the final arc and adds no damage event, so no shock damage number is invented.</p>`,
+};
+
+function renderInfo() {
+  const a = currentArc();
+  infoTitle.textContent = `${a.name} — ${a.element} · ${a.category} · ${a.subtype}`;
+  infoBody.innerHTML = INFO[a.key] + `
+<h3>About this reconstruction</h3>
+<p class="note">Built from the PR&nbsp;122 source-analysis entry
+(<code>wizard_of_legend_arcana_source_reference.md</code> §8 / §10, the Gate&nbsp;1 video inventory
+window, and the Gate&nbsp;2 wiki layer). Damage values, hit counts, beat counts, carrier structure
+and the enhancement rewrite are exactly as recorded there. Windup / active / recovery frame timings
+are authored for this demo, because the entries explicitly do not claim frame data yet.</p>`;
+}
+renderInfo();
+
+/* ======================================================================== */
+/*  Simulation                                                              */
+/* ======================================================================== */
+const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3();
+
+function updatePlayer(dt) {
+  // aim
+  let ax = input.aim.x, ay = input.aim.y;
+  if (input.aimActive && Math.hypot(ax, ay) > 0.2) {
+    pstate.facing = Math.atan2(ax, -ay);
+  } else if (mouseAim && !('ontouchstart' in window)) {
+    const ndc = new THREE.Vector2((mouseAim.x / innerWidth) * 2 - 1, -(mouseAim.y / innerHeight) * 2 + 1);
+    const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
+    const hit = new THREE.Vector3();
+    if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) {
+      const dx = hit.x - pstate.pos.x, dz = hit.z - pstate.pos.z;
+      if (Math.hypot(dx, dz) > 0.4) pstate.facing = Math.atan2(dx, dz);
+    }
+  }
+
+  // move
+  let mx = input.move.x, my = input.move.y;
+  if (input.keys.size) {
+    let kx = 0, ky = 0;
+    if (input.keys.has('KeyA') || input.keys.has('ArrowLeft')) kx -= 1;
+    if (input.keys.has('KeyD') || input.keys.has('ArrowRight')) kx += 1;
+    if (input.keys.has('KeyW') || input.keys.has('ArrowUp')) ky -= 1;
+    if (input.keys.has('KeyS') || input.keys.has('ArrowDown')) ky += 1;
+    if (kx || ky) { const d = Math.hypot(kx, ky); mx = kx / d; my = ky / d; }
+  }
+  const mag = Math.min(1, Math.hypot(mx, my));
+  // committed frames restrict movement, they do not stop the caster dead
+  const commit = (combo.phase === 'windup' || combo.phase === 'active') ? 0.32
+               : (combo.phase === 'recover' ? 0.7 : 1);
+  if (mag > 0.08) {
+    const nx = mx / (Math.hypot(mx, my) || 1), ny = my / (Math.hypot(mx, my) || 1);
+    pstate.pos.x += nx * PLAYER_SPEED * mag * commit * dt;
+    pstate.pos.z += ny * PLAYER_SPEED * mag * commit * dt;
+    if (!input.aimActive && !(mouseAim && !('ontouchstart' in window)) && combo.phase === 'idle') {
+      pstate.facing = Math.atan2(nx, ny);
+    }
+  }
+  // authored forward step on cast beats
+  pstate.pos.addScaledVector(pstate.lunge, dt);
+  pstate.lunge.multiplyScalar(Math.max(0, 1 - dt * 14));
+
+  const r = Math.hypot(pstate.pos.x, pstate.pos.z);
+  if (r > ARENA_R - 0.5) { pstate.pos.multiplyScalar((ARENA_R - 0.5) / r); }
+
+  player.position.copy(pstate.pos);
+  player.rotation.y = pstate.facing;
+
+  pstate.lean = Math.max(0, pstate.lean - dt * 5.5);
+  const swing = (combo.phase === 'active') ? 1 : pstate.lean;
+  robe.rotation.x = -0.22 * swing;
+  hat.rotation.x = -0.12 - 0.3 * swing;
+  const forwardHand = 0.16 + 0.55 * swing;
+  handR.position.z = (combo.beat % 2 === 0) ? forwardHand : 0.16;
+  handL.position.z = (combo.beat % 2 === 1) ? forwardHand : 0.16;
+  handR.position.y = 0.92 + 0.12 * ((combo.beat % 2 === 0) ? swing : 0);
+  handL.position.y = 0.92 + 0.12 * ((combo.beat % 2 === 1) ? swing : 0);
+
+  castGlow.material.opacity = Math.max(0, castGlow.material.opacity - dt * 4);
+  const g = 0.16 + 0.1 * Math.sin(performance.now() * 0.02);
+  castGlow.scale.setScalar(g / 0.2 + 0.6);
+
+  shadow.position.set(pstate.pos.x, 0.03, pstate.pos.z);
+}
+
+function updateEnemies(dt) {
+  for (const e of enemies) {
+    e.pos.addScaledVector(e.vel, dt);
+    e.vel.multiplyScalar(Math.max(0, 1 - dt * 6));
+    // drift back to the training post
+    const back = e.anchor.clone().sub(e.pos);
+    const bd = back.length();
+    if (bd > 0.02) e.pos.addScaledVector(back.normalize(), Math.min(bd, dt * 1.4));
+    const r = Math.hypot(e.pos.x, e.pos.z);
+    if (r > ARENA_R - 0.6) e.pos.multiplyScalar((ARENA_R - 0.6) / r);
+    e.group.position.copy(e.pos);
+
+    e.lean.multiplyScalar(Math.max(0, 1 - dt * 7));
+    e.group.rotation.x = e.lean.y * 0.5;
+    e.group.rotation.z = -e.lean.x * 0.5;
+
+    e.flash = Math.max(0, e.flash - dt * 5);
+    e.mat.emissive.setRGB(e.flash * 0.9, e.flash * 0.85, e.flash * 0.55);
+
+    if (e.shock > 0) {
+      e.shock -= dt;
+      e.shockTick -= dt;
+      if (e.shockTick <= 0) {
+        e.shockTick = 0.12;
+        const b = takeBolt();
+        b.mat.color.setHex(0xbde9ff);
+        const a1 = Math.random() * Math.PI * 2, a2 = a1 + 1.8 + Math.random();
+        b.draw(
+          new THREE.Vector3(e.pos.x + Math.cos(a1) * 0.42, 0.35 + Math.random() * 1.1, e.pos.z + Math.sin(a1) * 0.42),
+          new THREE.Vector3(e.pos.x + Math.cos(a2) * 0.42, 0.35 + Math.random() * 1.1, e.pos.z + Math.sin(a2) * 0.42),
+          0.22, 0.035);
+        addEffect({ t:0, update(dt2) {
+          this.t += dt2;
+          b.mat.opacity = 1 - this.t / 0.14;
+          if (this.t >= 0.14) { freeBolt(b); b.mat.color.setHex(0xfff3b0); return false; }
+          return true;
+        }});
+      }
+    }
+  }
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  let dt = Math.min(0.05, clock.getDelta());
+  readGamepad();
+
+  if (hitstop > 0) { hitstop -= dt; dt *= 0.22; }
+
+  updateCombo(dt);
+  updatePlayer(dt);
+  updateEnemies(dt);
+
+  for (let i = effects.length - 1; i >= 0; i--) {
+    if (!effects[i].update(dt)) effects.splice(i, 1);
+  }
+
+  camTarget.set(pstate.pos.x * 0.6, 0, pstate.pos.z * 0.6 - 1.5);
+  camera.position.lerp(camTarget.clone().add(CAM_OFFSET), Math.min(1, dt * 4));
+  camera.lookAt(camTarget.x, 0.8, camTarget.z);
+
+  updateFloaters(dt);
+  updateShockTags();
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+setArcana('vine');
+setEnhanced(false);
+tick();
+</script>
+</body>
+</html>
