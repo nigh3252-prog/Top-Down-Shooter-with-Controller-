@@ -6,6 +6,7 @@ const palette=Object.freeze({
   Air:Object.freeze({color:'#a7edf5',border:'rgba(133,221,233,.88)',background:'radial-gradient(circle,rgba(161,237,246,.28),rgba(5,31,40,.70))'}),
   Earth:Object.freeze({color:'#cdb177',border:'rgba(185,145,82,.88)',background:'radial-gradient(circle,rgba(190,151,87,.29),rgba(39,29,16,.70))'}),
   Water:Object.freeze({color:'#78cfff',border:'rgba(79,178,239,.88)',background:'radial-gradient(circle,rgba(74,181,244,.28),rgba(4,22,46,.70))'}),
+  Lightning:Object.freeze({color:'#fff0a0',border:'rgba(222,210,154,.90)',background:'radial-gradient(circle,rgba(222,210,154,.31),rgba(31,29,14,.72))'}),
 });
 
 const makeCard=({id,name,icon,element,category,sourceOrder,sourceClip,styleTags,description,summary,rows,chain})=>{
@@ -129,6 +130,34 @@ export const WIZARD_VFX_ARCANA_CARDS=Object.freeze([
     chain:['horizontal4','horizontal4','horizontal6'],
   }),
   makeCard({
+    id:'TERRA-RING',name:'Terra Ring',icon:'TR',element:'Earth',category:'Signature',sourceOrder:82,sourceClip:{start:608,end:618},
+    styleTags:['nine-lane earth ring','tunnel sequence','radial contact'],
+    description:'Drive nine earthen lanes outward in a radial ring, striking enemies as the tunnel of rock and scorch advances.',
+    summary:'The supplied Earth lab’s base Terra Ring is the source of truth: nine independently jittered lanes tunnel outward from the caster, throwing rock, scorch, sparks, and dust. Each lane can land up to five 15-damage contact hits; the charged ground-strike branch is documented but disabled.',
+    rows:[
+      ['FORM','Nine radial earthen lanes with a burnt fan, tunnel rocks, scorch decals, sparks, and dust.'],
+      ['RHYTHM','Radial lanes emit in a staggered dig sequence and travel point-first to roughly 4.6 tiles.'],
+      ['DAMAGE','15-damage contact hits, with an explicit maximum of five hits per target.'],
+      ['CONTROL','Contact knockback follows the source’s outward lane direction at the authored 3.6 force.'],
+      ['BASE LIMIT','The enhanced and charged ground-strike branches remain documented but disabled.'],
+    ],
+    chain:['vertical6','horizontal4','vertical6'],
+  }),
+  makeCard({
+    id:'GRASPING-EARTH',name:'Grasping Earth',icon:'GE',element:'Earth',category:'Standard',sourceOrder:83,sourceClip:{start:618,end:626},
+    styleTags:['growing sigil','crag dispatch','stone fist capture'],
+    description:'Grow a ground sigil, release stone crags toward nearby enemies, and crush captured targets in earthen fists.',
+    summary:'The supplied Earth lab’s base hold path is the source of truth: the sigil grows from a 1.25-tile circle to the authored base release, sends crags toward targets, and captures them in stone fists for five 3-damage grip ticks followed by a 25-damage finisher.',
+    rows:[
+      ['CHARGE','A caster-centered earthen sigil grows while the hold window fills.'],
+      ['CAPTURE','Released crags seek valid targets and convert them into held stone-fist captures.'],
+      ['DAMAGE','Five 3-damage grip ticks followed by one 25-damage crush finisher; impact is 10.'],
+      ['CONTROL','Captured targets are held in the source fist until the authored tick sequence ends.'],
+      ['BASE LIMIT','The enhanced longer tick path and charged variant remain documented but disabled.'],
+    ],
+    chain:['vertical6','horizontal4','vertical6'],
+  }),
+  makeCard({
     id:'TECTONIC-DRILL',name:'Tectonic Drill',icon:'TD',element:'Earth',category:'Signature',sourceOrder:86,sourceClip:{start:664,end:674},
     styleTags:['moving earth carrier','contact conveyor','bore track'],
     description:'Charge forward behind a rotating earthen drill that pins enemies along the route and leaves a churned bore track.',
@@ -155,6 +184,34 @@ export const WIZARD_VFX_ARCANA_CARDS=Object.freeze([
       ['BASE LIMIT','The enhanced double-throw branch remains documented but disabled.'],
     ],
     chain:['vertical6','stab6','horizontal6'],
+  }),
+  makeCard({
+    id:'SHOCK-NOVA',name:'Shock Nova',icon:'SN',element:'Lightning',category:'Signature',sourceOrder:102,sourceClip:{start:808,end:821},
+    styleTags:['gold lightning wheel','charge-and-discharge','shock stacking'],
+    description:'Charge a gold lightning wheel, release its spokes, and leave shocked targets to discharge after the wheel fades.',
+    summary:'The supplied Lightning lab’s base path is the source of truth: a 1.43-second charge builds an eight-spoke gold wheel, the 2.10-radius nova discharges for 0.70 seconds with 0.12-second source ticks, and each source contact applies the authored shock hold. The enhanced wheel is documented but disabled.',
+    rows:[
+      ['CHARGE','The caster holds a jagged gold wheel for the source’s 1.43-second base charge.'],
+      ['FORM','Eight bright spokes and a broken rim expand into a 2.10-tile base-radius discharge.'],
+      ['DAMAGE','The source contact value is 12, with the source’s 0.12-second tick rhythm preserved.'],
+      ['STATUS','Valid contacts add shock stacks that flicker on the target and discharge after the authored hold.'],
+      ['BASE LIMIT','The faster, wider, twelve-spoke enhanced branch remains documented but disabled.'],
+    ],
+    chain:['vertical8','horizontal4','vertical6'],
+  }),
+  makeCard({
+    id:'STAR-BOLT',name:'Star Bolt',icon:'SB',element:'Lightning',category:'Standard',sourceOrder:108,sourceClip:{start:869,end:875},
+    styleTags:['spinning star projectile','five-throw cadence','shock charge'],
+    description:'Launch spinning star bolts along your aim line, each carrying a bright contact hit and a delayed shock charge.',
+    summary:'The supplied Lightning lab’s Star Bolt is the source of truth: the star launches after its 0.13-second windup at speed 20, travels up to range 9, and follows the authored 0.75-second throw cadence. Each valid contact deals the source’s 8 damage and applies a shock charge.',
+    rows:[
+      ['FORM','A compact gold-and-stone star with the source’s bright core, spin, sparks, and trail.'],
+      ['FLIGHT','One star travels point-first at speed 20 for up to 9 tiles before expiring.'],
+      ['RHYTHM','The source demo’s five-throw sequence follows its 0.75-second cadence after the windup.'],
+      ['DAMAGE','8 on valid contact; shock state and delayed discharge are owned by the copied source behavior.'],
+      ['BASE LIMIT','The enhanced volley branch remains documented but disabled.'],
+    ],
+    chain:['vertical6','horizontal4','vertical6'],
   }),
   makeCard({
     id:'AQUA-VORTEX',name:'Aqua Vortex',icon:'AV',element:'Water',category:'Standard',sourceOrder:123,sourceClip:{start:1007,end:1013},

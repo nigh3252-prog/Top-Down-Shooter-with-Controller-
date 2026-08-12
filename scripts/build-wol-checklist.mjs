@@ -25,6 +25,7 @@ const improvedText=[
   read('12-air-standards-2.md'),
   read('13-water-prison.md'),
   read('14-archetype-sampler.md'),
+  read('15-vfx-lab-lightning-earth.md'),
 ].join('\n\n');
 const spellLanguage=read('wizard_of_legend_spell_language.md');
 const inventoryLedgerText=read('gate1-video-inventory.md');
@@ -281,6 +282,14 @@ const sourceMeta=[
   ['Ball Lightning','Lightning','Signature',893,909,900],
   ['Aqua Beam','Water','Signature',1118,1129,1123],
   ['Arcane Intervention','Chaos','Signature',1203,1219,1211],
+  ['Terra Ring','Earth','Signature',608,618,609.5],
+  ['Grasping Earth','Earth','Standard',618,626,619.5],
+  ['Shock Nova','Lightning','Signature',808,821,809.5],
+  ['Star Bolt','Lightning','Standard',869,875,870.5],
+  ['Tectonic Drill','Earth','Signature',664,674,665.5],
+  ['Rock-Solid Tomahawk','Earth','Standard',678,686,679.5],
+  ['Aqua Vortex','Water','Standard',1007,1013,1008.5],
+  ['Aqua Breaker','Water','Standard',1083,1091,1084.5],
 ];
 
 const implementedNames=new Set([
@@ -289,6 +298,9 @@ const implementedNames=new Set([
   'Bolt Rail','Volt Disc','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison',
   'Flame Fusion','Rapid Fire Agent','Ward of Flames','Mentis Imperium','Heroic Leap',
   'Cyclone Boomerang','Earthen Aegis','Ball Lightning','Aqua Beam','Arcane Intervention',
+  'Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain',
+  'Tectonic Drill','Rock-Solid Tomahawk','Aqua Vortex','Aqua Breaker',
+  'Terra Ring','Grasping Earth','Shock Nova','Star Bolt',
   ...WIZARD_NEXT_TWENTY_CARDS.map(card=>card.name),
 ]);
 const referenceLockWindows=new Map([
@@ -383,6 +395,31 @@ for(const card of WIZARD_NEXT_TWENTY_CARDS){
 
 **[INFERENCE — Top Down Game construction]** ${dashNote} Procedural geometry, particles, glow falloff, and harmless wall fizzles are authored approximations; they must not change the documented payload or invent damage through scenery.`);
 }
+const vfxLabReferenceLocks=new Map([
+  ['Flame Breath',{start:217,end:227,note:'The base clip retains the rounded close flame cone, discrete three-hit schedule, projectile interception, and compact smoke/ember cleanup. Charged steerable breath remains disabled.'}],
+  ['Searing Crown',{start:227,end:233,note:'The base clip retains the caster-centered crown, five timed ticks, stronger finisher handoff, and smoke/heat buildup. Enhanced and charged rewrites remain disabled.'}],
+  ['Ignition Drive',{start:353,end:357,note:'The base clip retains the ordered forward explosion route, carry beats, endpoint finisher, and source smoke/ember aftermath. Enhanced lingering fire remains disabled.'}],
+  ['Engulfing Fissure',{start:369,end:378,note:'The base clip retains three independent dormant fissures, first-trigger ownership, five-hit capture, and per-trap cleanup. Enhanced five-trap layout remains disabled.'}],
+  ['Dragon Blast',{start:418,end:420,note:'The base clip retains the stationary wind-dragon mouth, pull sequence, final outward blast, and projectile-erasure volume. Enhanced second head remains disabled.'}],
+  ['Shearing Chain',{start:461,end:472,note:'The base clip retains alternating moving crescents, the six-slash conveyor, shared dash route, and stronger finisher. Enhanced and charged slash counts remain disabled.'}],
+  ['Terra Ring',{start:608,end:612,note:'The base clip retains nine staggered earthen lanes, source tunnel rocks, burnt ground marks, sparks, dust, and the forward dig rhythm. Enhanced all-at-once spikes and the charged five-strike branch remain disabled.'}],
+  ['Grasping Earth',{start:618,end:626,note:'The base clip retains the growing sigil, crag dispatch, target capture, stone-fist hold, five grip ticks, and final crush. The enhanced faster tick branch remains disabled.'}],
+  ['Tectonic Drill',{start:664,end:674,note:'The base clip retains the point-first auger, helical fins, bounded contact cadence, flying slabs, dust, and bore track. Enhanced second charge and charged four-drill branches remain disabled.'}],
+  ['Rock-Solid Tomahawk',{start:678,end:686,note:'The base clip retains the raised double-bitted stone axe, spinning throw, curved return, impact star, chips, and dust. The enhanced double-throw branch remains disabled.'}],
+  ['Shock Nova',{start:808,end:814,note:'The base clip retains the vulnerable gold wheel charge, eight-spoke base release, compact radius, cyan shock state, and delayed discharge. The enhanced wider wheel and charged overlapping circles remain disabled.'}],
+  ['Star Bolt',{start:869,end:875,note:'The base clip retains the compact spinning star, bright core, source trail, single contact flash, and delayed shock. The enhanced longer-shock branch remains disabled.'}],
+  ['Aqua Vortex',{start:1007,end:1013,note:'The base clip retains the caster-centered six-arm water spiral, source tick schedule, pull, projectile interception, and low-sheet collapse. Extra charges and enhanced ice remain disabled.'}],
+  ['Aqua Breaker',{start:1083,end:1091,note:'The base clip retains the growing coiled charge, rolling carrier, bounded pass contacts, and wide deluge finisher. Extra charges and enhanced branches remain disabled.'}],
+]);
+for(const [name,window] of vfxLabReferenceLocks){
+  referenceLockAddenda.set(name,`## Reference-lock frame audit
+
+**[EVIDENCE — supplied 60 FPS showcase, ${window.start.toFixed(2)}–${window.end.toFixed(2)}s]** ${window.note}
+
+**[EVIDENCE — exact uploaded source]** The renderer, source timing, source-owned emission count, and source contact choreography are copied from the attached VFX lab. The Enemy Lab adapter supplies only target proxies, camera space, native status, and cleanup services.
+
+**[INFERENCE — Enemy Lab construction]** Parent-space transforms and deterministic target proxies are integration seams. Arcana Size scales the source visual and collision footprint only; it does not alter source damage, speed, range, charge, tick, knockback, or cooldown values.`);
+}
 const rebuiltNames=new Set(['Flame Cross','Bouncing Blaze','Homing Flares','Dragon Arc','Whirling Tornado','Water Prison']);
 const supplements=new Map([
   ['Flame Strike',read('wizard_of_legend_flame_strike_spec.md')],
@@ -401,6 +438,7 @@ const revisionHistory=new Map([
 ]);
 for(const name of samplerReferenceNotes.keys())revisionHistory.set(name,'The base-form source analysis was converted into a deterministic Enemy Lab implementation through contract, source-render, and final-style gates. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
 for(const card of WIZARD_NEXT_TWENTY_CARDS)revisionHistory.set(card.name,`The source-first analysis was converted into a deterministic base-form Enemy Lab implementation through contract, source-render, and final-style gates. ${card.dashMotion?'The payload is layered onto the already approved Top Down Game dash locomotion, with Chaotic Rift retaining its required teleport exception.':'The full authored Basic sequence is scheduled by one card activation.'} Source comparison remains pending user review; enhanced variants remain documented but disabled.`);
+for(const name of ['Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain','Tectonic Drill','Rock-Solid Tomahawk','Aqua Vortex','Aqua Breaker','Terra Ring','Grasping Earth','Shock Nova','Star Bolt'])revisionHistory.set(name,'VFX lab port (2026-08-11): the exact supplied source was ported into the Enemy Lab with native card, target, status, and cleanup adapters. Source comparison remains pending user review; enhanced and charged variants remain documented but disabled.');
 
 const inventory=parseInventoryLedger(inventoryLedgerText);
 const inventoryBySlug=new Map(inventory.entries.map(entry=>[slugify(entry.name),entry]));
@@ -566,7 +604,11 @@ const fallbackTemplate=fs.readFileSync(path.join(scriptDir,'wol-checklist-templa
 // that tracked shell when rebuilding; the older standalone template remains a
 // fallback for a clean artifact build.
 const existingTemplate=fs.existsSync(generatedPath)?fs.readFileSync(generatedPath,'utf8'):'';
-const template=existingTemplate.includes('id="rail-app"')?existingTemplate:fallbackTemplate;
+const template=(existingTemplate.includes('id="rail-app"')?existingTemplate:fallbackTemplate)
+  .replaceAll('const CATALOG_REVISION=6','const CATALOG_REVISION=7')
+  .replaceAll("const VFX_LAB_IMPLEMENTED=['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','tectonic-drill','rock-solid-tomahawk','aqua-vortex','aqua-breaker'];", "const VFX_LAB_IMPLEMENTED=['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','terra-ring','grasping-earth','tectonic-drill','rock-solid-tomahawk','shock-nova','star-bolt','aqua-vortex','aqua-breaker'];")
+  .replaceAll('6:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))','7:Object.fromEntries(VFX_LAB_IMPLEMENTED.map(id=>[id,{analysis:true,implementation:true}]))')
+  .replaceAll('The 77 newly added records are intentionally inventory-only','The 73 newly added records are intentionally inventory-only');
 const safeJson=JSON.stringify(payload).replace(/</g,'\\u003c');
 const html=template.includes('__WOL_DATA__')
   ? template.replace('__WOL_DATA__',safeJson).replace('__GENERATED_AT__',new Date().toISOString())

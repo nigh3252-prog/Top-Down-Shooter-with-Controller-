@@ -11,9 +11,9 @@ const effects = gameContent.effects.list();
 const enemies = gameContent.enemies.list();
 const routedCards = cards.filter(card => card.effectId);
 
-assert.equal(cards.length, 89, 'the exact current card inventory is preserved');
-assert.equal(routedCards.length, 59, 'all 59 non-standard cards resolve through the effect registry');
-assert.equal(effects.length, 59, 'each routed card owns one effect definition');
+assert.equal(cards.length, 93, 'the exact current card inventory is preserved');
+assert.equal(routedCards.length, 63, 'all 63 non-standard cards resolve through the effect registry');
+assert.equal(effects.length, 63, 'each routed card owns one effect definition');
 assert.equal(enemies.length, 29, 'the exact current enemy inventory is preserved');
 assert.equal(new Set(cards.map(card => card.id)).size, cards.length, 'card ids are unique');
 assert.equal(new Set(effects.map(effect => effect.effectId)).size, effects.length, 'effect ids are unique');

@@ -53,8 +53,12 @@ const ARCANA_HANDLER_ROWS = Object.freeze([
   ['ENGULFING-FISSURE','wizardVfxArcana'],
   ['DRAGON-BLAST','wizardVfxArcana'],
   ['SHEARING-CHAIN','wizardVfxArcana'],
+  ['TERRA-RING','wizardVfxArcana'],
+  ['GRASPING-EARTH','wizardVfxArcana'],
   ['TECTONIC-DRILL','wizardVfxArcana'],
   ['ROCK-SOLID-TOMAHAWK','wizardVfxArcana'],
+  ['SHOCK-NOVA','wizardVfxArcana'],
+  ['STAR-BOLT','wizardVfxArcana'],
   ['AQUA-VORTEX','wizardVfxArcana'],
   ['AQUA-BREAKER','wizardVfxArcana'],
 ]);

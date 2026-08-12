@@ -55,10 +55,10 @@ const implemented=entries.filter(entry=>entry.status==='source-first-implemented
 const pending=entries.filter(entry=>entry.status==='not-implemented');
 const legacy=entries.filter(entry=>entry.status==='legacy-replace');
 const replacement=entries.filter(entry=>entry.status==='replacement-in-progress');
-assert.equal(analyzed.length,76,'the 76 source-first analyses must survive the Gate 1 inventory expansion');
-assert.equal(inventoryOnly.length,73,'the four VFX-lab ports must leave 73 inventory-only records');
-assert.equal(improved.length,76,'all 76 analyzed entries must use the improved source-first analysis');
-assert.equal(implemented.length,56,'the ten VFX-lab cards must join the source-first implementation count');
+assert.equal(analyzed.length,80,'the 80 source-first analyses must survive the Gate 1 inventory expansion');
+assert.equal(inventoryOnly.length,69,'the eight additional VFX-lab ports must leave 69 inventory-only records');
+assert.equal(improved.length,80,'all 80 analyzed entries must use the improved source-first analysis');
+assert.equal(implemented.length,60,'the fourteen VFX-lab cards must join the source-first implementation count');
 assert.equal(pending.length,20,'20 source-first analyses must remain implementation-pending');
 assert.deepEqual(legacy,[],'no legacy entry should remain after the Water Prison reanalysis');
 assert.deepEqual(replacement,[],'the completed Dragon Arc design must leave no active replacement queue');
@@ -80,15 +80,15 @@ assert.match(dragonArc?.revisionHistory,/metric-validated deterministic double-h
 assert.match(dragonArc?.revisionHistory,/final visual source comparison remains pending user review/i,'Dragon Arc must leave final visual approval open');
 assert.match(dragonArc?.revisionHistory,/articulated segmented dragon silhouette/i,'Dragon Arc must record the completed visual carrier');
 assert.match(dragonArc?.analysisMarkdown,/Working motion calibration \[INFERENCE/i,'Dragon Arc must keep measured calibration separate from observed evidence');
-assert.match(html,/const CATALOG_REVISION=6/,'the VFX-lab card expansion must bump the stored progress revision');
-assert.match(rail,/const CATALOG_REVISION=6/,'the tools rail must share the VFX-lab catalog revision');
+assert.match(html,/const CATALOG_REVISION=7/,'the VFX-lab card expansion must bump the stored progress revision');
+assert.match(rail,/const CATALOG_REVISION=7/,'the tools rail must share the VFX-lab catalog revision');
 assert.match(html,/payload\.catalogRevision\?\?1/,'progress migration must preserve newer user choices');
 assert.match(html,/const CATALOG_MIGRATIONS=\{2:\{'dragon-arc':\{analysis:true,implementation:true\}\},3:/,'revision two must preserve the Dragon Arc completion migration');
 assert.match(html,/3:Object\.fromEntries\(NEXT_TWENTY_IMPLEMENTED\.map/,'revision three must migrate the next-twenty implementation defaults');
 assert.match(html,/4:Object\.fromEntries\(ARCHETYPE_SAMPLER_IMPLEMENTED\.map/,'revision four must migrate the archetype sampler implementation defaults');
-assert.match(html,/const VFX_LAB_IMPLEMENTED=\['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','tectonic-drill','rock-solid-tomahawk','aqua-vortex','aqua-breaker'\]/,'the checklist must name every VFX-lab card in its migration set');
-assert.match(html,/6:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'revision six must migrate the VFX-lab implementation defaults');
-assert.match(rail,/6:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'the tools rail must migrate the VFX-lab implementation defaults');
+assert.match(html,/const VFX_LAB_IMPLEMENTED=\['flame-breath','searing-crown','ignition-drive','engulfing-fissure','dragon-blast','shearing-chain','terra-ring','grasping-earth','tectonic-drill','rock-solid-tomahawk','shock-nova','star-bolt','aqua-vortex','aqua-breaker'\]/,'the checklist must name every VFX-lab card in its migration set');
+assert.match(html,/7:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'revision seven must migrate the VFX-lab implementation defaults');
+assert.match(rail,/7:Object\.fromEntries\(VFX_LAB_IMPLEMENTED\.map/,'the tools rail must migrate the VFX-lab implementation defaults');
 assert.match(html,/progress=progressFromPayload\(incoming\)/,'imported older progress must receive the same catalog migration as local progress');
 assert.doesNotMatch(html,/for\(const entry of data\.entries\).*?entry\.defaults\.implementation/s,'catalog migration must not overwrite unrelated user checklist choices');
 
@@ -98,7 +98,7 @@ for(const name of ['Bolt Rail','Volt Disc']){
   assert.deepEqual(entry?.defaults,{analysis:true,implementation:true,comparison:false},`${name} completion stages are incorrect`);
 }
 
-for(const name of ['Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain','Tectonic Drill','Rock-Solid Tomahawk','Aqua Vortex','Aqua Breaker']){
+for(const name of ['Flame Breath','Searing Crown','Ignition Drive','Engulfing Fissure','Dragon Blast','Shearing Chain','Terra Ring','Grasping Earth','Tectonic Drill','Rock-Solid Tomahawk','Shock Nova','Star Bolt','Aqua Vortex','Aqua Breaker']){
   const entry=entries.find(item=>item.name===name);
   assert.equal(entry?.lineage,'source-first',`${name} must be labeled as a native source-first card`);
   assert.equal(entry?.status,'source-first-implemented',`${name} must show as implemented in the Arcana preview`);

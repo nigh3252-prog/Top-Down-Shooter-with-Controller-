@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source=await readFile(new URL('../src/wizard-vfx-arcana-source-port.js',import.meta.url),'utf8');
+const lightning=await readFile(new URL('../src/wizard-lightning-arcana-source-port.js',import.meta.url),'utf8');
+const earth=await readFile(new URL('../src/wizard-earth-arcana-source-port.js',import.meta.url),'utf8');
 const runtime=await readFile(new URL('../src/wizard-vfx-arcana-runtime.js',import.meta.url),'utf8');
 const cards=await readFile(new URL('../src/wizard-vfx-arcana-cards.js',import.meta.url),'utf8');
 
@@ -43,6 +45,32 @@ for(const id of [
   'AQUA-VORTEX','AQUA-BREAKER','IGNITION-DRIVE','ENGULFING-FISSURE','TECTONIC-DRILL',
   'ROCK-SOLID-TOMAHAWK','FLAME-BREATH','SEARING-CROWN','DRAGON-BLAST','SHEARING-CHAIN',
 ])assert.match(runtime,new RegExp(`createSourceVisual\\('${id}'`),`${id} must use the copied source class`);
+
+for(const marker of [
+  /const TUNE = \{/,
+  /class StarBolt\s*\{/,
+  /class NovaCharge\s*\{/,
+  /class ShockNova\s*\{/,
+  /function applyShock\(/,
+  /onDischarge\(\{dummy, damage:dmg\}\)/,
+  /function createWizardLightningSourcePort\(/,
+])assert.match(lightning,marker,`lightning source port must retain ${marker}`);
+
+for(const marker of [
+  /const CFG = \{/,
+  /function castTerraRing\(/,
+  /function beginGraspHold\(/,
+  /function releaseGrasp\(/,
+  /function buildFist\(/,
+  /function createWizardEarthArcanaSourcePort\(/,
+])assert.match(earth,marker,`earth source port must retain ${marker}`);
+
+for(const id of ['TERRA-RING','GRASPING-EARTH','SHOCK-NOVA','STAR-BOLT'])
+  assert.match(runtime,new RegExp(`createStandaloneSource\\('${id}'`),`${id} must use its exact standalone source port`);
+assert.match(runtime,/createWizardLightningSourcePort/);
+assert.match(runtime,/createWizardEarthArcanaSourcePort/);
+assert.match(runtime,/standaloneSource:true/);
+assert.match(runtime,/Arcana Size scales the source visual and collision footprint only/);
 
 assert.match(runtime,/createWizardVfxSourcePort/);
 assert.match(runtime,/function updateSourceVisual\(effect,system\)/);

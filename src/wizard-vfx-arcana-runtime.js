@@ -6,6 +6,8 @@ import {
 import { getArenaRuntimeConfig } from './arena-runtime-context.js';
 import { dashDistance } from './basic-dash-logic.js';
 import { createWizardVfxSourcePort } from './wizard-vfx-arcana-source-port.js';
+import { createWizardLightningSourcePort } from './wizard-lightning-arcana-source-port.js';
+import { createWizardEarthArcanaSourcePort } from './wizard-earth-arcana-source-port.js';
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const sat=value=>clamp(Number(value)||0,0,1);
@@ -16,6 +18,7 @@ const easeOut=value=>1-Math.pow(1-sat(value),3);
 const VFX_IDS=Object.freeze(new Set([
   'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST',
   'SHEARING-CHAIN','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','AQUA-VORTEX','AQUA-BREAKER',
+  'TERRA-RING','GRASPING-EARTH','SHOCK-NOVA','STAR-BOLT',
 ]));
 
 // The copied Shearing Chain source moves its caster from local X -4.2 to
@@ -35,6 +38,10 @@ export const WIZARD_VFX_ARCANA_SPECS=Object.freeze({
   'ROCK-SOLID-TOMAHAWK':Object.freeze({life:2.10,damage:15}),
   'AQUA-VORTEX':Object.freeze({life:.80,damage:12,ticks:1}),
   'AQUA-BREAKER':Object.freeze({life:3.50,charge:1.90,entryDamage:15,passDamage:10,finisherDamage:35}),
+  'TERRA-RING':Object.freeze({life:2.60,damage:15,hits:5}),
+  'GRASPING-EARTH':Object.freeze({life:5.40,impactDamage:10,tickDamage:3,ticks:5,finisherDamage:25}),
+  'SHOCK-NOVA':Object.freeze({life:5.60,charge:1.43,radius:2.10,damage:12}),
+  'STAR-BOLT':Object.freeze({life:4.10,damage:8,speed:20,range:9}),
 });
 
 function isEnemyLabRuntime(){
@@ -152,7 +159,10 @@ export function installWizardVfxArcanaRuntime({
   const add=effect=>{state.effects.push(effect);return effect;};
   function remove(effect){
     effect.onRemove?.();
-    if(effect.source)sourcePort.dispose(effect.source);
+    if(effect.source){
+      if(effect.standaloneSource)effect.source.dispose?.();
+      else sourcePort.dispose(effect.source);
+    }
     if(effect.mesh)disposeObject(effect.mesh);
     for(const mesh of effect.meshes||[])disposeObject(mesh);
     for(const impact of effect.impacts||[])disposeObject(impact.mesh||impact);
@@ -165,7 +175,7 @@ export function installWizardVfxArcanaRuntime({
   const fallbackCameraQuaternion=new THREE.Quaternion();
   const sourceWorldQuaternion=new THREE.Quaternion();
   const sourceLocalCameraQuaternion=new THREE.Quaternion();
-  function sourceAnchor(frame,casterOffset,size){
+  function sourceAnchor(frame,casterOffset,size,applyScale=true){
     const anchor=new THREE.Group();
     anchor.position.set(
       frame.x-frame.forward.x*casterOffset*size,
@@ -175,6 +185,7 @@ export function installWizardVfxArcanaRuntime({
     // The lab authors every effect along local +X; rotate that axis onto the
     // game aim vector without changing any source geometry or choreography.
     anchor.rotation.y=Math.atan2(-frame.forward.z,frame.forward.x);
+    if(applyScale)anchor.scale.setScalar(size);
     scene.add(anchor);
     return anchor;
   }
@@ -207,7 +218,6 @@ export function installWizardVfxArcanaRuntime({
   }
   function createSourceVisual(id,frame,size,casterOffset=0){
     const anchor=sourceAnchor(frame,casterOffset,size);
-    anchor.scale.setScalar(size);
     const source=sourcePort.create(id,anchor);
     return{anchor,source};
   }
@@ -231,6 +241,87 @@ export function installWizardVfxArcanaRuntime({
       ? sourceLocalCameraQuaternion.copy(sourceWorldQuaternion).invert().multiply(cameraQuaternion)
       : cameraQuaternion;
     sourcePort.update(effect.source,effect.age,localCameraQuaternion,{anchor:effect.mesh});
+  }
+  function createStandaloneSource(id,frame,size){
+    // Arcana Size scales the source visual and collision footprint only; source
+    // damage, speed, range, timing, knockback, and cooldown stay unchanged.
+    const anchor=sourceAnchor(frame,0,1,false);
+    const factory=id==='STAR-BOLT'||id==='SHOCK-NOVA'
+      ?createWizardLightningSourcePort
+      :createWizardEarthArcanaSourcePort;
+    const source=factory({THREE,scene,camera,parent:anchor,size});
+    if(!source.cast(id)){
+      source.dispose?.();
+      anchor.parent?.remove(anchor);
+      return null;
+    }
+    return{anchor,source};
+  }
+  function updateStandaloneSource(effect,system,dt){
+    if(!effect.source)return;
+    const items=aliveEnemies(system).map(enemy=>{
+      const target=sourceTarget(enemy,effect);
+      return{enemy,x:target.position.x,z:target.position.z};
+    });
+    effect.source.syncTargets(items);
+    const sourceRoot=effect.source.root;
+    effect.mesh?.updateMatrixWorld?.(true);
+    sourceRoot.updateMatrixWorld?.(true);
+    sourceRoot.getWorldQuaternion?.(sourceWorldQuaternion);
+    const cameraQuaternion=camera?.quaternion||fallbackCameraQuaternion;
+    const localCameraQuaternion=sourceRoot.getWorldQuaternion
+      ? sourceLocalCameraQuaternion.copy(sourceWorldQuaternion).invert().multiply(cameraQuaternion)
+      : cameraQuaternion;
+    const sourceId=effect.arcanaId;
+    if(sourceId==='STAR-BOLT'||sourceId==='SHOCK-NOVA'){
+      effect.source.setCallbacks({
+        onShock:({dummy,stacks})=>{
+          const enemy=dummy?.enemy;
+          if(!enemy||Number(enemy.hp)<=0)return;
+          const amount=Number(stacks)>1.5?8:12;
+          damageEnemy(system,enemy,amount,{x:0,z:0},{
+            sourceArcana:sourceId,
+            starBolt:sourceId==='STAR-BOLT',
+            shockNova:sourceId==='SHOCK-NOVA',
+          });
+          applyStatus(system,enemy,'shock',Math.max(.1,Number(dummy?.userData?.shockT)||3.2),{source:sourceId.toLowerCase()});
+        },
+        onDischarge:({dummy,damage})=>{
+          const enemy=dummy?.enemy;
+          if(!enemy||Number(enemy.hp)<=0)return;
+          damageEnemy(system,enemy,damage,{x:0,z:0},{sourceArcana:sourceId,shockDischarge:true});
+        },
+        onPopup:()=>{},
+      });
+    }else{
+      effect.source.setCallbacks({
+        onHit:({enemy,damage,from,knock,dummy,popupOnly})=>{
+          if(popupOnly||!enemy||Number(enemy.hp)<=0)return;
+          const localFrom=from&&Number.isFinite(from.x)&&Number.isFinite(from.y)?from:null;
+          let localKnock={x:0,z:0};
+          if(localFrom&&Number(knock)>0){
+            const dx=(Number(dummy?.pos?.x)||0)-localFrom.x;
+            const dz=(Number(dummy?.pos?.y)||0)-localFrom.y;
+            const len=Math.hypot(dx,dz)||1;
+            localKnock={x:dx/len*Number(knock),z:dz/len*Number(knock)};
+          }
+          const worldKnock={
+            x:localKnock.x*effect.frame.forward.x+localKnock.z*effect.frame.right.x,
+            z:localKnock.x*effect.frame.forward.z+localKnock.z*effect.frame.right.z,
+          };
+          damageEnemy(system,enemy,damage,worldKnock,{
+            sourceArcana:sourceId,
+            terraRing:sourceId==='TERRA-RING',
+            graspingEarth:sourceId==='GRASPING-EARTH',
+          });
+        },
+        onGrab:({target})=>{
+          const enemy=target?.enemy;
+          if(enemy&&Number(enemy.hp)>0)applyStatus(system,enemy,'stun',3.2,{source:'graspingEarth'});
+        },
+      });
+    }
+    effect.source.update(dt,localCameraQuaternion);
   }
   // Source-class hit stars, foam, and debris are rendered by the copied lab
   // implementation. There is deliberately no second approximate impact mesh.
@@ -489,6 +580,46 @@ export function installWizardVfxArcanaRuntime({
     updateImpacts(effect,dt);if(effect.age>=effect.life)remove(effect);
   }
 
+  function startTerraRing(){
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('TERRA-RING',frame,size);
+    if(!visual)return null;
+    return add({type:'terraRing',arcanaId:'TERRA-RING',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['TERRA-RING'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+  }
+  function updateTerraRing(effect,dt,system){
+    advance(effect,dt);updateStandaloneSource(effect,system,dt);
+    if(effect.age>=effect.life)remove(effect);
+  }
+
+  function startGraspingEarth(){
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('GRASPING-EARTH',frame,size);
+    if(!visual)return null;
+    return add({type:'graspingEarth',arcanaId:'GRASPING-EARTH',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['GRASPING-EARTH'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+  }
+  function updateGraspingEarth(effect,dt,system){
+    advance(effect,dt);updateStandaloneSource(effect,system,dt);
+    if(effect.age>=effect.life)remove(effect);
+  }
+
+  function startShockNova(){
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('SHOCK-NOVA',frame,size);
+    if(!visual)return null;
+    return add({type:'shockNova',arcanaId:'SHOCK-NOVA',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['SHOCK-NOVA'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+  }
+  function updateShockNova(effect,dt,system){
+    advance(effect,dt);updateStandaloneSource(effect,system,dt);
+    if(effect.age>=effect.life)remove(effect);
+  }
+
+  function startStarBolt(){
+    const frame=playerFrame(getPlayer),size=currentSize(),visual=createStandaloneSource('STAR-BOLT',frame,size);
+    if(!visual)return null;
+    return add({type:'starBolt',arcanaId:'STAR-BOLT',age:0,previousAge:0,life:WIZARD_VFX_ARCANA_SPECS['STAR-BOLT'].life,frame,size,mesh:visual.anchor,source:visual.source,standaloneSource:true});
+  }
+  function updateStarBolt(effect,dt,system){
+    advance(effect,dt);updateStandaloneSource(effect,system,dt);
+    if(effect.age>=effect.life)remove(effect);
+  }
+
   function cast(card){
     const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();if(!VFX_IDS.has(id))return false;
     state.castSerial++;state.lastCast={serial:state.castSerial,cardId:card?.id||`WOL-${id}`,arcanaId:id};
@@ -502,6 +633,10 @@ export function installWizardVfxArcanaRuntime({
     else if(id==='ROCK-SOLID-TOMAHAWK')startTomahawk();
     else if(id==='AQUA-VORTEX')startAquaVortex();
     else if(id==='AQUA-BREAKER')startAquaBreaker();
+    else if(id==='TERRA-RING'&&!startTerraRing())return false;
+    else if(id==='GRASPING-EARTH'&&!startGraspingEarth())return false;
+    else if(id==='SHOCK-NOVA'&&!startShockNova())return false;
+    else if(id==='STAR-BOLT'&&!startStarBolt())return false;
     if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('wizard-arcana:cast',{detail:{card,serial:state.castSerial,vfxLabPort:true}}));
     return true;
   }
@@ -520,6 +655,10 @@ export function installWizardVfxArcanaRuntime({
       else if(effect.type==='rockSolidTomahawk')updateTomahawk(effect,frameDt,system);
       else if(effect.type==='aquaVortex')updateAquaVortex(effect,frameDt,system);
       else if(effect.type==='aquaBreaker')updateAquaBreaker(effect,frameDt,system);
+      else if(effect.type==='terraRing')updateTerraRing(effect,frameDt,system);
+      else if(effect.type==='graspingEarth')updateGraspingEarth(effect,frameDt,system);
+      else if(effect.type==='shockNova')updateShockNova(effect,frameDt,system);
+      else if(effect.type==='starBolt')updateStarBolt(effect,frameDt,system);
     }
   }
   function snapshot(){return state.effects.map(effect=>({type:effect.type,arcanaId:effect.arcanaId,age:Number(effect.age.toFixed(4)),life:effect.life}));}

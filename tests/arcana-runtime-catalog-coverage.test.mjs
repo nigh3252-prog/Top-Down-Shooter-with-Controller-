@@ -24,17 +24,18 @@ const families=Object.freeze([
   Object.freeze({installer:'installWizardArcaneTypesRuntime',file:'wizard-arcane-types-runtime.js',runtimeHandlerId:'wizardArcaneTypes',ids:['CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION']}),
   Object.freeze({installer:'installWizardVfxArcanaRuntime',file:'wizard-vfx-arcana-runtime.js',runtimeHandlerId:'wizardVfxArcana',ids:[
     'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST','SHEARING-CHAIN',
-    'TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','AQUA-VORTEX','AQUA-BREAKER',
+    'TERRA-RING','GRASPING-EARTH','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','SHOCK-NOVA','STAR-BOLT',
+    'AQUA-VORTEX','AQUA-BREAKER',
   ]}),
 ]);
 
 const catalogIds=WIZARD_ARCANA_CATALOG.map(card=>card.arcanaId).sort();
 const coveredIds=families.flatMap(family=>family.ids).sort();
-assert.equal(WIZARD_ARCANA_CATALOG.length,56);
-assert.equal(new Set(coveredIds).size,56,'runtime ownership must not duplicate an Arcana ID');
-assert.deepEqual(coveredIds,catalogIds,'all 56 canonical Arcana must have one full-arena runtime owner');
+assert.equal(WIZARD_ARCANA_CATALOG.length,60);
+assert.equal(new Set(coveredIds).size,60,'runtime ownership must not duplicate an Arcana ID');
+assert.deepEqual(coveredIds,catalogIds,'all 60 canonical Arcana must have one full-arena runtime owner');
 assert.equal(families.find(family=>family.ids.includes('HOMING-FLARES'))?.installer,'installWizardRebuiltArcanaRuntime');
-assert.equal(EFFECT_DEFINITIONS.length,59);
+assert.equal(EFFECT_DEFINITIONS.length,63);
 assert.equal(RUNTIME_HANDLER_IDS.length,15);
 for(const family of families)for(const id of family.ids){
   const definition=ARCANA_EFFECT_DEFINITIONS.find(entry=>entry.arcanaId===id);
@@ -70,4 +71,4 @@ assert.match(profileSource,/arcanaSize:clampArcanaSize/);
 assert.match(profileSource,/writeArcanaTweaks\(/);
 assert.match(profileSource,/profile\.arcanaSize===draft\.arcanaSize/);
 
-console.log('All 56 Arcana runtime families and the shared size setting are covered');
+console.log('All 60 Arcana runtime families and the shared size setting are covered');

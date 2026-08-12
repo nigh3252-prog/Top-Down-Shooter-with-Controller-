@@ -14,15 +14,15 @@ import {
 } from '../src/arena-ability-catalog.js';
 
 assert.equal(STANCE_CARDS.length,30);
-assert.equal(WIZARD_ARCANA_CATALOG.length,56);
-assert.equal(ARENA_ABILITY_CATALOG.length,89);
-assert.equal(ARENA_ABILITY_CARDS.length,89);
-assert.equal(new Set(ARENA_ABILITY_CATALOG.map(entry=>entry.id)).size,89);
+assert.equal(WIZARD_ARCANA_CATALOG.length,60);
+assert.equal(ARENA_ABILITY_CATALOG.length,93);
+assert.equal(ARENA_ABILITY_CARDS.length,93);
+assert.equal(new Set(ARENA_ABILITY_CATALOG.map(entry=>entry.id)).size,93);
 assert.deepEqual(ARENA_ABILITY_FAMILIES,['STANCES','SPECIAL STANCES','ARCANA','ABILITIES','MODIFIERS']);
 assert.deepEqual(ARENA_ABILITY_COUNTS,{
   STANCES:30,
   'SPECIAL STANCES':1,
-  ARCANA:56,
+  ARCANA:60,
   ABILITIES:1,
   MODIFIERS:1,
 });
@@ -51,4 +51,4 @@ assert.deepEqual(normalizeArenaAbilityIds(requested),[
   BLOOD_SLASH_CARD.id,
 ]);
 
-console.log('Arena ability catalog: 89 canonical cards');
+console.log('Arena ability catalog: 93 canonical cards');
