@@ -29,3 +29,16 @@ The checklist is the canonical working reference. The Markdown in
 
 Do not implement an arcana directly from an initial-pass summary when the
 checklist marks it **legacy first-pass prototype — replacement required**.
+
+## Playable source trace
+
+[`tools/Arcana Lab - Raging Inferno - Fire Wall.html`](../../tools/Arcana%20Lab%20-%20Raging%20Inferno%20-%20Fire%20Wall.html)
+is a standalone, phone-first three.js lab that implements two of these
+Arcana straight from the showcase capture and the notes above:
+
+- **48 Raging Inferno** — showcase window 342.0–353.0 s (`09-fire-standards-3.md`)
+- **50 Fire Wall** — showcase window 357.0–363.0 s (`10-fire-standards-4.md`)
+
+Everything is inlined, so the file runs from `file://` with no network. Its
+source panel carries the recipes and the acceptance tests from those notes,
+and ticks each test off as the running lab satisfies it.
