@@ -1012,7 +1012,7 @@ export function createWizardCuratedBasicSourcePort(options = {}) {
     };
   }
 
-  return { cast, update, reset, dispose, snapshot };
+  return { root, cast, update, reset, dispose, snapshot };
 }
 
 export { ARCANA as WIZARD_CURATED_BASIC_ARCANA, TIMING as WIZARD_CURATED_BASIC_TIMING };

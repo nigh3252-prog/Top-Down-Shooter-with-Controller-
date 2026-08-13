@@ -1154,5 +1154,5 @@ export function createWizardCuratedDashSourcePort(options = {}) {
     TEX_SPARK?.dispose?.();
   }
 
-  return { cast, update, reset, dispose, snapshot };
+  return { root, cast, update, reset, dispose, snapshot };
 }

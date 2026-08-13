@@ -99,6 +99,20 @@ function playerFrame(getPlayer){
   };
 }
 
+// Curated demos author their particles in world coordinates, then Saturn
+// applies Arcana Size on the source root. Scaling that root around world zero
+// also scales the caster's world position, visibly pulling the whole effect
+// away from a player who is not standing at (0, 0). Translate the source root
+// so its scale pivot is the caster instead: offset + scale * caster = caster.
+export function curatedPlayerCenteredRootOffset(frame,scale){
+  const sourceScale=Math.max(.001,Number(scale)||1);
+  const inversePivot=1-sourceScale;
+  return{
+    x:inversePivot*(Number(frame?.x)||0)||0,
+    z:inversePivot*(Number(frame?.z)||0)||0,
+  };
+}
+
 function enemyRadius(enemy,system){
   return Math.max(.42,(Number(enemy?.radius)||1)*(Number(system?.heightScale)||1)*.72);
 }
@@ -258,16 +272,26 @@ export function installWizardVfxArcanaRuntime({
       startDashMotion(options={}){
         const from=options.from,to=options.to;
         const distance=from&&to?Math.hypot((Number(to.x)||0)-(Number(from.x)||0),(Number(to.z)||0)-(Number(from.z)||0)):dashDistance();
-        return startDashMotion?.({...options,direction:options.direction,distanceMultiplier:distance/dashDistance(),grantIframes:false,applyDodgeCooldown:false});
+        return startDashMotion?.({...options,direction:options.direction,distanceMultiplier:distance/dashDistance()*currentSize(),grantIframes:false,applyDodgeCooldown:false});
       },
       translatePlayer,
     });
     if(!port||typeof port.cast!=='function')return null;
+    port.saturnSourceScale=currentSize();
     curatedPorts.set(family,port);return port;
+  }
+  function alignCuratedPortToPlayer(port,frame){
+    const root=port?.root;if(!root?.position)return;
+    const pivot=curatedPlayerCenteredRootOffset(frame,port.saturnSourceScale);
+    root.position.x=pivot.x;
+    root.position.z=pivot.z;
+    root.userData={...(root.userData||{}),saturnPlayerCenteredScalePivot:{playerX:frame.x,playerZ:frame.z,scale:port.saturnSourceScale}};
   }
   function castCurated(id){
     const family=CURATED_SOURCE_FAMILY.get(id),port=ensureCuratedPort(family);if(!port)return false;
-    const played=port.cast(id,curatedContext());
+    const context=curatedContext();
+    alignCuratedPortToPlayer(port,{x:context.origin.x,z:context.origin.z});
+    const played=port.cast(id,context);
     if(played&&CURATED_DASH_IDS.has(id))state.curatedDashTime=Math.max(state.curatedDashTime,(id==='GUST-BURST'||id==='RAZOR-BURST') ? .22 : .17);
     return played!==false;
   }
@@ -775,7 +799,10 @@ export function installWizardVfxArcanaRuntime({
   }
   function snapshot(){
     const effects=state.effects.map(effect=>({type:effect.type,arcanaId:effect.arcanaId,age:Number(effect.age.toFixed(4)),life:effect.life}));
-    const curated=Object.fromEntries([...curatedPorts.entries()].map(([family,port])=>[family,port.snapshot?.()??null]));
+    const curated=Object.fromEntries([...curatedPorts.entries()].map(([family,port])=>[family,{
+      ...(port.snapshot?.()??{}),
+      saturnRoot:{x:Number(port.root?.position?.x)||0,z:Number(port.root?.position?.z)||0,scale:port.saturnSourceScale},
+    }]));
     return{effects,curated,curatedDashTime:state.curatedDashTime};
   }
 

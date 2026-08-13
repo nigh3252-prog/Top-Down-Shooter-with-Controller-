@@ -523,5 +523,5 @@ export function createWizardCuratedEarthProjectileSourcePort(options = {}) {
   // these two authored Earth effects do not request dash motion themselves.
   void startDashMotion;
 
-  return { cast, update, reset, dispose, snapshot };
+  return { root, cast, update, reset, dispose, snapshot };
 }
