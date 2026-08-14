@@ -13,7 +13,7 @@ import {
 } from '../src/enemy-lab-working-roster.js';
 
 const catalogIds=ARENA_ENEMY_CATALOG.map(enemy=>enemy.id);
-assert.equal(ARENA_ENEMY_CATALOG.length,29);
+assert.equal(ARENA_ENEMY_CATALOG.length,30);
 assert.deepEqual(ARENA_ENEMY_FAMILIES,['GOBLINS','FUSION','FLARE','HADES']);
 assert.equal(new Set(catalogIds).size,catalogIds.length);
 assert.equal(ARENA_ENEMY_CATALOG.find(enemy=>enemy.id==='lion')?.arenaStatus,'lab');

@@ -1,6 +1,7 @@
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
   <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
+  <div id="trialBadge">LONGSWORD · RAT STEP · AUTONOMOUS</div>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>

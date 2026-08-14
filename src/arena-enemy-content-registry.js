@@ -43,6 +43,7 @@ export function normalizeArenaEnemyStatus(value, fallback = 'candidate') {
 export const normalizeArenaStatus = normalizeArenaEnemyStatus;
 
 const ORIGINAL_METADATA = Object.freeze({
+  trialDot: { label:'Trial Dot', role:'trial pursuer', tags:['trial','swarm','pursuer'], encounterCost:2, maxCount:12, introductionDepth:1, arenaStatus:'lab' },
   grunt: { label: 'Goblin Grunt', role: 'frontliner', tags: ['frontline'], encounterCost: 5, maxCount: 4, introductionDepth: 1 },
   dagger: { label: 'Goblin Dagger', role: 'flanker', tags: ['mobile', 'close'], encounterCost: 5, maxCount: 4, introductionDepth: 2 },
   mace: { label: 'Goblin Mace', role: 'anchor', tags: ['frontline', 'anchor'], encounterCost: 10, maxCount: 4, introductionDepth: 3 },
@@ -182,6 +183,7 @@ const originalRecords = Object.entries(ORIGINAL_METADATA).map(([id, metadata]) =
     role: metadata.role,
     tags: metadata.tags,
     encounter: metadata,
+    arenaStatus: metadata.arenaStatus,
     attackLibrary: ORIGINAL_ENEMY_ATTACKS,
     attackIds: source?.attack ? [source.attack] : [],
   });

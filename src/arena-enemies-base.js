@@ -130,6 +130,7 @@ const GOBLIN_WEAPON_SCALE = 1;
 // The retained goblins use the chunky enemy-only weapons from goblin-weapons.js,
 // but drive them with the same authored attacks.js choreography as the player.
 export const ARENA_ENEMY_ARCHETYPES = {
+  trialDot:{ hp:18, radius:.48, height:1.05, speed:4.45, attack:'trialBump', score:4, weapon:null, color:0xd8584d, bellyColor:0xffb48d, armorColor:0x6b1f27, poseScale:1, role:'trial pursuer', trialOnly:true, trialDot:true, turnSpeed:Math.PI*3, rallyMin:99, rallyMax:120 },
   grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00, turnSpeed:Math.PI,       rallyMin:6, rallyMax:11 },
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88, turnSpeed:Math.PI*1.34, rallyMin:5, rallyMax:9 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35, turnSpeed:Math.PI*.62, rallyMin:7, rallyMax:12 },
@@ -141,6 +142,7 @@ const ARCHETYPES = { ...BASE_ARCHETYPES, ...FUSION_ARCHETYPES };
 
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
 const BASE_EATK = {
+  trialBump:    { kind:'melee',  name:'Bump',          range:1.05*S, tokenCost:.55, windup:.48, active:.13, recovery:.40, cooldown:1.25, damage:6, arc:1.35, knock:.22*S },
   slash:        { kind:'melee',  name:'Slash',         range:.78*S,  tokenCost:1.0,  windup:.58, active:.16, recovery:.50, cooldown:1.45, damage:10, arc:1.1, knock:.5*S },
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
@@ -336,7 +338,14 @@ export function createArenaEnemySystem({
     const root = new THREE.Group(); root.name = `${kind} arena enemy`;
     const weaponDef = a.weapon ? STONE_WEAPONS[a.weapon] : STONE_WEAPONS.mace;
     let visual;
-    if(a.fusion){
+    if(a.trialDot){
+      const torsoRoot=new THREE.Group(),weaponRigRoot=new THREE.Group(),weaponRoot=new THREE.Group();
+      const trialCore=new THREE.Mesh(new THREE.DodecahedronGeometry(a.radius,1),bodyMats[kind]);
+      const trialHalo=new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.28,.055,6,24),mats.windup);
+      torsoRoot.add(trialCore);weaponRigRoot.add(weaponRoot);root.add(torsoRoot,weaponRigRoot,trialHalo);
+      trialCore.position.y=a.height*.62;trialHalo.position.y=.07;trialHalo.rotation.x=-Math.PI/2;
+      visual={trialDot:true,trialCore,trialHalo,torsoRoot,weaponRigRoot,weaponRoot};
+    } else if(a.fusion){
       const fusionVisual = fusionRig.create(kind);
       root.add(fusionVisual.model.group);
       visual = { fusionVisual };
@@ -366,7 +375,7 @@ export function createArenaEnemySystem({
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       wizardFaction:'hostile',wizardStableId:`${systemKey}:${String(nextId-1).padStart(4,'0')}`,
       hp, maxHp:hp, speed:a.speed, stop:useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
-      fusion:isFusionEnemy(kind) || !!a.fusion, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
+      fusion:isFusionEnemy(kind) || !!a.fusion, trialDot:!!a.trialDot, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
       visualScale:a.visualScale || 1, targetScale:a.targetScale || 1, currentTargetScale:a.targetScale || 1,
       collisionScale:a.collisionScale || 1, separationScale:a.separationScale || a.collisionScale || 1,
       attackOriginForward:a.attackOriginForward || 0, headCollisionRadius:a.headCollisionRadius || 0,
@@ -853,12 +862,21 @@ export function createArenaEnemySystem({
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
   function updateEnemyVisual(e, dt){
-    if(e.fusion){
+    if(e.trialDot){
+      e.root.rotation.y=Math.atan2(e.facing.x,e.facing.z);
+      const pulse=1+Math.sin(time*5+e.bobPhase)*.08;
+      const scale=tuning.heightScale*e.visualScale;
+      e.trialCore.position.y=e.height*.62+Math.sin(time*4+e.bobPhase)*.11;
+      e.trialCore.rotation.x+=dt*1.8;e.trialCore.rotation.y+=dt*2.4;
+      e.trialCore.scale.setScalar(scale*pulse);
+      e.trialHalo.scale.setScalar(scale*(e.state==='windup'?1.15:1));
+      e.trialHalo.material.opacity=e.state==='windup'?.9:.34;e.trialHalo.material.transparent=true;
+    } else if(e.fusion){
       e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
       fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale * e.visualScale);
     } else if(e.useRealCombat) applyRealCombatPose(e);
     else applyPunchPose(e);
-    if(!e.fusion) applyRallyPose(e);
+    if(!e.fusion&&!e.trialDot) applyRallyPose(e);
     e.root.position.set(e.x, e.yOff + e.rootLift + (Number(e.wizardAirborneOffset)||0), e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
@@ -866,6 +884,7 @@ export function createArenaEnemySystem({
     e.root.scale.set(flashScale * (1 + sq*.45), flashScale * (1 - sq*.36), flashScale * (1 + sq*.45));
     e.root.rotation.z = e.spin * .12;
     if(e.fusion) rig.updateSharedEnemyMarkers(e, e.height * tuning.heightScale * e.targetScale, mats);
+    else if(e.trialDot){e.telegraph.visible=e.state==='windup';e.telegraph.scale.setScalar(tuning.heightScale*.72);e.tokenRing.visible=!!e.token;}
     else rig.applyGoblinVisual(e, tuning.heightScale, mats);
     const f = clamp(e.hp/e.maxHp, 0, 1); e.bar.scale.x = f; e.bar.position.x = -(1 - f)*e.radius*.85;
     e.bar.lookAt(lastPlayer.x ?? 0, 2, lastPlayer.z ?? 0);
@@ -875,7 +894,7 @@ export function createArenaEnemySystem({
   // Pure strains remain the default; the picker can switch the wave to the
   // retained goblin roster or focus on one pure strain.
   const MIX = FUSION_ENEMY_IDS;
-  const GOBLIN_MIX = Object.keys(BASE_ARCHETYPES);
+  const GOBLIN_MIX = Object.keys(BASE_ARCHETYPES).filter(kind=>!BASE_ARCHETYPES[kind].trialOnly);
   function chooseSpawnKind(i){
     if(tuning.spawnKind === 'mixed') return MIX[(wave - 1 + i) % MIX.length];
     if(tuning.spawnKind === 'goblins') return GOBLIN_MIX[(wave - 1 + i) % GOBLIN_MIX.length];
@@ -917,7 +936,9 @@ export function createArenaEnemySystem({
       if(factionService?.charmedEnemy===e)factionService.releaseCharm(e);
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
-      if(e.fusion){
+      if(e.trialDot){
+        if(e.trialCore)rig.addDeathPieceFromObject(worldRoot,deathPieces,e.trialCore,null,e.trialCore.material,knock,1.1+power*.25);
+      }else if(e.fusion){
         fusionRig.shatterMeshes(e.fusionVisual).forEach((mesh, i) => {
           rig.addDeathPieceFromObject(worldRoot, deathPieces, mesh, null, mesh.material, knock, (1 + i*.025) * (1.05 + power*.35));
         });
@@ -1037,7 +1058,7 @@ export function createArenaEnemySystem({
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },
     setIdleRangeScale:(v)=>{ tuning.idleRangeScale = clamp(Number(v) || 3, 1, 6); director.settings.battleCircleRadius = 1.6*S*(tuning.idleRangeScale/3); director.getDebugState().slots.forEach(sl => { sl.radius = director.settings.battleCircleRadius; }); },
-    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || kind === 'goblins' || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
+    setSpawnKind:(kind)=>{ tuning.spawnKind = kind === 'mixed' || kind === 'goblins' || Object.hasOwn(BASE_ARCHETYPES,kind) || FUSION_ENEMY_IDS.includes(kind) ? kind : 'mixed'; },
     setGoblinColors:()=>{}, setGoblinRigDebug:()=>{}, setSpawnGoblins:()=>{},
     get heightScale(){ return tuning.heightScale; },
     get speedScale(){ return tuning.speedScale; },

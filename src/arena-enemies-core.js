@@ -25,7 +25,7 @@ export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const ORIGINAL_GOBLIN_IDS=new Set(
-  listArenaEnemies({family:'GOBLINS'}).map(enemy=>enemy.id).filter(id=>id!==LUGARU_DUELIST_ID),
+  listArenaEnemies({family:'GOBLINS'}).filter(enemy=>enemy.id!==LUGARU_DUELIST_ID&&!enemy.stats?.trialOnly).map(enemy=>enemy.id),
 );
 
 export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){

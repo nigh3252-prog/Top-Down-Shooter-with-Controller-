@@ -17,13 +17,13 @@ const flag=value=>['1','true','yes','on'].includes(text(value).toLowerCase());
 const readParams=search=>search instanceof URLSearchParams?new URLSearchParams(search):new URLSearchParams(text(search).replace(/^\?/,''));
 
 export function normalizeArenaRuntimeMode(value){
-  return ['enemy-lab','lab'].includes(text(value).toLowerCase())
-    ? ARENA_RUNTIME_MODES.ENEMY_LAB
-    : ARENA_RUNTIME_MODES.ARENA;
+  const requested=text(value).toLowerCase();
+  if(['enemy-lab','lab'].includes(requested))return ARENA_RUNTIME_MODES.ENEMY_LAB;
+  return ARENA_RUNTIME_MODES.ARENA;
 }
 
 export function resolveArenaRuntimeConfig({
-  search='', pathname='', mode, seed, layout, cellSize, tune, enemyLab,
+  search='', pathname='', mode, variant, seed, layout, cellSize, tune, enemyLab,
   storageKeys=ARENA_STORAGE_KEYS,
 }={}){
   const params=readParams(search);
@@ -32,11 +32,15 @@ export function resolveArenaRuntimeConfig({
   const page=text(pathname).split('/').filter(Boolean).at(-1)?.toLowerCase()||'';
   const legacyLab=flag(enemyLab??params.get('enemyLab'))||page==='enemy-lab.html';
   const resolvedMode=explicitMode?normalizeArenaRuntimeMode(explicitMode):(legacyLab?ARENA_RUNTIME_MODES.ENEMY_LAB:ARENA_RUNTIME_MODES.ARENA);
+  const requestedVariant=text(variant||params.get('variant')).toLowerCase();
+  const wardenTrial=['warden-trial','trial','auto-battler','autobattler'].includes(requestedVariant);
   return Object.freeze({
     mode:resolvedMode,
+    variant:wardenTrial?'warden-trial':requestedVariant||null,
     enemyLab:resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB,
-    layout:requestedLayout||(resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'arena':'maze'),
-    seed:text(seed||params.get('seed'))||(resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'enemy-lab-001':'arena-001'),
+    wardenTrial,
+    layout:wardenTrial?'arena':requestedLayout||(resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'arena':'maze'),
+    seed:text(seed||params.get('seed'))||(wardenTrial?'warden-trial-001':resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'enemy-lab-001':'arena-001'),
     cellSize:text(cellSize||params.get('cellSize')).toLowerCase()||null,
     tune:flag(tune??params.get('tune')),
     capture:flag(params.get('capture')),

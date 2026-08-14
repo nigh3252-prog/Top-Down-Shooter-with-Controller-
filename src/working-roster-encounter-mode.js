@@ -10,7 +10,7 @@ import { LUGARU_DUELIST_ID } from './lugaru-duelist.js';
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const baseOriginalIds=Object.freeze(
   ARENA_ENEMY_CATALOG
-    .filter(enemy=>enemy.family==='GOBLINS'&&enemy.id!==LUGARU_DUELIST_ID)
+    .filter(enemy=>enemy.family==='GOBLINS'&&enemy.id!==LUGARU_DUELIST_ID&&!enemy.stats?.trialOnly)
     .map(enemy=>enemy.id)
 );
 const baseOriginalIdSet=new Set(baseOriginalIds);

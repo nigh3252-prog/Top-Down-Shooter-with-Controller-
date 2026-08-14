@@ -4,6 +4,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   /* ---- top bar ---- */
   #topBar{position:fixed;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));z-index:30;display:flex;gap:8px;align-items:stretch;pointer-events:none}
   #topBar button{pointer-events:auto}
+  #trialBadge{display:none;align-items:center;padding:0 11px;border:1px solid rgba(232,160,76,.36);border-radius:6px;background:rgba(10,20,22,.72);color:#f0d8b0;font-size:9px;letter-spacing:.11em;pointer-events:none}
   .tbtn{font-family:inherit;font-size:11px;letter-spacing:.1em;color:#e8a04c;
     background:rgba(18,36,38,.85);border:1px solid #6e3a24;padding:0 12px;border-radius:6px;min-height:36px}
   .tbtn.icon{width:42px;padding:0;font-size:21px;line-height:1;letter-spacing:0}
@@ -159,3 +160,14 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-mode="enemy-lab"] #menuBtn,
   :root[data-arena-mode="enemy-lab"] #panel,
   :root[data-arena-mode="enemy-lab"] #startGate{display:none!important}
+
+  :root[data-arena-variant="warden-trial"] #trialBadge{display:flex}
+  :root[data-arena-variant="warden-trial"] #cardRow,
+  :root[data-arena-variant="warden-trial"] .btnrow,
+  :root[data-arena-variant="warden-trial"] #joyBase,
+  :root[data-arena-variant="warden-trial"] #joyKnob,
+  :root[data-arena-variant="warden-trial"] #panel .controlsHelp{display:none!important}
+  :root[data-arena-variant="warden-trial"] #hud{top:56px}
+  :root[data-arena-variant="warden-trial"] #hpWrap{width:116px;height:7px;background:rgba(10,20,22,.58)}
+  :root[data-arena-variant="warden-trial"] #stWrap{width:116px;height:4px;background:rgba(10,20,22,.48)}
+  @media (max-width:560px){:root[data-arena-variant="warden-trial"] #trialBadge{font-size:8px;padding:0 8px;letter-spacing:.06em}}
