@@ -35,6 +35,7 @@ import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { readArenaStandardSetup } from './arena-standard-setup.js';
 import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { createWardenTrialBrain } from './warden-trial-ai.js';
+import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -110,8 +111,8 @@ function norm2(x,z){ const l=Math.hypot(x,z)||1; return {x:x/l, z:z/l}; }
 function rand(a,b){ return a + Math.random()*(b-a); }
 
 /* ---------- arena-scale constants (weapon-lab world units, ~×4 meters) ---- */
-const ARENA = 18;               // playfield radius
-const HEX_SIZE = 20;
+const ARENA = wardenTrialMode ? WARDEN_TRIAL_SETTINGS.arenaRadius : 18; // playfield radius
+const HEX_SIZE = wardenTrialMode ? WARDEN_TRIAL_SETTINGS.hexSize : 20;
 const PLAYER_RADIUS = 1.05;
 const MAZE_SEED = runtimeConfig.seed || new URLSearchParams(location.search).get('seed') || 'arena-001';
 const PLAYER_SPEED = 8.5;
@@ -123,7 +124,14 @@ const STAMINA = { max:100, start:100, recoverTime:.85, recoverDelay:.08, chargeC
                   costs:{ horizontal:18, vertical:14, stab:10, default:14 }, shuffleTime:2, exhaustFlash:.35 };
 const CHAIN = { comboWindow:.45, finisherWindow:.80, whiffLock:.20, postSecondLightLock:.35 };
 const LUNGE_RATE = 2.8;         // root-motion units/sec × feel lunge during the strike
-const CAM_HEIGHT = wardenTrialMode ? 28 : 20, CAM_BACK = wardenTrialMode ? 24.5 : 17.6;
+const CAMERA_LOOK_HEIGHT = 1.8;
+const CAMERA_LOOK_BACK_OFFSET = -1.4;
+const CAM_HEIGHT = wardenTrialMode
+  ? CAMERA_LOOK_HEIGHT + (28 - CAMERA_LOOK_HEIGHT) * WARDEN_TRIAL_SETTINGS.viewScale
+  : 20;
+const CAM_BACK = wardenTrialMode
+  ? CAMERA_LOOK_BACK_OFFSET + (24.5 - CAMERA_LOOK_BACK_OFFSET) * WARDEN_TRIAL_SETTINGS.viewScale
+  : 17.6;
 const CAPTURE_PARAMS = new URLSearchParams(location.search);
 const ABILITY_CAPTURE_MODE = CAPTURE_PARAMS.get('capture') === '1';
 const ABILITY_CAPTURE_CLEAN = ABILITY_CAPTURE_MODE && CAPTURE_PARAMS.get('clean') === '1';
@@ -145,8 +153,13 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(arenaTheme.worldStyle.palette.background);
-scene.fog = new THREE.Fog(arenaTheme.worldStyle.palette.fog, arenaTheme.worldStyle.fogNear, arenaTheme.worldStyle.fogFar);
-const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, innerWidth/innerHeight, .5, 220);
+const fogDistanceScale=wardenTrialMode?WARDEN_TRIAL_SETTINGS.viewScale:1;
+scene.fog = new THREE.Fog(
+  arenaTheme.worldStyle.palette.fog,
+  arenaTheme.worldStyle.fogNear*fogDistanceScale,
+  arenaTheme.worldStyle.fogFar*fogDistanceScale,
+);
+const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, innerWidth/innerHeight, .5, wardenTrialMode?660:220);
 
 scene.add(new THREE.AmbientLight(0xd8ecff, .5));
 const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi);
@@ -494,6 +507,14 @@ const mazeNavigation = {
   raycastWalls(start, end){ return raycastWalls(start, end, mazeWorld.getCollisionSegments()); },
   randomSpawn(roomId, player){
     if(roomId === null || roomId === undefined) return null;
+    if(wardenTrialMode){
+      const angle=encounterRandom()*Math.PI*2;
+      const radius=lerp(WARDEN_TRIAL_SETTINGS.spawnRadiusMin,WARDEN_TRIAL_SETTINGS.spawnRadiusMax,encounterRandom());
+      return{
+        x:(player?.x??mazeWorld.center.x)+Math.cos(angle)*radius,
+        z:(player?.z??mazeWorld.center.z)+Math.sin(angle)*radius,
+      };
+    }
     let fallback = null;
     for(let attempt=0; attempt<14; attempt++){
       const point = randomPointInRoom(dungeon, roomId, encounterRandom, HEX_SIZE);
@@ -1609,7 +1630,7 @@ function updateCamera(rawDt){
     camFollow.x + shake.x + (Math.random()*2-1)*j + kick.x,
     CAM_HEIGHT - doorPush*3.4 - zk*2.2 + shake.y + (Math.random()*2-1)*j*.4,
     camFollow.z + CAM_BACK - doorPush*5.2 - zk*2.4 + shake.z + (Math.random()*2-1)*j + kick.z);
-  camera.lookAt(camFollow.x+shake.x*.5, 1.8, camFollow.z-1.4+shake.z*.5);
+  camera.lookAt(camFollow.x+shake.x*.5, CAMERA_LOOK_HEIGHT, camFollow.z+CAMERA_LOOK_BACK_OFFSET+shake.z*.5);
 }
 
 /* ---------- main update ---------- */

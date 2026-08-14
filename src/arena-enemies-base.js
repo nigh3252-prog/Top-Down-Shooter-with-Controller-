@@ -15,6 +15,7 @@ import { installGoblinRig } from './goblin-rig.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
 import { FUSION_ARCHETYPES, FUSION_ATTACKS, FUSION_ENEMY_IDS, isFusionEnemy } from './fusion-enemies.js';
 import { installFusionEnemyRig } from './fusion-enemy-rig.js';
+import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
@@ -130,7 +131,7 @@ const GOBLIN_WEAPON_SCALE = 1;
 // The retained goblins use the chunky enemy-only weapons from goblin-weapons.js,
 // but drive them with the same authored attacks.js choreography as the player.
 export const ARENA_ENEMY_ARCHETYPES = {
-  trialDot:{ hp:18, radius:.48, height:1.05, speed:4.45, attack:'trialBump', score:4, weapon:null, color:0xd8584d, bellyColor:0xffb48d, armorColor:0x6b1f27, poseScale:1, role:'trial pursuer', trialOnly:true, trialDot:true, turnSpeed:Math.PI*3, rallyMin:99, rallyMax:120 },
+  trialDot:{ hp:18, radius:WARDEN_TRIAL_SETTINGS.enemyRadius, height:WARDEN_TRIAL_SETTINGS.enemyHeight, speed:4.45, attack:'trialBump', score:4, weapon:null, color:0xd8584d, bellyColor:0xffb48d, armorColor:0x6b1f27, poseScale:1, role:'trial pursuer', trialOnly:true, trialDot:true, turnSpeed:Math.PI*3, rallyMin:99, rallyMax:120 },
   grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00, turnSpeed:Math.PI,       rallyMin:6, rallyMax:11 },
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88, turnSpeed:Math.PI*1.34, rallyMin:5, rallyMax:9 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35, turnSpeed:Math.PI*.62, rallyMin:7, rallyMax:12 },
@@ -340,10 +341,10 @@ export function createArenaEnemySystem({
     let visual;
     if(a.trialDot){
       const torsoRoot=new THREE.Group(),weaponRigRoot=new THREE.Group(),weaponRoot=new THREE.Group();
-      const trialCore=new THREE.Mesh(new THREE.DodecahedronGeometry(a.radius,1),bodyMats[kind]);
+      const trialCore=new THREE.Mesh(new THREE.CylinderGeometry(a.radius*.82,a.radius,a.height,10,1),bodyMats[kind]);
       const trialHalo=new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.28,.055,6,24),mats.windup);
       torsoRoot.add(trialCore);weaponRigRoot.add(weaponRoot);root.add(torsoRoot,weaponRigRoot,trialHalo);
-      trialCore.position.y=a.height*.62;trialHalo.position.y=.07;trialHalo.rotation.x=-Math.PI/2;
+      trialCore.position.y=a.height*.5;trialHalo.position.y=.07;trialHalo.rotation.x=-Math.PI/2;
       visual={trialDot:true,trialCore,trialHalo,torsoRoot,weaponRigRoot,weaponRoot};
     } else if(a.fusion){
       const fusionVisual = fusionRig.create(kind);
@@ -866,9 +867,9 @@ export function createArenaEnemySystem({
       e.root.rotation.y=Math.atan2(e.facing.x,e.facing.z);
       const pulse=1+Math.sin(time*5+e.bobPhase)*.08;
       const scale=tuning.heightScale*e.visualScale;
-      e.trialCore.position.y=e.height*.62+Math.sin(time*4+e.bobPhase)*.11;
-      e.trialCore.rotation.x+=dt*1.8;e.trialCore.rotation.y+=dt*2.4;
-      e.trialCore.scale.setScalar(scale*pulse);
+      e.trialCore.position.y=e.height*.5;
+      e.trialCore.rotation.y+=dt*1.4;
+      e.trialCore.scale.set(scale*pulse,scale,scale*pulse);
       e.trialHalo.scale.setScalar(scale*(e.state==='windup'?1.15:1));
       e.trialHalo.material.opacity=e.state==='windup'?.9:.34;e.trialHalo.material.transparent=true;
     } else if(e.fusion){

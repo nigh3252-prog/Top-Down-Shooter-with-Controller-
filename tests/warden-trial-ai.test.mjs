@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { createWardenTrialBrain, nearestWardenTrialTarget } from '../src/warden-trial-ai.js';
+import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
+
+assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
+assert.ok(WARDEN_TRIAL_SETTINGS.hexSize>=WARDEN_TRIAL_SETTINGS.spawnRadiusMax*6,'the trial hex stays far outside the combat spawn ring');
+assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
 
 const player={x:0,z:0};
 const near={id:'near',x:3,z:0,hp:10,state:'idle'};
