@@ -37,6 +37,11 @@ import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialStageBoundary } from './warden-trial-stage.js';
+import {
+  WARDEN_TRIAL_ENEMY_SET_IDS,
+  configureWardenTrialEnemySet,
+  normalizeWardenTrialEnemySet,
+} from './warden-trial-enemies.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -45,6 +50,7 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   const wardenTrialMode=runtimeConfig.wardenTrial===true||runtimeConfig.variant==='warden-trial';
+  let wardenTrialEnemySet=normalizeWardenTrialEnemySet(StoneSettings.get('wardenTrial.enemySet',WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS));
   const lockedStandard=runtimeConfig.enemyLab||wardenTrialMode?null:readArenaStandardSetup();
   const startupTrace=createArenaStartupTrace({location:globalThis.location});
   const summarizeStandard=standard=>{
@@ -577,6 +583,7 @@ const enemySystem = createArenaEnemySystem({
     announce(progress?.cleared === progress?.total ? 'DUNGEON CLEAR' : `ROOM ${roomId + 1} CLEAR · STRIKE A DOOR`, 1.8);
   }
 });
+function configureWardenTrialWave(){return configureWardenTrialEnemySet(enemySystem,wardenTrialEnemySet);}
 encounterState = createRoomEncounterState(dungeon, {
   onRoomEnter({ roomId, previousRoomId, cleared }){
     resetStartupMilestones(roomId);
@@ -1358,7 +1365,7 @@ function updateWardenTrialAI(dt){
   });
   input.mx=Number(decision.move?.x)||0;input.mz=Number(decision.move?.z)||0;
   if(decision.spawnWave){
-    enemySystem.setSpawnKind('trialDot');enemySystem.setWaveSize(7);enemySystem.startRoomEncounter(activeRoomId);
+    configureWardenTrialWave();enemySystem.startRoomEncounter(activeRoomId);
     announce('NEXT WAVE',.7);return;
   }
   if(decision.action==='light')lightDown();
@@ -1373,6 +1380,7 @@ const panel=document.getElementById('panel');
 const menuBtn=document.getElementById('menuBtn');
 const resumeBtn=document.getElementById('resumeBtn');
 const themeButtons=[...document.querySelectorAll('[data-arena-theme-option]')];
+const trialEnemyButtons=[...document.querySelectorAll('[data-trial-enemy-set]')];
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1388,6 +1396,23 @@ function selectArenaThemeFromMenu(id){
   if(typeof selectArenaTheme!=='function')throw new Error('Arena theme selection API is unavailable.');
   return selectArenaTheme(id,{storage,location});
 }
+function syncTrialEnemyButtons(){
+  trialEnemyButtons.forEach(button=>{
+    const active=button.dataset.trialEnemySet===wardenTrialEnemySet;
+    button.classList.toggle('on',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
+function selectWardenTrialEnemySet(value){
+  if(!wardenTrialMode)return false;
+  wardenTrialEnemySet=normalizeWardenTrialEnemySet(value);
+  StoneSettings.set('wardenTrial.enemySet',wardenTrialEnemySet);
+  syncTrialEnemyButtons();
+  const selected=configureWardenTrialWave();
+  respawn();
+  announce(selected.label,.9);
+  return true;
+}
 function toggleMenu(){
   const opening = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !opening);
@@ -1399,7 +1424,9 @@ function isPaused(){ return !arena.started || arena.paused || !panel.classList.c
 menuBtn.addEventListener('click', toggleMenu);
 resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'))toggleMenu(); });
 themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
+trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialEnemySet(button.dataset.trialEnemySet)));
 syncThemeButtons();
+syncTrialEnemyButtons();
 const startGate=document.getElementById('startGate');
 document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
@@ -2230,7 +2257,7 @@ if(!runtimeConfig.enemyLab){
 if(wardenTrialMode){
   selectWeapon('longsword',{reset:false,persist:false});
   selectStance('S24',{allowAdapted:true});
-  enemySystem.setSpawnKind('trialDot');enemySystem.setWaveSize(7);
+  configureWardenTrialWave();
   enemySystem.setPressureBudget(2);enemySystem.setAggression(.9);
   const title=document.querySelector('#startCard .sgTitle'),hint=document.querySelector('#startCard .sgHint'),start=document.getElementById('startBtn'),pauseTitle=document.querySelector('#panel .pauseTitle');
   if(title)title.textContent='WARDEN TRIAL';

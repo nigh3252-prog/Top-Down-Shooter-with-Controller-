@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { createWardenTrialBrain, nearestWardenTrialTarget } from '../src/warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
 import { createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
+import {
+  WARDEN_TRIAL_ENEMY_SET_IDS,
+  WARDEN_TRIAL_GOBLIN_GROUPS,
+  WARDEN_TRIAL_WAVE_SIZE,
+  configureWardenTrialEnemySet,
+} from '../src/warden-trial-enemies.js';
+import { LUGARU_DUELIST_ID } from '../src/lugaru-duelist.js';
+import { ORIGINAL_MULTI_GROUP_SPAWN_KIND } from '../src/original-encounter-groups.js';
+import { rewardTotemEnabledForRuntime } from '../src/run-draft.js';
+import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
 assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
@@ -15,6 +25,26 @@ assert.equal(stage.contains({x:8,z:0},1),false,'actor radius must remain inside 
 const boundedMove=stage.resolveMovement({x:0,z:0},{x:20,z:-20},1);
 assert.deepEqual({x:boundedMove.x,z:boundedMove.z},{x:7,z:-7},'movement clamps to the fixed screen footprint instead of the visual hex');
 assert.equal(boundedMove.collided,true);
+
+assert.equal(rewardTotemEnabledForRuntime({config:{variant:'warden-trial'}}),false,'Trial clears must not spawn the run reward totem');
+assert.equal(rewardTotemEnabledForRuntime({config:{mode:'arena'}}),true,'ordinary Combat Arena runs keep reward totems');
+assert.match(ARENA_SHELL_HTML,/data-trial-enemy-set="cylinders"/,'the pause menu offers the cylinder wave');
+assert.match(ARENA_SHELL_HTML,/data-trial-enemy-set="goblins-lugaru"/,'the pause menu offers the goblin and Lugaru wave');
+
+const configured={kind:null,waveSize:0,groups:[]};
+const enemySystem={
+  originalSystem:{setWorkingRosterEncounterGroups(groups){configured.groups=groups;}},
+  setSpawnKind(kind){configured.kind=kind;},
+  setWaveSize(value){configured.waveSize=value;},
+};
+configureWardenTrialEnemySet(enemySystem,WARDEN_TRIAL_ENEMY_SET_IDS.GOBLINS_LUGARU);
+assert.equal(configured.kind,ORIGINAL_MULTI_GROUP_SPAWN_KIND);
+assert.equal(configured.waveSize,WARDEN_TRIAL_WAVE_SIZE);
+assert.deepEqual(configured.groups,WARDEN_TRIAL_GOBLIN_GROUPS);
+assert.ok(configured.groups.some(group=>group.spawnKind===LUGARU_DUELIST_ID),'the Trial goblin mix explicitly includes Lugaru');
+assert.deepEqual(new Set(configured.groups.map(group=>group.spawnKind)),new Set(['grunt','dagger','mace','rock','captain',LUGARU_DUELIST_ID]));
+configureWardenTrialEnemySet(enemySystem,WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS);
+assert.equal(configured.kind,'trialDot');
 
 const player={x:0,z:0};
 const near={id:'near',x:3,z:0,hp:10,state:'idle'};

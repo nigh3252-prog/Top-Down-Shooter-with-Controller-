@@ -47,6 +47,13 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="themeChoice" type="button" data-arena-theme-option="akai" aria-pressed="false">AKAI</button>
     </div>
   </section>
+  <section class="pauseSection trialEnemySection" aria-labelledby="trialEnemyTitle">
+    <h2 id="trialEnemyTitle">TRIAL ENEMIES</h2>
+    <div class="trialEnemyGrid" role="group" aria-label="Trial enemy set">
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="cylinders" aria-pressed="false">CYLINDERS</button>
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="goblins-lugaru" aria-pressed="false">GOBLINS + LUGARU</button>
+    </div>
+  </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">
     <h2 id="controlsTitle">CONTROLS</h2>
     <p>MOVE <span>WASD / STICK</span></p>

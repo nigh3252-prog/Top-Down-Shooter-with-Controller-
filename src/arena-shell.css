@@ -93,6 +93,11 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .themeChoice{font-family:inherit;font-size:9px;letter-spacing:.06em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 4px;min-height:38px}
   .themeChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
+  .trialEnemySection{display:none}
+  .trialEnemyGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .trialEnemyChoice{font-family:inherit;font-size:9px;letter-spacing:.06em;line-height:1.25;color:#9fd2c9;
+    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 5px;min-height:42px}
+  .trialEnemyChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
   .controlsHelp p{display:flex;justify-content:space-between;gap:12px;margin:5px 0;color:#7fb8b0;font-size:9px;letter-spacing:.06em}
   .controlsHelp p span{color:#9fd2c9;text-align:right;white-space:nowrap}
   .wide{width:100%;font-family:inherit;font-size:10px;letter-spacing:.12em;color:#e8a04c;
@@ -151,6 +156,8 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .pauseTitle{color:var(--arena-gold)}.pauseSection{border-color:var(--arena-line-soft)}.pauseSection h2{color:var(--arena-subtle)}
   .themeChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
   .themeChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .trialEnemyChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
+  .trialEnemyChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
   .controlsHelp p{color:var(--arena-subtle)}.controlsHelp p span{color:var(--arena-text)}
   .wide{color:var(--arena-gold);background:var(--arena-red-soft);border-color:var(--arena-line-bright)}
   #startCard{background:var(--arena-panel);border-color:var(--arena-line-bright)}#startCard .sgTitle{color:var(--arena-gold)}#startCard .sgHint{color:var(--arena-text)}
@@ -162,6 +169,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-mode="enemy-lab"] #startGate{display:none!important}
 
   :root[data-arena-variant="warden-trial"] #trialBadge{display:flex}
+  :root[data-arena-variant="warden-trial"] #panel .trialEnemySection{display:block}
   :root[data-arena-variant="warden-trial"] #cardRow,
   :root[data-arena-variant="warden-trial"] .btnrow,
   :root[data-arena-variant="warden-trial"] #joyBase,
