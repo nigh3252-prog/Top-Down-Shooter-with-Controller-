@@ -36,6 +36,7 @@ import { readArenaStandardSetup } from './arena-standard-setup.js';
 import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
+import { createWardenTrialStageBoundary } from './warden-trial-stage.js';
 
 import { createArenaControlRegistry } from './arena-control-registry.js';
 import { clearArenaRuntime, provideArenaCaptureController, provideArenaCaptureOptions, provideArenaRuntime, provideArenaRuntimeConfig } from './arena-runtime-context.js';
@@ -111,8 +112,8 @@ function norm2(x,z){ const l=Math.hypot(x,z)||1; return {x:x/l, z:z/l}; }
 function rand(a,b){ return a + Math.random()*(b-a); }
 
 /* ---------- arena-scale constants (weapon-lab world units, ~×4 meters) ---- */
-const ARENA = wardenTrialMode ? WARDEN_TRIAL_SETTINGS.arenaRadius : 18; // playfield radius
-const HEX_SIZE = wardenTrialMode ? WARDEN_TRIAL_SETTINGS.hexSize : 20;
+const ARENA = 18;               // playfield radius
+const HEX_SIZE = 20;
 const PLAYER_RADIUS = 1.05;
 const MAZE_SEED = runtimeConfig.seed || new URLSearchParams(location.search).get('seed') || 'arena-001';
 const PLAYER_SPEED = 8.5;
@@ -187,6 +188,33 @@ let activeRoomId = dungeon.startRoomId;
 let mazeWorld = createMazeWorld({ THREE, maze:dungeon, roomId:activeRoomId, hexSize:HEX_SIZE, wallHeight:3.2, wallThickness:.34, doorWidth:7, theme:arenaTheme });
 worldRoot.add(mazeWorld.group);
 const startPoint = axialToWorld(0, 0, HEX_SIZE);
+if(wardenTrialMode){
+  camera.position.set(startPoint.x,CAM_HEIGHT,startPoint.z+CAM_BACK);
+  camera.lookAt(startPoint.x,CAMERA_LOOK_HEIGHT,startPoint.z+CAMERA_LOOK_BACK_OFFSET);
+  camera.updateMatrixWorld();
+}
+const wardenTrialStageCamera=wardenTrialMode?camera.clone():null;
+const stageProjected=wardenTrialMode?new THREE.Vector3():null;
+const stageRayPoint=wardenTrialMode?new THREE.Vector3():null;
+const stageRayDirection=wardenTrialMode?new THREE.Vector3():null;
+const wardenTrialStage=wardenTrialMode?createWardenTrialStageBoundary({
+  margins:WARDEN_TRIAL_SETTINGS.screenMargins,
+  projectWorldToNdc(point){
+    stageProjected.set(Number(point?.x)||0,0,Number(point?.z)||0).project(wardenTrialStageCamera);
+    return{x:stageProjected.x,y:stageProjected.y};
+  },
+  groundPointFromNdc(point){
+    stageRayPoint.set(Number(point?.x)||0,Number(point?.y)||0,.5).unproject(wardenTrialStageCamera);
+    stageRayDirection.copy(stageRayPoint).sub(wardenTrialStageCamera.position);
+    if(Math.abs(stageRayDirection.y)<1e-7)return null;
+    const distance=-wardenTrialStageCamera.position.y/stageRayDirection.y;
+    if(distance<0)return null;
+    return{
+      x:wardenTrialStageCamera.position.x+stageRayDirection.x*distance,
+      z:wardenTrialStageCamera.position.z+stageRayDirection.z*distance,
+    };
+  },
+}):null;
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -502,18 +530,19 @@ positionRoomLighting(mazeWorld.center);
 
 const mazeNavigation = {
   resolveMovement(position, delta, radius){
+    if(wardenTrialStage)return wardenTrialStage.resolveMovement(position,delta,radius);
     return resolveCircleMovement(position, delta, radius, mazeWorld.getCollisionSegments());
   },
-  raycastWalls(start, end){ return raycastWalls(start, end, mazeWorld.getCollisionSegments()); },
+  raycastWalls(start, end){ return wardenTrialStage?false:raycastWalls(start, end, mazeWorld.getCollisionSegments()); },
   randomSpawn(roomId, player){
     if(roomId === null || roomId === undefined) return null;
     if(wardenTrialMode){
       const angle=encounterRandom()*Math.PI*2;
       const radius=lerp(WARDEN_TRIAL_SETTINGS.spawnRadiusMin,WARDEN_TRIAL_SETTINGS.spawnRadiusMax,encounterRandom());
-      return{
+      return wardenTrialStage.clampPoint({
         x:(player?.x??mazeWorld.center.x)+Math.cos(angle)*radius,
         z:(player?.z??mazeWorld.center.z)+Math.sin(angle)*radius,
-      };
+      },WARDEN_TRIAL_SETTINGS.enemyRadius);
     }
     let fallback = null;
     for(let attempt=0; attempt<14; attempt++){
@@ -1616,8 +1645,11 @@ function updateHud(rawDt){
 /* ---------- camera ---------- */
 const camFollow = new THREE.Vector3(0,0,0);
 function updateCamera(rawDt){
-  camFollow.x += (actorPos.x - camFollow.x)*Math.min(1, rawDt*5);
-  camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*5);
+  if(wardenTrialMode)camFollow.set(startPoint.x,0,startPoint.z);
+  else{
+    camFollow.x += (actorPos.x - camFollow.x)*Math.min(1, rawDt*5);
+    camFollow.z += (actorPos.y - camFollow.z)*Math.min(1, rawDt*5);
+  }
   shakeVel.addScaledVector(shake,-140*rawDt).addScaledVector(shakeVel,-12*rawDt);
   shake.addScaledVector(shakeVel,rawDt);
   // hit-feel layers: random jitter, directional kick, zoom punch toward the action
@@ -1671,11 +1703,10 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
       actorPos.y += Math.cos(actorFacing)*rate*dt;
     }
   }
-  const resolvedMove = resolveCircleMovement(
+  const resolvedMove = mazeNavigation.resolveMovement(
     moveStart,
     { x:actorPos.x - moveStart.x, z:actorPos.y - moveStart.z },
-    PLAYER_RADIUS,
-    mazeWorld.getCollisionSegments()
+    PLAYER_RADIUS
   );
   actorPos.set(resolvedMove.x, resolvedMove.z);
 
@@ -2223,6 +2254,11 @@ if(ABILITY_CAPTURE_MODE){
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
+  if(wardenTrialStageCamera){
+    wardenTrialStageCamera.aspect=innerWidth/innerHeight;
+    wardenTrialStageCamera.updateProjectionMatrix();
+    wardenTrialStageCamera.updateMatrixWorld();
+  }
   renderer.setSize(innerWidth, innerHeight);
 });
 emitRuntime({type:'ready',runtime:runtimeHandle});

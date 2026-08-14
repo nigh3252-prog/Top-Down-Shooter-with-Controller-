@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
 import { createWardenTrialBrain, nearestWardenTrialTarget } from '../src/warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
+import { createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
 
 assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
-assert.ok(WARDEN_TRIAL_SETTINGS.hexSize>=WARDEN_TRIAL_SETTINGS.spawnRadiusMax*6,'the trial hex stays far outside the combat spawn ring');
 assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
+const stage=createWardenTrialStageBoundary({
+  margins:{left:.1,right:.1,top:.1,bottom:.1},
+  projectWorldToNdc:point=>({x:point.x/10,y:point.z/10}),
+  groundPointFromNdc:point=>({x:point.x*10,z:point.y*10}),
+});
+assert.equal(stage.contains({x:0,z:0},1),true);
+assert.equal(stage.contains({x:8,z:0},1),false,'actor radius must remain inside the visible-stage margin');
+const boundedMove=stage.resolveMovement({x:0,z:0},{x:20,z:-20},1);
+assert.deepEqual({x:boundedMove.x,z:boundedMove.z},{x:7,z:-7},'movement clamps to the fixed screen footprint instead of the visual hex');
+assert.equal(boundedMove.collided,true);
 
 const player={x:0,z:0};
 const near={id:'near',x:3,z:0,hp:10,state:'idle'};
