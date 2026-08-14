@@ -1360,6 +1360,7 @@ function updateWardenTrialAI(dt){
   const decision=wardenTrialBrain.update(dt,{
     player:{x:actorPos.x,z:actorPos.y},
     enemies:combatHostileEnemies(),
+    weapon:PC.currentWeapon?.(),
     stamina:arena.stamina.v,
     attackActive:!!combatState.attack,
   });
@@ -1371,7 +1372,10 @@ function updateWardenTrialAI(dt){
   if(decision.action==='light')lightDown();
   else if(decision.action==='heavy-down')heavyDown();
   else if(decision.action==='heavy-up')heavyUp();
-  else if(decision.action==='dodge'){input.mx=input.mz=0;triggerDodge();}
+  else if(decision.action==='dodge'){
+    input.mx=Number(decision.dodgeMove?.x)||0;input.mz=Number(decision.dodgeMove?.z)||0;
+    defenseDown('warden-ai');
+  }
   else if(decision.action==='refill'){fullRefillStamina();announce('RAT STEP RESET',.45);}
 }
 

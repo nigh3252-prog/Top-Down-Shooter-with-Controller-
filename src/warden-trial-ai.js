@@ -1,18 +1,60 @@
 export const WARDEN_TRIAL_DEFAULTS = Object.freeze({
-  approachRange:4.8,
-  retreatRange:2.15,
-  attackRange:5.55,
+  approachRange:6.95,
+  retreatRange:6.15,
+  attackRange:6.95,
   decisionInterval:.16,
   heavyEvery:5,
   heavyHold:.34,
   dodgeCooldown:2.1,
+  defenseTelegraphAt:.38,
+  emergencyDefenseAt:.78,
+  defenseBuffer:1.1,
   emptyWaveDelay:1.8,
   staminaRestDelay:.72,
   lowStamina:12,
 });
 
 const finite=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
+const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const living=enemies=>(enemies||[]).filter(enemy=>enemy&&finite(enemy.hp)>0);
+
+const WEAPON_RANGE_BONUS=Object.freeze({
+  dagger:-.30,
+  rapier:.25,
+  katana:.05,
+  whip:.45,
+  mace:-.20,
+  spear:.45,
+  axe:.10,
+  hammer:.20,
+});
+
+export function getWardenTrialCombatBand({weapon={},target={}}={}){
+  const kind=String(weapon?.kind||'').toLowerCase();
+  const length=clamp(finite(weapon?.tune?.length,finite(weapon?.baseLength,1)),.45,2.45);
+  const targetRadius=clamp(finite(target?.radius,.9),.5,2.4);
+  // The player weapon is authored at the shared four-times combat scale. This
+  // converts its tuned length into a center-to-center target distance, then
+  // adds a small kind-specific reach adjustment for thrusts, lashes, and short
+  // blunt weapons. The band is deliberately outside the body-contact range so
+  // the attack's root-motion lunge does not leave the Warden point blank.
+  const contactRange=4.65 + length*1.35 + (WEAPON_RANGE_BONUS[kind]||0) + (targetRadius-.9)*.45;
+  const preferred=contactRange+.45;
+  const inner=preferred-.45;
+  const outer=preferred+.35;
+  return Object.freeze({
+    contactRange,
+    preferred,
+    inner,
+    outer,
+    attackMin:inner,
+    attackMax:outer,
+    approachRange:outer,
+    retreatRange:inner,
+    attackRange:outer,
+    targetRadius,
+  });
+}
 
 export function nearestWardenTrialTarget(player,enemies){
   let target=null,distance=Infinity;
@@ -22,6 +64,37 @@ export function nearestWardenTrialTarget(player,enemies){
     if(next<distance){target=enemy;distance=next;}
   }
   return target?{target,distance}:null;
+}
+
+export function nearestWardenTrialThreat(player,enemies,{defenseTelegraphAt=.38,defenseBuffer=1.1,playerRadius=1.05}={}){
+  let threat=null,bestScore=-Infinity;
+  for(const enemy of living(enemies)){
+    if(enemy.state!=='windup')continue;
+    const windup=Math.max(.001,finite(enemy.windup,1));
+    const progress=clamp(finite(enemy.stateTime)/windup,0,1);
+    if(progress<defenseTelegraphAt)continue;
+    const dx=finite(enemy.x)-finite(player?.x),dz=finite(enemy.z)-finite(player?.z);
+    const distance=Math.hypot(dx,dz);
+    const attackRange=finite(enemy.attack?.range,finite(enemy.attackRange,3.5));
+    const contact=attackRange+finite(enemy.radius,.9)+playerRadius+defenseBuffer;
+    if(distance>contact)continue;
+    const proximity=1-clamp(distance/Math.max(.001,contact),0,1);
+    const score=progress*.72+proximity*.28;
+    if(score<=bestScore)continue;
+    bestScore=score;threat={enemy,distance,progress,contact,score};
+  }
+  return threat;
+}
+
+function tacticalDodgeVector(player,threat){
+  const dx=finite(threat?.enemy?.x)-finite(player?.x),dz=finite(threat?.enemy?.z)-finite(player?.z);
+  const length=Math.hypot(dx,dz)||1;
+  const toward={x:dx/length,z:dz/length};
+  const sideSign=String(threat?.enemy?.id||'').length%2===0?1:-1;
+  const side={x:-toward.z*sideSign,z:toward.x*sideSign};
+  const x=-toward.x*.45+side.x*.89,z=-toward.z*.45+side.z*.89;
+  const magnitude=Math.hypot(x,z)||1;
+  return{x:x/magnitude,z:z/magnitude};
 }
 
 export function createWardenTrialBrain(options={}){
@@ -54,14 +127,23 @@ export function createWardenTrialBrain(options={}){
     const {target,distance}=found;
     const dx=finite(target.x)-finite(context.player?.x),dz=finite(target.z)-finite(context.player?.z);
     const length=Math.hypot(dx,dz)||1;
+    const derivedBand=getWardenTrialCombatBand({weapon:context.weapon,target});
+    const band=context.weapon?derivedBand:{
+      ...derivedBand,
+      inner:finite(config.retreatRange,derivedBand.inner),
+      outer:finite(config.approachRange,derivedBand.outer),
+      attackMin:finite(config.retreatRange,derivedBand.attackMin),
+      attackMax:finite(config.attackRange,derivedBand.attackMax),
+    };
     let move={x:0,z:0};
-    if(distance>config.approachRange)move={x:dx/length,z:dz/length};
-    else if(distance<config.retreatRange)move={x:-dx/length,z:-dz/length};
+    if(distance>band.outer)move={x:dx/length,z:dz/length};
+    else if(distance<band.inner)move={x:-dx/length,z:-dz/length};
 
-    const danger=target.state==='windup'&&finite(target.windup,1)>0&&finite(target.stateTime)/finite(target.windup,1)>.52;
-    if(danger&&state.dodgeT<=0&&!context.attackActive){
+    const threat=nearestWardenTrialThreat(context.player,context.enemies,config);
+    const danger=threat&&(!context.attackActive||threat.progress>=config.emergencyDefenseAt);
+    if(danger&&state.dodgeT<=0){
       state.dodgeT=config.dodgeCooldown;
-      return{move:{x:0,z:0},action:'dodge',target};
+      return{move:{x:0,z:0},action:'dodge',dodgeMove:tacticalDodgeVector(context.player,threat),target:threat.enemy,threat};
     }
 
     if(finite(context.stamina,100)<config.lowStamina&&!context.attackActive){
@@ -71,7 +153,7 @@ export function createWardenTrialBrain(options={}){
     }
     state.restT=0;
 
-    if(distance<=config.attackRange&&state.decisionT<=0){
+    if(distance>=band.attackMin&&distance<=band.attackMax&&state.decisionT<=0){
       state.decisionT=config.decisionInterval;
       state.attackCount++;
       if(!context.attackActive&&state.attackCount%config.heavyEvery===0){

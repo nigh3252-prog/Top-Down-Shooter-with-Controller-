@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createWardenTrialBrain, nearestWardenTrialTarget } from '../src/warden-trial-ai.js';
+import { createWardenTrialBrain, getWardenTrialCombatBand, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
 import { createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
 import {
@@ -15,6 +15,11 @@ import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
 assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
+const longswordBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:1}},target:{radius:.9}});
+const daggerBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:.55}},target:{radius:.9}});
+const spearBand=getWardenTrialCombatBand({weapon:{kind:'spear',tune:{length:1.42}},target:{radius:.9}});
+assert.ok(longswordBand.preferred>5.55,'the Longsword band stays outside the old point-blank attack threshold');
+assert.ok(daggerBand.preferred<longswordBand.preferred&&spearBand.preferred>longswordBand.preferred,'weapon length and kind change the preferred combat band');
 const stage=createWardenTrialStageBoundary({
   margins:{left:.1,right:.1,top:.1,bottom:.1},
   projectWorldToNdc:point=>({x:point.x/10,y:point.z/10}),
@@ -47,24 +52,34 @@ configureWardenTrialEnemySet(enemySystem,WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS);
 assert.equal(configured.kind,'trialDot');
 
 const player={x:0,z:0};
-const near={id:'near',x:3,z:0,hp:10,state:'idle'};
+const near={id:'near',x:6.4,z:0,hp:10,state:'idle'};
 const far={id:'far',x:9,z:0,hp:10,state:'idle'};
 assert.equal(nearestWardenTrialTarget(player,[far,near]).target,near);
 assert.equal(nearestWardenTrialTarget(player,[{...near,hp:0}]),null);
 
 const brain=createWardenTrialBrain({decisionInterval:0,heavyEvery:2,emptyWaveDelay:.2,staminaRestDelay:.1});
-let decision=brain.update(.016,{player,enemies:[far],stamina:100,attackActive:false});
+const trialWeapon={kind:'blade',tune:{length:1}};
+let decision=brain.update(.016,{player,enemies:[far],weapon:trialWeapon,stamina:100,attackActive:false});
 assert.ok(decision.move.x>.99&&decision.move.z===0,'Warden should close on a distant target');
-decision=brain.update(.016,{player,enemies:[near],stamina:100,attackActive:false});
+decision=brain.update(.016,{player,enemies:[near],weapon:trialWeapon,stamina:100,attackActive:false});
 assert.equal(decision.action,'light');
-decision=brain.update(.016,{player,enemies:[near],stamina:100,attackActive:false});
+decision=brain.update(.016,{player,enemies:[near],weapon:trialWeapon,stamina:100,attackActive:false});
 assert.equal(decision.action,'heavy-down','configured cadence should use the shared heavy attack input');
-decision=brain.update(.34,{player,enemies:[near],stamina:100,attackActive:true});
+decision=brain.update(.34,{player,enemies:[near],weapon:trialWeapon,stamina:100,attackActive:true});
 assert.equal(decision.action,'heavy-up','held heavy attacks must be released');
 
-const danger={...near,state:'windup',stateTime:.7,windup:1};
-decision=brain.update(.016,{player,enemies:[danger],stamina:100,attackActive:false});
+const danger={...near,state:'windup',stateTime:.7,windup:1,attack:{range:3.5}};
+decision=brain.update(.016,{player,enemies:[danger],weapon:trialWeapon,stamina:100,attackActive:false});
 assert.equal(decision.action,'dodge','telegraphed close attacks should trigger Rat Step defense');
+assert.ok(Math.hypot(decision.dodgeMove.x,decision.dodgeMove.z)>.99,'defense should provide a deliberate dodge direction');
+
+const emergencyBrain=createWardenTrialBrain({decisionInterval:0});
+const emergencyDecision=emergencyBrain.update(.016,{player,enemies:[{...danger,stateTime:.82}],weapon:trialWeapon,stamina:100,attackActive:true});
+assert.equal(emergencyDecision.action,'dodge','a late telegraph can interrupt an attack for an emergency defense');
+
+const quiet={id:'quiet',x:5.8,z:0,hp:10,state:'idle'};
+const imminent={id:'imminent',x:6.4,z:0,hp:10,state:'windup',stateTime:.7,windup:1,attack:{range:3.5}};
+assert.equal(nearestWardenTrialThreat(player,[quiet,imminent]).enemy,imminent,'defense should prioritize an imminent telegraph over a merely nearer target');
 
 const tired=createWardenTrialBrain({staminaRestDelay:.05});
 decision=tired.update(.06,{player,enemies:[near],stamina:0,attackActive:false});
