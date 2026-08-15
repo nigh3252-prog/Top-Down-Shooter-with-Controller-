@@ -9,6 +9,7 @@ import { stanceDefenseLetter } from './stance-defense-profiles.js';
 import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
+import { isWardenTrialRuntime } from './warden-trial-card-policy.js';
 
 const POW_BUNKER_CARD = getCard('A01-PILEBUNKER');
 const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
@@ -164,7 +165,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
   const api={
     get hand(){return s.hand;},get upcoming(){return s.draw.slice(0,4);},get drawCount(){return s.draw.length;},get discardCount(){return s.discard.length;},get shuffling(){return s.shuffleT>=0;},get shuffleT(){return s.shuffleT;},get shuffleTime(){return shuffleTime;},get pool(){return s.pool.slice();},get runLocked(){return s.runLocked;},get manualSequence(){return s.manualSequence?{...s.manualSequence}:null;},
     rebuild(cards){applyPool(s.runLocked?s.pool:defaultPool(cards));},
-    beginRun(cards,{openingStanceId='S24'}={}){s.runLocked=true;applyPool(cards);const opening=s.stancePool.find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;},
+    beginRun(cards,{openingStanceId=null}={}){s.runLocked=true;applyPool(cards);const opening=s.stancePool.find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;},
     unlockRun(){s.runLocked=false;},
     setCardDispatcher(dispatcher){s.cardDispatcher=normalizeCardDispatcher(dispatcher);return api;},
     setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
@@ -209,7 +210,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
     installEnemyLabDeckEditor(api);
     installEnemyLabDeckEditorRefinements();
   }
-  if(typeof document!=='undefined'&&document.getElementById('startGate')&&!isEnemyLabRuntime()){
+  if(typeof document!=='undefined'&&document.getElementById('startGate')&&!isEnemyLabRuntime()&&!isWardenTrialRuntime(getArenaRuntimeConfig())){
     const install=()=>import('./run-draft.js').then(module=>module.installRunDraft(api)).catch(error=>{console.error('Run draft UI failed to install',error);const err=document.getElementById('err');if(err){err.style.display='block';err.textContent=`Run draft UI did not load\n${error?.message||error}`;}});
     if(typeof queueMicrotask==='function')queueMicrotask(install);else setTimeout(install,0);
   }
