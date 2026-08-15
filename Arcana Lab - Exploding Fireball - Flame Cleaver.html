@@ -1,0 +1,1335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no,maximum-scale=1">
+<meta name="theme-color" content="#05070d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Arcana Lab — Exploding Fireball / Flame Cleaver</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#05070d; --panel:rgba(9,13,21,.90); --line:rgba(255,255,255,.16);
+  --text:#eef6ff; --muted:#9fabc2; --ok:#7fe0a0; --off:#5d6779;
+  --fire:#ff8a12; --hot:#ffd23a; --charged:#43b6ff; --bad:#e33b3b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+#app{position:fixed;inset:0}
+canvas{display:block;width:100%;height:100%}
+
+/* ---------- floating damage numbers ---------- */
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:20}
+.dmg{position:absolute;transform:translate(-50%,-50%);font:900 19px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:#fff;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000;white-space:nowrap}
+.dmg.burst{padding:5px 9px;background:#fff;color:#1a1a1a;text-shadow:none;
+  clip-path:polygon(50% 0,61% 17%,80% 8%,80% 29%,100% 30%,88% 50%,100% 70%,80% 71%,80% 92%,61% 83%,50% 100%,39% 83%,20% 92%,20% 71%,0 70%,12% 50%,0 30%,20% 29%,20% 8%,39% 17%)}
+.dmg.crit{background:var(--bad);color:#fff;font-size:21px}
+.dmg.burn{font-size:14px;color:var(--hot);opacity:.95}
+
+/* ---------- top HUD ---------- */
+#hud{position:absolute;left:0;right:0;top:0;z-index:30;pointer-events:none;
+  padding:max(6px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) 0 max(9px,env(safe-area-inset-left));
+  display:grid;gap:6px;justify-items:start}
+#topRow{display:flex;gap:8px;align-items:center;width:100%}
+#card{display:flex;gap:8px;align-items:center;pointer-events:none}
+#cardArt{width:28px;height:39px;border-radius:4px;border:2px solid #d9a441;flex:0 0 auto;
+  background:radial-gradient(circle at 50% 62%,#ffe9a8 0,#ff9d1c 26%,#e4550a 46%,#2b1a3f 70%,#241534 100%);
+  box-shadow:0 0 0 2px #150d22,0 6px 18px #000a}
+#cardText{display:grid;gap:0}
+#cardName{font:900 15px/1.0 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.05em;color:var(--fire);
+  text-shadow:0 2px 0 #6b2400,0 4px 10px #000;text-transform:uppercase}
+#cardSub{font:900 11px/1.1 ui-monospace,monospace;letter-spacing:.16em;color:var(--charged);
+  text-shadow:0 2px 0 #063a5e,0 4px 10px #000;visibility:hidden}
+#cardSub.on{visibility:visible}
+#infoBtn{margin-left:auto;pointer-events:auto;width:34px;height:34px;flex:0 0 auto;border-radius:11px;
+  border:1px solid var(--line);background:var(--panel);color:var(--text);font:800 15px/1 system-ui}
+
+#tabs{display:flex;gap:5px;pointer-events:auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:3px}
+#tabs button{border:0;background:transparent;color:var(--muted);font:800 11px/1 system-ui;letter-spacing:.02em;
+  padding:7px 9px;border-radius:8px;min-height:30px}
+#tabs button.on{background:linear-gradient(180deg,rgba(255,138,18,.34),rgba(255,138,18,.13));
+  color:#fff;box-shadow:inset 0 0 0 1px rgba(255,167,74,.5)}
+#chips{display:flex;gap:5px;flex-wrap:wrap;pointer-events:auto}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--muted);
+  font:800 10px/1 system-ui;letter-spacing:.04em;padding:7px 9px;border-radius:9px;min-height:28px}
+.chip.on{color:#0a1018;background:linear-gradient(180deg,#ffd98a,#f2a63a);border-color:#ffcf7a}
+
+#meters{pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:6px 9px;display:grid;gap:5px;min-width:min(272px,70vw)}
+.mrow{display:grid;grid-template-columns:58px 1fr auto;gap:7px;align-items:center;
+  font:800 9px/1 system-ui;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.bar{height:6px;border-radius:4px;background:rgba(255,255,255,.11);overflow:hidden}
+.bar>i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#ff7b0a,#ffd23a)}
+.bar.sig>i{background:linear-gradient(90deg,#1f7fd0,#7ee1ff)}
+.mval{font:800 10px/1 ui-monospace,monospace;color:var(--text);min-width:38px;text-align:right}
+#pips{display:flex;gap:4px}
+.pip{width:13px;height:13px;border-radius:4px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.07)}
+.pip.on{background:linear-gradient(180deg,#ffd23a,#ff7b0a);border-color:#ffcf7a;box-shadow:0 0 8px rgba(255,140,30,.55)}
+
+/* ---------- touch controls ---------- */
+#pads{position:absolute;inset:0;z-index:15}
+.stick{position:absolute;width:118px;height:118px;margin:-59px 0 0 -59px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.045);opacity:0;transition:opacity .12s;pointer-events:none}
+.stick.on{opacity:1}
+.stick>i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+  background:rgba(255,255,255,.20);border:1px solid rgba(255,255,255,.35)}
+#aimStick{border-color:rgba(255,167,74,.34);background:rgba(255,138,18,.09)}
+#aimStick>i{background:rgba(255,167,74,.30);border-color:rgba(255,190,110,.55)}
+
+#btns{position:absolute;z-index:25;right:max(14px,env(safe-area-inset-right));
+  bottom:calc(max(14px,env(safe-area-inset-bottom)) + 6px);display:grid;gap:10px;justify-items:end}
+.btn{border-radius:50%;border:1px solid var(--line);color:#fff;font:900 12px/1.05 system-ui;letter-spacing:.05em;
+  display:grid;place-content:center;text-align:center;touch-action:none}
+#castBtn{width:98px;height:98px;font-size:14px;
+  background:radial-gradient(circle at 50% 34%,#ffb257,#e8620d 58%,#8e2f04);
+  box-shadow:0 8px 26px rgba(232,98,13,.36),inset 0 2px 0 rgba(255,255,255,.32)}
+#chargedBtn{width:76px;height:76px;background:radial-gradient(circle at 50% 34%,#7fd2ff,#1c73c4 58%,#0b3b70);
+  box-shadow:0 6px 20px rgba(28,115,196,.34),inset 0 2px 0 rgba(255,255,255,.3)}
+.btn:disabled{filter:grayscale(.85) brightness(.55);box-shadow:none}
+.btn.press{transform:scale(.94)}
+.btn small{display:block;font:800 9px/1.3 ui-monospace,monospace;opacity:.82;letter-spacing:.08em}
+
+/* ---------- info sheet ---------- */
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:40;max-height:86dvh;transform:translateY(101%);
+  transition:transform .24s cubic-bezier(.2,.8,.3,1);background:linear-gradient(180deg,#0c1220,#070b13);
+  border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -22px 60px #000b;
+  display:grid;grid-template-rows:auto minmax(0,1fr)}
+#sheet.on{transform:translateY(0)}
+#sheetHead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.09)}
+#sheetHead h2{margin:0;font:900 14px/1 system-ui;letter-spacing:.03em}
+#sheetHead button{margin-left:auto;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);
+  border-radius:10px;min-height:34px;padding:0 13px;font:800 12px system-ui}
+#sheetBody{overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding:12px 14px max(20px,env(safe-area-inset-bottom));display:grid;gap:12px}
+.sec{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.03);padding:11px 12px;display:grid;gap:8px}
+.sec h3{margin:0;font:900 11px/1 system-ui;letter-spacing:.13em;text-transform:uppercase;color:var(--hot)}
+.sec p{margin:0;font:400 12.5px/1.5 system-ui;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font:600 12px/1.45 ui-monospace,monospace}
+.kv b{color:var(--muted);font-weight:600}
+.kv span{color:var(--text);text-align:right}
+ol.check{margin:0;padding:0;list-style:none;display:grid;gap:5px;counter-reset:c}
+ol.check li{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:start;
+  font:600 12px/1.4 system-ui;color:var(--off)}
+ol.check li::before{counter-increment:c;content:"○";font:900 13px/1.25 ui-monospace,monospace;color:var(--off);text-align:center}
+ol.check li.done{color:var(--text)}
+ol.check li.done::before{content:"●";color:var(--ok)}
+.hint{font:600 11.5px/1.5 system-ui;color:var(--off)}
+kbd{font:700 11px ui-monospace,monospace;background:rgba(255,255,255,.09);border:1px solid var(--line);
+  border-radius:5px;padding:1px 5px}
+
+#err{position:absolute;inset:0;z-index:60;display:none;place-content:center;padding:26px;text-align:center;
+  background:#05070d;font:600 14px/1.6 system-ui;color:var(--muted)}
+#err.on{display:grid}
+#err b{color:var(--text);font-size:16px}
+
+@media (max-height:560px){
+  #cardArt{width:30px;height:42px}#cardName{font-size:16px}#cardSub{font-size:12px}
+  #meters{min-width:min(260px,60vw);padding:6px 9px}
+  #castBtn{width:84px;height:84px}#chargedBtn{width:66px;height:66px}
+}
+@media (min-width:900px){ #meters{min-width:340px} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="fx"></div>
+
+  <div id="hud">
+    <div id="topRow">
+      <div id="card">
+        <div id="cardArt"></div>
+        <div id="cardText">
+          <div id="cardName">Exploding<br>Fireball</div>
+          <div id="cardSub">Charged</div>
+        </div>
+      </div>
+      <button id="infoBtn" aria-label="Source notes">i</button>
+    </div>
+
+    <div id="tabs">
+      <button data-arcana="ef" class="on">Exploding Fireball</button>
+      <button data-arcana="fc">Flame Cleaver</button>
+    </div>
+
+    <div id="chips">
+      <button class="chip" id="enhChip">Enhanced</button>
+      <button class="chip" id="fireChip">Incoming fire</button>
+      <button class="chip" id="resetChip">Reset</button>
+    </div>
+
+    <div id="meters">
+      <div class="mrow" id="rowCd"><span>Cooldown</span><span class="bar"><i id="barCd"></i></span><span class="mval" id="valCd">5.0s</span></div>
+      <div class="mrow" id="rowAmmo" hidden><span>Charges</span><span class="bar"><i id="barAmmo"></i></span><span id="pips"><i class="pip"></i><i class="pip"></i></span></div>
+      <div class="mrow"><span>Signature</span><span class="bar sig"><i id="barSig"></i></span><span class="mval" id="valSig">0%</span></div>
+    </div>
+  </div>
+
+  <div id="pads">
+    <div class="stick" id="moveStick"><i></i></div>
+    <div class="stick" id="aimStick"><i></i></div>
+  </div>
+
+  <div id="btns">
+    <button class="btn" id="chargedBtn" disabled>CHARGED<small>SIGNATURE</small></button>
+    <button class="btn" id="castBtn">CAST<small id="castHint">TAP</small></button>
+  </div>
+
+  <section id="sheet">
+    <div id="sheetHead">
+      <h2 id="sheetTitle">Exploding Fireball</h2>
+      <button id="sheetClose">Close</button>
+    </div>
+    <div id="sheetBody"></div>
+  </section>
+
+  <div id="err"><div><b>Three.js did not load.</b><br>This lab pulls three.js from a CDN, so the first open needs internet access.</div></div>
+</div>
+
+<script>
+  // Surface a clear message instead of a blank screen when the CDN is blocked.
+  window.__labBooted = false;
+  setTimeout(() => { if (!window.__labBooted) document.getElementById('err').classList.add('on'); }, 6000);
+</script>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+window.__labBooted = true;
+
+/* ============================================================================
+   Arcana Lab — Exploding Fireball / Flame Cleaver
+   Behaviour is transcribed from the Wizard of Legend arcana showcase
+   (media/wizard-of-legend/wizard-of-legend-arcana-showcase-480p.mp4, 315-337s)
+   and the matching source-first notes in
+   archive/wizard-of-legend/source-notes/09-fire-standards-3.md.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- constants */
+const ROOM = { x: 10, z: 15 };            // half extents, in tiles — portrait-shaped for phones
+const FLOOR = { x: 26, z: 34 };           // stone runs past the walls so wide views never show void
+const PLAYER_R = 0.42, DUMMY_R = 0.55;
+
+const EF = {
+  name: 'Exploding Fireball',
+  cooldown: 5.0,                          // wiki: 5s
+  speed: 24, radius: 0.5,
+  blast: 3.0, blastEnhanced: 4.3,         // enhancement is radius-only
+  damage: 50, chargedFinalDamage: 75,     // on-screen numbers: 50 / 50 / 75
+  knock: 14.0,                            // wiki knockback 35 -> lab impulse
+  chargedShots: 3, chargedGap: 0.22, windup: 0.85,
+};
+const FC = {
+  name: 'Flame Cleaver',
+  maxCharges: 2, recharge: 4.0,           // wiki: 2 charges, 4s each
+  damage: 16, chargedDamage: 20,          // on-screen numbers: 16 / 20
+  knock: 4.8,                             // wiki knockback 12
+  speed: 16, span: 0.46, spanEnh: 0.66,   // arc half-width, radians
+  reach: 9.0, reachEnh: 12.0, thick: 1.25,
+  chargedWaves: 7, chargedGap: 0.075, chargedSpeed: 15,
+  chargedReach: 15, chargedSpan: 0.60, chargedThick: 2.7,
+  windup: 0.85,
+};
+const BURN = { dmg: 2, interval: 0.5, ticks: 8 };        // 16 total, matches wiki
+const FIERCE = { dmg: 3, interval: 0.5, ticks: 9 };      // 27 total, matches video
+
+/* --------------------------------------------------------------- boot three */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x0a0d13);
+app.insertBefore(renderer.domElement, app.firstChild);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 260);
+
+// The arena is framed by fitting a target world window, so a portrait phone and a
+// laptop both see a usable slice of the room instead of a random zoom level.
+const VIEW = { halfW: 6.5, halfH: 9.0, lead: 2.0, visW: 8, visH: 10 };
+const CAM_DIR = new THREE.Vector3(0, Math.sin(1.09), Math.cos(1.09)); // ~62 degrees down
+let camDist = 38;
+function frameCamera() {
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5);
+  camDist = Math.max(VIEW.halfH / t, VIEW.halfW / (t * camera.aspect));
+  VIEW.visH = camDist * t;
+  VIEW.visW = VIEW.visH * camera.aspect;
+}
+frameCamera();
+
+scene.add(new THREE.AmbientLight(0xc7d6ee, 1.05));
+const sun = new THREE.DirectionalLight(0xfff2dd, 0.85);
+sun.position.set(-8, 18, 6);
+scene.add(sun);
+
+/* ------------------------------------------------------- canvas art helpers */
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+function texFrom(c, repeat) {
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+}
+
+// Flagstone floor, matching the grey dungeon room in the showcase.
+function floorTexture() {
+  const [c, g] = makeCanvas(256, 256);
+  g.fillStyle = '#4b4e53'; g.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const px = x * 64 + ((y % 2) ? 18 : 0), py = y * 64;
+    const v = 88 + Math.floor(Math.random() * 26);
+    g.fillStyle = `rgb(${v},${v + 2},${v + 6})`;
+    g.fillRect(px + 2, py + 2, 60, 60);
+    g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(px + 2, py + 2, 60, 3);
+    g.fillStyle = 'rgba(0,0,0,.20)'; g.fillRect(px + 2, py + 57, 60, 5);
+  }
+  for (let i = 0; i < 900; i++) {
+    g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
+    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+  return texFrom(c, [FLOOR.x, FLOOR.z]);
+}
+// Lumpy flame puff — the chunky pixel-art blobs the waves and blasts are built from.
+function blobTexture() {
+  const [c, g] = makeCanvas(64, 64);
+  g.fillStyle = '#fff';
+  const lumps = [[32, 32, 20], [20, 26, 12], [44, 25, 12], [24, 44, 12], [43, 43, 11], [32, 18, 11], [32, 47, 11]];
+  for (const [x, y, r] of lumps) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  const d = g.getImageData(0, 0, 64, 64);
+  for (let i = 3; i < d.data.length; i += 4) if (d.data[i] > 0 && Math.random() < 0.1) d.data[i] = 150;
+  g.putImageData(d, 0, 0);
+  return texFrom(c);
+}
+function glowTexture() {
+  const [c, g] = makeCanvas(64, 64);
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(255,255,255,.55)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return texFrom(c);
+}
+// The 4-point white sparkles that pop around every impact in the source.
+function starTexture() {
+  const [c, g] = makeCanvas(64, 64);
+  g.fillStyle = '#fff';
+  g.fillRect(28, 4, 8, 56); g.fillRect(4, 28, 56, 8);
+  g.beginPath(); g.arc(32, 32, 12, 0, 7); g.fill();
+  return texFrom(c);
+}
+function spikeTexture() {                    // charged wind-up ray
+  const [c, g] = makeCanvas(32, 256);
+  const gr = g.createLinearGradient(0, 256, 0, 0);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.15, 'rgba(255,255,255,1)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.beginPath(); g.moveTo(16, 0); g.lineTo(26, 256); g.lineTo(6, 256); g.closePath(); g.fill();
+  return texFrom(c);
+}
+function shadowTexture() {
+  const [c, g] = makeCanvas(64, 64);
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return texFrom(c);
+}
+const TEX = { blob: blobTexture(), glow: glowTexture(), star: starTexture(), spike: spikeTexture(), shade: shadowTexture() };
+
+/* ------------------------------------------------------- particle instancing */
+const PART_VS = `
+attribute vec3 iPos; attribute vec2 iScale; attribute vec3 iColor; attribute float iAlpha; attribute float iRot;
+varying vec2 vUv; varying vec3 vColor; varying float vAlpha;
+void main(){
+  vUv = uv; vColor = iColor; vAlpha = iAlpha;
+  vec4 mv = modelViewMatrix * vec4(iPos, 1.0);
+  float c = cos(iRot), s = sin(iRot);
+  vec2 p = position.xy * iScale;
+  mv.xy += vec2(p.x * c - p.y * s, p.x * s + p.y * c);
+  gl_Position = projectionMatrix * mv;
+}`;
+const PART_FS = `
+uniform sampler2D map; varying vec2 vUv; varying vec3 vColor; varying float vAlpha;
+void main(){
+  vec4 t = texture2D(map, vUv);
+  float a = t.a * vAlpha;
+  if (a < 0.015) discard;
+  gl_FragColor = vec4(t.rgb * vColor, a);
+}`;
+
+class Layer {
+  constructor(tex, blending, cap, order) {
+    this.cap = cap; this.n = 0;
+    this.pool = Array.from({ length: cap }, () => ({
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, drag: 0, grav: 0, age: 0, life: 1,
+      s0: 1, s1: 1, ar: 1, rot: 0, spin: 0, a0: 1, a1: 0,
+      r0: 1, g0: 1, b0: 1, r1: 1, g1: 1, b1: 1,
+    }));
+    const base = new THREE.PlaneGeometry(1, 1);
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.index = base.index;
+    geo.setAttribute('position', base.getAttribute('position'));
+    geo.setAttribute('uv', base.getAttribute('uv'));
+    this.aPos = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    this.aScale = new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2);
+    this.aColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    this.aAlpha = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+    this.aRot = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+    geo.setAttribute('iPos', this.aPos); geo.setAttribute('iScale', this.aScale);
+    geo.setAttribute('iColor', this.aColor); geo.setAttribute('iAlpha', this.aAlpha);
+    geo.setAttribute('iRot', this.aRot);
+    geo.instanceCount = 0;
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: tex } }, vertexShader: PART_VS, fragmentShader: PART_FS,
+      transparent: true, depthWrite: false, depthTest: true, blending,
+    });
+    this.geo = geo;
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = order;
+    scene.add(this.mesh);
+  }
+  spawn(o) {
+    if (this.n >= this.cap) return null;
+    const p = this.pool[this.n++];
+    p.x = o.x; p.y = o.y ?? 0.35; p.z = o.z;
+    p.vx = o.vx || 0; p.vy = o.vy || 0; p.vz = o.vz || 0;
+    p.drag = o.drag ?? 3.0; p.grav = o.grav || 0;
+    p.age = 0; p.life = o.life ?? 0.4;
+    p.s0 = o.s0 ?? 1; p.s1 = o.s1 ?? p.s0; p.ar = o.ar ?? 1;
+    p.rot = o.rot ?? Math.random() * 6.28; p.spin = o.spin ?? 0;
+    p.a0 = o.a0 ?? 1; p.a1 = o.a1 ?? 0;
+    const c0 = o.c0 ?? 0xffffff, c1 = o.c1 ?? c0;
+    p.r0 = ((c0 >> 16) & 255) / 255; p.g0 = ((c0 >> 8) & 255) / 255; p.b0 = (c0 & 255) / 255;
+    p.r1 = ((c1 >> 16) & 255) / 255; p.g1 = ((c1 >> 8) & 255) / 255; p.b1 = (c1 & 255) / 255;
+    return p;
+  }
+  update(dt) {
+    const P = this.aPos.array, S = this.aScale.array, C = this.aColor.array, A = this.aAlpha.array, R = this.aRot.array;
+    for (let i = 0; i < this.n; i++) {
+      const p = this.pool[i];
+      p.age += dt;
+      if (p.age >= p.life) {
+        this.pool[i] = this.pool[this.n - 1]; this.pool[this.n - 1] = p; this.n--; i--; continue;
+      }
+      const k = Math.max(0, 1 - p.drag * dt);
+      p.vx *= k; p.vz *= k; p.vy = p.vy * k + p.grav * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      p.rot += p.spin * dt;
+      const t = p.age / p.life, s = p.s0 + (p.s1 - p.s0) * t;
+      const o = i * 3;
+      P[o] = p.x; P[o + 1] = p.y; P[o + 2] = p.z;
+      S[i * 2] = s * p.ar; S[i * 2 + 1] = s;   // `s` is length, `ar` narrows the quad
+      C[o] = p.r0 + (p.r1 - p.r0) * t; C[o + 1] = p.g0 + (p.g1 - p.g0) * t; C[o + 2] = p.b0 + (p.b1 - p.b0) * t;
+      A[i] = p.a0 + (p.a1 - p.a0) * t;
+      R[i] = p.rot;
+    }
+    this.geo.instanceCount = this.n;
+    this.aPos.needsUpdate = this.aScale.needsUpdate = this.aColor.needsUpdate = true;
+    this.aAlpha.needsUpdate = this.aRot.needsUpdate = true;
+  }
+  clear() { this.n = 0; this.geo.instanceCount = 0; }
+}
+
+const L = {
+  smoke: new Layer(TEX.blob, THREE.NormalBlending, 320, 8),
+  flame: new Layer(TEX.blob, THREE.NormalBlending, 1800, 10),
+  glow:  new Layer(TEX.glow, THREE.AdditiveBlending, 320, 12),
+  spark: new Layer(TEX.star, THREE.NormalBlending, 220, 14),
+  ray:   new Layer(TEX.spike, THREE.AdditiveBlending, 140, 13),
+};
+const layers = Object.values(L);
+
+/* ------------------------------------------------------------------- arena */
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(FLOOR.x * 2, FLOOR.z * 2),
+  new THREE.MeshLambertMaterial({ map: floorTexture() })
+);
+floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+// Everything outside the arena walls is dimmed, so the play area still reads as a room
+// even when a wide screen sees well past the boundary.
+{
+  const shape = new THREE.Shape();
+  shape.moveTo(-FLOOR.x, -FLOOR.z); shape.lineTo(FLOOR.x, -FLOOR.z);
+  shape.lineTo(FLOOR.x, FLOOR.z); shape.lineTo(-FLOOR.x, FLOOR.z); shape.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-ROOM.x, -ROOM.z); hole.lineTo(-ROOM.x, ROOM.z);
+  hole.lineTo(ROOM.x, ROOM.z); hole.lineTo(ROOM.x, -ROOM.z); hole.closePath();
+  shape.holes.push(hole);
+  const surround = new THREE.Mesh(new THREE.ShapeGeometry(shape),
+    new THREE.MeshBasicMaterial({ color: 0x05070c, transparent: true, opacity: 0.62, depthWrite: false }));
+  surround.rotation.x = -Math.PI / 2; surround.position.y = 0.014; surround.renderOrder = 1;
+  scene.add(surround);
+}
+
+const wallMat = new THREE.MeshLambertMaterial({ color: 0x33373d });
+function wall(w, d, x, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 2.2, d), wallMat);
+  m.position.set(x, 1.1, z); scene.add(m);
+}
+wall(ROOM.x * 2 + 2, 1, 0, -ROOM.z - 0.5); wall(ROOM.x * 2 + 2, 1, 0, ROOM.z + 0.5);
+wall(1, ROOM.z * 2 + 2, -ROOM.x - 0.5, 0); wall(1, ROOM.z * 2 + 2, ROOM.x + 0.5, 0);
+
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2.6, r * 2.6),
+    new THREE.MeshBasicMaterial({ map: TEX.shade, transparent: true, depthWrite: false, opacity: .85 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; m.renderOrder = 2;
+  return m;
+}
+
+/* Obstacles — the source calls out barrels and trees as early detonators. */
+const obstacles = [];
+function addBarrel(x, z) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.42, 0.95, 10), new THREE.MeshLambertMaterial({ color: 0x8a5c30 }));
+  body.position.y = 0.48;
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.14, 10), new THREE.MeshLambertMaterial({ color: 0x5b3d20 }));
+  band.position.y = 0.62;
+  g.add(body, band, blobShadow(0.5));
+  g.position.set(x, 0, z); scene.add(g);
+  obstacles.push({ x, z, r: 0.55, mesh: g, kind: 'barrel' });
+}
+function addTree(x, z) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.1, 8), new THREE.MeshLambertMaterial({ color: 0x4a3520 }));
+  trunk.position.y = 0.55;
+  const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 0), new THREE.MeshLambertMaterial({ color: 0x2f5b2f, flatShading: true }));
+  leaf.position.y = 1.6;
+  g.add(trunk, leaf, blobShadow(0.85));
+  g.position.set(x, 0, z); scene.add(g);
+  obstacles.push({ x, z, r: 0.85, mesh: g, kind: 'tree' });
+}
+
+/* Training dummies — anchored, so knockback reads as a slide-and-return. */
+const dummies = [];
+const barBgMat = new THREE.SpriteMaterial({ color: 0x1a1d24, depthTest: false, transparent: true });
+function addDummy(x, z) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.18, 12), new THREE.MeshLambertMaterial({ color: 0x7c8189 }));
+  base.position.y = 0.09;
+  const skin = new THREE.MeshLambertMaterial({ color: 0xd79a55 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.95, 10), skin); body.position.y = 0.66;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), skin); head.position.y = 1.34;
+  const arms = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.19, 0.19), skin); arms.position.y = 0.95;
+  const barBg = new THREE.Sprite(barBgMat.clone());
+  const barFg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff5b39, depthTest: false, transparent: true }));
+  for (const s of [barBg, barFg]) { s.center.set(0, .5); s.position.set(-0.45, 1.86, 0); s.renderOrder = 30; }
+  barBg.scale.set(0.9, 0.11, 1); barFg.scale.set(0.9, 0.11, 1);
+  g.add(base, body, head, arms, barBg, barFg, blobShadow(0.55));
+  g.position.set(x, 0, z); scene.add(g);
+  dummies.push({
+    x, z, ax: x, az: z, vx: 0, vz: 0, r: DUMMY_R, hp: 500, max: 500,
+    mesh: g, skin, bar: barFg, flash: 0,
+    burn: null, gunT: 1 + Math.random() * 2, respawn: 0,
+  });
+}
+
+function buildArena() {
+  // Ranks of dummies ahead of the caster, so piercing lines and blast overlap both read.
+  addDummy(-2.4, -3.4); addDummy(-0.2, -3.8); addDummy(2.0, -3.2);
+  addDummy(-3.0, -6.4); addDummy(-0.8, -7.0); addDummy(1.4, -6.4);
+  addDummy(4.4, -5.0); addDummy(5.0, -1.6); addDummy(-5.6, -1.8); addDummy(-5.0, -5.6);
+  addBarrel(3.2, -1.4); addBarrel(-4.4, 0.8); addBarrel(7.2, -6.8);
+  addTree(-8.2, -8.4); addTree(8.0, 1.6);
+}
+buildArena();
+
+/* ------------------------------------------------------------------ player */
+const player = {
+  x: 0, z: 5.5, vx: 0, vz: 0, r: PLAYER_R,
+  aimX: 0, aimZ: -1, lean: 0,
+  cd: 0, charges: FC.maxCharges, recharge: 0, sig: 0,
+  casting: null, dead: false,
+};
+const pg = new THREE.Group();
+{
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 1.0, 10), new THREE.MeshLambertMaterial({ color: 0x5c3f27 }));
+  robe.position.y = 0.5;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 11), new THREE.MeshLambertMaterial({ color: 0xe8d9b8 }));
+  head.position.y = 1.18;
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb04a }));
+  hand.position.set(0.05, 0.82, 0.45);
+  pg.add(robe, head, hand, blobShadow(0.45));
+  pg.userData.hand = hand;
+}
+scene.add(pg);
+
+const aimArrow = new THREE.Group();
+{
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 2.6), new THREE.MeshBasicMaterial({
+    map: TEX.spike, color: 0xffa03c, transparent: true, opacity: 0.17,
+    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }));
+  m.rotation.x = Math.PI / 2; m.position.set(0, 0.05, 1.9);
+  aimArrow.add(m);
+}
+scene.add(aimArrow);
+
+/* Expanding ground rings: explosion shockwaves and dummy respawn portals. */
+const ringPool = [];
+function ring(x, z, color, r0, r1, life, opacity) {
+  let e = ringPool.find(r => !r.live);
+  if (!e) {
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 44), new THREE.MeshBasicMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    }));
+    mesh.rotation.x = -Math.PI / 2; mesh.renderOrder = 6; scene.add(mesh);
+    e = { mesh, live: false }; ringPool.push(e);
+  }
+  e.live = true; e.age = 0; e.life = life; e.r0 = r0; e.r1 = r1; e.op = opacity ?? 0.9;
+  e.mesh.visible = true; e.mesh.material.color.setHex(color);
+  e.mesh.position.set(x, 0.06, z);
+  return e;
+}
+function updateRings(dt) {
+  for (const e of ringPool) {
+    if (!e.live) continue;
+    e.age += dt;
+    const t = e.age / e.life;
+    if (t >= 1) { e.live = false; e.mesh.visible = false; continue; }
+    const s = e.r0 + (e.r1 - e.r0) * (1 - (1 - t) * (1 - t));
+    e.mesh.scale.set(s, s, s);
+    e.mesh.material.opacity = e.op * (1 - t);
+  }
+}
+
+/* ------------------------------------------------------------ floating text */
+const fxRoot = document.getElementById('fx');
+const numPool = [];
+const projected = new THREE.Vector3();
+function popNumber(x, z, text, kind) {
+  let n = numPool.find(o => !o.live);
+  if (!n) {
+    if (numPool.length > 26) return;
+    const el = document.createElement('div'); el.className = 'dmg'; fxRoot.appendChild(el);
+    n = { el, live: false }; numPool.push(n);
+  }
+  n.live = true; n.age = 0; n.life = kind === 'burn' ? 0.75 : 1.05;
+  n.x = x + (Math.random() - .5) * 0.5; n.z = z + (Math.random() - .5) * 0.5;
+  n.y = kind === 'burn' ? 1.7 : 1.35;
+  n.el.textContent = text;
+  n.el.className = 'dmg' + (kind === 'burn' ? ' burn' : kind === 'crit' ? ' burst crit' : ' burst');
+  n.el.style.display = 'block';
+}
+function updateNumbers(dt) {
+  for (const n of numPool) {
+    if (!n.live) continue;
+    n.age += dt;
+    const t = n.age / n.life;
+    if (t >= 1) { n.live = false; n.el.style.display = 'none'; continue; }
+    projected.set(n.x, n.y + t * 1.5, n.z).project(camera);
+    n.el.style.left = ((projected.x * 0.5 + 0.5) * innerWidth) + 'px';
+    n.el.style.top = ((-projected.y * 0.5 + 0.5) * innerHeight) + 'px';
+    n.el.style.opacity = t > 0.6 ? String(1 - (t - 0.6) / 0.4) : '1';
+  }
+}
+
+/* ------------------------------------------------------------------ effects */
+const R = Math.random;
+function rnd(a, b) { return a + R() * (b - a); }
+
+// Chunky orange flame body with a hot rim — the source palette.
+function flamePuff(x, z, y, size, vx, vz, life, hot) {
+  L.flame.spawn({
+    x, z, y: y ?? rnd(0.3, 0.8), vx, vz, drag: 3.4, life,
+    s0: size, s1: size * 0.62, a0: 1, a1: 0,
+    c0: hot ? 0xfff6d0 : 0xffc22c, c1: hot ? 0xffa927 : 0xe04d06,
+    spin: rnd(-2, 2),
+  });
+}
+function ember(x, z) {
+  L.flame.spawn({
+    x, z, y: rnd(0.15, 0.5), vx: rnd(-2, 2), vz: rnd(-2, 2), drag: 2.4, life: rnd(0.4, 0.9),
+    s0: rnd(0.1, 0.22), s1: 0.02, a0: 1, a1: 0, c0: 0xffb43a, c1: 0xe04a06,
+  });
+}
+function smokePuff(x, z, size, life) {
+  L.smoke.spawn({
+    x, z, y: rnd(0.2, 0.6), vx: rnd(-.7, .7), vz: rnd(-.7, .7), drag: 1.6, life,
+    s0: size, s1: size * 1.5, a0: 0.55, a1: 0, c0: 0x9aa0a8, c1: 0x50555c, spin: rnd(-1, 1),
+  });
+}
+function sparkle(x, z, size, life) {
+  L.spark.spawn({ x, z, y: rnd(0.5, 1.2), drag: 5, life, s0: size, s1: size * 0.2, a0: 1, a1: 0.9, c0: 0xffffff });
+}
+
+// Impact blast: white flash, shock ring, orange petals, sparkles, lingering smoke.
+function explosionFx(x, z, radius, big) {
+  ring(x, z, 0xffffff, radius * 0.25, radius * 1.12, 0.34, 0.95);
+  L.glow.spawn({ x, z, y: 0.7, life: 0.18, s0: radius * 0.8, s1: radius * 1.5, a0: 1, a1: 0, c0: 0xfff3c8 });
+  const petals = Math.round(34 + radius * 8);
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * 6.283 + rnd(-.16, .16), sp = rnd(0.30, 1.0) * radius * 3.4;
+    flamePuff(x + Math.cos(a) * 0.3, z + Math.sin(a) * 0.3, rnd(0.3, 0.9),
+      rnd(0.8, 1.5) * (0.7 + radius * 0.2), Math.cos(a) * sp, Math.sin(a) * sp, rnd(0.32, 0.58), i % 4 === 0);
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = R() * 6.283, d = radius * rnd(0.5, 1.05);
+    sparkle(x + Math.cos(a) * d, z + Math.sin(a) * d, rnd(0.5, 1.0), rnd(0.16, 0.3));
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = R() * 6.283, d = radius * rnd(0, 0.9);
+    smokePuff(x + Math.cos(a) * d, z + Math.sin(a) * d, rnd(0.7, 1.4), rnd(0.8, 1.5));
+  }
+  for (let i = 0; i < 14; i++) ember(x + rnd(-1, 1) * radius * .6, z + rnd(-1, 1) * radius * .6);
+  if (big) {  // the third charged fireball blows the screen white in the source
+    L.glow.spawn({ x, z, y: 1.0, life: 0.46, s0: radius * 1.6, s1: radius * 6.4, a0: 1, a1: 0, c0: 0xffffff });
+  }
+  shake += big ? 0.85 : 0.45;
+  hitstop = Math.max(hitstop, big ? 0.09 : 0.05);
+}
+
+/* ------------------------------------------------------------- combat rules */
+let shake = 0, hitstop = 0, totalDamage = 0;
+
+function applyBurn(d, profile) {
+  d.burn = { left: profile.ticks, t: profile.interval, dmg: profile.dmg };
+  if (state.arcana === 'ef') check('ef10');
+  else check(profile === FIERCE ? 'fc11' : 'fc6');
+}
+function damage(d, amount, kind) {
+  d.hp -= amount; d.flash = 0.16;
+  totalDamage += amount;
+  player.sig = Math.min(1, player.sig + amount / 420);
+  popNumber(d.x, d.z, String(amount), kind);
+  if (d.hp <= 0) {                         // dummies reset through a cyan portal, as in the source
+    d.hp = d.max; d.respawn = 0.55; d.burn = null;
+    ring(d.x, d.z, 0x3fe4ff, 0.4, 2.4, 0.55, 0.9);
+    for (let i = 0; i < 10; i++) L.glow.spawn({
+      x: d.x + rnd(-.8, .8), z: d.z + rnd(-.8, .8), y: rnd(.3, 1.6), life: rnd(.3, .55),
+      s0: rnd(.5, 1.1), s1: 0.05, a0: .9, a1: 0, c0: 0x59e8ff, drag: 1.2, vy: rnd(.5, 2),
+    });
+  }
+}
+function knock(d, fx, fz, power) {
+  const l = Math.hypot(fx, fz) || 1;
+  d.vx += (fx / l) * power; d.vz += (fz / l) * power;
+  check('ef6');
+}
+
+/* Exploding Fireball: one projectile, consumed on first contact, one blast. */
+const fireballs = [];
+function launchFireball(final) {
+  const a = { x: player.x + player.aimX * 0.6, z: player.z + player.aimZ * 0.6,
+              dx: player.aimX, dz: player.aimZ, life: 3.0, final: !!final };
+  fireballs.push(a);
+  L.glow.spawn({ x: a.x, z: a.z, y: 0.7, life: 0.16, s0: 1.6, s1: 0.3, a0: 1, a1: 0, c0: 0xffd88a });
+  return a;
+}
+function detonate(f, x, z, cause) {
+  const enhanced = state.enhanced;
+  const radius = enhanced ? EF.blastEnhanced : EF.blast;
+  const dmg = f.final ? EF.chargedFinalDamage : EF.damage;
+  explosionFx(x, z, radius, f.final);
+  let hits = 0;
+  for (const d of dummies) {
+    if (d.respawn > 0) continue;
+    const dx = d.x - x, dz = d.z - z;
+    if (Math.hypot(dx, dz) > radius + d.r) continue;
+    hits++;
+    damage(d, dmg, f.final ? 'crit' : 'hit');       // the blast is the only damage event
+    knock(d, dx, dz, EF.knock);
+    if (f.final) applyBurn(d, BURN);
+  }
+  if (hits >= 2) check('ef4');
+  if (cause === 'geometry') check('ef3');
+  if (f.final) check('ef10');
+  if (enhanced) check('ef7');
+  state.lastBlastRadius = radius;
+}
+
+/* Flame Cleaver: an advancing curved wall that pierces and eats projectiles. */
+const waves = [];
+function launchWave(dirX, dirZ, charged) {
+  const enhanced = state.enhanced;
+  const w = {
+    x: player.x, z: player.z, dx: dirX, dz: dirZ,
+    rad: charged ? 1.2 : 0.9,
+    speed: charged ? FC.chargedSpeed : FC.speed,
+    reach: charged ? FC.chargedReach : (enhanced ? FC.reachEnh : FC.reach),
+    span: charged ? FC.chargedSpan : (enhanced ? FC.spanEnh : FC.span),
+    thick: charged ? FC.chargedThick : FC.thick,
+    dmg: charged ? FC.chargedDamage : FC.damage,
+    burn: charged ? FIERCE : BURN,
+    charged, hit: new Set(), age: 0,
+  };
+  waves.push(w);
+  if (enhanced && !charged) check('fc8');
+  return w;
+}
+function waveVisual(w, dt) {
+  const base = Math.atan2(w.dz, w.dx);
+  const arcLen = w.rad * w.span * 2;
+  const budget = w.charged ? 13 : 10;
+  const count = Math.min(budget, Math.max(5, Math.round(arcLen * 1.6 * Math.min(dt * 60, 2))));
+  // Short-lived puffs keep the wave reading as an advancing front rather than a
+  // filled cone, which is the distinction the source notes insist on.
+  const life = w.charged ? [0.20, 0.30] : [0.17, 0.27];
+  for (let i = 0; i < count; i++) {
+    const a = base + rnd(-w.span, w.span);
+    const rr = w.rad + rnd(-w.thick * 0.5, w.thick * 0.42);
+    const x = w.x + Math.cos(a) * rr, z = w.z + Math.sin(a) * rr;
+    const big = w.charged ? rnd(2.1, 3.3) : rnd(0.75, 1.35);
+    // body
+    flamePuff(x, z, rnd(0.25, 0.95), big, Math.cos(a) * 2.2, Math.sin(a) * 2.2, rnd(life[0], life[1]), false);
+    // hot leading rim
+    if (R() < 0.5) {
+      const rx = w.x + Math.cos(a) * (w.rad + w.thick * 0.42), rz = w.z + Math.sin(a) * (w.rad + w.thick * 0.42);
+      flamePuff(rx, rz, rnd(0.3, 0.9), big * 0.66, Math.cos(a) * 3.2, Math.sin(a) * 3.2, rnd(0.16, 0.28), true);
+    }
+    if (R() < 0.14) ember(x, z);
+  }
+}
+
+/* Hostile projectiles, so the wave's interception rule is observable. */
+const hostiles = [];
+function fireHostile(d) {
+  const dx = player.x - d.x, dz = player.z - d.z, l = Math.hypot(dx, dz) || 1;
+  hostiles.push({ x: d.x, z: d.z, dx: dx / l, dz: dz / l, life: 4 });
+}
+
+/* ---------------------------------------------------------------- cast flow */
+const state = {
+  arcana: 'ef', enhanced: false, incoming: false,
+  lastChargedFC: false, lastBlastRadius: 0,
+  aimAtEmit: [], waveStartRad: 0,
+};
+
+function beginCast() {
+  if (player.casting) return;
+  if (state.arcana === 'ef') {
+    if (player.cd > 0) return;
+    player.cd = EF.cooldown;
+    player.casting = { kind: 'ef', t: 0, dur: 0.26, fired: false };
+    check('ef11');
+  } else {
+    if (player.charges <= 0) return;
+    player.charges--;
+    if (player.recharge <= 0) player.recharge = FC.recharge;
+    player.casting = { kind: 'fc', t: 0, dur: 0.24, fired: false };
+  }
+}
+function beginCharged() {
+  if (player.casting || player.sig < 1) return;
+  player.sig = 0;
+  state.aimAtEmit = [];
+  cardSub.classList.add('on');
+  clearTimeout(cardSub._t);
+  cardSub._t = setTimeout(() => cardSub.classList.remove('on'), 4200);
+  if (state.arcana === 'ef') {
+    player.casting = { kind: 'efc', t: 0, dur: EF.windup + EF.chargedGap * 3 + 0.2, shots: 0, next: EF.windup };
+    player.cd = Math.max(player.cd, EF.cooldown * 0.6);
+  } else {
+    state.lastChargedFC = true;
+    player.casting = { kind: 'fcc', t: 0, dur: FC.windup + FC.chargedGap * FC.chargedWaves + 0.25, waves: 0, next: FC.windup };
+  }
+}
+// Wind-up: the white spike starburst the source plays before every charged signature.
+function windupFx(dt) {
+  for (let i = 0; i < 2; i++) {
+    const a = R() * 6.283;
+    L.ray.spawn({
+      x: player.x, z: player.z, y: 0.75, life: rnd(0.14, 0.3), rot: a - Math.PI / 2,
+      s0: rnd(1.4, 3.4), ar: 0.13, s1: rnd(3.0, 6.0), a0: 0.95, a1: 0, c0: 0xffffff, drag: 0,
+    });
+  }
+  L.glow.spawn({ x: player.x, z: player.z, y: 0.8, life: 0.12, s0: rnd(1.0, 1.8), s1: 0.6, a0: 0.9, a1: 0, c0: 0xffe27a });
+}
+
+function updateCast(dt) {
+  const c = player.casting;
+  if (!c) return;
+  c.t += dt;
+  player.lean = Math.max(player.lean, Math.min(1, c.t < 0.12 ? c.t / 0.12 : 1 - (c.t - 0.12) / 0.2));
+
+  if (c.kind === 'ef' && !c.fired && c.t >= 0.07) { c.fired = true; launchFireball(false); check('ef1'); check('ef2'); }
+  if (c.kind === 'fc' && !c.fired && c.t >= 0.06) {
+    c.fired = true;
+    const w = launchWave(player.aimX, player.aimZ, false);
+    state.waveStartRad = w.rad; check('fc3');
+  }
+  if (c.kind === 'efc') {
+    if (c.t < EF.windup) windupFx(dt);
+    while (c.shots < EF.chargedShots && c.t >= c.next) {
+      const final = c.shots === EF.chargedShots - 1;
+      launchFireball(final);
+      state.aimAtEmit.push(Math.atan2(player.aimZ, player.aimX));
+      c.shots++; c.next += EF.chargedGap;
+      shake += 0.2;
+    }
+    if (c.shots === EF.chargedShots) {
+      check('ef8');
+      // aim was re-sampled per emission, so a turn between shots is honoured
+      for (let i = 1; i < state.aimAtEmit.length; i++) {
+        let d = Math.abs(state.aimAtEmit[i] - state.aimAtEmit[i - 1]);
+        if (d > Math.PI) d = 6.283 - d;
+        if (d > 0.35) check('ef9');
+      }
+    }
+  }
+  if (c.kind === 'fcc') {
+    if (c.t < FC.windup) windupFx(dt);
+    while (c.waves < FC.chargedWaves && c.t >= c.next) {
+      // Centre-out ordering; directions are spread so wave span + offset covers
+      // exactly the forward 180 degrees and leaves the caster's rear exposed.
+      const step = (Math.PI - 2 * FC.chargedSpan) / (FC.chargedWaves - 1);
+      const k = Math.ceil(c.waves / 2) * (c.waves % 2 === 0 ? 1 : -1);
+      const a = Math.atan2(player.aimZ, player.aimX) + k * step;
+      launchWave(Math.cos(a), Math.sin(a), true);
+      c.waves++; c.next += FC.chargedGap;
+      shake += 0.16;
+    }
+    if (c.waves === FC.chargedWaves) { check('fc9'); check('fc10'); }
+  }
+  if (c.t >= c.dur) { player.casting = null; state.lastChargedFC = false; }
+}
+
+/* ------------------------------------------------------------------- update */
+function stepFireballs(dt) {
+  for (let i = fireballs.length - 1; i >= 0; i--) {
+    const f = fireballs[i];
+    const step = EF.speed * dt;
+    f.x += f.dx * step; f.z += f.dz * step; f.life -= dt;
+
+    // Trail is laid down along the travelled segment, so the comet stays unbroken
+    // no matter how long the frame was.
+    const puffs = Math.max(2, Math.ceil(step / 0.32));
+    for (let k = 0; k < puffs; k++) {
+      const back = (k / puffs) * step + rnd(0, 0.25);
+      const bx = f.x - f.dx * back, bz = f.z - f.dz * back;
+      flamePuff(bx, bz, rnd(0.5, 0.85), rnd(0.6, 1.05),
+        -f.dx * rnd(1, 4) + rnd(-1, 1), -f.dz * rnd(1, 4) + rnd(-1, 1), rnd(0.16, 0.3), false);
+    }
+    flamePuff(f.x, f.z, 0.7, 0.95, 0, 0, 0.1, true);
+    L.glow.spawn({ x: f.x, z: f.z, y: 0.7, life: 0.08, s0: 1.5, s1: 1.2, a0: 0.75, a1: 0, c0: 0xffc65a });
+
+    let hit = null, cause = null;
+    for (const d of dummies) {
+      if (d.respawn > 0) continue;
+      if (Math.hypot(d.x - f.x, d.z - f.z) < d.r + EF.radius) { hit = { x: f.x, z: f.z }; cause = 'enemy'; break; }
+    }
+    if (!hit) for (const o of obstacles) {
+      if (Math.hypot(o.x - f.x, o.z - f.z) < o.r + EF.radius) { hit = { x: f.x, z: f.z }; cause = 'geometry'; break; }
+    }
+    if (!hit && (Math.abs(f.x) > ROOM.x - 0.2 || Math.abs(f.z) > ROOM.z - 0.2)) {
+      hit = { x: Math.max(-ROOM.x, Math.min(ROOM.x, f.x)), z: Math.max(-ROOM.z, Math.min(ROOM.z, f.z)) };
+      cause = 'geometry';
+    }
+    if (hit || f.life <= 0) {
+      detonate(f, hit ? hit.x : f.x, hit ? hit.z : f.z, cause);
+      fireballs.splice(i, 1);                        // non-piercing: consumed by first contact
+    }
+  }
+}
+
+function stepWaves(dt) {
+  for (let i = waves.length - 1; i >= 0; i--) {
+    const w = waves[i];
+    w.age += dt;
+    const prev = w.rad;
+    w.rad += w.speed * dt;
+    waveVisual(w, dt);
+    if (w.rad - prev > 0.01) check(w.charged ? 'fc10' : 'fc4');
+
+    for (const d of dummies) {
+      if (d.respawn > 0 || w.hit.has(d)) continue;
+      const dx = d.x - w.x, dz = d.z - w.z, dist = Math.hypot(dx, dz);
+      if (Math.abs(dist - w.rad) > w.thick * 0.5 + d.r) continue;
+      let da = Math.abs(Math.atan2(dz, dx) - Math.atan2(w.dz, w.dx));
+      if (da > Math.PI) da = 6.283 - da;
+      if (da > w.span) continue;
+      w.hit.add(d);                                   // pierces: one hit per target
+      damage(d, w.dmg, 'hit');
+      knock(d, dx, dz, FC.knock);
+      applyBurn(d, w.burn);
+      sparkle(d.x, d.z, 0.8, 0.22);
+      if (w.hit.size >= 2 && !w.charged) check('fc5');
+    }
+    for (let h = hostiles.length - 1; h >= 0; h--) {
+      const p = hostiles[h];
+      const dx = p.x - w.x, dz = p.z - w.z, dist = Math.hypot(dx, dz);
+      if (Math.abs(dist - w.rad) > w.thick * 0.5 + 0.3) continue;
+      let da = Math.abs(Math.atan2(dz, dx) - Math.atan2(w.dz, w.dx));
+      if (da > Math.PI) da = 6.283 - da;
+      if (da > w.span) continue;
+      hostiles.splice(h, 1);                          // the visible wave destroys hostile projectiles
+      for (let k = 0; k < 6; k++) sparkle(p.x + rnd(-.3, .3), p.z + rnd(-.3, .3), rnd(.3, .6), .2);
+      L.glow.spawn({ x: p.x, z: p.z, y: .7, life: .2, s0: .8, s1: 2.0, a0: .9, a1: 0, c0: 0xa9d4ff });
+      check('fc7');
+    }
+    if (w.rad > w.reach) waves.splice(i, 1);          // cleans up at declared range
+  }
+}
+
+function stepDummies(dt) {
+  for (const d of dummies) {
+    if (d.respawn > 0) {
+      d.respawn -= dt;
+      const s = d.respawn > 0 ? Math.max(0.001, 1 - d.respawn / 0.55) : 1;
+      d.mesh.scale.setScalar(s);
+      d.mesh.visible = d.respawn <= 0 || (Math.sin(d.respawn * 40) > -0.3);
+      if (d.respawn <= 0) { d.mesh.visible = true; d.mesh.scale.setScalar(1); d.x = d.ax; d.z = d.az; d.vx = d.vz = 0; }
+      continue;
+    }
+    d.x += d.vx * dt; d.z += d.vz * dt;
+    const damp = Math.max(0, 1 - 4.2 * dt);
+    d.vx *= damp; d.vz *= damp;
+    d.x = Math.max(-ROOM.x + d.r, Math.min(ROOM.x - d.r, d.x));
+    d.z = Math.max(-ROOM.z + d.r, Math.min(ROOM.z - d.r, d.z));
+    // anchored training dummies walk back to their pad
+    const rx = d.ax - d.x, rz = d.az - d.z, rl = Math.hypot(rx, rz);
+    if (rl > 0.05 && Math.hypot(d.vx, d.vz) < 1.2) { d.x += (rx / rl) * Math.min(rl, 2.0 * dt); d.z += (rz / rl) * Math.min(rl, 2.0 * dt); }
+
+    if (d.burn) {
+      d.burn.t -= dt;
+      if (d.burn.t <= 0) {
+        d.burn.t = BURN.interval; d.burn.left--;
+        damage(d, d.burn.dmg, 'burn');
+        for (let i = 0; i < 3; i++) flamePuff(d.x + rnd(-.4, .4), d.z + rnd(-.4, .4), rnd(.4, 1.3), rnd(.2, .4), 0, 0, .3, R() < .4);
+        if (d.burn.left <= 0) d.burn = null;
+      }
+    }
+    if (state.incoming) {
+      d.gunT -= dt;
+      if (d.gunT <= 0) { d.gunT = rnd(2.2, 4.0); if (Math.hypot(player.x - d.x, player.z - d.z) < 20) fireHostile(d); }
+    }
+    d.flash = Math.max(0, d.flash - dt * 6);
+    d.mesh.position.set(d.x, 0, d.z);
+    d.bar.scale.x = 0.9 * Math.max(0, d.hp / d.max);
+    d.skin.color.setHex(d.flash > 0.05 ? 0xffffff : 0xd79a55);
+  }
+}
+
+function stepHostiles(dt) {
+  for (let i = hostiles.length - 1; i >= 0; i--) {
+    const p = hostiles[i];
+    p.x += p.dx * 7.5 * dt; p.z += p.dz * 7.5 * dt; p.life -= dt;
+    L.glow.spawn({ x: p.x, z: p.z, y: 0.75, life: 0.16, s0: 0.85, s1: 0.35, a0: 0.9, a1: 0, c0: 0x8fc4ff });
+    if (p.life <= 0 || Math.abs(p.x) > ROOM.x || Math.abs(p.z) > ROOM.z) { hostiles.splice(i, 1); continue; }
+    if (Math.hypot(p.x - player.x, p.z - player.z) < 0.7) {
+      hostiles.splice(i, 1);
+      for (let k = 0; k < 5; k++) sparkle(player.x + rnd(-.3, .3), player.z + rnd(-.3, .3), .4, .2);
+      shake += 0.25;
+    }
+  }
+}
+
+/* -------------------------------------------------------------------- input */
+const input = { mx: 0, mz: 0, aimHeld: false, lastAim: -99 };
+const moveStick = document.getElementById('moveStick');
+const aimStickEl = document.getElementById('aimStick');
+const pads = document.getElementById('pads');
+const touches = new Map();
+
+function stickAt(el, x, y) { el.style.left = x + 'px'; el.style.top = y + 'px'; el.classList.add('on'); }
+function stickKnob(el, dx, dy) { el.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`; }
+
+let touchSeen = false;
+pads.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch') touchSeen = true;
+  pads.setPointerCapture(e.pointerId);
+  const left = e.clientX < innerWidth * 0.5;
+  touches.set(e.pointerId, { left, ox: e.clientX, oy: e.clientY });
+  stickAt(left ? moveStick : aimStickEl, e.clientX, e.clientY);
+  stickKnob(left ? moveStick : aimStickEl, 0, 0);
+  if (!left) input.aimHeld = true;
+});
+pads.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId); if (!t) return;
+  let dx = e.clientX - t.ox, dy = e.clientY - t.oy;
+  const l = Math.hypot(dx, dy), max = 46;
+  const nx = l > 0 ? dx / l : 0, ny = l > 0 ? dy / l : 0;
+  const cl = Math.min(l, max);
+  stickKnob(t.left ? moveStick : aimStickEl, nx * cl, ny * cl);
+  const mag = Math.min(1, l / max);
+  if (t.left) { input.mx = nx * mag; input.mz = ny * mag; }
+  else if (l > 10) { player.aimX = nx; player.aimZ = ny; input.lastAim = now; }
+});
+function endPointer(e) {
+  const t = touches.get(e.pointerId); if (!t) return;
+  touches.delete(e.pointerId);
+  (t.left ? moveStick : aimStickEl).classList.remove('on');
+  if (t.left) { input.mx = 0; input.mz = 0; } else input.aimHeld = false;
+}
+pads.addEventListener('pointerup', endPointer);
+pads.addEventListener('pointercancel', endPointer);
+
+const castBtn = document.getElementById('castBtn');
+const chargedBtn = document.getElementById('chargedBtn');
+function wire(btn, fn) {
+  btn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); btn.classList.add('press'); fn(); });
+  const up = e => { e.stopPropagation(); btn.classList.remove('press'); };
+  btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('pointerleave', up);
+}
+wire(castBtn, beginCast);
+wire(chargedBtn, beginCharged);
+
+// Desktop fallbacks so the lab is usable on a laptop too.
+const keys = new Set();
+addEventListener('keydown', e => {
+  keys.add(e.key.toLowerCase());
+  if (e.key === ' ') { e.preventDefault(); beginCast(); }
+  if (e.key.toLowerCase() === 'q') beginCharged();
+  if (e.key === '1') setArcana('ef');
+  if (e.key === '2') setArcana('fc');
+  if (e.key.toLowerCase() === 'e') toggleEnh();
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); const hitPt = new THREE.Vector3();
+addEventListener('mousemove', e => {
+  if (touchSeen) return;
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (ray.ray.intersectPlane(groundPlane, hitPt)) {
+    const dx = hitPt.x - player.x, dz = hitPt.z - player.z, l = Math.hypot(dx, dz);
+    if (l > 0.4) { player.aimX = dx / l; player.aimZ = dz / l; input.lastAim = now; }
+  }
+});
+
+/* ---------------------------------------------------------------------- HUD */
+const cardName = document.getElementById('cardName');
+const cardSub = document.getElementById('cardSub');
+const barCd = document.getElementById('barCd'), valCd = document.getElementById('valCd');
+const barAmmo = document.getElementById('barAmmo'), rowAmmo = document.getElementById('rowAmmo'), rowCd = document.getElementById('rowCd');
+const barSig = document.getElementById('barSig'), valSig = document.getElementById('valSig');
+const pips = [...document.querySelectorAll('#pips .pip')];
+const enhChip = document.getElementById('enhChip'), fireChip = document.getElementById('fireChip');
+
+function setArcana(a) {
+  state.arcana = a;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.arcana === a));
+  cardName.innerHTML = a === 'ef' ? 'Exploding<br>Fireball' : 'Flame<br>Cleaver';
+  rowCd.hidden = a !== 'ef'; rowAmmo.hidden = a === 'ef';
+  document.getElementById('castHint').textContent = a === 'ef' ? '5s CD' : '2 CHARGES';
+  renderSheet();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setArcana(b.dataset.arcana)));
+function toggleEnh() { state.enhanced = !state.enhanced; enhChip.classList.toggle('on', state.enhanced); renderSheet(); }
+enhChip.addEventListener('click', toggleEnh);
+fireChip.addEventListener('click', () => { state.incoming = !state.incoming; fireChip.classList.toggle('on', state.incoming); });
+document.getElementById('resetChip').addEventListener('click', () => {
+  for (const d of dummies) { d.hp = d.max; d.x = d.ax; d.z = d.az; d.vx = d.vz = 0; d.burn = null; d.respawn = 0; d.mesh.visible = true; d.mesh.scale.setScalar(1); }
+  fireballs.length = 0; waves.length = 0; hostiles.length = 0;
+  for (const l of layers) l.clear();
+  totalDamage = 0;
+  for (const k of Object.keys(checks)) checks[k] = false;
+  for (const id of STRUCTURAL) checks[id] = true;
+  renderSheet();
+});
+
+function updateHud() {
+  barCd.style.width = (100 * (1 - player.cd / EF.cooldown)) + '%';
+  valCd.textContent = player.cd > 0 ? player.cd.toFixed(1) + 's' : 'READY';
+  const frac = player.charges >= FC.maxCharges ? 1 : 1 - player.recharge / FC.recharge;
+  barAmmo.style.width = (100 * frac) + '%';
+  pips.forEach((p, i) => p.classList.toggle('on', i < player.charges));
+  barSig.style.width = (player.sig * 100) + '%';
+  valSig.textContent = Math.round(player.sig * 100) + '%';
+  chargedBtn.disabled = player.sig < 1 || !!player.casting;
+  castBtn.disabled = !!player.casting || (state.arcana === 'ef' ? player.cd > 0 : player.charges <= 0);
+}
+
+/* ------------------------------------------------- acceptance-test checklist */
+const CHECKS = {
+  ef: [
+    ['ef1', 'Base cast launches exactly one large fireball'],
+    ['ef2', 'The projectile follows the aimed line and does not pierce'],
+    ['ef3', 'Wall, barrel, or tree contact also triggers the blast'],
+    ['ef4', 'Every target inside the blast takes one 50-damage event'],
+    ['ef5', 'Direct target gets the blast only — no extra projectile hit'],
+    ['ef6', 'The blast applies strong outward knockback'],
+    ['ef7', 'Enhancement increases radius, not projectiles or ticks'],
+    ['ef8', 'Charged Signature emits exactly three fireballs'],
+    ['ef9', 'Aim can be corrected between charged emissions'],
+    ['ef10', 'The final charged projectile adds damage and burn'],
+    ['ef11', 'Cooldown is 5 seconds'],
+  ],
+  fc: [
+    ['fc1', 'Flame Cleaver stores no more than two charges'],
+    ['fc2', 'Each charge recovers in 4 seconds'],
+    ['fc3', 'One normal cast emits exactly one broad curved wave'],
+    ['fc4', 'The wave visibly advances instead of filling a cone'],
+    ['fc5', 'It pierces and hits several aligned enemies once each'],
+    ['fc6', 'Each hit deals 16 damage and applies burn'],
+    ['fc7', 'The visible wave destroys hostile projectiles'],
+    ['fc8', 'Enhancement increases both width and travel range'],
+    ['fc9', 'Charged Signature emits exactly seven massive waves'],
+    ['fc10', 'Charged directions cover the forward 180 degrees'],
+    ['fc11', 'Charged waves apply a fiercer burn'],
+  ],
+};
+const checks = {};
+for (const list of Object.values(CHECKS)) for (const [id] of list) checks[id] = false;
+// Structural guarantees: the projectile never deals damage of its own, and the
+// charge store is hard-capped at two.
+const STRUCTURAL = ['ef5', 'fc1'];
+for (const id of STRUCTURAL) checks[id] = true;
+let sheetDirty = true;
+function check(id) { if (id && !checks[id]) { checks[id] = true; sheetDirty = true; } }
+
+const sheet = document.getElementById('sheet'), sheetBody = document.getElementById('sheetBody');
+document.getElementById('infoBtn').addEventListener('click', () => { sheet.classList.toggle('on'); renderSheet(); });
+document.getElementById('sheetClose').addEventListener('click', () => sheet.classList.remove('on'));
+
+const NOTES = {
+  ef: {
+    title: 'Exploding Fireball',
+    line: 'Fire · Signature · Projectile',
+    body: 'A non-piercing projectile whose first enemy, wall, or destructible-obstacle contact is converted into one circular blast. Projectile contact and explosion damage are a single conversion event, not two stacked hits on the direct target.',
+    stats: [
+      ['Damage', '50 (blast)'], ['Hit count', '1 per target'], ['Knockback', '35 / 10 / 50'],
+      ['Cooldown', '5s'], ['Blast radius', () => (state.enhanced ? 'enhanced' : 'base') + ' — ' + (state.enhanced ? EF.blastEnhanced : EF.blast).toFixed(1) + ' tiles'],
+      ['Charged', '3 fireballs, final +damage +burn'],
+    ],
+    src: 'Video 315–325s · notes 09-fire-standards-3.md #45',
+  },
+  fc: {
+    title: 'Flame Cleaver',
+    line: 'Fire · Signature · Projectile · 2 charges',
+    body: 'A broad curved wall of fire that advances along the aim, pierces enemies, applies burn, and destroys every hostile projectile it touches. The attack is a moving front, not an instantaneous cone — collision tracks the visible wave.',
+    stats: [
+      ['Damage', '16 + 16 burn'], ['Hit count', '1 per target'], ['Knockback', '12'],
+      ['Charges', '2, one per 4s'],
+      ['Wave', () => (state.enhanced ? 'enhanced' : 'base') + ' — ' + (state.enhanced ? FC.reachEnh : FC.reach).toFixed(0) + ' tiles, ' + Math.round((state.enhanced ? FC.spanEnh : FC.span) * 2 * 57.3) + '° wide'],
+      ['Charged', '7 waves across 180°, fiercer burn'],
+    ],
+    src: 'Video 325–337s · notes 09-fire-standards-3.md #46',
+  },
+};
+function renderSheet() {
+  const a = state.arcana, n = NOTES[a];
+  document.getElementById('sheetTitle').textContent = n.title;
+  const done = CHECKS[a].filter(([id]) => checks[id]).length;
+  sheetBody.innerHTML = `
+    <div class="sec">
+      <h3>${n.line}</h3>
+      <p>${n.body}</p>
+      <div class="kv">${n.stats.map(([k, v]) => `<b>${k}</b><span>${typeof v === 'function' ? v() : v}</span>`).join('')}</div>
+    </div>
+    <div class="sec">
+      <h3>Source-faithful acceptance test — ${done}/${CHECKS[a].length}</h3>
+      <ol class="check">${CHECKS[a].map(([id, t]) => `<li class="${checks[id] ? 'done' : ''}">${t}</li>`).join('')}</ol>
+      <p class="hint">Items light up as you reproduce them in the arena. Turn on <b>Incoming fire</b> to test the wave's projectile screen; fire into a barrel or the wall to test geometry detonation.</p>
+    </div>
+    <div class="sec">
+      <h3>Controls</h3>
+      <p class="hint">Left thumb moves. Right thumb aims (it auto-aims at the nearest dummy when idle). <b>CAST</b> uses the normal cast, <b>CHARGED</b> unlocks at 100% signature.<br>
+      Desktop: <kbd>WASD</kbd> move, mouse aims, <kbd>Space</kbd> cast, <kbd>Q</kbd> charged, <kbd>1</kbd>/<kbd>2</kbd> switch, <kbd>E</kbd> enhance.</p>
+    </div>
+    <div class="sec">
+      <h3>Source</h3>
+      <p class="hint">${n.src}<br>Damage totals, cooldowns, and charge counts follow the Wizard of Legend Wiki entries recorded in gate2-online-reference.md.</p>
+    </div>`;
+}
+setArcana('ef');
+
+/* ------------------------------------------------------------------ mainloop */
+let last = performance.now() / 1000, now = last;
+function frame() {
+  requestAnimationFrame(frame);
+  const t = performance.now() / 1000;
+  let dt = Math.min(0.05, t - last); last = t; now = t;
+  if (hitstop > 0) { hitstop -= dt; dt *= 0.22; }
+
+  // keyboard movement
+  let kx = 0, kz = 0;
+  if (keys.has('a') || keys.has('arrowleft')) kx -= 1;
+  if (keys.has('d') || keys.has('arrowright')) kx += 1;
+  if (keys.has('w') || keys.has('arrowup')) kz -= 1;
+  if (keys.has('s') || keys.has('arrowdown')) kz += 1;
+  const mx = kx || input.mx, mz = kz || input.mz;
+
+  // player movement
+  const sp = 7.4;
+  player.vx += ((mx * sp) - player.vx) * Math.min(1, dt * 14);
+  player.vz += ((mz * sp) - player.vz) * Math.min(1, dt * 14);
+  player.x += player.vx * dt; player.z += player.vz * dt;
+  player.x = Math.max(-ROOM.x + player.r, Math.min(ROOM.x - player.r, player.x));
+  player.z = Math.max(-ROOM.z + player.r, Math.min(ROOM.z - player.r, player.z));
+
+  // auto-aim at the nearest dummy when the aim thumb is idle
+  if (!input.aimHeld && now - input.lastAim > 0.6) {
+    let best = null, bd = 1e9;
+    for (const d of dummies) {
+      if (d.respawn > 0) continue;
+      const l = Math.hypot(d.x - player.x, d.z - player.z);
+      if (l < bd) { bd = l; best = d; }
+    }
+    if (best) {
+      const dx = best.x - player.x, dz = best.z - player.z, l = Math.hypot(dx, dz) || 1;
+      player.aimX += ((dx / l) - player.aimX) * Math.min(1, dt * 5);
+      player.aimZ += ((dz / l) - player.aimZ) * Math.min(1, dt * 5);
+      const al = Math.hypot(player.aimX, player.aimZ) || 1;
+      player.aimX /= al; player.aimZ /= al;
+    }
+  }
+
+  // cooldowns
+  if (player.cd > 0) player.cd = Math.max(0, player.cd - dt);
+  if (player.charges < FC.maxCharges) {
+    player.recharge -= dt;
+    if (player.recharge <= 0) {
+      player.charges++;                      // one charge back every 4s, capped at 2
+      player.recharge = player.charges < FC.maxCharges ? FC.recharge : 0;
+      check('fc2');
+      if (player.charges >= FC.maxCharges) check('fc1');
+    }
+  }
+  player.sig = Math.min(1, player.sig + dt / 6.5);
+
+  updateCast(dt);
+  stepFireballs(dt);
+  stepWaves(dt);
+  stepHostiles(dt);
+  stepDummies(dt);
+  for (const l of layers) l.update(dt);
+  updateRings(dt);
+  updateNumbers(dt);
+
+  // player transform
+  player.lean = Math.max(0, player.lean - dt * 4);
+  const yaw = Math.atan2(player.aimX, player.aimZ);
+  pg.rotation.y = yaw;
+  pg.position.set(player.x + player.aimX * player.lean * 0.28, 0, player.z + player.aimZ * player.lean * 0.28);
+  pg.userData.hand.material.color.setHex(player.casting ? 0xfff0c0 : 0xffb04a);
+  aimArrow.position.set(player.x, 0, player.z);
+  aimArrow.rotation.y = yaw;
+
+  // camera: centred on the caster, nudged forward so the HUD never eats the action
+  shake = Math.max(0, shake - dt * 3.2);
+  const limX = Math.max(0, ROOM.x - VIEW.visW), limZ = Math.max(0, ROOM.z - VIEW.visH);
+  const tx = Math.max(-limX, Math.min(limX, player.x));
+  const tz = Math.max(-limZ, Math.min(limZ, player.z - VIEW.lead));
+  camera.position.set(
+    tx + CAM_DIR.x * camDist + (Math.random() - .5) * shake * 0.6,
+    CAM_DIR.y * camDist + (Math.random() - .5) * shake * 0.4,
+    tz + CAM_DIR.z * camDist + (Math.random() - .5) * shake * 0.6
+  );
+  camera.lookAt(tx, 0, tz);
+
+  updateHud();
+  if (sheetDirty && sheet.classList.contains('on')) { renderSheet(); sheetDirty = false; }
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  frameCamera();
+  renderer.setSize(innerWidth, innerHeight);
+});
+document.addEventListener('gesturestart', e => e.preventDefault());
+</script>
+</body>
+</html>
