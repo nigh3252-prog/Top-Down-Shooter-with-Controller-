@@ -7,7 +7,10 @@ import {
   buildRunOffers,
   drawCards,
 } from '../src/run-draft.js';
+import { STONE_WEAPONS } from '../src/weapons.js';
+import { resolveStanceWeaponCompatibility } from '../src/stance-compatibility.js';
 
+assert.deepEqual(new Set(Object.keys(STARTER_STANCE_IDS_BY_WEAPON)), new Set(Object.keys(STONE_WEAPONS)));
 assert.deepEqual(STARTER_STANCE_IDS_BY_WEAPON.dagger, ['S24','S25']);
 assert.deepEqual(STARTER_STANCE_IDS_BY_WEAPON.rapier, ['S16','S19']);
 assert.deepEqual(STARTER_STANCE_IDS_BY_WEAPON.spear, ['S20','S22']);
@@ -17,6 +20,14 @@ for (const [weaponId, stanceIds] of Object.entries(STARTER_STANCE_IDS_BY_WEAPON)
   assert.equal(stanceIds.length, 2, `${weaponId} should have two starter stances`);
   const cards = starterStanceCardsForWeapon(weaponId);
   assert.deepEqual(cards.map(card => card.id), stanceIds);
+  for (const card of cards) {
+    const compatibility = resolveStanceWeaponCompatibility({
+      stance:card,
+      weapon:STONE_WEAPONS[weaponId],
+      weaponId,
+    });
+    assert.notEqual(compatibility.tier, 'unusable', `${weaponId} starter ${card.id} should remain usable`);
+  }
 }
 for (const weaponId of ['rapier', 'spear']) {
   const cards = starterStanceCardsForWeapon(weaponId);
