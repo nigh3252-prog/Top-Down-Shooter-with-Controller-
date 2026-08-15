@@ -24,7 +24,7 @@ import {
 
 assert.deepEqual(ARENA_ENEMY_FAMILIES, ['GOBLINS', 'FUSION', 'FLARE', 'HADES']);
 assert.deepEqual(ARENA_ENEMY_STATUSES, ['candidate', 'arena', 'lab', 'disabled']);
-assert.equal(ARENA_ENEMY_REGISTRY.length, 29);
+assert.equal(ARENA_ENEMY_REGISTRY.length, 31);
 assert.equal(new Set(ARENA_ENEMY_IDS).size, ARENA_ENEMY_REGISTRY.length);
 assert.equal(new Set(ARENA_ENEMY_REGISTRY.map(enemy => enemy.spawnKind)).size, ARENA_ENEMY_REGISTRY.length);
 assert.ok(Object.isFrozen(ARENA_ENEMY_REGISTRY));
@@ -57,6 +57,10 @@ assert.equal(getArenaEnemy('missing'), null);
 assert.throws(() => requireArenaEnemy('missing'), /Unknown enemy/);
 
 assert.equal(requireArenaEnemy('grunt').stats.hp, 45);
+assert.equal(requireArenaEnemy('trialDot').arenaStatus,'lab');
+assert.equal(requireArenaEnemy('trialDot').stats.trialOnly,true);
+assert.equal(requireArenaEnemy('accordion2d').stats.trialOnly,true);
+assert.equal(requireArenaEnemy('accordion2d').arenaStatus,'lab');
 assert.equal(requireArenaEnemy('lion').attacks[0].id, 'lionPounce');
 assert.equal(requireArenaEnemy('flareGoblinRunner').attacks.length, 2);
 assert.equal(requireArenaEnemy('hadesWretchedWitch').attacks[0].id, 'hadesWitchOrb');

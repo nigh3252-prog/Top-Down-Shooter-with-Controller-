@@ -1,6 +1,7 @@
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
   <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
+  <div id="trialBadge">LONGSWORD · RAT STEP · AUTONOMOUS</div>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
@@ -44,6 +45,14 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="themeChoice" type="button" data-arena-theme-option="neutral" aria-pressed="false">NEUTRAL</button>
       <button class="themeChoice" type="button" data-arena-theme-option="original" aria-pressed="false">ORIGINAL</button>
       <button class="themeChoice" type="button" data-arena-theme-option="akai" aria-pressed="false">AKAI</button>
+    </div>
+  </section>
+  <section class="pauseSection trialEnemySection" aria-labelledby="trialEnemyTitle">
+    <h2 id="trialEnemyTitle">TRIAL ENEMIES</h2>
+    <div class="trialEnemyGrid" role="group" aria-label="Trial enemy set">
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="cylinders" aria-pressed="false">CYLINDERS</button>
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="goblins-lugaru" aria-pressed="false">GOBLINS + LUGARU</button>
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="accordion-2d" aria-pressed="false">2D ACCORDION + 3D</button>
     </div>
   </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">
