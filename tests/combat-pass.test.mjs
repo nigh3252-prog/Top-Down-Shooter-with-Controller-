@@ -113,12 +113,13 @@ assert.equal(shouldExpireBufferedInput({
 
 const interpreter=createAttackInterpreter(THREE);
 for(const [kind,enemy] of Object.entries(ARENA_ENEMY_ARCHETYPES)){
-  if(enemy.thrower) continue;
+  if(enemy.thrower||enemy.trialOnly) continue;
   assert(enemy.combatAttacks?.length>=3,`${kind} has a varied authored attack vocabulary`);
   for(const attackKey of enemy.combatAttacks){
     assert(interpreter.ATTACKS[attackKey],`${kind} references real attacks.js move ${attackKey}`);
   }
 }
+assert.equal(ARENA_ENEMY_ARCHETYPES.trialDot.attack,'trialBump','the intentionally simple trial enemy keeps one readable bump attack');
 assert.notDeepEqual(ARENA_ENEMY_ARCHETYPES.dagger.combatAttacks,ARENA_ENEMY_ARCHETYPES.mace.combatAttacks,'dagger and mace roles have different move silhouettes');
 assert.equal(normalizeGoblinWeaponKind('maceGoblin'),'mace','main-combat mace goblin uses the chunky mace');
 assert.equal(normalizeGoblinWeaponKind('spearGoblin'),'spear','main-combat spear goblin uses the chunky spear');

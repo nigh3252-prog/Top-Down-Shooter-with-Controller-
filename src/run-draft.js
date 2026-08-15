@@ -37,6 +37,10 @@ export function drawRewardChoices({stancePool=ALL_STANCE_CARDS,nonStancePool=NON
   return drawCards(pool,Math.min(count,pool.length),rng);
 }
 
+export function rewardTotemEnabledForRuntime(api){
+  return !(api?.config?.wardenTrial===true||api?.config?.variant==='warden-trial');
+}
+
 function cleanName(card){return String(card?.name||'Unknown Card').replace(/^S\d+\s*/,'');}
 function isNonStance(card){return card?.type==='ability'||card?.type==='modifier';}
 function arrowForAttack(key){
@@ -155,7 +159,9 @@ export function installRunDraft(deck){
     state.api=api;
     state.profile=applyActiveCombatProfileToArena(state.api);
     state.seenCleared=api.encounterState.progress?.cleared||0;
-    try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}
+    if(rewardTotemEnabledForRuntime(api)){
+      try{state.totem=await createRewardTotemGate({getApi:()=>state.api,onTriggered:openReward,onMessage:showMessage});}catch{return;}
+    }
     renderOffers();startGate.classList.remove('hidden');monitorProgress();
   }
   function waitForArena(){
