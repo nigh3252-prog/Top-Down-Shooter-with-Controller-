@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
-import { installWardenTrialCardGesture, resolveWardenTrialCardDirection } from '../src/warden-trial-card-ui.js';
+import { installWardenTrialCardGesture, installWardenTrialSwipeSurface, resolveWardenTrialCardDirection } from '../src/warden-trial-card-ui.js';
 
 assert.equal(resolveWardenTrialCardDirection(-55),'up');
 assert.equal(resolveWardenTrialCardDirection(55),'down');
@@ -54,5 +54,23 @@ cancelledCard.dispatch('pointercancel',{...event,pointerId:3,clientY:0});
 assert.deepEqual(cancelled,[],'a cancelled drag must not register a card direction');
 cancelledGesture.destroy();
 gesture.destroy();
+
+const surface=createFakeElement();
+const surfaceDirections=[];
+const surfaceGesture=installWardenTrialSwipeSurface({
+  target:surface,
+  startGuard:event=>event.clientY>=100,
+  onDirection:(direction,detail)=>surfaceDirections.push({direction,...detail}),
+});
+surface.dispatch('pointerdown',{...event,pointerId:4,clientY:50,target:surface});
+surface.dispatch('pointermove',{...event,pointerId:4,clientY:0,target:surface});
+surface.dispatch('pointerup',{...event,pointerId:4,clientY:0,target:surface});
+assert.deepEqual(surfaceDirections,[],'the reserved top area must not register card swipes');
+surface.dispatch('pointerdown',{...event,pointerId:5,clientY:200,target:surface});
+surface.dispatch('pointermove',{...event,pointerId:5,clientY:130,target:surface});
+surface.dispatch('pointerup',{...event,pointerId:5,clientY:120,target:surface});
+assert.deepEqual(surfaceDirections,[{direction:'up',deltaY:-80}]);
+assert.equal(surface.style.transform,undefined,'the full-screen registration surface must not move the card');
+surfaceGesture.destroy();
 
 console.log('Warden Trial blank card gesture: ok');

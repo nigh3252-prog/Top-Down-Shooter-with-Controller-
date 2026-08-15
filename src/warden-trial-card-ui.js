@@ -113,3 +113,95 @@ export function installWardenTrialCardGesture({
     getSnapshot(){ return { active:pointerId !== null, deltaY }; },
   };
 }
+
+export function installWardenTrialSwipeSurface({
+  target = globalThis.document,
+  onDirection = () => {},
+  enabled = () => true,
+  startGuard = () => true,
+  threshold = 55,
+} = {}){
+  if(!target?.addEventListener){
+    return {
+      reset(){},
+      destroy(){},
+      getSnapshot(){ return { active:false, deltaY:0 }; },
+    };
+  }
+
+  let pointerId = null;
+  let startY = 0;
+  let deltaY = 0;
+  let captureTarget = null;
+  let destroyed = false;
+
+  const reset = () => {
+    if(pointerId !== null){
+      try{ captureTarget?.releasePointerCapture?.(pointerId); }catch(_){ /* pointer already released */ }
+    }
+    pointerId = null;
+    startY = 0;
+    deltaY = 0;
+    captureTarget = null;
+  };
+
+  const onDown = event => {
+    if(destroyed || pointerId !== null || !enabled(event) || !startGuard(event)) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    pointerId = event.pointerId;
+    startY = Number(event.clientY) || 0;
+    deltaY = 0;
+    captureTarget = event.target?.setPointerCapture ? event.target : null;
+    try{ captureTarget?.setPointerCapture?.(pointerId); }catch(_){ /* target cannot capture this pointer */ }
+  };
+
+  const onMove = event => {
+    if(event.pointerId !== pointerId) return;
+    event.preventDefault?.();
+    deltaY = (Number(event.clientY) || 0) - startY;
+  };
+
+  const finish = (event, cancelled = false) => {
+    if(event.pointerId !== pointerId) return;
+    if(!cancelled&&Number.isFinite(Number(event.clientY)))deltaY=Number(event.clientY)-startY;
+    const finalDelta = deltaY;
+    try{ captureTarget?.releasePointerCapture?.(pointerId); }catch(_){ /* pointer already released */ }
+    pointerId = null;
+    startY = 0;
+    deltaY = 0;
+    captureTarget = null;
+    if(!cancelled){
+      const direction = resolveWardenTrialCardDirection(finalDelta, threshold);
+      if(direction) onDirection(direction, { deltaY:finalDelta });
+    }
+  };
+
+  const onUp = event => finish(event, false);
+  const onCancel = event => finish(event, true);
+  const windowRef = globalThis.window || globalThis;
+  const onBlur = () => reset();
+  const listenerOptions = { capture:true };
+  target.addEventListener('pointerdown', onDown, listenerOptions);
+  target.addEventListener('pointermove', onMove, listenerOptions);
+  target.addEventListener('pointerup', onUp, listenerOptions);
+  target.addEventListener('pointercancel', onCancel, listenerOptions);
+  target.addEventListener('lostpointercapture', onCancel, listenerOptions);
+  windowRef.addEventListener?.('blur', onBlur);
+
+  return {
+    reset,
+    destroy(){
+      if(destroyed) return;
+      destroyed = true;
+      reset();
+      target.removeEventListener?.('pointerdown', onDown, listenerOptions);
+      target.removeEventListener?.('pointermove', onMove, listenerOptions);
+      target.removeEventListener?.('pointerup', onUp, listenerOptions);
+      target.removeEventListener?.('pointercancel', onCancel, listenerOptions);
+      target.removeEventListener?.('lostpointercapture', onCancel, listenerOptions);
+      windowRef.removeEventListener?.('blur', onBlur);
+    },
+    getSnapshot(){ return { active:pointerId !== null, deltaY }; },
+  };
+}

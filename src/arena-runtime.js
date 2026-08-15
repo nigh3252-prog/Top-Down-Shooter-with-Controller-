@@ -37,7 +37,7 @@ import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
-import { installWardenTrialCardGesture } from './warden-trial-card-ui.js';
+import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -1514,9 +1514,15 @@ function setTrialCardFeedback(direction='neutral'){
 }
 resetTrialCardFeedback=()=>setTrialCardFeedback('neutral');
 if(wardenTrialMode&&trialCard){
-  trialCardGesture=installWardenTrialCardGesture({
-    element:trialCard,
+  trialCardGesture=installWardenTrialSwipeSurface({
+    target:document,
     enabled:()=>arena.started&&!isPaused()&&arena.deadT<0&&!roomTransition?.active,
+    startGuard:event=>{
+      const startY=Number(event?.clientY)||0;
+      if(startY < (Number(innerHeight)||1)*.2)return false;
+      if(event?.target?.closest?.('#topBar,#panel'))return false;
+      return true;
+    },
     onDirection:direction=>setTrialCardFeedback(direction),
   });
 }
