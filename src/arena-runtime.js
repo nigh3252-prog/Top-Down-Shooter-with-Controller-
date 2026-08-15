@@ -37,6 +37,7 @@ import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
+import { installWardenTrialCardGesture } from './warden-trial-card-ui.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -146,12 +147,23 @@ const ABILITY_CAPTURE_CLEAN = ABILITY_CAPTURE_MODE && CAPTURE_PARAMS.get('clean'
 document.body.classList.toggle('abilityCaptureClean',ABILITY_CAPTURE_CLEAN);
 
 /* ---------- scene ---------- */
+const trialCardTray=document.getElementById('trialCardTray');
+const readArenaViewport=()=>{
+  const trayHeight=wardenTrialMode
+    ? Math.max(0,Number(trialCardTray?.getBoundingClientRect?.().height)||0)
+    : 0;
+  return{
+    width:Math.max(1,Number(innerWidth)||1),
+    height:Math.max(1,(Number(innerHeight)||1)-trayHeight),
+  };
+};
+let arenaViewport=readArenaViewport();
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 // Cap device pixel ratio at 1.5: on high-DPI phones (DPR 2-3) this is the single
 // biggest GPU win (render resolution scales with the square of this) and is barely
 // perceptible with antialiasing on.
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
-renderer.setSize(innerWidth,innerHeight);
+renderer.setSize(arenaViewport.width,arenaViewport.height);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.22;
@@ -167,7 +179,7 @@ scene.fog = new THREE.Fog(
   arenaTheme.worldStyle.fogNear*fogDistanceScale,
   arenaTheme.worldStyle.fogFar*fogDistanceScale,
 );
-const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, innerWidth/innerHeight, .5, wardenTrialMode?660:220);
+const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, arenaViewport.width/arenaViewport.height, .5, wardenTrialMode?660:220);
 
 scene.add(new THREE.AmbientLight(0xd8ecff, .5));
 const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi);
@@ -233,14 +245,38 @@ const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
   projectWorldToScreen(point){
     accordionOverlayProjection.set(Number(point?.x)||0,Number(point?.y)||0,Number(point?.z)||0).project(camera);
     return{
-      x:(accordionOverlayProjection.x*.5+.5)*innerWidth,
-      y:(-accordionOverlayProjection.y*.5+.5)*innerHeight,
+      x:(accordionOverlayProjection.x*.5+.5)*arenaViewport.width,
+      y:(-accordionOverlayProjection.y*.5+.5)*arenaViewport.height,
       depth:accordionOverlayProjection.z,
     };
   },
-  getViewport:()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1}),
+  getViewport:()=>({width:arenaViewport.width,height:arenaViewport.height,dpr:devicePixelRatio||1}),
 }):null;
 if(accordionEnemyOverlay)document.body.appendChild(accordionEnemyOverlay.canvas);
+
+function syncAccordionEnemyOverlayCanvas(){
+  const canvas=accordionEnemyOverlay?.canvas;
+  if(!canvas)return;
+  Object.assign(canvas.style,{
+    inset:'auto',left:'0px',top:'0px',right:'auto',bottom:'auto',
+    width:`${arenaViewport.width}px`,height:`${arenaViewport.height}px`,
+  });
+}
+function syncArenaViewport(){
+  arenaViewport=readArenaViewport();
+  camera.aspect=arenaViewport.width/arenaViewport.height;
+  camera.updateProjectionMatrix();
+  if(wardenTrialStageCamera){
+    wardenTrialStageCamera.aspect=arenaViewport.width/arenaViewport.height;
+    wardenTrialStageCamera.updateProjectionMatrix();
+    wardenTrialStageCamera.updateMatrixWorld();
+  }
+  wardenTrialCenterField?.refresh?.();
+  renderer.setSize(arenaViewport.width,arenaViewport.height);
+  syncAccordionEnemyOverlayCanvas();
+  accordionEnemyOverlay?.resize();
+}
+syncArenaViewport();
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -1209,6 +1245,8 @@ function flashVignette(){
   const v = document.getElementById('vig');
   v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
 }
+let trialCardGesture=null;
+let resetTrialCardFeedback=()=>{};
 function respawn(){
   resetStartupMilestones(null);
   traceArenaState('respawn-begin',{transition:{kind:'full-reset'}});
@@ -1232,6 +1270,8 @@ function respawn(){
   combatState.attack = null; combatState.t = 0; resetChainState();
   fullRefillStamina();
   wardenTrialBrain?.reset?.();
+  trialCardGesture?.reset?.();
+  resetTrialCardFeedback();
   rebuildDeck();
   encounterState.reset();
   enemySystem.reset();
@@ -1306,6 +1346,7 @@ const joy = { id:null, sx:0, sy:0, x:0, z:0 };
 const joyBase=document.getElementById('joyBase'), joyKnob=document.getElementById('joyKnob');
 addEventListener('pointerdown', e=>{
   if(e.target.closest('button')||e.target.closest('#panel')) return;
+  if(wardenTrialMode && e.clientY >= arenaViewport.height) return;
   if(e.clientX > innerWidth*.55 || joy.id!==null) return;
   joy.id=e.pointerId; joy.sx=e.clientX; joy.sy=e.clientY;
   joyBase.style.display='block';
@@ -1453,6 +1494,32 @@ function toggleMenu(){
   emitRuntime({type:'menu',open:opening});
 }
 function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
+const trialCard=document.getElementById('trialCard');
+const trialCardStatus=document.getElementById('trialCardStatus');
+let trialCardDirection='neutral';
+function setTrialCardFeedback(direction='neutral'){
+  trialCardDirection=direction==='up'||direction==='down'?direction:'neutral';
+  if(trialCard){
+    if(trialCardDirection==='neutral')delete trialCard.dataset.direction;
+    else trialCard.dataset.direction=trialCardDirection;
+  }
+  if(trialCardStatus){
+    trialCardStatus.textContent=trialCardDirection==='up'
+      ? 'UP REGISTERED · INERT'
+      : trialCardDirection==='down'
+        ? 'DOWN REGISTERED · INERT'
+        : 'BLANK CARD · READY';
+  }
+  emitRuntime({type:'trial-card-direction',direction:trialCardDirection});
+}
+resetTrialCardFeedback=()=>setTrialCardFeedback('neutral');
+if(wardenTrialMode&&trialCard){
+  trialCardGesture=installWardenTrialCardGesture({
+    element:trialCard,
+    enabled:()=>arena.started&&!isPaused()&&arena.deadT<0&&!roomTransition?.active,
+    onDirection:direction=>setTrialCardFeedback(direction),
+  });
+}
 menuBtn.addEventListener('click', toggleMenu);
 resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'))toggleMenu(); });
 themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
@@ -1463,6 +1530,7 @@ const startGate=document.getElementById('startGate');
 document.getElementById('startBtn').addEventListener('click', ()=>{
   arena.started = true;
   startGate.classList.add('hidden');
+  resetTrialCardFeedback();
 });
 const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
@@ -1479,8 +1547,8 @@ function syncFsButtons(){
   fsBtn.setAttribute('aria-label', fsBtn.title);
   sgFsBtn.textContent = active?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
 }
-document.addEventListener('fullscreenchange', syncFsButtons);
-document.addEventListener('webkitfullscreenchange', syncFsButtons);
+document.addEventListener('fullscreenchange', ()=>{ syncFsButtons(); syncArenaViewport(); });
+document.addEventListener('webkitfullscreenchange', ()=>{ syncFsButtons(); syncArenaViewport(); });
 syncFsButtons();
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   respawn();
@@ -2229,6 +2297,7 @@ function destroyRuntime(){
   stanceGate4Runtime?.destroy?.();stanceGate4Runtime=null;
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
+  trialCardGesture?.destroy?.();trialCardGesture=null;
   accordionEnemyOverlay?.destroy?.();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
@@ -2243,6 +2312,7 @@ const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Obje
 const runtimeHandle={
   config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},get defenseController(){return stanceGate5Runtime;},
+  get trialCardDirection(){return trialCardDirection;},
   get playerFacing(){return actorFacing;},getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
@@ -2312,17 +2382,7 @@ if(ABILITY_CAPTURE_MODE){
   captureController.reset(captureInitialOptions());
 }else startRuntime();
 
-addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  if(wardenTrialStageCamera){
-    wardenTrialStageCamera.aspect=innerWidth/innerHeight;
-    wardenTrialStageCamera.updateProjectionMatrix();
-    wardenTrialStageCamera.updateMatrixWorld();
-  }
-  renderer.setSize(innerWidth, innerHeight);
-  accordionEnemyOverlay?.resize();
-});
+addEventListener('resize', syncArenaViewport);
 emitRuntime({type:'ready',runtime:runtimeHandle});
 return runtimeHandle;
 }

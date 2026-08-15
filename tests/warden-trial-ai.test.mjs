@@ -39,6 +39,17 @@ assert.ok(edgeSample.pressure>.9,'the outer screen band should apply strong cent
 assert.ok(edgeSample.direction.x<-.9&&Math.abs(edgeSample.direction.z)<.1,'edge pressure should point back toward the projected center');
 const cornerSample=centerField.sample({x:8,z:8},1);
 assert.ok(cornerSample.direction.x<-.5&&cornerSample.direction.z<-.5,'corner pressure should pull diagonally inward');
+let centerOffset=0;
+const refreshableCenterField=createWardenTrialCenterField({
+  stage:createWardenTrialStageBoundary({
+    projectWorldToNdc:point=>({x:point.x/10,y:point.z/10}),
+    groundPointFromNdc:point=>({x:point.x*10,z:point.y*10+centerOffset}),
+  }),
+});
+const initialCenter=refreshableCenterField.center;
+centerOffset=4;
+refreshableCenterField.refresh();
+assert.equal(refreshableCenterField.center.z,initialCenter.z+4,'the center field can refresh after the render viewport changes');
 const gentleCenterMove=blendWardenTrialCenterMovement({x:0,z:0},{direction:{x:-1,z:0},pressure:.5,bias:.8});
 assert.ok(gentleCenterMove.x<0&&Math.abs(gentleCenterMove.x)<1,'center correction should be a soft movement contribution');
 const strongCenterMove=blendWardenTrialCenterMovement({x:1,z:0},{direction:{x:-1,z:0},pressure:1,bias:1});

@@ -37,6 +37,16 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     </button>
   </div>
 </div>
+<div id="trialCardTray" aria-label="Warden Trial card interface">
+  <div id="trialCardStatus" aria-live="polite">BLANK CARD · READY</div>
+  <div id="trialCardRail">
+    <button id="trialCard" class="trialCard" type="button" aria-label="Blank test card; drag upward or downward">
+      <span class="trialCardUp">↑ UP TEST</span>
+      <span class="trialCardArt" aria-hidden="true">BLANK</span>
+      <span class="trialCardDown">↓ DOWN TEST</span>
+    </button>
+  </div>
+</div>
 <div id="panel" class="hidden" aria-label="Pause menu">
   <div class="pauseTitle">PAUSED</div>
   <section class="pauseSection" aria-labelledby="themeTitle">

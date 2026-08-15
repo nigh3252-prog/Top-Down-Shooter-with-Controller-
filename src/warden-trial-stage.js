@@ -98,10 +98,17 @@ export function createWardenTrialCenterField({stage,softEdge=.64,fullEdge=.9}={}
   const halfHeight=Math.max(1e-6,(bounds.maxY-bounds.minY)*.5);
   const soft=clamp(Number(softEdge)||.64,0,1);
   const full=Math.max(soft+1e-3,clamp(Number(fullEdge)||.9,0,1.25));
-  const centerGround=stage.groundPointFromNdc(centerNdc);
-  const center=Number.isFinite(Number(centerGround?.x))&&Number.isFinite(Number(centerGround?.z))
-    ?Object.freeze({x:Number(centerGround.x),z:Number(centerGround.z)})
-    :null;
+  const resolveCenter=()=>{
+    const centerGround=stage.groundPointFromNdc(centerNdc);
+    return Number.isFinite(Number(centerGround?.x))&&Number.isFinite(Number(centerGround?.z))
+      ?Object.freeze({x:Number(centerGround.x),z:Number(centerGround.z)})
+      :null;
+  };
+  let center=resolveCenter();
+  const refresh=()=>{
+    center=resolveCenter();
+    return center;
+  };
   const projectedRadius=(point,radius)=>{
     const r=Math.max(0,Number(radius)||0);
     if(r<=0)return{x:0,y:0};
@@ -143,5 +150,13 @@ export function createWardenTrialCenterField({stage,softEdge=.64,fullEdge=.9}={}
       ndc:Object.freeze({x:Number(projected.x),y:Number(projected.y)}),
     });
   };
-  return Object.freeze({bounds,centerNdc,center,softEdge:soft,fullEdge:full,sample});
+  return Object.freeze({
+    bounds,
+    centerNdc,
+    get center(){ return center; },
+    softEdge:soft,
+    fullEdge:full,
+    refresh,
+    sample,
+  });
 }
