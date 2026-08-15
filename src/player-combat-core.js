@@ -35,6 +35,7 @@ import { buildStoneWeaponMesh, normalizeStoneWeaponId } from './weapons.js';
 import { createAttackInterpreter } from './attack-interpreter.js';
 import { shouldStartBufferedFollowup } from './combat-links.js';
 import { RAPIER_TIP_TUNING } from './weapon-balance.js';
+import { enforceGroundClearance } from './combat-ground-clearance.js';
 
 export function installPlayerCombat(api) {
   const { THREE, scene, materials, facet } = api;
@@ -78,7 +79,7 @@ export function installPlayerCombat(api) {
     pending:null, pendingGroup:null, last:'vertical', variantIndex:{vertical:0,horizontal:0,stab:0},
     tune:Object.assign({},TUNE_DEFAULTS), puppetScale:DEFAULT_COMBAT_SCALE, shoulderDrop:3.05, floorBlend:1.0, weaponHitboxScale:1, hideArms:false, loop:false, showDriver:false,
     commitYaw:0, lastAttackLabel:'none',
-    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, chargePull:0, readyLock:0
+    hitStop:0, wobble:{v:0,vel:0}, trailFlash:0, breath:1, chargePull:0, readyLock:0, groundConstraintEnabled:true, groundClearance:0.05, groundTipRaise:0.58, groundTipSteps:5, groundCorrection:null
   };
   const lastRenderedPose=P({hold:[0,1,0],tip:[0,1,0]});
   const linkFromPose=P({hold:[0,1,0],tip:[0,1,0]});
@@ -104,6 +105,7 @@ export function installPlayerCombat(api) {
   let combatLayer = null, weaponRoot = null, driverDebug = null, rightArmA = null, rightArmB = null, leftArmA = null, leftArmB = null, rightHandProxy = null, leftHandProxy = null;
   let weaponParts = {}, activeWeaponKind = 'blade', haveCombatTip = false;
   const prevCombatTip = new THREE.Vector3();
+  const groundBounds = new THREE.Box3();
 
   const combatTrail = (()=>{
     const N=24, pos=new Float32Array(N*2*3), col=new Float32Array(N*2*3), idx=[];
@@ -193,6 +195,18 @@ export function installPlayerCombat(api) {
   function planePointAroundShoulders(v,anchor,q,out=v){ return out.copy(v).sub(anchor).applyQuaternion(q).add(anchor); }
   function currentWeapon(){const WEAPONS=api.WEAPONS; return WEAPONS[combatState.weapon] || WEAPONS.longsword;}
   function tuneNum(k){return Number(combatState.tune[k] ?? TUNE_DEFAULTS[k]);}
+  function getCombatGroundY(){
+    const source=typeof api.getGroundHeight==='function'?api.getGroundHeight():api.getGroundHeight;
+    const value=Number(source);
+    return Number.isFinite(value)?value:0;
+  }
+  function getGroundClearance(){return clamp(Number(combatState.groundClearance??.05),0,.5);}
+  function measureWeaponMinY(){
+    if(!weaponRoot)return Number.POSITIVE_INFINITY;
+    weaponRoot.updateWorldMatrix(true,true);
+    groundBounds.setFromObject(weaponRoot);
+    return groundBounds.isEmpty()?Number.POSITIVE_INFINITY:groundBounds.min.y;
+  }
 
   /* ---- weapon lifecycle --------------------------------------------------- */
   function selectCombatWeapon(id){
@@ -408,12 +422,31 @@ export function installPlayerCombat(api) {
     const shoulderMid=shR.clone().lerp(shL,.5);
     const planeQ=getCombatPlaneCorrection(combatPlaneQ);
     const weaponQ=new THREE.Quaternion();
-    swordQuat(p.tip,p.roll+w.v*.35,swQ); weaponQ.copy(planeQ).multiply(swQ);
-    gripOff.set(0,RIG.gripCenter,0).applyQuaternion(weaponQ).multiplyScalar(getCombatScale());
-    const holdRaw=combatToWarden(p.hold,new THREE.Vector3());
-    const holdW=planePointAroundShoulders(holdRaw,shoulderMid,planeQ,new THREE.Vector3());
-    weaponRoot.position.copy(holdW).sub(gripOff); weaponRoot.quaternion.copy(weaponQ); weaponRoot.scale.setScalar(getCombatScale());
-    updateWeaponDynamicVisual(now,dt); weaponRoot.updateWorldMatrix(true,false);
+    const placeWeapon=()=>{
+      swordQuat(p.tip,p.roll+w.v*.35,swQ); weaponQ.copy(planeQ).multiply(swQ);
+      gripOff.set(0,RIG.gripCenter,0).applyQuaternion(weaponQ).multiplyScalar(getCombatScale());
+      const holdRaw=combatToWarden(p.hold,new THREE.Vector3());
+      const holdW=planePointAroundShoulders(holdRaw,shoulderMid,planeQ,new THREE.Vector3());
+      weaponRoot.position.copy(holdW).sub(gripOff);
+      weaponRoot.quaternion.copy(weaponQ);
+      weaponRoot.scale.setScalar(getCombatScale());
+      updateWeaponDynamicVisual(now,dt);
+      weaponRoot.updateWorldMatrix(true,true);
+    };
+    placeWeapon();
+    combatState.groundCorrection=combatState.groundConstraintEnabled
+      ? enforceGroundClearance({
+        pose:p,
+        groundY:getCombatGroundY(),
+        clearance:getGroundClearance(),
+        holdScale:getCombatScale(),
+        allowTipCorrection:activeWeaponKind!=='whip',
+        maxTipRaise:combatState.groundTipRaise,
+        tipSteps:combatState.groundTipSteps,
+        applyPose:placeWeapon,
+        measureMinY:measureWeaponMinY,
+      })
+      : null;
     const rightLocal=RIG.handR.clone().applyQuaternion(weaponQ).multiplyScalar(getCombatScale()).add(weaponRoot.position);
     const leftLocal=RIG.handL.clone().applyQuaternion(weaponQ).multiplyScalar(getCombatScale()).add(weaponRoot.position);
     const eR=shR.clone().lerp(rightLocal,.55).add(new THREE.Vector3(.18,-.18,.05));
