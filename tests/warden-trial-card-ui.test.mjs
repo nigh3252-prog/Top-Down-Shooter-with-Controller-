@@ -10,7 +10,7 @@ assert.equal(resolveWardenTrialCardDirection(0),null);
 
 assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-only card tray');
 assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one blank trial card');
-assert.match(ARENA_SHELL_HTML,/drag upward or downward/,'the card exposes its vertical interaction to assistive technology');
+assert.match(ARENA_SHELL_HTML,/swipe upward or downward/,'the card exposes its vertical interaction to assistive technology');
 
 function createFakeElement(){
   const listeners=new Map();
