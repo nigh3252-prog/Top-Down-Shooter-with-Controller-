@@ -1,7 +1,7 @@
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
   <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
-  <div id="trialBadge">LONGSWORD · RAT STEP · AUTONOMOUS</div>
+  <div id="trialBadge">WARDEN TRIAL · READY</div>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
@@ -38,12 +38,12 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
   </div>
 </div>
 <div id="trialCardTray" aria-label="Warden Trial card interface">
-  <div id="trialCardStatus" aria-live="polite">BLANK CARD · READY</div>
+  <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
   <div id="trialCardRail">
-    <button id="trialCard" class="trialCard" type="button" aria-label="Blank test card; drag upward or downward">
-      <span class="trialCardUp">↑ UP TEST</span>
-      <span class="trialCardArt" aria-hidden="true">BLANK</span>
-      <span class="trialCardDown">↓ DOWN TEST</span>
+    <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe upward or downward">
+      <span class="trialCardUp">↑ UP · INERT</span>
+      <span class="trialCardArt" aria-hidden="true">CURRENT CARD</span>
+      <span class="trialCardDown">↓ DOWN · PLAY</span>
     </button>
   </div>
 </div>
