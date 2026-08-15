@@ -10,4 +10,11 @@ export const WARDEN_TRIAL_SETTINGS = Object.freeze({
     top: 0.22,
     bottom: 0.1,
   }),
+  centerField: Object.freeze({
+    softEdge: 0.64,
+    fullEdge: 0.9,
+    wardenBias: 1,
+    enemyBias: 1.05,
+    flankerBias: 0.72,
+  }),
 });

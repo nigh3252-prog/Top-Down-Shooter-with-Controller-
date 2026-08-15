@@ -34,9 +34,9 @@ import { resolveArenaTheme } from './arena-theme-registry.js';
 import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { readArenaStandardSetup } from './arena-standard-setup.js';
 import { createArenaStartupTrace } from './arena-startup-trace.js';
-import { createWardenTrialBrain } from './warden-trial-ai.js';
+import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
-import { createWardenTrialStageBoundary } from './warden-trial-stage.js';
+import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -221,6 +221,11 @@ const wardenTrialStage=wardenTrialMode?createWardenTrialStageBoundary({
       z:wardenTrialStageCamera.position.z+stageRayDirection.z*distance,
     };
   },
+}):null;
+const wardenTrialCenterField=wardenTrialMode?createWardenTrialCenterField({
+  stage:wardenTrialStage,
+  softEdge:WARDEN_TRIAL_SETTINGS.centerField.softEdge,
+  fullEdge:WARDEN_TRIAL_SETTINGS.centerField.fullEdge,
 }):null;
 const accordionOverlayProjection=wardenTrialMode?new THREE.Vector3():null;
 const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
@@ -589,7 +594,9 @@ let roomTransition = null;
 
 /* ---------- enemies ---------- */
 const enemySystem = createArenaEnemySystem({
-  THREE, worldRoot, controlRegistry, arenaRadius:ARENA, navigation:mazeNavigation, roomEncounterMode:true,
+  THREE, worldRoot, controlRegistry, arenaRadius:ARENA, navigation:mazeNavigation,
+  combatCenterField:wardenTrialCenterField,
+  roomEncounterMode:true,
   onActivityTransition:traceActivityTransition,
   onEncounterCleared(roomId){
     encounterState?.clearRoom(roomId);
@@ -1379,7 +1386,13 @@ function updateWardenTrialAI(dt){
     stamina:arena.stamina.v,
     attackActive:!!combatState.attack,
   });
-  input.mx=Number(decision.move?.x)||0;input.mz=Number(decision.move?.z)||0;
+  const centerSample=wardenTrialCenterField?.sample({x:actorPos.x,z:actorPos.y},PLAYER_RADIUS);
+  const move=(!decision.action&&!combatState.attack&&centerSample)
+    ?blendWardenTrialCenterMovement(decision.move,centerSample,{
+      bias:WARDEN_TRIAL_SETTINGS.centerField.wardenBias,
+    })
+    :decision.move;
+  input.mx=Number(move?.x)||0;input.mz=Number(move?.z)||0;
   if(decision.spawnWave){
     configureWardenTrialWave();enemySystem.startRoomEncounter(activeRoomId);
     announce('NEXT WAVE',.7);return;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { createWardenTrialBrain, getWardenTrialCombatBand, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
+import { blendWardenTrialCenterMovement, createWardenTrialBrain, getWardenTrialCombatBand, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
-import { createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
+import { createWardenTrialCenterField, createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
   WARDEN_TRIAL_GOBLIN_GROUPS,
@@ -30,6 +30,19 @@ assert.equal(stage.contains({x:8,z:0},1),false,'actor radius must remain inside 
 const boundedMove=stage.resolveMovement({x:0,z:0},{x:20,z:-20},1);
 assert.deepEqual({x:boundedMove.x,z:boundedMove.z},{x:7,z:-7},'movement clamps to the fixed screen footprint instead of the visual hex');
 assert.equal(boundedMove.collided,true);
+
+const centerField=createWardenTrialCenterField({stage,softEdge:.6,fullEdge:.9});
+const centerSample=centerField.sample({x:0,z:0},1);
+assert.ok(centerSample.pressure<.01,'the preferred center should not apply edge pressure');
+const edgeSample=centerField.sample({x:8,z:0},1);
+assert.ok(edgeSample.pressure>.9,'the outer screen band should apply strong center pressure');
+assert.ok(edgeSample.direction.x<-.9&&Math.abs(edgeSample.direction.z)<.1,'edge pressure should point back toward the projected center');
+const cornerSample=centerField.sample({x:8,z:8},1);
+assert.ok(cornerSample.direction.x<-.5&&cornerSample.direction.z<-.5,'corner pressure should pull diagonally inward');
+const gentleCenterMove=blendWardenTrialCenterMovement({x:0,z:0},{direction:{x:-1,z:0},pressure:.5,bias:.8});
+assert.ok(gentleCenterMove.x<0&&Math.abs(gentleCenterMove.x)<1,'center correction should be a soft movement contribution');
+const strongCenterMove=blendWardenTrialCenterMovement({x:1,z:0},{direction:{x:-1,z:0},pressure:1,bias:1});
+assert.ok(strongCenterMove.x<0,'full edge pressure should overcome outward movement');
 
 assert.equal(rewardTotemEnabledForRuntime({config:{variant:'warden-trial'}}),false,'Trial clears must not spawn the run reward totem');
 assert.equal(rewardTotemEnabledForRuntime({config:{mode:'arena'}}),true,'ordinary Combat Arena runs keep reward totems');
