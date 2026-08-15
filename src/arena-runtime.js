@@ -37,6 +37,7 @@ import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialStageBoundary } from './warden-trial-stage.js';
+import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
   configureWardenTrialEnemySet,
@@ -221,6 +222,20 @@ const wardenTrialStage=wardenTrialMode?createWardenTrialStageBoundary({
     };
   },
 }):null;
+const accordionOverlayProjection=wardenTrialMode?new THREE.Vector3():null;
+const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
+  canvas:document.createElement('canvas'),
+  projectWorldToScreen(point){
+    accordionOverlayProjection.set(Number(point?.x)||0,Number(point?.y)||0,Number(point?.z)||0).project(camera);
+    return{
+      x:(accordionOverlayProjection.x*.5+.5)*innerWidth,
+      y:(-accordionOverlayProjection.y*.5+.5)*innerHeight,
+      depth:accordionOverlayProjection.z,
+    };
+  },
+  getViewport:()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1}),
+}):null;
+if(accordionEnemyOverlay)document.body.appendChild(accordionEnemyOverlay.canvas);
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -1818,6 +1833,7 @@ function renderArena(){
   });
   renderer.render(scene, camera);
   for(const object of hiddenCaptureTrails)object.visible=true;
+  accordionEnemyOverlay?.render({enemies:enemySystem.enemies,now:performance.now()});
 }
 function arenaMoveInput(){return{x:Number(input.mx)||0,z:Number(input.mz)||0};}
 function setArcanaMovementLock(locked=true){arena.arcanaMovementLocked=!!locked;return arena.arcanaMovementLocked;}
@@ -2200,6 +2216,7 @@ function destroyRuntime(){
   stanceGate4Runtime?.destroy?.();stanceGate4Runtime=null;
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
+  accordionEnemyOverlay?.destroy?.();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
   emitRuntime({type:'lifecycle',destroyed:true});
@@ -2291,6 +2308,7 @@ addEventListener('resize', ()=>{
     wardenTrialStageCamera.updateMatrixWorld();
   }
   renderer.setSize(innerWidth, innerHeight);
+  accordionEnemyOverlay?.resize();
 });
 emitRuntime({type:'ready',runtime:runtimeHandle});
 return runtimeHandle;

@@ -4,11 +4,13 @@ import { ORIGINAL_MULTI_GROUP_SPAWN_KIND } from './original-encounter-groups.js'
 export const WARDEN_TRIAL_ENEMY_SET_IDS = Object.freeze({
   CYLINDERS:'cylinders',
   GOBLINS_LUGARU:'goblins-lugaru',
+  ACCORDION_2D:'accordion-2d',
 });
 
 export const WARDEN_TRIAL_ENEMY_SET_OPTIONS = Object.freeze([
   Object.freeze({id:WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS,label:'CYLINDERS'}),
   Object.freeze({id:WARDEN_TRIAL_ENEMY_SET_IDS.GOBLINS_LUGARU,label:'GOBLINS + LUGARU'}),
+  Object.freeze({id:WARDEN_TRIAL_ENEMY_SET_IDS.ACCORDION_2D,label:'2D ACCORDION + 3D'}),
 ]);
 
 export const WARDEN_TRIAL_WAVE_SIZE=7;
@@ -36,7 +38,8 @@ export function configureWardenTrialEnemySet(enemySystem,value){
     if(typeof original?.setWorkingRosterEncounterGroups!=='function')throw new Error('The Original goblin roster mixer is unavailable.');
     original.setWorkingRosterEncounterGroups(WARDEN_TRIAL_GOBLIN_GROUPS);
     enemySystem.setSpawnKind(ORIGINAL_MULTI_GROUP_SPAWN_KIND);
-  }else enemySystem.setSpawnKind('trialDot');
+  }else if(id===WARDEN_TRIAL_ENEMY_SET_IDS.ACCORDION_2D)enemySystem.setSpawnKind('accordion2d');
+  else enemySystem.setSpawnKind('trialDot');
   enemySystem.setWaveSize(WARDEN_TRIAL_WAVE_SIZE);
   return WARDEN_TRIAL_ENEMY_SET_OPTIONS.find(option=>option.id===id);
 }

@@ -35,6 +35,7 @@ assert.equal(rewardTotemEnabledForRuntime({config:{variant:'warden-trial'}}),fal
 assert.equal(rewardTotemEnabledForRuntime({config:{mode:'arena'}}),true,'ordinary Combat Arena runs keep reward totems');
 assert.match(ARENA_SHELL_HTML,/data-trial-enemy-set="cylinders"/,'the pause menu offers the cylinder wave');
 assert.match(ARENA_SHELL_HTML,/data-trial-enemy-set="goblins-lugaru"/,'the pause menu offers the goblin and Lugaru wave');
+assert.match(ARENA_SHELL_HTML,/data-trial-enemy-set="accordion-2d"/,'the pause menu offers the 2D accordion hybrid wave');
 
 const configured={kind:null,waveSize:0,groups:[]};
 const enemySystem={
@@ -50,6 +51,8 @@ assert.ok(configured.groups.some(group=>group.spawnKind===LUGARU_DUELIST_ID),'th
 assert.deepEqual(new Set(configured.groups.map(group=>group.spawnKind)),new Set(['grunt','dagger','mace','rock','captain',LUGARU_DUELIST_ID]));
 configureWardenTrialEnemySet(enemySystem,WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS);
 assert.equal(configured.kind,'trialDot');
+configureWardenTrialEnemySet(enemySystem,WARDEN_TRIAL_ENEMY_SET_IDS.ACCORDION_2D);
+assert.equal(configured.kind,'accordion2d');
 
 const player={x:0,z:0};
 const near={id:'near',x:6.4,z:0,hp:10,state:'idle'};

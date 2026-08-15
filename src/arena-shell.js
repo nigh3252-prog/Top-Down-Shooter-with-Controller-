@@ -52,6 +52,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <div class="trialEnemyGrid" role="group" aria-label="Trial enemy set">
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="cylinders" aria-pressed="false">CYLINDERS</button>
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="goblins-lugaru" aria-pressed="false">GOBLINS + LUGARU</button>
+      <button class="trialEnemyChoice" type="button" data-trial-enemy-set="accordion-2d" aria-pressed="false">2D ACCORDION + 3D</button>
     </div>
   </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">

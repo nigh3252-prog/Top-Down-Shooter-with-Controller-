@@ -132,6 +132,10 @@ const GOBLIN_WEAPON_SCALE = 1;
 // but drive them with the same authored attacks.js choreography as the player.
 export const ARENA_ENEMY_ARCHETYPES = {
   trialDot:{ hp:18, radius:WARDEN_TRIAL_SETTINGS.enemyRadius, height:WARDEN_TRIAL_SETTINGS.enemyHeight, speed:4.45, attack:'trialBump', score:4, weapon:null, color:0xd8584d, bellyColor:0xffb48d, armorColor:0x6b1f27, poseScale:1, role:'trial pursuer', trialOnly:true, trialDot:true, turnSpeed:Math.PI*3, rallyMin:99, rallyMax:120 },
+  // The Accordion Lab enemy is a 2D puppet riding the same 3D enemy state
+  // machine. Its root is intentionally hidden; arena-runtime's hybrid canvas
+  // projects the state back into screen space and draws the supplied parts.
+  accordion2d:{ hp:44, radius:.86, height:3.55, speed:3.55, attack:'accordionStrike', score:12, weapon:null, color:0xc86a47, bellyColor:0xffd7a0, armorColor:0x532e24, poseScale:1, role:'accordion flanker', preferredRange:4.15, trialOnly:true, accordion2d:true, turnSpeed:Math.PI*3.2, rallyMin:99, rallyMax:120 },
   grunt:   { hp:45,  radius:.99, height:4.21, speed:3.61, attack:'slash',         score:10, weapon:'longsword',  color:0x6f9f4e, bellyColor:0xbfd582, armorColor:0x543820, poseScale:1.0,  combatAttacks:['vertical5','horizontal6','vertical3'], timingScale:1.00, turnSpeed:Math.PI,       rallyMin:6, rallyMax:11 },
   dagger:  { hp:34,  radius:.86, height:3.78, speed:5.12, attack:'poke',          score:14, weapon:'dagger',     color:0x83b26a, bellyColor:0xc7d78a, armorColor:0x3f5a35, poseScale:.85, combatAttacks:['stab2','horizontal6','stab4'],         timingScale:.88, turnSpeed:Math.PI*1.34, rallyMin:5, rallyMax:9 },
   mace:    { hp:88,  radius:1.20, height:4.82, speed:2.84, attack:'maceOverhead', score:24, weapon:'mace',       color:0x5c8f42, bellyColor:0xa9c273, armorColor:0x4a3320, poseScale:1.25, combatAttacks:['vertical6','vertical9','vertical16'], timingScale:1.35, turnSpeed:Math.PI*.62, rallyMin:7, rallyMax:12 },
@@ -144,6 +148,7 @@ const ARCHETYPES = { ...BASE_ARCHETYPES, ...FUSION_ARCHETYPES };
 // Punch EATK: ranges/knock scaled by S; timings/damage/arc verbatim.
 const BASE_EATK = {
   trialBump:    { kind:'melee',  name:'Bump',          range:1.05*S, tokenCost:.55, windup:.48, active:.13, recovery:.40, cooldown:1.25, damage:6, arc:1.35, knock:.22*S },
+  accordionStrike:{ kind:'melee', name:'Accordion Strike', range:5.0, tokenCost:.65, windup:.24, active:.12, recovery:.36, cooldown:1.05, damage:9, arc:.82, knock:.35*S },
   slash:        { kind:'melee',  name:'Slash',         range:.78*S,  tokenCost:1.0,  windup:.58, active:.16, recovery:.50, cooldown:1.45, damage:10, arc:1.1, knock:.5*S },
   poke:         { kind:'melee',  name:'Poke',          range:.70*S,  tokenCost:.75,  windup:.36, active:.13, recovery:.36, cooldown:1.05, damage:7,  arc:.75, knock:.25*S },
   maceOverhead: { kind:'melee',  name:'Overhead',      range:1.06*S, tokenCost:1.75, windup:1.05, active:.20, recovery:.78, cooldown:1.95, damage:24, arc:.9,  knock:1.0*S, wantsSolo:true },
@@ -346,6 +351,11 @@ export function createArenaEnemySystem({
       torsoRoot.add(trialCore);weaponRigRoot.add(weaponRoot);root.add(torsoRoot,weaponRigRoot,trialHalo);
       trialCore.position.y=a.height*.5;trialHalo.position.y=.07;trialHalo.rotation.x=-Math.PI/2;
       visual={trialDot:true,trialCore,trialHalo,torsoRoot,weaponRigRoot,weaponRoot};
+    } else if(a.accordion2d){
+      // The canvas overlay owns this enemy's pixels. Keeping an empty root in
+      // the 3D group preserves the normal lifecycle, hit testing, and cleanup
+      // contracts without drawing a second body underneath the puppet.
+      visual={accordion2d:true};
     } else if(a.fusion){
       const fusionVisual = fusionRig.create(kind);
       root.add(fusionVisual.model.group);
@@ -360,6 +370,7 @@ export function createArenaEnemySystem({
     const tokenRing = new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.6, .04, 6, 32), mats.windup); tokenRing.position.y = .08; tokenRing.visible = false; root.add(tokenRing);
     const rockProp = a.thrower ? visual.weaponRoot : null;
     root.position.set(x, 0, z); group.add(root);
+    if(a.accordion2d) root.visible=false;
     const weaponScale = visual.RIG?.scale || GOBLIN_WEAPON_SCALE;
     const realAttacks = (a.combatAttacks || []).map(key => materializeGoblinAttack(a, key, weaponScale, visual.RIG)).filter(Boolean);
     const useRealCombat = realAttacks.length > 0;
@@ -376,7 +387,7 @@ export function createArenaEnemySystem({
       id: nextId++, kind, x, z, vx:0, vz:0, radius:a.radius, height:a.height,
       wizardFaction:'hostile',wizardStableId:`${systemKey}:${String(nextId-1).padStart(4,'0')}`,
       hp, maxHp:hp, speed:a.speed, stop:useRealCombat ? holdDist : HOLD(), score:a.score, poseScale:a.poseScale,
-      fusion:isFusionEnemy(kind) || !!a.fusion, trialDot:!!a.trialDot, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
+      fusion:isFusionEnemy(kind) || !!a.fusion, trialDot:!!a.trialDot, accordion2d:!!a.accordion2d, role:a.role || 'goblin', preferredRange:a.preferredRange || 2.6,
       visualScale:a.visualScale || 1, targetScale:a.targetScale || 1, currentTargetScale:a.targetScale || 1,
       collisionScale:a.collisionScale || 1, separationScale:a.separationScale || a.collisionScale || 1,
       attackOriginForward:a.attackOriginForward || 0, headCollisionRadius:a.headCollisionRadius || 0,
@@ -395,6 +406,7 @@ export function createArenaEnemySystem({
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
       yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
       visualGroundSpeed:0, maxGroundSpeed:a.speed*tuning.speedScale,
+      drawVx:0, drawVz:0, animPhase:Math.random()*6.28, animSeed:Math.random()*6.28, animAttackT:99, animAttackSide:1, rethink:THREE.MathUtils.randFloat(.7,1.5), flankBias:THREE.MathUtils.randFloat(.7,1.25), flankAngle:THREE.MathUtils.randFloat(-Math.PI,Math.PI),
       root, rockProp, barBg, bar, telegraph, tokenRing, ...visual
     };
     enemies.push(e);
@@ -663,6 +675,87 @@ export function createArenaEnemySystem({
     }
   }
 
+  /* ---------- Accordion Lab hybrid behavior ---------- */
+  // This is the behavior layer from the supplied 2D prototype, expressed in
+  // arena world units. It deliberately bypasses the token director: the Trial
+  // is a spectator loop, so every accordion can choose a flank, telegraph, and
+  // commit its own strike while still using the shared player damage route.
+  function startAccordionAttack(e,p){
+    const attack=EATK.accordionStrike;
+    e.attack=attack;e.state='windup';e.stateTime=0;e.windup=attack.windup;e.active=attack.active;e.recovery=attack.recovery;
+    e.hitDone=false;e.attackTargetX=p.x;e.attackTargetZ=p.z;e.animAttackT=0;e.animAttackSide=p.x>=e.x?1:-1;
+    e.cooldown=attack.cooldown;
+  }
+  function updateAccordionEnemy(e,p,dt,movementScale,previous){
+    const attack=EATK.accordionStrike;
+    e.drawVx=0;e.drawVz=0;
+
+    if(e.stunned>0){
+      e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.vx*=Math.pow(.004,dt);e.vz*=Math.pow(.004,dt);
+      e.x+=e.vx*dt;e.z+=e.vz*dt;e.animAttackT=99;
+      e.stunned=Math.max(0,e.stunned-dt);
+    }else if(e.state==='windup'){
+      e.vx=e.vz=0;
+      turnFacingToPoint(e,p,dt,e.turnSpeed*.72);
+      e.animAttackT=e.stateTime;
+      if(e.stateTime>=e.windup){e.state='active';e.stateTime=0;}
+    }else if(e.state==='active'){
+      const lunge=1.15*movementScale;
+      e.x+=e.facing.x*lunge*dt;e.z+=e.facing.z*lunge*dt;
+      e.animAttackT=e.windup+e.stateTime;
+      if(!e.hitDone){resolveEnemyMelee(e,p);e.hitDone=true;}
+      if(e.stateTime>=e.active){e.state='recovery';e.stateTime=0;}
+    }else if(e.state==='recovery'){
+      e.vx=e.vz=0;e.animAttackT=e.windup+e.active+e.stateTime;
+      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.attack=null;e.animAttackT=99;}
+    }else if(movementScale>0){
+      const dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz)||1,baseAngle=Math.atan2(dz,dx);
+      e.rethink-=dt;
+      if(e.rethink<=0){
+        const spread=clamp((e.slotIndex||0)*.34,-1.1,1.1);
+        const candidateA=baseAngle+Math.PI+spread*e.orbitDir+THREE.MathUtils.randFloat(-.18,.18);
+        const candidateB=baseAngle+Math.PI-spread*e.orbitDir+THREE.MathUtils.randFloat(-.18,.18);
+        e.flankAngle=Math.random()<.5?candidateA:candidateB;
+        if(Math.random()<.25)e.orbitDir*=-1;
+        e.rethink=THREE.MathUtils.randFloat(.8,1.6);
+      }
+
+      const slotRadius=e.preferredRange;
+      const slotX=p.x+Math.cos(e.flankAngle)*slotRadius,slotZ=p.z+Math.sin(e.flankAngle)*slotRadius;
+      let mx=slotX-e.x,mz=slotZ-e.z,md=Math.hypot(mx,mz)||1;
+      if(distance>11){mx=dx;mz=dz;md=distance;}
+      else{
+        const tx=-dz/distance*e.orbitDir,tz=dx/distance*e.orbitDir;
+        mx=(mx/md)*.82+tx*.58*e.flankBias;mz=(mz/md)*.82+tz*.58*e.flankBias;md=Math.hypot(mx,mz)||1;
+      }
+      if(distance>slotRadius+.28){
+        steer(e,mx/md,mz/md,1,dt);
+      }else if(distance<slotRadius*.72){
+        steer(e,-dx/distance,-dz/distance,.72,dt);
+      }else{
+        const tx=-dz/distance*e.orbitDir,tz=dx/distance*e.orbitDir;
+        steer(e,tx+(slotX-e.x)*.08,tz+(slotZ-e.z)*.08,.62,dt);
+      }
+      applySeparationSteering(e,dt);
+      e.x+=e.vx*dt*movementScale;e.z+=e.vz*dt*movementScale;
+      turnFacingToPoint(e,p,dt,e.turnSpeed);
+      if(distance<=attack.range&&e.cooldown<=0)startAccordionAttack(e,p);
+      if(e.state==='idle')e.animAttackT=99;
+    }else e.vx=e.vz=0;
+
+    e.drawVx=(e.x-previous.x)/Math.max(.0001,dt);
+    e.drawVz=(e.z-previous.z)/Math.max(.0001,dt);
+    const motion=clamp(Math.hypot(e.drawVx,e.drawVz)/Math.max(1,e.speed*tuning.speedScale),0,1);
+    e.animPhase+=dt*(5+4.4*motion);
+    if(navigation?.resolveMovement){
+      const moved=navigation.resolveMovement(previous,{x:e.x-previous.x,z:e.z-previous.z},collisionRadius(e));
+      e.x=moved.x;e.z=moved.z;
+    }else{
+      const rr=Math.hypot(e.x,e.z);
+      if(rr>arenaRadius-CLAMP_MARGIN){e.x*=((arenaRadius-CLAMP_MARGIN)/rr);e.z*=((arenaRadius-CLAMP_MARGIN)/rr);}
+    }
+  }
+
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
@@ -690,6 +783,11 @@ export function createArenaEnemySystem({
     e.spinVel *= Math.pow(.06, dt);
     e.spin *= Math.pow(.02, dt);
     e.squashT = Math.max(0, e.squashT - dt);
+
+    if(e.accordion2d){
+      updateAccordionEnemy(e,p,dt,movementScale,previous);
+      return;
+    }
 
     if(e.stunned > 0){
       endRally(e);
@@ -863,7 +961,13 @@ export function createArenaEnemySystem({
     e.root.rotation.y = Math.atan2(e.facing.x, e.facing.z);
   }
   function updateEnemyVisual(e, dt){
-    if(e.trialDot){
+    if(e.accordion2d){
+      // The 2D puppet is drawn by the fixed screen-space overlay. Keep its
+      // simulation root hidden and expose only timing/position fields there.
+      e.root.visible=false;
+      e.telegraph.visible=false;e.tokenRing.visible=false;
+      return;
+    } else if(e.trialDot){
       e.root.rotation.y=Math.atan2(e.facing.x,e.facing.z);
       const pulse=1+Math.sin(time*5+e.bobPhase)*.08;
       const scale=tuning.heightScale*e.visualScale;
@@ -877,7 +981,7 @@ export function createArenaEnemySystem({
       fusionRig.update(e.fusionVisual, e, dt, time, tuning.heightScale * e.visualScale);
     } else if(e.useRealCombat) applyRealCombatPose(e);
     else applyPunchPose(e);
-    if(!e.fusion&&!e.trialDot) applyRallyPose(e);
+    if(!e.fusion&&!e.trialDot&&!e.accordion2d) applyRallyPose(e);
     e.root.position.set(e.x, e.yOff + e.rootLift + (Number(e.wizardAirborneOffset)||0), e.z);
     const flashScale = 1 + Math.max(0, e.flash) * .18;
     // squash-and-stretch rides the flash pop: wide + short at max, easing back
@@ -937,7 +1041,10 @@ export function createArenaEnemySystem({
       if(factionService?.charmedEnemy===e)factionService.releaseCharm(e);
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
-      if(e.trialDot){
+      if(e.accordion2d){
+        // The accordion is a screen-space puppet, so its death is handled by
+        // the same lifecycle removal without spawning a 3D shatter duplicate.
+      }else if(e.trialDot){
         if(e.trialCore)rig.addDeathPieceFromObject(worldRoot,deathPieces,e.trialCore,null,e.trialCore.material,knock,1.1+power*.25);
       }else if(e.fusion){
         fusionRig.shatterMeshes(e.fusionVisual).forEach((mesh, i) => {

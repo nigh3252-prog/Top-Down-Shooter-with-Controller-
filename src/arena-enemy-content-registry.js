@@ -44,6 +44,7 @@ export const normalizeArenaStatus = normalizeArenaEnemyStatus;
 
 const ORIGINAL_METADATA = Object.freeze({
   trialDot: { label:'Trial Dot', role:'trial pursuer', tags:['trial','swarm','pursuer'], encounterCost:2, maxCount:12, introductionDepth:1, arenaStatus:'lab' },
+  accordion2d: { label:'Accordion Duelist (2D hybrid)', role:'flanking duelist', tags:['trial','2d','hybrid','mobile'], encounterCost:5, maxCount:12, introductionDepth:1, arenaStatus:'lab' },
   grunt: { label: 'Goblin Grunt', role: 'frontliner', tags: ['frontline'], encounterCost: 5, maxCount: 4, introductionDepth: 1 },
   dagger: { label: 'Goblin Dagger', role: 'flanker', tags: ['mobile', 'close'], encounterCost: 5, maxCount: 4, introductionDepth: 2 },
   mace: { label: 'Goblin Mace', role: 'anchor', tags: ['frontline', 'anchor'], encounterCost: 10, maxCount: 4, introductionDepth: 3 },
