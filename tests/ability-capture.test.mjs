@@ -129,9 +129,10 @@ assert.ok(respawnResetIndex>respawnIndex&&respawnMoveIndex>respawnResetIndex,'re
 assert.match(playerCombat,/const preserved=preserveResources[\s\S]*wizardNextTwentyDashRuntime\.state\?\.resources/,'the centralized reset must snapshot authored resource progress when requested');
 assert.match(playerCombat,/basicDashRuntime\.reset\?\.\(\);[\s\S]*wizardNextTwentyBasicsRuntime\.reset\?\.\(\);[\s\S]*wizardNextTwentyDashRuntime\.reset\?\.\(\);/,'the centralized reset must cancel shared motion and both next-twenty runtimes');
 assert.match(playerCombat,/wizardNextTwentyDashRuntime\.state\.resources=Object\.fromEntries/,'room-transition reset must restore the preserved resource bank after live cleanup');
-assert.match(arena,/function arcanaDashBusy\(\)\{return !!\(PC\.basicDashRuntime\?\.busy\|\|PC\.wizardNextTwentyDashRuntime\?\.busy\);\}/,'continuous and teleport Arcana dashes must share one combat-input gate');
+assert.match(arena,/function arcanaDashBusy\(\)\{return !!\(PC\.basicDashRuntime\?\.busy\|\|PC\.wizardNextTwentyDashRuntime\?\.busy\|\|PC\.wizardVfxArcanaRuntime\?\.busy\);\}/,'continuous, teleport, and curated Arcana dashes must share one combat-input gate');
+assert.match(arena,/wizardVfxArcana:PC\.wizardVfxArcanaRuntime/,'capture snapshots must include the curated VFX runtime');
 assert.match(arena,/function canUseCombatInput\(\)\{[^}]*!arcanaDashBusy\(\)[^}]*!arena\.arcanaMovementLocked/,'combat attacks must reject during shared dash recovery and authored movement commitments');
-assert.match(arena,/d\.cool > 0 \|\| arcanaDashBusy\(\) \|\| heroicLeapCommitted\(\) \|\| arena\.arcanaMovementLocked\) return;/,'rejected ordinary dodges must exit before attack cancellation, cooldown, or iframe mutations');
+assert.match(arena,/d\.cool > 0 \|\| arcanaDashBusy\(\) \|\| heroicLeapCommitted\(\) \|\| arena\.arcanaMovementLocked\)return false;/,'rejected ordinary dodges must exit before attack cancellation, cooldown, or iframe mutations');
 assert.match(arena,/if\(arena\.arcanaFacingLock\) return \{ angle:arena\.arcanaFacingLock\.angle, source:'arcana-lock' \}/,'Rip Tide must hold its activation-facing in the arena');
 assert.match(arena,/for\(const e of combatHostileEnemies\(\)\)/,'auto-facing and dodge threat selection must ignore Mentis-converted allies');
 assert.match(arena,/if\(arena\.arcanaFacingLock\)return false;/,'capture aim changes must not rotate a facing-locked Rip Tide cast');

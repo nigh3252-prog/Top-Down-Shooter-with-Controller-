@@ -46,7 +46,7 @@ const dodgeStart=arena.indexOf('function triggerDodge()');
 const dodgeEnd=arena.indexOf('function defenseDown',dodgeStart);
 assert.ok(dodgeStart>=0&&dodgeEnd>dodgeStart,'Combat Arena dodge route should be present');
 const dodge=arena.slice(dodgeStart,dodgeEnd);
-assert.match(dodge,/defenseController\?\.spendDodge\?\.\(\)/,'Rat Step dodge must route through stance-defense spending');
+assert.match(dodge,/stanceGate5Runtime\?\.spendDodge\?\.\(\)/,'Rat Step dodge must route through the installed stance-defense runtime');
 assert.match(dodge,/dodgeSpend\?\.allowed===false/,'empty stamina must reject the dodge');
 assert.ok(
   dodge.indexOf('if(arena.deadT')<dodge.indexOf('spendDodge'),

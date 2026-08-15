@@ -12,26 +12,33 @@ const families=Object.freeze([
   Object.freeze({installer:'installWizardArcanaRuntime',file:'wizard-arcana-runtime.js',runtimeHandlerId:'wizardArcana',ids:['FLAME-CROSS','BOUNCING-BLAZE']}),
   Object.freeze({installer:'installWizardWindSlashRuntime',file:'wizard-wind-slash-runtime.js',runtimeHandlerId:'wizardWindSlash',ids:['WIND-SLASH']}),
   Object.freeze({installer:'installWizardAirBasicsRuntime',file:'wizard-air-basics-runtime.js',runtimeHandlerId:'wizardAirBasics',ids:['AIR-SPINNER','PERFORATING-JET']}),
-  Object.freeze({installer:'installWizardNextSourceRuntime',file:'wizard-next-source-runtime.js',runtimeHandlerId:'wizardNextSource',ids:['EARTH-KNUCKLES','BLADED-VINE','STONE-SHOT','SPARK-CONTACT','BOLT-RAIL','VOLT-DISC']}),
+  Object.freeze({installer:'installWizardNextSourceRuntime',file:'wizard-next-source-runtime.js',runtimeHandlerId:'wizardNextSource',ids:['EARTH-KNUCKLES','STONE-SHOT','BOLT-RAIL','VOLT-DISC']}),
   Object.freeze({installer:'installWizardNextTwentyBasicsRuntime',file:'wizard-next-twenty-basics-runtime.js',runtimeHandlerId:'wizardNextTwentyBasics',ids:['ICE-DAGGER','RIP-TIDE','AQUA-ARC','CHAOS-CRUSHER']}),
   Object.freeze({installer:'installWizardNextTwentyDashRuntime',file:'wizard-next-twenty-dash-runtime.js',runtimeHandlerId:'wizardNextTwentyDash',ids:[
-    'SEARING-RUSH','FLARE-RUSH','IGNITION-RUSH','AIR-BURST','GUST-BURST','RAZOR-BURST','SPIKE-TRACK','TOXIC-TRAP',
-    'SNARE-TRACK','THUNDER-LINE','CIRCUIT-LINE','SHOCK-LINE','WAVE-FRONT','FROST-FEINT','FROST-WING','CHAOTIC-RIFT',
+    'SEARING-RUSH','FLARE-RUSH','IGNITION-RUSH','AIR-BURST','SPIKE-TRACK','TOXIC-TRAP',
+    'SNARE-TRACK','SHOCK-LINE','WAVE-FRONT','FROST-FEINT','FROST-WING','CHAOTIC-RIFT',
   ]}),
   Object.freeze({installer:'installWizardRebuiltArcanaRuntime',file:'wizard-rebuilt-arcana-runtime.js',runtimeHandlerId:'wizardRebuiltArcana',ids:['HOMING-FLARES','DRAGON-ARC','WHIRLING-TORNADO','WATER-PRISON']}),
   Object.freeze({installer:'installWizardFusionLeapRuntime',file:'wizard-fusion-leap-runtime.js',runtimeHandlerId:'wizardFusionLeap',ids:['FLAME-FUSION','HEROIC-LEAP']}),
   Object.freeze({installer:'installWizardAlliedArcanaRuntime',file:'wizard-allied-arcana-runtime.js',runtimeHandlerId:'wizardAlliedArcana',ids:['RAPID-FIRE-AGENT','WARD-OF-FLAMES','MENTIS-IMPERIUM']}),
   Object.freeze({installer:'installWizardArcaneTypesRuntime',file:'wizard-arcane-types-runtime.js',runtimeHandlerId:'wizardArcaneTypes',ids:['CYCLONE-BOOMERANG','EARTHEN-AEGIS','BALL-LIGHTNING','AQUA-BEAM','ARCANE-INTERVENTION']}),
+  Object.freeze({installer:'installWizardVfxArcanaRuntime',file:'wizard-vfx-arcana-runtime.js',runtimeHandlerId:'wizardVfxArcana',ids:[
+    'FLAME-BREATH','SEARING-CROWN','IGNITION-DRIVE','ENGULFING-FISSURE','DRAGON-BLAST','SHEARING-CHAIN',
+    'TERRA-RING','GRASPING-EARTH','TECTONIC-DRILL','ROCK-SOLID-TOMAHAWK','SHOCK-NOVA','STAR-BOLT',
+    'AQUA-VORTEX','AQUA-BREAKER','BLADED-VINE','SPARK-CONTACT','GUST-BURST','RAZOR-BURST','THUNDER-LINE','CIRCUIT-LINE',
+    'BLAZING-LARIAT','EXPLOSIVE-CHARGE','STORM-DRAFT','BLURRING-FALCONRY','WHIRLING-WIND-AGENT',
+    'KNOCKOUT-BOULDER','TOXIC-BOLAS','ROCK-N-ROLL','EARTH-STOMP-AGENT','BUBBLE-BARRAGE',
+  ]}),
 ]);
 
 const catalogIds=WIZARD_ARCANA_CATALOG.map(card=>card.arcanaId).sort();
 const coveredIds=families.flatMap(family=>family.ids).sort();
-assert.equal(WIZARD_ARCANA_CATALOG.length,46);
-assert.equal(new Set(coveredIds).size,46,'runtime ownership must not duplicate an Arcana ID');
-assert.deepEqual(coveredIds,catalogIds,'all 46 canonical Arcana must have one full-arena runtime owner');
+assert.equal(WIZARD_ARCANA_CATALOG.length,70);
+assert.equal(new Set(coveredIds).size,70,'runtime ownership must not duplicate an Arcana ID');
+assert.deepEqual(coveredIds,catalogIds,'all 70 canonical Arcana must have one full-arena runtime owner');
 assert.equal(families.find(family=>family.ids.includes('HOMING-FLARES'))?.installer,'installWizardRebuiltArcanaRuntime');
-assert.equal(EFFECT_DEFINITIONS.length,49);
-assert.equal(RUNTIME_HANDLER_IDS.length,14);
+assert.equal(EFFECT_DEFINITIONS.length,73);
+assert.equal(RUNTIME_HANDLER_IDS.length,15);
 for(const family of families)for(const id of family.ids){
   const definition=ARCANA_EFFECT_DEFINITIONS.find(entry=>entry.arcanaId===id);
   assert.equal(definition?.runtimeHandlerId,family.runtimeHandlerId,`${id} must map to the runtime family whose play() recognizes it`);
@@ -66,4 +73,4 @@ assert.match(profileSource,/arcanaSize:clampArcanaSize/);
 assert.match(profileSource,/writeArcanaTweaks\(/);
 assert.match(profileSource,/profile\.arcanaSize===draft\.arcanaSize/);
 
-console.log('All 46 Arcana runtime families and the shared size setting are covered');
+console.log('All 70 Arcana runtime families and the shared size setting are covered');
