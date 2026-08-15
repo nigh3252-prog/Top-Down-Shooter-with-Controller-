@@ -9,12 +9,22 @@ import { stanceDefenseLetter } from './stance-defense-profiles.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
 import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
+import {
+  WEAPON_STARTER_STANCE_IDS,
+  starterStanceIdsForWeapon,
+} from './weapon-stance-plan.js';
 
 const STANCE_CARDS = listCards({family:'stance'});
 const EXTRA_STANCE_CARDS = listCards({family:'special-stance'});
 const NON_STANCE_CARDS = listCards({family:'non-stance'});
 
-export const STARTER_STANCE_IDS = Object.freeze(['S24','S09']);
+export const STARTER_STANCE_IDS_BY_WEAPON = WEAPON_STARTER_STANCE_IDS;
+export const STARTER_STANCE_IDS = Object.freeze([...starterStanceIdsForWeapon('longsword')]);
+
+export function starterStanceCardsForWeapon(weaponId, stanceCards=ALL_STANCE_CARDS){
+  const byId=new Map((stanceCards||[]).map(card=>[card.id,card]));
+  return starterStanceIdsForWeapon(weaponId).map(id=>byId.get(id)).filter(Boolean);
+}
 export const ALL_STANCE_CARDS = Object.freeze([...STANCE_CARDS,...EXTRA_STANCE_CARDS]);
 
 function shuffleCopy(values,rng=Math.random){
@@ -29,7 +39,11 @@ export function drawCards(pool,count,rng=Math.random){
 }
 export function buildRunOffers({weaponOrder=STONE_WEAPON_ORDER,nonStancePool=NON_STANCE_CARDS,count=3,rng=Math.random}={}){
   const starterCount=Math.min(2,Math.max(0,nonStancePool.length));
-  return drawCards(weaponOrder,count,rng).map(weaponId=>({weaponId,cards:drawCards(nonStancePool,starterCount,rng)}));
+  return drawCards(weaponOrder,count,rng).map(weaponId=>({
+    weaponId,
+    starterStanceIds:Object.freeze([...starterStanceIdsForWeapon(weaponId)]),
+    cards:drawCards(nonStancePool,starterCount,rng),
+  }));
 }
 export function buildRewardPool(stancePool=ALL_STANCE_CARDS,nonStancePool=NON_STANCE_CARDS){return[...stancePool,...nonStancePool];}
 export function drawRewardChoices({stancePool=ALL_STANCE_CARDS,nonStancePool=NON_STANCE_CARDS,count=3,rng=Math.random}={}){
@@ -85,8 +99,7 @@ export function installRunDraft(deck){
   if(typeof window==='undefined'||typeof document==='undefined'||window.__STONE_RUN_DRAFT_INSTALLED__)return;
   const startGate=document.getElementById('startGate'),startCard=document.getElementById('startCard');if(!startGate||!startCard)return;
   window.__STONE_RUN_DRAFT_INSTALLED__=true;addStyles();
-  const starters=STARTER_STANCE_IDS.map(id=>ALL_STANCE_CARDS.find(card=>card.id===id)).filter(Boolean);
-  if(starters.length!==2){const err=document.getElementById('err');if(err){err.style.display='block';err.textContent='Run setup missing Rat Step or Deep Launch';}return;}
+  const starterCardsForOffer=weaponId=>starterStanceCardsForWeapon(weaponId);
   const state={api:null,setupOpen:true,rewardOpen:false,seenCleared:0,rewardRoomId:null,totem:null,profile:null,pools:null};
   const title=document.createElement('div');title.className='sgTitle';title.textContent='CHOOSE A LOADOUT';
   const hint=document.createElement('div');hint.className='sgHint';hint.textContent='Choose one weapon and two non-stance starter cards.';
@@ -123,11 +136,14 @@ export function installRunDraft(deck){
 
   function chooseOffer(offer){
     const api=state.api;if(!api)return;
+    const starterIds=starterStanceIdsForWeapon(offer.weaponId);
+    const starters=starterCardsForOffer(offer.weaponId);
+    if(starters.length!==starterIds.length||!starters.length)return;
     state.totem?.reset();
     deck.unlockRun();
     api.PC.selectCombatWeapon(offer.weaponId);
     StoneSettings.set('arena.weapon',offer.weaponId);
-    deck.beginRun([...starters,...offer.cards],{openingStanceId:STARTER_STANCE_IDS[0]});
+    deck.beginRun([...starters,...offer.cards],{openingStanceId:starterIds[0]});
     api.arena.started=true;
     state.setupOpen=false;
     startGate.classList.add('hidden');
@@ -147,7 +163,15 @@ export function installRunDraft(deck){
       ?`${profileText}${pools.cards.length}-card Working Ability Pool · ${pools.nonStancePool.length} starter extras · room rewards stay inside the pool.`
       :'Choose one weapon and two non-stance starter cards. Empty Ability Pool uses the legacy card lists.';
     const offers=buildRunOffers({nonStancePool:pools.nonStancePool});
-    grid.replaceChildren(...offers.map(offer=>{const weapon=STONE_WEAPONS[offer.weaponId]||{label:offer.weaponId,profile:''};const button=document.createElement('button');button.className='runOffer';button.innerHTML=`<div class="runOfferWeapon">${weapon.label}</div><div class="runOfferProfile">${weapon.profile||''}</div><div class="runFixedStances">${starters.map(card=>`<div class="runFixedStance"><b>${cleanName(card)}</b>${subtitle(card)}</div>`).join('')}</div><div class="runStarterCards">${offer.cards.map(card=>`<div class="runStarterCard"><b>${cleanName(card)}</b><span>${subtitle(card)}</span></div>`).join('')}</div>`;button.addEventListener('click',()=>chooseOffer(offer));return button;}));
+    grid.replaceChildren(...offers.map(offer=>{
+      const weapon=STONE_WEAPONS[offer.weaponId]||{label:offer.weaponId,profile:''};
+      const starterCards=starterCardsForOffer(offer.weaponId);
+      const button=document.createElement('button');
+      button.className='runOffer';
+      button.innerHTML=`<div class="runOfferWeapon">${weapon.label}</div><div class="runOfferProfile">${weapon.profile||''}</div><div class="runFixedStances">${starterCards.map(card=>`<div class="runFixedStance"><b>${cleanName(card)}</b>${subtitle(card)}</div>`).join('')}</div><div class="runStarterCards">${offer.cards.map(card=>`<div class="runStarterCard"><b>${cleanName(card)}</b><span>${subtitle(card)}</span></div>`).join('')}</div>`;
+      button.addEventListener('click',()=>chooseOffer(offer));
+      return button;
+    }));
   }
   function openSetup(){if(!state.api)return;state.setupOpen=true;state.api.arena.paused=true;renderOffers();startGate.classList.remove('hidden');}
   const topBar=document.getElementById('topBar');if(topBar&&!document.getElementById('runSetupBtn')){const button=document.createElement('button');button.className='tbtn';button.id='runSetupBtn';button.textContent='RUN';button.title='Choose a new run loadout';button.addEventListener('click',openSetup);topBar.insertBefore(button,topBar.firstChild);}
