@@ -160,7 +160,7 @@ const EATK = { ...BASE_EATK, ...FUSION_ATTACKS };
 
 export function createArenaEnemySystem({
   THREE, worldRoot, materials = {}, arenaRadius = 18,
-  navigation = null, roomEncounterMode = false, onEncounterCleared = null,
+  navigation = null, combatCenterField = null, roomEncounterMode = false, onEncounterCleared = null,
   factionService = null, systemKey = 'original',
 } = {}){
   const rig = installGoblinRig(THREE);
@@ -456,6 +456,33 @@ export function createArenaEnemySystem({
     e.vx = clamp(e.vx + sx/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
     e.vz = clamp(e.vz + sz/amount * maxSpeed * Math.min(1, amount) * dt * 7, -maxSpeed, maxSpeed);
   }
+  function centerBiasForEnemy(e){
+    const center=WARDEN_TRIAL_SETTINGS.centerField||{};
+    return e.accordion2d
+      ? Number(center.flankerBias)||.72
+      : Number(center.enemyBias)||1.05;
+  }
+  function applyCenterPressureSteering(e,dt){
+    if(!combatCenterField?.sample){
+      e.wardenTrialCenterPressure=0;
+      return;
+    }
+    const sample=combatCenterField.sample({x:e.x,z:e.z},collisionRadius(e));
+    e.wardenTrialCenterPressure=Number(sample?.pressure)||0;
+    if(e.wardenTrialCenterPressure<=0||!sample?.direction)return;
+    const maxSpeed=Math.max(.001,e.speed*tuning.speedScale);
+    const baseX=clamp(e.vx/maxSpeed,-1,1),baseZ=clamp(e.vz/maxSpeed,-1,1);
+    const weight=clamp(
+      e.wardenTrialCenterPressure*centerBiasForEnemy(e),
+      0,
+      .9,
+    );
+    let targetX=baseX*(1-weight)+sample.direction.x*weight;
+    let targetZ=baseZ*(1-weight)+sample.direction.z*weight;
+    const targetLength=Math.hypot(targetX,targetZ);
+    if(targetLength<=1e-4)return;
+    steer(e,targetX/targetLength,targetZ/targetLength,Math.min(1,targetLength),dt);
+  }
   function seekPlayer(e, p, dt){
     const target = navigation?.nextWaypoint?.(e, p, activeEncounterRoomId) || p;
     const d = norm(target.x - e.x, target.z - e.z);
@@ -737,6 +764,7 @@ export function createArenaEnemySystem({
         steer(e,tx+(slotX-e.x)*.08,tz+(slotZ-e.z)*.08,.62,dt);
       }
       applySeparationSteering(e,dt);
+      applyCenterPressureSteering(e,dt);
       e.x+=e.vx*dt*movementScale;e.z+=e.vz*dt*movementScale;
       turnFacingToPoint(e,p,dt,e.turnSpeed);
       if(distance<=attack.range&&e.cooldown<=0)startAccordionAttack(e,p);
@@ -835,6 +863,7 @@ export function createArenaEnemySystem({
           if(d>wantRange+.45*S) seekPlayer(e,p,dt); else moveFusion(e,p,dt,d);
         } else if(!updateGoblinRally(e,p,dt,d)) moveGoblin(e,p,dt,d);
         applySeparationSteering(e, dt);
+        if(e.gesture!=='rally')applyCenterPressureSteering(e,dt);
         e.x += e.vx*dt*movementScale; e.z += e.vz*dt*movementScale;
       }else e.vx=e.vz=0;
     }

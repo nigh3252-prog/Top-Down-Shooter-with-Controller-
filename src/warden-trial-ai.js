@@ -18,6 +18,27 @@ const finite=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fa
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const living=enemies=>(enemies||[]).filter(enemy=>enemy&&finite(enemy.hp)>0);
 
+export function blendWardenTrialCenterMovement(move={},{
+  direction={x:0,z:0},
+  pressure=0,
+  bias=1,
+  maxWeight=.9,
+}={}){
+  const baseX=finite(move?.x),baseZ=finite(move?.z);
+  const directionLength=Math.hypot(finite(direction?.x),finite(direction?.z));
+  const centerX=directionLength>1e-6?finite(direction?.x)/directionLength:0;
+  const centerZ=directionLength>1e-6?finite(direction?.z)/directionLength:0;
+  const weight=clamp(
+    finite(pressure)*Math.max(0,finite(bias,1)),
+    0,
+    clamp(finite(maxWeight,.9),0,1),
+  );
+  const x=baseX*(1-weight)+centerX*weight;
+  const z=baseZ*(1-weight)+centerZ*weight;
+  const length=Math.hypot(x,z);
+  return length>1?{x:x/length,z:z/length}:{x,z};
+}
+
 const WEAPON_RANGE_BONUS=Object.freeze({
   dagger:-.30,
   rapier:.25,
