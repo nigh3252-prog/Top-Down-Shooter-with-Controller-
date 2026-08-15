@@ -110,7 +110,8 @@ assert.equal(nearestWardenTrialThreat(player,[quiet,imminent]).enemy,imminent,'d
 
 const tired=createWardenTrialBrain({staminaRestDelay:.05});
 decision=tired.update(.06,{player,enemies:[near],stamina:0,attackActive:false});
-assert.equal(decision.action,'refill','the spectator loop should recover after the Warden exhausts its fixed stance');
+assert.equal(decision.action,undefined,'the Warden must not refill its stamina autonomously');
+assert.equal(decision.resting,true,'the Warden should hold position while exhausted');
 
 const empty=createWardenTrialBrain({emptyWaveDelay:.05});
 decision=empty.update(.06,{player,enemies:[],stamina:100,attackActive:false});
