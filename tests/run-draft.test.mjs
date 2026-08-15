@@ -14,14 +14,14 @@ assert.deepEqual(STARTER_STANCE_IDS_BY_WEAPON.spear, ['S20','S22']);
 assert.deepEqual(STARTER_STANCE_IDS_BY_WEAPON.greatsword, ['S27','S28']);
 
 for (const [weaponId, stanceIds] of Object.entries(STARTER_STANCE_IDS_BY_WEAPON)) {
-  assert.equal(stanceIds.length, 2, \`${weaponId} should have two starter stances\`);
+  assert.equal(stanceIds.length, 2, `${weaponId} should have two starter stances`);
   const cards = starterStanceCardsForWeapon(weaponId);
   assert.deepEqual(cards.map(card => card.id), stanceIds);
 }
 for (const weaponId of ['rapier', 'spear']) {
   const cards = starterStanceCardsForWeapon(weaponId);
   assert.ok(cards.every(card => card.chain.filter(key => String(key).startsWith('stab')).length >= 2),
-    \`${weaponId} starter stances should emphasize piercing\`);
+    `${weaponId} starter stances should emphasize piercing`);
 }
 assert.ok(ALL_STANCE_CARDS.some(card => card.id === 'S31-BING-BONG'), 'Bing Bong should be in unrestricted stance rewards');
 
