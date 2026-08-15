@@ -422,11 +422,12 @@ export function installPlayerCombat(api) {
     const shoulderMid=shR.clone().lerp(shL,.5);
     const planeQ=getCombatPlaneCorrection(combatPlaneQ);
     const weaponQ=new THREE.Quaternion();
+    const holdW=new THREE.Vector3();
     const placeWeapon=()=>{
       swordQuat(p.tip,p.roll+w.v*.35,swQ); weaponQ.copy(planeQ).multiply(swQ);
       gripOff.set(0,RIG.gripCenter,0).applyQuaternion(weaponQ).multiplyScalar(getCombatScale());
       const holdRaw=combatToWarden(p.hold,new THREE.Vector3());
-      const holdW=planePointAroundShoulders(holdRaw,shoulderMid,planeQ,new THREE.Vector3());
+      holdW.copy(planePointAroundShoulders(holdRaw,shoulderMid,planeQ,new THREE.Vector3()));
       weaponRoot.position.copy(holdW).sub(gripOff);
       weaponRoot.quaternion.copy(weaponQ);
       weaponRoot.scale.setScalar(getCombatScale());
