@@ -1711,15 +1711,12 @@ function playWardenTrialCardUp(){
 }
 if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
-    target:document,
+    // Register on the actual card.  A document-wide capture listener is useful
+    // for a playfield gesture, but it is fragile on mobile when the card sits
+    // inside a pointer-events:none tray and the browser retargets the touch.
+    target:trialCard,
     visualElement:trialCard,
     enabled:()=>!arena.paused&&arena.deadT<0&&!roomTransition?.active,
-    startGuard:event=>{
-      const startY=Number(event?.clientY)||0;
-      if(startY < (Number(innerHeight)||1)*.2)return false;
-      if(event?.target?.closest?.('#topBar,#panel'))return false;
-      return true;
-    },
     onDirection:direction=>direction==='down'?playWardenTrialCardDown():playWardenTrialCardUp(),
   });
 }

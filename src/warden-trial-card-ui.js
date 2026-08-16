@@ -140,6 +140,7 @@ export function installWardenTrialSwipeSurface({
   let destroyed = false;
   let animating = false;
   let animationTimer = 0;
+  const pointerKey = event => event?.pointerId ?? 'primary';
 
   const numericMaxDrag = Number(maxDrag);
   const dragLimit = Number.isFinite(numericMaxDrag) ? Math.max(0, numericMaxDrag) : 52;
@@ -181,17 +182,26 @@ export function installWardenTrialSwipeSurface({
     if(destroyed || animating || pointerId !== null || !enabled(event) || !startGuard(event)) return;
     event.preventDefault?.();
     event.stopPropagation?.();
-    pointerId = event.pointerId;
+    pointerId = event.pointerId ?? 'primary';
     startY = Number(event.clientY) || 0;
     deltaY = 0;
-    captureTarget = event.target?.setPointerCapture ? event.target : null;
+    // Prefer the listener target/current card so a nested label/span cannot
+    // leave the gesture without pointer capture.  The event target fallback
+    // keeps the playfield-surface variant working for non-DOM test doubles.
+    captureTarget = event.currentTarget?.setPointerCapture
+      ? event.currentTarget
+      : visualElement?.setPointerCapture
+        ? visualElement
+        : event.target?.setPointerCapture
+          ? event.target
+          : null;
     try{ captureTarget?.setPointerCapture?.(pointerId); }catch(_){ /* target cannot capture this pointer */ }
     visualElement?.classList?.add?.('dragging');
     if(visualElement?.style)visualElement.style.transition='none';
   };
 
   const onMove = event => {
-    if(event.pointerId !== pointerId) return;
+    if(pointerKey(event) !== pointerId) return;
     event.preventDefault?.();
     deltaY = (Number(event.clientY) || 0) - startY;
     if(visualElement?.style){
@@ -202,7 +212,7 @@ export function installWardenTrialSwipeSurface({
   };
 
   const finish = (event, cancelled = false) => {
-    if(event.pointerId !== pointerId) return;
+    if(pointerKey(event) !== pointerId) return;
     if(!cancelled&&Number.isFinite(Number(event.clientY)))deltaY=Number(event.clientY)-startY;
     const finalDelta = deltaY;
     try{ captureTarget?.releasePointerCapture?.(pointerId); }catch(_){ /* pointer already released */ }
