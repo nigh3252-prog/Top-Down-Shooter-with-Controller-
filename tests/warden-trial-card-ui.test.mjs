@@ -9,17 +9,15 @@ assert.equal(resolveWardenTrialCardDirection(54),null);
 assert.equal(resolveWardenTrialCardDirection(0),null);
 
 assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-only card tray');
-assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one blank trial card');
-assert.match(ARENA_SHELL_HTML,/swipe upward or downward/,'the card exposes its vertical interaction to assistive technology');
+assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial card');
+assert.match(ARENA_SHELL_HTML,/swipe up or down/,'the card exposes its vertical interaction to assistive technology');
+assert.doesNotMatch(ARENA_SHELL_HTML,/trialCardUp|trialCardDown/,'direction labels are kept out of the compact card face');
 
 function createFakeElement(){
   const listeners=new Map();
   const classes=new Set();
   return{
     style:{},
-    hidden:false,
-    textContent:'',
-    offsetWidth:90,
     classList:{add:value=>classes.add(value),remove:value=>classes.delete(value),has:value=>classes.has(value)},
     setPointerCapture(pointerId){this.captured=pointerId;},
     releasePointerCapture(pointerId){if(this.captured===pointerId)this.captured=null;},
@@ -59,19 +57,11 @@ cancelledGesture.destroy();
 gesture.destroy();
 
 const surface=createFakeElement();
-const visualCard=createFakeElement();
-const upLabel={textContent:'↑ UP · INERT'};
-const downLabel={textContent:'↓ DOWN · STAMINA'};
-visualCard.querySelector=selector=>selector==='.trialCardUp'?upLabel:selector==='.trialCardDown'?downLabel:null;
-const status=createFakeElement();
-status.textContent='SWIPE DOWN TO START · LONG BLADE FORM';
-const nodes={trialCard:visualCard,trialCardStatus:status};
-surface.getElementById=id=>nodes[id]||null;
 const surfaceDirections=[];
 const surfaceGesture=installWardenTrialSwipeSurface({
   target:surface,
   startGuard:event=>event.clientY>=100,
-  commitDuration:5,
+  transitionDuration:0,
   onDirection:(direction,detail)=>surfaceDirections.push({direction,...detail}),
 });
 surface.dispatch('pointerdown',{...event,pointerId:4,clientY:50,target:surface});
@@ -81,28 +71,29 @@ assert.deepEqual(surfaceDirections,[],'the reserved top area must not register c
 surface.dispatch('pointerdown',{...event,pointerId:5,clientY:200,target:surface});
 surface.dispatch('pointermove',{...event,pointerId:5,clientY:130,target:surface});
 surface.dispatch('pointerup',{...event,pointerId:5,clientY:120,target:surface});
-assert.equal(visualCard.style.transform,'translateY(-96px) scale(.96)','a committed up swipe should visibly move the card upward');
-assert.equal(visualCard.style.opacity,'0','a committed swipe should fade the card away');
-assert.equal(status.textContent,'','registration helper text should be suppressed while the card resolves');
-assert.equal(surfaceDirections.length,0,'the card action should resolve after the exit animation');
-await new Promise(resolve=>setTimeout(resolve,10));
 assert.deepEqual(surfaceDirections,[{direction:'up',deltaY:-80}]);
-assert.equal(visualCard.style.transform,'');
-assert.equal(visualCard.style.opacity,'');
-assert.equal(status.hidden,false,'the initial start instruction should remain available after an inert up swipe');
-assert.equal(status.textContent,'SWIPE DOWN TO START · LONG BLADE FORM');
-assert.equal(upLabel.textContent,'↑ INERT','the card should not repeat the UP label');
-assert.equal(downLabel.textContent,'↓ STAMINA','the card should not repeat the DOWN label');
-
-surface.dispatch('pointerdown',{...event,pointerId:6,clientY:200,target:surface});
-surface.dispatch('pointermove',{...event,pointerId:6,clientY:270,target:surface});
-surface.dispatch('pointerup',{...event,pointerId:6,clientY:280,target:surface});
-assert.equal(visualCard.style.transform,'translateY(96px) scale(.96)','a committed down swipe should visibly move the card downward');
-await new Promise(resolve=>setTimeout(resolve,10));
-assert.equal(surfaceDirections.at(-1).direction,'down');
-assert.equal(status.hidden,true,'normal registered/trial-started helper copy should disappear after the first down play');
-assert.equal(status.textContent,'');
-assert.equal(surface.style.transform,undefined,'the full-screen registration surface must not move with the card');
+assert.equal(surface.style.transform,undefined,'the full-screen registration surface must not move the card');
 surfaceGesture.destroy();
+
+const animatedSurface=createFakeElement();
+const animatedCard=createFakeElement();
+const animatedDirections=[];
+const animatedGesture=installWardenTrialSwipeSurface({
+  target:animatedSurface,
+  visualElement:animatedCard,
+  transitionDuration:5,
+  onDirection:(direction,detail)=>animatedDirections.push({direction,...detail}),
+});
+animatedSurface.dispatch('pointerdown',{...event,pointerId:6,clientY:200,target:animatedSurface});
+animatedSurface.dispatch('pointermove',{...event,pointerId:6,clientY:160,target:animatedSurface});
+assert.equal(animatedCard.style.transform,'translateY(-40px)','the card follows the swipe before release');
+animatedSurface.dispatch('pointerup',{...event,pointerId:6,clientY:120,target:animatedSurface});
+assert.equal(animatedCard.style.transform,'translateY(-136px) scale(.9)','a completed upward swipe sends the card out');
+assert.equal(animatedCard.style.opacity,'0','a completed swipe fades the card out');
+await new Promise(resolve=>setTimeout(resolve,12));
+assert.deepEqual(animatedDirections,[{direction:'up',deltaY:-80}]);
+assert.equal(animatedCard.style.transform,'','the next card can reuse the centered slot');
+assert.equal(animatedCard.style.opacity,'','the card visual state resets after the swipe');
+animatedGesture.destroy();
 
 console.log('Warden Trial blank card gesture: ok');
