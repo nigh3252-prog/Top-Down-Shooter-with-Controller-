@@ -77,9 +77,17 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
   const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],stanceCatalog:Array.isArray(stanceCatalog)?stanceCatalog.slice():[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
-  function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];refill(0);refill(1);scheduleDecoration();}
+  function matchesCardId(card,id){const wanted=String(id||'').trim().toUpperCase().replace(/^WOL-/,'');return[String(card?.id||''),String(card?.arcanaId||'')].some(value=>value.trim().toUpperCase().replace(/^WOL-/,'')===wanted);}
+  function dealFresh(cards,{openingCardIds=[]}={}){
+    const remaining=cards.slice(),opening=[];
+    for(const id of [...new Set(Array.isArray(openingCardIds)?openingCardIds:[])]){
+      const index=remaining.findIndex(card=>matchesCardId(card,id));
+      if(index>=0)opening.push(...remaining.splice(index,1));
+    }
+    s.draw=[...shuffle(opening),...shuffle(remaining)];s.discard=[];refill(0);refill(1);scheduleDecoration();
+  }
   function consumeSlot(slot,card){s.discard.push(card);refill(slot);if(!s.hand[0]&&!s.hand[1]&&!s.draw.length&&s.discard.length)dealFresh(s.discard);}
-  function activeStanceFallback(){const found=s.lastStance&&s.stancePool.find(card=>card.id===s.lastStance.id);return found||s.stancePool[0]||null;}
+  function activeStanceFallback(){const found=s.lastStance&&(s.stancePool.find(card=>card.id===s.lastStance.id)||s.stanceCatalog.find(card=>card.id===s.lastStance.id));return found||s.stancePool[0]||null;}
   function proxyActiveStance(card,marker,{usePairing=false}={}){
     const catalog=s.stanceCatalog.length?s.stanceCatalog:s.stancePool;
     const pairedId=usePairing?arcanaDownStanceId(card?.arcanaId||card?.id):null;
@@ -89,12 +97,12 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
     s.lastStance=stance;
     return{...stance,name:usePairing?stance.name:card.name,__sourceCardType:card.type,__restoresStamina:false,__pairedStanceId:paired?.id||stance.id,[marker]:true};
   }
-  function applyPool(cards){
+  function applyPool(cards,{openingCardIds=[]}={}){
     s.manualSequence=null;
     s.pool=cards.slice();s.stancePool=s.pool.filter(card=>!isNonStance(card));
     const previous=activeStanceFallback();
-    s.lastStance=previous&&s.stancePool.some(card=>card.id===previous.id)?s.stancePool.find(card=>card.id===previous.id):(s.stancePool[0]||null);
-    s.shuffleT=-1;dealFresh(s.pool);bindStanceButton();
+    s.lastStance=s.stancePool.length?(previous&&s.stancePool.some(card=>card.id===previous.id)?s.stancePool.find(card=>card.id===previous.id):s.stancePool[0]):previous;
+    s.shuffleT=-1;dealFresh(s.pool,{openingCardIds});bindStanceButton();
   }
   function defaultPool(stances){
     const stanceCards=stances.some(card=>card.id===BING_BONG_CARD.id)?stances.slice():[...stances,BING_BONG_CARD];
@@ -174,7 +182,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
   const api={
     get hand(){return s.hand;},get upcoming(){return s.draw.slice(0,4);},get drawCount(){return s.draw.length;},get discardCount(){return s.discard.length;},get shuffling(){return s.shuffleT>=0;},get shuffleT(){return s.shuffleT;},get shuffleTime(){return shuffleTime;},get pool(){return s.pool.slice();},get runLocked(){return s.runLocked;},get manualSequence(){return s.manualSequence?{...s.manualSequence}:null;},
     rebuild(cards){applyPool(s.runLocked?s.pool:defaultPool(cards));},
-    beginRun(cards,{openingStanceId=null}={}){s.runLocked=true;applyPool(cards);const opening=s.stancePool.find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;},
+    beginRun(cards,{openingStanceId=null,openingCardIds=[]}={}){s.runLocked=true;applyPool(cards,{openingCardIds});const opening=[...s.stancePool,...s.stanceCatalog].find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;else if(!s.stancePool.length)s.lastStance=null;},
     unlockRun(){s.runLocked=false;},
     setCardDispatcher(dispatcher){s.cardDispatcher=normalizeCardDispatcher(dispatcher);return api;},
     setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
