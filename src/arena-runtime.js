@@ -38,7 +38,7 @@ import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
-import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon } from './warden-trial-card-policy.js';
+import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay } from './warden-trial-card-policy.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -321,7 +321,7 @@ const arena = {
   stamina:{ v:wardenTrialMode ? 0 : STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain():null;
-const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null });
+const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null, stanceCatalog: STANCE_CARDS });
 function staminaCostForGroup(group){
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
   return staminaCostForWeapon(base, PC.currentWeapon());
@@ -474,7 +474,10 @@ function ensureStanceMatchesWeapon(){
 }
 /* ---------- stance-card deck ---------- */
 function starterDeckForWardenTrial(weaponId = combatState.weapon){
-  return starterCardsForWardenTrialWeapon(weaponId, STANCE_CARDS);
+  // Keep every stance available as a valid down-side destination while the
+  // Arcana catalog supplies the up-side effects.  The starter pair still
+  // gates the first downward play and restores the opening stamina state.
+  return [...STANCE_CARDS, ...gameContent.cards.list({family:'arcana'})];
 }
 function rebuildDeck(){
   if(wardenTrialMode){
@@ -1593,10 +1596,11 @@ function renderTrialCard(){
   const card=currentTrialCard();
   const name=trialCardName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
+  const arcanaCard=card?.type==='ability'&&typeof card?.arcanaId==='string';
   const art=trialCard.querySelector('.trialCardArt');
   trialCard.dataset.cardId=card?.id||'';
   trialCard.setAttribute('aria-label',card
-    ? `${name} card; swipe upward for inert registration or downward to ${staminaCard?'play and restore stamina':'play'}`
+    ? `${name} card; swipe upward to ${arcanaCard?'fire the Arcana':'register the card'} or downward to ${staminaCard?'play and restore stamina':'change stance'}`
     : 'No trial card available');
   if(art){
     art.textContent=name;
@@ -1639,7 +1643,7 @@ function playWardenTrialCardDown(){
     return false;
   }
   const wasWaiting=!arena.started;
-  const played=deck.play(slot);
+  const played=deck.play(slot,{direction:'down'});
   if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
   const pool=stancePoolForWeapon();
   const index=pool.findIndex(stance=>stance.id===played.id);
@@ -1656,6 +1660,30 @@ function playWardenTrialCardDown(){
   announce(trialCardName(played),.9);
   return true;
 }
+function playWardenTrialCardUp(){
+  if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
+  const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
+  if(!card){setTrialCardFeedback('up','NO TRIAL CARD');return false;}
+  const decision=resolveWardenTrialCardPlay({
+    direction:'up',
+    started:arena.started,
+    card,
+    weaponId:combatState.weapon,
+    deckCards:deck.pool,
+    stamina:arena.stamina.v,
+    maxStamina:STAMINA.max,
+  });
+  if(!decision.accepted){
+    setTrialCardFeedback('up',decision.reason==='starter-card-required'?'DOWN STARTS THE TRIAL':'ONLY ARCANA FIRES UP');
+    return false;
+  }
+  const played=deck.play(slot,{direction:'up'});
+  if(!played){setTrialCardFeedback('up','ARCANA NOT READY');return false;}
+  renderCards();
+  setTrialCardFeedback('up',`UP FIRED · ${trialCardName(card)}`);
+  announce(trialCardName(card),.9);
+  return true;
+}
 if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
     target:document,
@@ -1667,7 +1695,7 @@ if(wardenTrialMode&&trialCard){
       if(event?.target?.closest?.('#topBar,#panel'))return false;
       return true;
     },
-    onDirection:direction=>direction==='down'?playWardenTrialCardDown():setTrialCardFeedback('up'),
+    onDirection:direction=>direction==='down'?playWardenTrialCardDown():playWardenTrialCardUp(),
   });
 }
 menuBtn.addEventListener('click', toggleMenu);
