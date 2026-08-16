@@ -10,6 +10,7 @@ import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
 import { isWardenTrialRuntime } from './warden-trial-card-policy.js';
+import { arcanaDownStanceId } from './arcana-stance-pairings.js';
 
 const POW_BUNKER_CARD = getCard('A01-PILEBUNKER');
 const BLOOD_SLASH_CARD = getCard('M01-BLOOD-SLASH');
@@ -72,14 +73,22 @@ export function createCardEffectCompatibilityAdapter({windowRef}={}){
   });
 }
 
-export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=null,effectDispatcher=null,compatibilityAdapter=undefined,canPlay=null,play=null}={}){
-  const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
+export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=null,effectDispatcher=null,compatibilityAdapter=undefined,canPlay=null,play=null,stanceCatalog=[]}={}){
+  const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],stanceCatalog:Array.isArray(stanceCatalog)?stanceCatalog.slice():[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
   function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];refill(0);refill(1);scheduleDecoration();}
   function consumeSlot(slot,card){s.discard.push(card);refill(slot);if(!s.hand[0]&&!s.hand[1]&&!s.draw.length&&s.discard.length)dealFresh(s.discard);}
   function activeStanceFallback(){const found=s.lastStance&&s.stancePool.find(card=>card.id===s.lastStance.id);return found||s.stancePool[0]||null;}
-  function proxyActiveStance(card,marker){const stance=activeStanceFallback();return stance?{...stance,name:card.name,__sourceCardType:card.type,__restoresStamina:false,[marker]:true}:null;}
+  function proxyActiveStance(card,marker,{usePairing=false}={}){
+    const catalog=s.stanceCatalog.length?s.stanceCatalog:s.stancePool;
+    const pairedId=usePairing?arcanaDownStanceId(card?.arcanaId||card?.id):null;
+    const paired=pairedId?catalog.find(stance=>stance.id===pairedId):null;
+    const stance=paired||activeStanceFallback();
+    if(!stance)return null;
+    s.lastStance=stance;
+    return{...stance,name:usePairing?stance.name:card.name,__sourceCardType:card.type,__restoresStamina:false,__pairedStanceId:paired?.id||stance.id,[marker]:true};
+  }
   function applyPool(cards){
     s.manualSequence=null;
     s.pool=cards.slice();s.stancePool=s.pool.filter(card=>!isNonStance(card));
@@ -171,11 +180,14 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
     setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
     setCompatibilityAdapter(adapter){s.compatibilityAdapter=adapter||null;return api;},
     addCard(card){if(!card)return false;s.pool.push(card);if(!isNonStance(card))s.stancePool.push(card);s.discard.push(card);return true;},
-    play(slot){
+    play(slot,{direction='default'}={}){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){
+        const down=direction==='down';
+        const proxy=proxyActiveStance(card,'__abilityProxy',{usePairing:down});if(!proxy)return null;
+        if(down){consumeSlot(slot,card);scheduleDecoration();return proxy;}
         if(!canPlayCard(card,{slot}))return null;
-        const proxy=proxyActiveStance(card,'__abilityProxy');if(!proxy)return null;const stamina=captureStaminaState(currentArenaStamina()),spec=normalizeManualSequence(card);
+        const stamina=captureStaminaState(currentArenaStamina()),spec=normalizeManualSequence(card);
         if(spec){
           const active=s.manualSequence&&s.manualSequence.cardId===card.id?s.manualSequence:{slot,cardId:card.id,press:0,total:spec.presses,remaining:spec.timeout,timeout:spec.timeout,label:spec.label};
           active.press++;active.remaining=active.timeout;s.manualSequence=active;
