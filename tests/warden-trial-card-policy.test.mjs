@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createStanceDeck } from '../src/stance-deck.js';
+import { STANCE_CARDS } from '../src/stance-cards.js';
 import {
   isWardenTrialRuntime,
   isWardenTrialStaminaCard,
@@ -52,5 +54,13 @@ assert.deepEqual(
   { accepted:true, reason:'card-played', started:true, stamina:0, refill:false },
   'a non-stamina card cannot refill an exhausted trial',
 );
+
+const weaponDeck=createStanceDeck({rng:()=>0,compatibilityAdapter:null});
+const longswordStarters=starterCardsForWardenTrialWeapon('longsword',STANCE_CARDS);
+const greatswordStarters=starterCardsForWardenTrialWeapon('greatsword',STANCE_CARDS);
+weaponDeck.beginRun(longswordStarters,{openingStanceId:null});
+weaponDeck.beginRun(greatswordStarters,{openingStanceId:null});
+assert.deepEqual(weaponDeck.pool.map(card=>card.id),['S27','S28'],'a new Warden weapon run replaces the locked prior weapon pool');
+assert.equal(weaponDeck.pool.some(card=>card.id==='S22'),false,'Greatsword must not retain Spear starter Hook and Thrust');
 
 console.log('Warden Trial card policy: ok');
