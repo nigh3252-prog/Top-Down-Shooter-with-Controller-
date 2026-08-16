@@ -36,6 +36,7 @@ import { readArenaStandardSetup } from './arena-standard-setup.js';
 import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
+import { DEFAULT_WARDEN_TEMPERAMENT_ID, normalizeWardenTemperament } from './warden-trial-temperaments.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
 import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon } from './warden-trial-card-policy.js';
@@ -54,6 +55,7 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   const wardenTrialMode=runtimeConfig.wardenTrial===true||runtimeConfig.variant==='warden-trial';
   let wardenTrialEnemySet=normalizeWardenTrialEnemySet(StoneSettings.get('wardenTrial.enemySet',WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS));
+  let wardenTrialTemperament=normalizeWardenTemperament(StoneSettings.get('wardenTrial.temperament',DEFAULT_WARDEN_TEMPERAMENT_ID));
   const lockedStandard=runtimeConfig.enemyLab||wardenTrialMode?null:readArenaStandardSetup();
   const startupTrace=createArenaStartupTrace({location:globalThis.location});
   const summarizeStandard=standard=>{
@@ -320,7 +322,7 @@ const arena = {
   combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
   stamina:{ v:wardenTrialMode ? 0 : STAMINA.start, pending:0, recoverDelayT:0 },
 };
-const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain():null;
+const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain({temperament:wardenTrialTemperament}):null;
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null });
 function staminaCostForGroup(group){
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
@@ -1450,6 +1452,15 @@ function gatherInput(){
 
 function updateWardenTrialAI(dt){
   if(!wardenTrialBrain)return;
+  const lightKey=arena.stance?.chain?.[0];
+  const heavyKey=arena.stance?.chain?.[2];
+  const lightAttack=lightKey?PC.ATTACKS?.[lightKey]:null;
+  const heavyAttack=heavyKey?PC.ATTACKS?.[heavyKey]:null;
+  const attackCosts={
+    light:staminaCostForGroup(lightAttack?.group||'vertical'),
+    heavy:staminaCostForGroup(heavyAttack?.group||'vertical'),
+    chargedHeavy:staminaCostForGroup(heavyAttack?.group||'vertical')*STAMINA.chargeCostMult,
+  };
   const activeAttack=combatState.attack?{
     active:true,
     t:Number(combatState.t)||0,
@@ -1464,6 +1475,9 @@ function updateWardenTrialAI(dt){
     enemies:combatHostileEnemies(),
     weapon:PC.currentWeapon?.(),
     stamina:arena.stamina.v,
+    health:enemySystem.playerHp,
+    maxHealth:100,
+    attackCosts,
     attackActive:!!combatState.attack,
     attack:activeAttack,
     defense:defenseSnapshot,
@@ -1475,7 +1489,7 @@ function updateWardenTrialAI(dt){
   const centerSample=wardenTrialCenterField?.sample({x:actorPos.x,z:actorPos.y},PLAYER_RADIUS);
   const move=(!decision.action&&!combatState.attack&&centerSample)
     ?blendWardenTrialCenterMovement(decision.move,centerSample,{
-      bias:WARDEN_TRIAL_SETTINGS.centerField.wardenBias,
+      bias:WARDEN_TRIAL_SETTINGS.centerField.wardenBias*wardenTrialTemperament.centerBias,
     })
     :decision.move;
   input.mx=Number(move?.x)||0;input.mz=Number(move?.z)||0;
@@ -1510,6 +1524,8 @@ const resumeBtn=document.getElementById('resumeBtn');
 const themeButtons=[...document.querySelectorAll('[data-arena-theme-option]')];
 const trialEnemyButtons=[...document.querySelectorAll('[data-trial-enemy-set]')];
 const trialWeaponButtons=[...document.querySelectorAll('[data-trial-weapon]')];
+const trialTemperamentButtons=[...document.querySelectorAll('[data-trial-temperament]')];
+const trialTemperamentNote=document.getElementById('trialTemperamentNote');
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1539,6 +1555,16 @@ function syncTrialWeaponButtons(){
     button.setAttribute('aria-pressed',String(active));
   });
 }
+function syncTrialTemperamentButtons(){
+  trialTemperamentButtons.forEach(button=>{
+    const active=Number(button.dataset.trialTemperament)===wardenTrialTemperament.level;
+    button.classList.toggle('on',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+  if(trialTemperamentNote){
+    trialTemperamentNote.textContent=`LEVEL ${wardenTrialTemperament.level} · ${wardenTrialTemperament.description}`;
+  }
+}
 function selectWardenTrialEnemySet(value){
   if(!wardenTrialMode)return false;
   wardenTrialEnemySet=normalizeWardenTrialEnemySet(value);
@@ -1561,6 +1587,15 @@ function selectWardenTrialWeapon(value){
   }
   syncTrialWeaponButtons();
   if(!panel.classList.contains('hidden'))toggleMenu();
+  return true;
+}
+function selectWardenTrialTemperament(value){
+  if(!wardenTrialMode)return false;
+  wardenTrialTemperament=normalizeWardenTemperament(value);
+  StoneSettings.set('wardenTrial.temperament',wardenTrialTemperament.id);
+  wardenTrialBrain?.setTemperament?.(wardenTrialTemperament);
+  syncTrialTemperamentButtons();
+  announce(`LEVEL ${wardenTrialTemperament.level} · ${wardenTrialTemperament.label}`,.9);
   return true;
 }
 function toggleMenu(){
@@ -1675,9 +1710,11 @@ resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'
 themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
 trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialEnemySet(button.dataset.trialEnemySet)));
 trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
+trialTemperamentButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialTemperament(button.dataset.trialTemperament)));
 syncThemeButtons();
 syncTrialEnemyButtons();
 syncTrialWeaponButtons();
+syncTrialTemperamentButtons();
 document.getElementById('startBtn').addEventListener('click', ()=>{
   if(wardenTrialMode)return;
   arena.started = true;
@@ -2459,7 +2496,7 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
@@ -2475,7 +2512,7 @@ const runtimeHandle={
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
-  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };

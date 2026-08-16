@@ -1,3 +1,8 @@
+import { WARDEN_TEMPERAMENTS } from './warden-trial-temperaments.js';
+
+const WARDEN_TEMPERAMENT_BUTTONS=WARDEN_TEMPERAMENTS.map(option=>`
+      <button class="trialTemperamentChoice" type="button" data-trial-temperament="${option.level}" aria-pressed="false" aria-label="Defense level ${option.level}: ${option.label}. ${option.description}" title="${option.description}">${option.level} ${option.label}</button>`).join('');
+
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
   <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
@@ -77,6 +82,12 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="trialWeaponChoice" type="button" data-trial-weapon="claymore" aria-pressed="false">CLAYMORE</button>
       <button class="trialWeaponChoice" type="button" data-trial-weapon="greatsword" aria-pressed="false">GREATSWORD</button>
     </div>
+  </section>
+  <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
+    <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>
+    <div id="trialTemperamentGrid" class="trialTemperamentGrid" role="group" aria-label="Warden defense level">${WARDEN_TEMPERAMENT_BUTTONS}
+    </div>
+    <p id="trialTemperamentNote" class="trialTemperamentNote" aria-live="polite"></p>
   </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">
     <h2 id="controlsTitle">CONTROLS</h2>
