@@ -21,6 +21,22 @@ export const WEAPON_STARTER_STANCE_IDS = Object.freeze({
   greatsword: freezeList(['S27', 'S28']),
 });
 
+// Existing cards from the 70-card combined Arcana/stance catalog. Each list
+// is ordered to match the weapon's two starter stance IDs above.
+export const WEAPON_STARTER_ARCANA_IDS = Object.freeze({
+  longsword: freezeList(['RAPID-FIRE-AGENT', 'AQUA-VORTEX']),
+  dagger: freezeList(['CIRCUIT-LINE', 'SPARK-CONTACT']),
+  rapier: freezeList(['PERFORATING-JET', 'STAR-BOLT']),
+  katana: freezeList(['WIND-SLASH', 'FLAME-CROSS']),
+  mace: freezeList(['EARTH-STOMP-AGENT', 'CHAOS-CRUSHER']),
+  whip: freezeList(['AIR-BURST', 'WAVE-FRONT']),
+  spear: freezeList(['SEARING-RUSH', 'EXPLOSIVE-CHARGE']),
+  battleaxe: freezeList(['ROCK-SOLID-TOMAHAWK', 'ROCK-N-ROLL']),
+  warhammer: freezeList(['KNOCKOUT-BOULDER', 'SPIKE-TRACK']),
+  claymore: freezeList(['BOUNCING-BLAZE', 'FROST-WING']),
+  greatsword: freezeList(['TERRA-RING', 'EARTHEN-AEGIS']),
+});
+
 export const PIERCING_STANCE_IDS_BY_WEAPON = Object.freeze({
   rapier: freezeList(['S16', 'S17', 'S18', 'S19']),
   spear: freezeList(['S17', 'S20', 'S21', 'S22']),
@@ -48,6 +64,11 @@ function normalizeWeaponId(weaponId) {
 export function starterStanceIdsForWeapon(weaponId) {
   const normalized = normalizeWeaponId(weaponId);
   return WEAPON_STARTER_STANCE_IDS[normalized] || WEAPON_STARTER_STANCE_IDS.longsword;
+}
+
+export function starterArcanaIdsForWeapon(weaponId) {
+  const normalized = normalizeWeaponId(weaponId);
+  return WEAPON_STARTER_ARCANA_IDS[normalized] || WEAPON_STARTER_ARCANA_IDS.longsword;
 }
 
 export function openingStanceIdForWeapon(weaponId) {
