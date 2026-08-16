@@ -63,6 +63,21 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="accordion-2d" aria-pressed="false">2D ACCORDION + 3D</button>
     </div>
   </section>
+  <section class="pauseSection trialWeaponSection" aria-labelledby="trialWeaponTitle">
+    <h2 id="trialWeaponTitle">TRIAL WEAPON</h2>
+    <div class="trialWeaponGrid" role="group" aria-label="Trial weapon">
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="longsword" aria-pressed="false">LONGSWORD</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="dagger" aria-pressed="false">DAGGER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="rapier" aria-pressed="false">RAPIER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="katana" aria-pressed="false">KATANA</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="mace" aria-pressed="false">MACE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="spear" aria-pressed="false">SPEAR</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="battleaxe" aria-pressed="false">BATTLEAXE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="warhammer" aria-pressed="false">WARHAMMER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="claymore" aria-pressed="false">CLAYMORE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="greatsword" aria-pressed="false">GREATSWORD</button>
+    </div>
+  </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">
     <h2 id="controlsTitle">CONTROLS</h2>
     <p>MOVE <span>WASD / STICK</span></p>
