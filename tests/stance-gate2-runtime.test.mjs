@@ -10,6 +10,7 @@ import {
   installStanceGate2Runtime,
   resolveGate2PilotProfile,
 } from '../src/stance-gate2-runtime.js';
+import { getWeaponStanceBalance } from '../src/weapon-stance-plan.js';
 
 const stanceById=id=>STANCE_CARDS.find(stance=>stance.id===id);
 const expectedTier={
@@ -74,8 +75,11 @@ let snapshot=runtime.snapshot();
 assert.equal(snapshot.profileId,'rat-step-longsword-adapted');
 assert.deepEqual(arena.stance.chain,originalRatStep,'adjacent weight should preserve Rat Step authored attacks');
 assert.ok(PC.RIG.gripCenter>0,'half-sword grip should move up the blade');
-const baseScale=1+(combatState.tune.length-1)*.36+(combatState.tune.weight-.35)*.78;
-assert.ok(Math.abs(baseScale-GATE2_PAIR_PROFILES['S24:longsword'].pace.strike)<1e-6,'stance pace should dominate the weapon timing base');
+const speedPlan=getWeaponStanceBalance({weaponId:'longsword',stanceClass:'Light'});
+assert.equal(combatState.tune.weight,STONE_WEAPONS.longsword.tune.weight,'stance timing must preserve the weapon weight baseline');
+assert.ok(Math.abs(combatState.tune.windup-speedPlan.tempo.attack)<1e-6,'Speed should make the longsword entry slightly quicker without replacing its base tune');
+assert.ok(Math.abs(combatState.tune.follow-speedPlan.tempo.attack)<1e-6,'Speed should preserve the same bounded attack tempo through follow-through');
+assert.ok(Math.abs(combatState.tune.recovery-speedPlan.tempo.recovery)<1e-6,'Speed should return the longsword to movement slightly sooner');
 
 const adaptedZones=PC.getWeaponHitZones();
 assert.equal(adaptedZones.length,1);

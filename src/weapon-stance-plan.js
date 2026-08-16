@@ -26,6 +26,87 @@ export const PIERCING_STANCE_IDS_BY_WEAPON = Object.freeze({
   spear: freezeList(['S17', 'S20', 'S21', 'S22']),
 });
 
+export const WEAPON_STANCE_AXIS = Object.freeze(['Speed', 'Balanced', 'Power']);
+
+const balanceEntry = (fit, role, tempo, summary) => Object.freeze({
+  fit,
+  role,
+  tempo: Object.freeze({...tempo}),
+  summary,
+});
+
+export const WEAPON_STANCE_BALANCE_MATRIX = Object.freeze({
+  longsword: Object.freeze({
+    Speed: balanceEntry('adapted', 'half-sword response', {attack:.96, recovery:.92}, 'Quicker entries with reduced commitment, while the longsword stays an all-purpose blade.'),
+    Balanced: balanceEntry('full', 'flexible response', {attack:1.00, recovery:1.00}, 'The reference timing: reliable cuts, thrusts, and confirms without a special bias.'),
+    Power: balanceEntry('adapted', 'braced response', {attack:1.06, recovery:1.10}, 'A slower, committed form that trades fast recovery for impact and stagger.'),
+  }),
+  dagger: Object.freeze({
+    Speed: balanceEntry('full', 'mobile scramble', {attack:.92, recovery:.88}, 'Fastest baseline: short entries, rapid confirms, and the quickest return to movement.'),
+    Balanced: balanceEntry('adapted', 'planted precision', {attack:1.04, recovery:1.05}, 'Measured precision without pretending the dagger has longsword reach or power.'),
+    Power: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'The stance asks too much of a short blade and uses the authored failure expression.'),
+  }),
+  rapier: Object.freeze({
+    Speed: balanceEntry('full', 'needle line', {attack:.96, recovery:.92}, 'Quick piercing thrusts with a faster return than other light weapons.'),
+    Balanced: balanceEntry('adapted', 'measured line', {attack:1.04, recovery:1.06}, 'A steadier thrust rhythm that keeps the rapier focused on precision piercing.'),
+    Power: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'A power stance overwhelms the rapier’s narrow thrusting identity.'),
+  }),
+  katana: Object.freeze({
+    Speed: balanceEntry('full', 'quick draw', {attack:.94, recovery:.90}, 'Fast draw cuts and timing windows with the lightest edge commitment.'),
+    Balanced: balanceEntry('adapted', 'deliberate edge', {attack:1.02, recovery:1.03}, 'Broader, more deliberate cuts while preserving the katana’s curved-cutter identity.'),
+    Power: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'The power stance is too committed for this light weapon frame.'),
+  }),
+  whip: Object.freeze({
+    Speed: balanceEntry('full', 'fast lash', {attack:.96, recovery:.92}, 'Quick lashes and spacing control with the weapon’s flexible reach intact.'),
+    Balanced: balanceEntry('adapted', 'controlled reach', {attack:1.03, recovery:1.05}, 'A more deliberate lash rhythm that gives the long flexible hit path time to read.'),
+    Power: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'A power stance breaks the whip’s timing and recovery identity.'),
+  }),
+  mace: Object.freeze({
+    Speed: balanceEntry('adapted', 'compact impact', {attack:1.00, recovery:.98}, 'A little quicker to re-enter, but still chunky enough to feel like a mace.'),
+    Balanced: balanceEntry('full', 'controlled blunt', {attack:1.00, recovery:1.00}, 'Reliable blunt confirms with the mace’s compact impact as the baseline.'),
+    Power: balanceEntry('adapted', 'heavy impact', {attack:1.06, recovery:1.10}, 'More committed impact and stagger without turning the mace into a warhammer.'),
+  }),
+  spear: Object.freeze({
+    Speed: balanceEntry('adapted', 'quick drill', {attack:1.00, recovery:.96}, 'Faster repositioning around direct thrusts, but still clearly slower than the dagger.'),
+    Balanced: balanceEntry('full', 'keep-out drill', {attack:1.02, recovery:1.04}, 'Measured reach control with direct piercing thrusts as the default expression.'),
+    Power: balanceEntry('adapted', 'braced impale', {attack:1.08, recovery:1.12}, 'A planted impale with high stagger and the longest commitment of the spear forms.'),
+  }),
+  claymore: Object.freeze({
+    Speed: balanceEntry('adapted', 'choked arcs', {attack:1.02, recovery:1.02}, 'A tighter grip and shorter arcs make the big blade more responsive without making it light.'),
+    Balanced: balanceEntry('full', 'space maker', {attack:1.01, recovery:1.04}, 'Broad, controlled arcs that create room and preserve the claymore’s reach.'),
+    Power: balanceEntry('adapted', 'committed sweep', {attack:1.07, recovery:1.11}, 'Wider, heavier sweeps with clear commitment and high payoff on contact.'),
+  }),
+  battleaxe: Object.freeze({
+    Speed: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'The axe cannot express a light stance cleanly and uses the authored failure expression.'),
+    Balanced: balanceEntry('adapted', 'controlled cleave', {attack:1.04, recovery:1.08}, 'Readable cleaves with a little less commitment than the full power form, still deliberately slow.'),
+    Power: balanceEntry('full', 'breaking chop', {attack:1.06, recovery:1.10}, 'Wide committed chops that reward timing, impact, and stagger.'),
+  }),
+  warhammer: Object.freeze({
+    Speed: balanceEntry('unusable', 'unsupported overcommit', {attack:1.00, recovery:1.00}, 'The hammer cannot express a light stance and uses the authored failure expression.'),
+    Balanced: balanceEntry('adapted', 'planted hammer', {attack:1.05, recovery:1.08}, 'A planted, readable swing that remains slow and heavy even in Balanced.'),
+    Power: balanceEntry('full', 'maximum impact', {attack:1.06, recovery:1.10}, 'The full commitment: biggest stagger and the longest honest recovery.'),
+  }),
+  greatsword: Object.freeze({
+    Speed: balanceEntry('unusable', 'failed lift', {attack:1.00, recovery:1.00}, 'The greatsword cannot express a light stance and uses the authored failure expression.'),
+    Balanced: balanceEntry('adapted', 'choked greatblade', {attack:1.05, recovery:1.08}, 'A tighter grip changes the path, not the identity: the greatsword is still slow.'),
+    Power: balanceEntry('full', 'greatblade dominance', {attack:1.08, recovery:1.12}, 'Full reach, cleave, stagger, and the longest commitment in the matrix.'),
+  }),
+});
+
+export function stanceAxisForClass(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'light' || raw === 'speed') return 'Speed';
+  if (raw === 'medium' || raw === 'balanced') return 'Balanced';
+  if (raw === 'heavy' || raw === 'power') return 'Power';
+  return null;
+}
+
+export function getWeaponStanceBalance({weaponId, stanceClass} = {}) {
+  const normalized = normalizeWeaponId(weaponId);
+  const axis = stanceAxisForClass(stanceClass);
+  return axis ? WEAPON_STANCE_BALANCE_MATRIX[normalized]?.[axis] || null : null;
+}
+
 const WEAPON_STYLE_PREFERENCES = Object.freeze({
   longsword: freezeList(['balanced', 'longblade', 'slice', 'mixed']),
   dagger: freezeList(['fast', 'knife', 'duelist', 'pierce']),
