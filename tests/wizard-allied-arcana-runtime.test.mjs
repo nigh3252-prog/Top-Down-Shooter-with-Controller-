@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createArenaFactionService} from '../src/arena-faction-service.js';
+import {clearArenaRuntime,getArenaCollisionSegments,provideArenaRuntime} from '../src/arena-runtime-context.js';
 import {
   installWizardAlliedArcanaRuntime,
   resolveAgentLeashPosition,
@@ -69,6 +70,15 @@ assert.equal(leashResolution.blockedByWall,true);
 assert.ok(leashResolution.z>-.7&&leashResolution.z<0,'hard-leash recovery stays on the owner side of scenery');
 assert.ok(Number.isFinite(RAPID_FIRE_AGENT_SPEC.attackRange)&&RAPID_FIRE_AGENT_SPEC.attackRange<RAPID_FIRE_AGENT_SPEC.shotSpeed*RAPID_FIRE_AGENT_SPEC.shotLife,'agent acquisition is explicitly bounded within projectile travel range');
 
+// Warden Trial's projected stage is intentionally open even if a stale maze
+// object still exposes the old theoretical hex boundary. Normal Arena keeps
+// that collision source unchanged.
+const theoreticalWardenWall={a:{x:-2,z:-.7},b:{x:2,z:-.7}};
+const wardenRuntime={config:{mode:'arena',wardenTrial:true,variant:'warden-trial'},mazeWorld:{getCollisionSegments:()=>[theoreticalWardenWall]}};
+assert.deepEqual(getArenaCollisionSegments(wardenRuntime),[],'Warden Trial must not expose hidden maze walls to Arcana');
+const normalRuntime={config:{mode:'arena'},mazeWorld:{getCollisionSegments:()=>[theoreticalWardenWall]}};
+assert.deepEqual(getArenaCollisionSegments(normalRuntime),[theoreticalWardenWall],'normal Arena must preserve maze wall collision');
+
 const scene=new Group();
 const player={x:0,z:0,forwardX:0,forwardZ:1,targetable:true,invulnerable:false};
 const factionService=createArenaFactionService();
@@ -93,7 +103,8 @@ const enemySystem={
   getNearestHostile:position=>factionService.chooseTarget({...position,wizardFaction:'allied'},null)?.__arenaEntity||null,
 };
 factionService.registerEnemySystem('original',enemySystem);
-const runtime=installWizardAlliedArcanaRuntime({THREE,scene,getPlayer:()=>player,getEnemySystem:()=>enemySystem,getMazeSegments:()=>walls});
+let wallSource=()=>walls;
+const runtime=installWizardAlliedArcanaRuntime({THREE,scene,getPlayer:()=>player,getEnemySystem:()=>enemySystem,getMazeSegments:()=>wallSource()});
 const cast=id=>runtime.cast({id:`WOL-${id}`});
 const step=(seconds,dt=.02)=>{for(let elapsed=0;elapsed<seconds-1e-9;elapsed+=dt)runtime.update(Math.min(dt,seconds-elapsed));};
 const makeEnemy=(id,x,z,extra={})=>({id,x,z,hp:extra.hp??500,radius:extra.radius??.35,wizardFaction:'hostile',state:'idle',...extra});
@@ -137,6 +148,17 @@ assert.equal(cast(RAPID_FIRE_AGENT_SPEC.id),true);step(.3);assert.equal(hits.fil
 
 runtime.reset();hits.length=0;enemies.length=0;walls.length=0;target=makeEnemy('near-wall-target',0,1.2,{hp:10000,radius:.5});enemies.push(target);walls.push({a:{x:-2,z:1},b:{x:2,z:1}});
 assert.equal(cast(RAPID_FIRE_AGENT_SPEC.id),true);step(.3);assert.equal(hits.filter(hit=>hit.options.agentShot).length,0,'an expanded target collider immediately behind a wall cannot steal the projectile contact');walls.length=0;
+
+provideArenaRuntime(wardenRuntime);
+wallSource=()=>getArenaCollisionSegments();
+runtime.reset();hits.length=0;enemies.length=0;player.x=0;player.z=0;player.forwardX=0;player.forwardZ=1;
+assert.equal(cast(RAPID_FIRE_AGENT_SPEC.id),true);
+agent=runtime.effects.find(effect=>effect.type==='agent');
+step(.35);
+assert.ok(agent.z<theoreticalWardenWall.a.z,'Rapid Fire Agent must cross the removed Warden Trial wall position');
+assert.equal(runtime.snapshot().semanticEvents.some(event=>event.kind==='agent-leash-teleport'&&event.blockedByWall===true),false,'Warden Trial agent movement must not report a hidden wall block');
+wallSource=()=>walls;
+clearArenaRuntime();
 
 // Ward placement/pulses stay exact while Fire damage from other sources is
 // amplified once. The ward is itself a finite-health registered ally.

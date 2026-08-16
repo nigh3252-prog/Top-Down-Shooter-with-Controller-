@@ -2167,7 +2167,7 @@ function setArcanaEnemyCarried(enemy,detail={}){
 }
 function translateArcanaPlayer(dx=0,dz=0){
   const start={x:actorPos.x,z:actorPos.y},delta={x:Number(dx)||0,z:Number(dz)||0};
-  const result=resolveCircleMovement(start,delta,PLAYER_RADIUS,captureMazeWorld().getCollisionSegments());
+  const result=resolveCircleMovement(start,delta,PLAYER_RADIUS,getArcanaCollisionSegments());
   actorPos.set(result.x,result.z);actorRoot.position.set(result.x,0,result.z);
   return{start,end:{x:result.x,z:result.z},applied:{x:result.x-start.x,z:result.z-start.z},blocked:!!result.collided};
 }
@@ -2177,7 +2177,7 @@ function validateArcanaTeleportEndpoint(desired={}){
   const requested={x:rawX,z:rawZ};
   const cell=findCellAtPoint(dungeon,requested,HEX_SIZE);
   if(!cell)return{ok:false,start,end:{...start},reason:'outside-maze'};
-  const resolved=resolveCircleMovement(requested,{x:0,z:0},PLAYER_RADIUS,captureMazeWorld().getCollisionSegments());
+  const resolved=resolveCircleMovement(requested,{x:0,z:0},PLAYER_RADIUS,getArcanaCollisionSegments());
   if(resolved.collided||Math.hypot(resolved.x-requested.x,resolved.z-requested.z)>.005)return{ok:false,start,requested,end:{...start},reason:'blocked-endpoint'};
   const validCell=findCellAtPoint(dungeon,resolved,HEX_SIZE);
   if(!validCell)return{ok:false,start,end:{...start},reason:'invalid-endpoint'};
@@ -2321,6 +2321,12 @@ function performCaptureWorldAction(action={}){
 function captureMazeWorld(){
   if(!ABILITY_CAPTURE_MODE||!captureWallSegments.length)return mazeWorld;
   const view=Object.create(mazeWorld||null);view.getCollisionSegments=()=>[...(mazeWorld?.getCollisionSegments?.()||[]),...captureWallSegments];return view;
+}
+function getArcanaCollisionSegments(){
+  // Warden Trial is an open projected stage. Its hidden maze object is retained
+  // for shared rendering/bootstrap contracts, but must not act as an Arcana
+  // wall source for summons, projectiles, or authored movement.
+  return wardenTrialMode?[]:(captureMazeWorld().getCollisionSegments?.()||[]);
 }
 function placeCaptureFixtures(config){
   const dummyConfig=normalizeCaptureDummy(config?.dummy);
@@ -2536,7 +2542,7 @@ const runtimeHandle={
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
   selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,
-  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,
+  arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };
 provideArenaRuntime(runtimeHandle);
