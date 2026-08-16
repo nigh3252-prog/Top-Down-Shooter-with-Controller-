@@ -1534,38 +1534,28 @@ function renderTrialCard(){
   const name=trialCardName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
   const art=trialCard.querySelector('.trialCardArt');
-  const up=trialCard.querySelector('.trialCardUp');
-  const down=trialCard.querySelector('.trialCardDown');
   trialCard.dataset.cardId=card?.id||'';
   trialCard.setAttribute('aria-label',card
     ? `${name} card; swipe upward for inert registration or downward to ${staminaCard?'play and restore stamina':'play'}`
     : 'No trial card available');
-  if(art)art.textContent=name;
-  if(up)up.textContent='↑ UP · INERT';
-  if(down)down.textContent=staminaCard?'↓ DOWN · STAMINA':'↓ DOWN · PLAY';
+  if(art){
+    art.textContent=name;
+    art.dataset.length=name.length>14?'long':'short';
+  }
   if(trialBadge){
     const weaponLabel=WEAPONS[combatState.weapon]?.label||combatState.weapon||'UNKNOWN WEAPON';
     trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${name} · ${arena.started?'AUTONOMOUS':'READY'}`;
   }
   if(trialCardStatus&&trialCardDirection==='neutral'){
     trialCardStatus.textContent=card
-      ? (arena.started?`READY · ${name}`:`SWIPE DOWN TO START · ${name}`)
+      ? (arena.started?'':`SWIPE DOWN TO START · ${name}`)
       : 'NO TRIAL CARD';
   }
 }
 function setTrialCardFeedback(direction='neutral',message=''){
   trialCardDirection=direction==='up'||direction==='down'?direction:'neutral';
-  if(trialCard){
-    if(trialCardDirection==='neutral')delete trialCard.dataset.direction;
-    else trialCard.dataset.direction=trialCardDirection;
-  }
-  if(trialCardStatus){
-    trialCardStatus.textContent=trialCardDirection==='up'
-      ? 'UP REGISTERED · INERT'
-      : trialCardDirection==='down'
-        ? (message||'DOWN REGISTERED')
-        : message||'';
-  }
+  if(trialCard)delete trialCard.dataset.direction;
+  if(trialCardStatus&&trialCardDirection==='neutral')trialCardStatus.textContent=message||'';
   if(trialCardDirection==='neutral')renderTrialCard();
   emitRuntime({type:'trial-card-direction',direction:trialCardDirection});
 }
@@ -1588,6 +1578,7 @@ function playWardenTrialCardDown(){
     announce('STARTER CARD REQUIRED',.8);
     return false;
   }
+  const wasWaiting=!arena.started;
   const played=deck.play(slot);
   if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
   const pool=stancePoolForWeapon();
@@ -1595,7 +1586,6 @@ function playWardenTrialCardDown(){
   if(index>=0)setStance(index);
   else applyStance(played);
   if(decision.refill)fullRefillStamina();
-  const wasWaiting=!arena.started;
   if(wasWaiting){
     arena.started=true;
     arena.paused=false;
@@ -1609,6 +1599,7 @@ function playWardenTrialCardDown(){
 if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
     target:document,
+    visualElement:trialCard,
     enabled:()=>!arena.paused&&arena.deadT<0&&!roomTransition?.active,
     startGuard:event=>{
       const startY=Number(event?.clientY)||0;
