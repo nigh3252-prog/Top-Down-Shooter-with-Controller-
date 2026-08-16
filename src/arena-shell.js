@@ -40,10 +40,8 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
 <div id="trialCardTray" aria-label="Warden Trial card interface">
   <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
   <div id="trialCardRail">
-    <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe upward or downward">
-      <span class="trialCardUp">↑ UP · INERT</span>
+    <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
       <span class="trialCardArt" aria-hidden="true">CURRENT CARD</span>
-      <span class="trialCardDown">↓ DOWN · PLAY</span>
     </button>
   </div>
 </div>
