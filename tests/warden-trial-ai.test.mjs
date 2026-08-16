@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { blendWardenTrialCenterMovement, createWardenTrialBrain, getWardenTrialCombatBand, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
+import { blendWardenTrialCenterMovement, chooseWardenTrialDodgeEndpoint, createWardenTrialBrain, getWardenTrialCombatBand, getWardenTrialThreatSnapshot, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
 import {
@@ -107,6 +107,54 @@ assert.equal(emergencyDecision.action,'dodge','a late telegraph can interrupt an
 const quiet={id:'quiet',x:5.8,z:0,hp:10,state:'idle'};
 const imminent={id:'imminent',x:6.4,z:0,hp:10,state:'windup',stateTime:.7,windup:1,attack:{range:3.5}};
 assert.equal(nearestWardenTrialThreat(player,[quiet,imminent]).enemy,imminent,'defense should prioritize an imminent telegraph over a merely nearer target');
+
+const timedThreat=getWardenTrialThreatSnapshot(player,{...imminent,attack:{range:3.5,arc:Math.PI,damage:10,kind:'melee'}});
+assert.equal(Number(timedThreat.impactIn.toFixed(2)),.3,'threat snapshots expose time remaining until contact');
+assert.equal(timedThreat.hitLikely,true,'a telegraphed attack aimed at the Warden should be considered dangerous');
+
+const parryBrain=createWardenTrialBrain({decisionInterval:0});
+const longWindup={...danger,windup:1,stateTime:.5,attack:{range:3.5,arc:Math.PI,damage:10,kind:'melee'}};
+decision=parryBrain.update(.016,{player,enemies:[longWindup],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'parry',parryRemaining:0,parryRecoveryRemaining:0}});
+assert.notEqual(decision.action,'parry','parry should not open halfway through a long telegraph');
+longWindup.stateTime=.86;
+decision=parryBrain.update(.016,{player,enemies:[longWindup],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'parry',parryRemaining:0,parryRecoveryRemaining:0}});
+assert.equal(decision.action,'parry','parry should be scheduled from time-to-impact, not fixed windup progress');
+
+const shieldBrain=createWardenTrialBrain({decisionInterval:0});
+const shieldThreat={...danger,stateTime:.7,windup:1,attack:{range:3.5,arc:Math.PI,damage:24,kind:'melee'}};
+decision=shieldBrain.update(.016,{player,enemies:[shieldThreat],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'shield',guardRaised:false,guardBroken:false}});
+assert.equal(decision.action,'guard-on','shield defense should raise explicitly instead of toggling through the generic dodge command');
+shieldBrain.acknowledgeDefense('guard-on',{accepted:true,guardRaised:true});
+decision=shieldBrain.update(.016,{player,enemies:[shieldThreat],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'shield',guardRaised:true,guardBroken:false}});
+assert.equal(decision.action,'guard-hold','a raised guard should remain held while the threat is still live');
+decision=shieldBrain.update(.5,{player,enemies:[{...shieldThreat,state:'idle'}],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'shield',guardRaised:true,guardBroken:false}});
+assert.equal(decision.action,'guard-off','a guard should be explicitly released after the telegraph ends');
+decision=shieldBrain.update(.16,{player,enemies:[],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'shield',guardRaised:true,guardBroken:false}});
+assert.equal(decision.action,'guard-off','a raised guard should also release when the final threat disappears');
+
+const dodgeThreat=getWardenTrialThreatSnapshot(player,{...danger,attack:{range:3.5,arc:Math.PI,damage:10,kind:'melee'}});
+const dodgeEndpoint=chooseWardenTrialDodgeEndpoint({
+  player,threat:dodgeThreat,enemies:[danger],dodgeDistance:4.6,
+  stage:{resolveMovement(position,delta){return{x:position.x+delta.x,z:position.z+delta.z,collided:false};}},
+});
+assert.ok(Math.hypot(dodgeEndpoint.direction.x,dodgeEndpoint.direction.z)>.99,'dodge planning should return a normalized movement direction');
+assert.ok(Math.hypot(dodgeEndpoint.endpoint.x-danger.x,dodgeEndpoint.endpoint.z-danger.z)>dodgeThreat.attackRange+1,'dodge planning should choose an endpoint outside the incoming danger radius');
+
+const spacingBrain=createWardenTrialBrain({decisionInterval:0});
+const spacingThreat={...danger,windup:1,stateTime:.7,attack:{range:3.5,arc:Math.PI,damage:10,kind:'melee'}};
+decision=spacingBrain.update(.016,{player,enemies:[spacingThreat],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'parry',parryRemaining:0,parryRecoveryRemaining:0}});
+assert.equal(decision.action,'space','the Warden should preserve spacing instead of starting an attack it cannot safely finish');
+
+const feedbackBrain=createWardenTrialBrain({decisionInterval:0});
+decision=feedbackBrain.update(.016,{player,enemies:[danger],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'existing-dodge'}});
+assert.equal(decision.action,'dodge');
+feedbackBrain.acknowledgeDefense('dodge',{accepted:false,dodged:false,reason:'empty-reserve'});
+decision=feedbackBrain.update(.016,{player,enemies:[danger],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'existing-dodge'}});
+assert.equal(feedbackBrain.snapshot().dodgeT,0,'a rejected defense must remain retryable instead of consuming the cooldown');
+assert.ok(decision.action==='space'||decision.action==='dodge','a rejected defense may briefly reposition before retrying');
+feedbackBrain.acknowledgeDefense('dodge',{dodged:true});
+decision=feedbackBrain.update(.016,{player,enemies:[danger],weapon:trialWeapon,stamina:100,attackActive:false,defense:{kind:'existing-dodge'}});
+assert.notEqual(decision.action,'dodge','an accepted dodge must consume the AI defense cooldown');
 
 const tired=createWardenTrialBrain({staminaRestDelay:.05});
 decision=tired.update(.06,{player,enemies:[near],stamina:0,attackActive:false});
