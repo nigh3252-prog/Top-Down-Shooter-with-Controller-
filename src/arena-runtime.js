@@ -1580,6 +1580,11 @@ let trialCardDirection='neutral';
 function trialCardName(card){
   return String(card?.name||card?.id||'NO CARD').replace(/^S\d+\s*/,'').toUpperCase();
 }
+function trialCardStanceName(card){
+  const id=String(card?.id||'').trim().toUpperCase();
+  const name=trialCardName(card);
+  return id&&name!=='NO CARD'?`${id} ${name}`:name;
+}
 function currentTrialCardSlot(){
   if(deck.hand[0])return 0;
   if(deck.hand[1])return 1;
@@ -1592,26 +1597,35 @@ function currentTrialCard(){
 function renderTrialCard(){
   if(!wardenTrialMode||!trialCard)return;
   const card=currentTrialCard();
-  const name=trialCardName(card);
+  const stanceName=trialCardStanceName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
   const upArcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
   const art=trialCard.querySelector('.trialCardArt');
+  const arcanaNameElement=trialCard.querySelector('.trialArcanaName');
+  const stanceNameElement=trialCard.querySelector('.trialStanceName');
+  const arcanaName=String(upArcana?.name||'NO ARCANA').toUpperCase();
   trialCard.dataset.cardId=card?.id||'';
   trialCard.dataset.arcanaId=upArcana?.arcanaId||'';
+  trialCard.dataset.stanceId=card?.id||'';
   trialCard.setAttribute('aria-label',card
-    ? `${name} card; swipe upward to ${upArcana?`cast ${upArcana.name}`:'register with no mapped Arcana'} or downward to ${staminaCard?'play and restore stamina':'play'}`
+    ? `${stanceName} card; swipe upward to ${upArcana?`cast ${arcanaName}`:'register the card'} or downward to enter ${stanceName}${!arena.started&&staminaCard?' and start the trial':staminaCard?' and restore stamina':''}`
     : 'No trial card available');
-  if(art){
-    art.textContent=name;
-    art.dataset.length=name.length>14?'long':'short';
+  if(art)art.dataset.element=String(upArcana?.element||'').toLowerCase();
+  if(arcanaNameElement){
+    arcanaNameElement.textContent=arcanaName;
+    arcanaNameElement.dataset.length=arcanaName.length>16?'long':'short';
+  }
+  if(stanceNameElement){
+    stanceNameElement.textContent=stanceName;
+    stanceNameElement.dataset.length=stanceName.length>18?'long':'short';
   }
   if(trialBadge){
     const weaponLabel=WEAPONS[combatState.weapon]?.label||combatState.weapon||'UNKNOWN WEAPON';
-    trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${name} · ${arena.started?'AUTONOMOUS':'READY'}`;
+    trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${upArcana?arcanaName:'NO ARCANA'} / ${card?.id||'--'} · ${arena.started?'AUTONOMOUS':'READY'}`;
   }
   if(trialCardStatus&&trialCardDirection==='neutral'){
     trialCardStatus.textContent=card
-      ? (arena.started?'':`SWIPE DOWN TO START · ${name}`)
+      ? (arena.started?'':`SWIPE DOWN TO START · ${arcanaName} / ${card?.id||'--'}`)
       : 'NO TRIAL CARD';
   }
 }
