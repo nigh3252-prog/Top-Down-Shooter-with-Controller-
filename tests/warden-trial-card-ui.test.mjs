@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
+import { STONE_WEAPON_ORDER } from '../src/weapons.js';
 import { installWardenTrialCardGesture, installWardenTrialSwipeSurface, resolveWardenTrialCardDirection } from '../src/warden-trial-card-ui.js';
 
 assert.equal(resolveWardenTrialCardDirection(-55),'up');
@@ -12,6 +13,10 @@ assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-o
 assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial card');
 assert.match(ARENA_SHELL_HTML,/swipe up or down/,'the card exposes its vertical interaction to assistive technology');
 assert.doesNotMatch(ARENA_SHELL_HTML,/trialCardUp|trialCardDown/,'direction labels are kept out of the compact card face');
+assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
+for(const weaponId of STONE_WEAPON_ORDER){
+  assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
+}
 
 function createFakeElement(){
   const listeners=new Map();
