@@ -3,6 +3,11 @@ import { createStanceDeck } from '../src/stance-deck.js';
 import { STANCE_CARDS } from '../src/stance-cards.js';
 import { wizardArcanaCardById } from '../src/wizard-arcana-catalog.js';
 import {
+  starterArcanaIdsForWeapon,
+  WEAPON_STARTER_ARCANA_IDS,
+  WEAPON_STARTER_STANCE_IDS,
+} from '../src/weapon-stance-plan.js';
+import {
   dispatchWardenTrialUpArcana,
   isWardenTrialRuntime,
   isWardenTrialStaminaCard,
@@ -15,6 +20,42 @@ import {
 assert.equal(isWardenTrialRuntime({ variant:'warden-trial' }), true);
 assert.equal(isWardenTrialRuntime({ wardenTrial:true }), true);
 assert.equal(isWardenTrialRuntime({ mode:'arena' }), false);
+
+assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_STARTER_STANCE_IDS));
+const allStarterArcanaIds=Object.values(WEAPON_STARTER_ARCANA_IDS).flat();
+assert.equal(allStarterArcanaIds.length,22,'every weapon contributes two authored starter Arcana');
+assert.equal(new Set(allStarterArcanaIds).size,22,'starter Arcana remain unique even when stance IDs repeat');
+for(const [weaponId,stanceIds] of Object.entries(WEAPON_STARTER_STANCE_IDS)){
+  const arcanaIds=starterArcanaIdsForWeapon(weaponId);
+  assert.equal(stanceIds.length,2,`${weaponId} has two starter stances`);
+  assert.equal(arcanaIds.length,2,`${weaponId} has two starter Arcana`);
+  for(const [index,stanceId] of stanceIds.entries()){
+    const arcanaId=arcanaIds[index];
+    assert.ok(wizardArcanaCardById(arcanaId),`${weaponId} starter ${arcanaId} exists in the canonical Arcana catalog`);
+    assert.equal(
+      wardenTrialUpArcanaIdForCard({id:stanceId},weaponId),
+      arcanaId,
+      `${weaponId} starter ${stanceId} resolves to its authored Arcana`,
+    );
+    assert.deepEqual(
+      resolveWardenTrialCardPlay({direction:'up',started:true,card:{id:stanceId},weaponId,stamina:42}),
+      {accepted:true,reason:'arcana-fired',started:true,stamina:42,refill:false,arcanaId},
+      `${weaponId} starter ${stanceId} fires its authored Arcana without changing stamina`,
+    );
+  }
+}
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S14'},'katana'),'WIND-SLASH',
+  'shared S14 resolves to Katana\'s authored Arcana');
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S14'},'whip'),'AIR-BURST',
+  'shared S14 resolves to Whip\'s authored Arcana');
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S26'},'longsword'),'RAPID-FIRE-AGENT',
+  'shared S26 resolves to Longsword\'s authored Arcana');
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S26'},'claymore'),'BOUNCING-BLAZE',
+  'shared S26 resolves to Claymore\'s authored Arcana');
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S27'},'claymore'),'FROST-WING',
+  'shared S27 resolves to Claymore\'s authored Arcana');
+assert.equal(wardenTrialUpArcanaIdForCard({id:'S27'},'greatsword'),'TERRA-RING',
+  'shared S27 resolves to Greatsword\'s authored Arcana');
 
 const longswordDeck = [
   { id:'A01', type:'ability' },
@@ -36,9 +77,9 @@ assert.equal(isWardenTrialStaminaCard(longswordDeck[0], { weaponId:'longsword', 
   'non-stance cards cannot refill the trial');
 assert.equal(isWardenTrialStaminaCard(longswordDeck[3], { weaponId:'longsword', deckCards:[longswordDeck[1]] }), false,
   'a starter card must still be present in the active deck');
-assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[3]), 'RAPID-FIRE-AGENT');
-assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[1]), 'AQUA-VORTEX');
-assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[2]), null);
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[3], 'longsword'), 'RAPID-FIRE-AGENT');
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[1], 'longsword'), 'AQUA-VORTEX');
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[2], 'longsword'), null);
 
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'up', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
@@ -66,7 +107,7 @@ const dispatcher={
   play(card,context){arcanaDispatches.push({phase:'play',card,context});return true;},
 };
 const rapidFireDispatch=dispatchWardenTrialUpArcana({
-  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[3]),
+  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[3], 'longsword'),
   resolveArcanaCard:wizardArcanaCardById,
   dispatcher,
   context:{source:'warden-trial-card',stanceCardId:'S26'},
@@ -78,7 +119,7 @@ assert.deepEqual(arcanaDispatches.map(entry=>[entry.phase,entry.card.arcanaId]),
   ['play','RAPID-FIRE-AGENT'],
 ]);
 const aquaVortexDispatch=dispatchWardenTrialUpArcana({
-  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[1]),
+  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[1], 'longsword'),
   resolveArcanaCard:wizardArcanaCardById,
   dispatcher,
 });

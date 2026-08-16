@@ -1,14 +1,13 @@
-import { starterStanceIdsForWeapon } from './weapon-stance-plan.js';
+import { starterArcanaIdsForWeapon, starterStanceIdsForWeapon } from './weapon-stance-plan.js';
 
 const NON_STANCE_CARD_TYPES = new Set(['ability', 'modifier']);
-const WARDEN_TRIAL_UP_ARCANA_IDS = Object.freeze({
-  S26:'RAPID-FIRE-AGENT',
-  S29:'AQUA-VORTEX',
-});
 
-export function wardenTrialUpArcanaIdForCard(card) {
+export function wardenTrialUpArcanaIdForCard(card, weaponId) {
   const stanceId = String(card?.id ?? card ?? '').trim().toUpperCase();
-  return WARDEN_TRIAL_UP_ARCANA_IDS[stanceId] || null;
+  const stanceIds = starterStanceIdsForWeapon(weaponId);
+  const arcanaIds = starterArcanaIdsForWeapon(weaponId);
+  const index = stanceIds.indexOf(stanceId);
+  return index >= 0 ? arcanaIds[index] || null : null;
 }
 
 export function dispatchWardenTrialUpArcana({
@@ -65,7 +64,7 @@ export function resolveWardenTrialCardPlay({
     if(!started){
       return Object.freeze({ accepted:false, reason:'starter-card-required', started:false, stamina:currentStamina, refill:false });
     }
-    const arcanaId = wardenTrialUpArcanaIdForCard(card);
+    const arcanaId = wardenTrialUpArcanaIdForCard(card, weaponId);
     if(!arcanaId){
       return Object.freeze({ accepted:false, reason:'direction-inert', started:true, stamina:currentStamina, refill:false });
     }

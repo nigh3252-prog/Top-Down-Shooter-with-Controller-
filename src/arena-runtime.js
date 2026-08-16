@@ -1594,7 +1594,7 @@ function renderTrialCard(){
   const card=currentTrialCard();
   const name=trialCardName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
-  const upArcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card));
+  const upArcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
   const art=trialCard.querySelector('.trialCardArt');
   trialCard.dataset.cardId=card?.id||'';
   trialCard.dataset.arcanaId=upArcana?.arcanaId||'';
@@ -1678,7 +1678,7 @@ function playWardenTrialCardUp(){
     announce(message,.8);
     return false;
   }
-  const arcanaContext={source:'warden-trial-card',direction:'up',slot,stanceCardId:card.id};
+  const arcanaContext={source:'warden-trial-card',direction:'up',slot,weaponId:combatState.weapon,stanceCardId:card.id};
   const arcanaResult=dispatchWardenTrialUpArcana({
     arcanaId:decision.arcanaId,
     resolveArcanaCard:wizardArcanaCardById,
