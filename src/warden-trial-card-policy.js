@@ -1,6 +1,36 @@
 import { starterStanceIdsForWeapon } from './weapon-stance-plan.js';
 
 const NON_STANCE_CARD_TYPES = new Set(['ability', 'modifier']);
+const WARDEN_TRIAL_UP_ARCANA_IDS = Object.freeze({
+  S26:'RAPID-FIRE-AGENT',
+  S29:'AQUA-VORTEX',
+});
+
+export function wardenTrialUpArcanaIdForCard(card) {
+  const stanceId = String(card?.id ?? card ?? '').trim().toUpperCase();
+  return WARDEN_TRIAL_UP_ARCANA_IDS[stanceId] || null;
+}
+
+export function dispatchWardenTrialUpArcana({
+  arcanaId,
+  resolveArcanaCard = () => null,
+  dispatcher = null,
+  context = {},
+} = {}) {
+  const normalizedId = String(arcanaId || '').trim().toUpperCase();
+  const arcanaCard = normalizedId ? resolveArcanaCard(normalizedId) : null;
+  if(!arcanaCard){
+    return Object.freeze({ accepted:false, reason:'arcana-unavailable', arcanaId:normalizedId || null, arcanaCard:null });
+  }
+  if(typeof dispatcher?.canPlay !== 'function' || typeof dispatcher?.play !== 'function'
+    || dispatcher.canPlay(arcanaCard,context) === false){
+    return Object.freeze({ accepted:false, reason:'arcana-not-ready', arcanaId:normalizedId, arcanaCard });
+  }
+  if(dispatcher.play(arcanaCard,context) === false){
+    return Object.freeze({ accepted:false, reason:'arcana-not-ready', arcanaId:normalizedId, arcanaCard });
+  }
+  return Object.freeze({ accepted:true, reason:'arcana-fired', arcanaId:normalizedId, arcanaCard });
+}
 
 export function isWardenTrialRuntime(config = {}) {
   return config?.wardenTrial === true || config?.variant === 'warden-trial';
@@ -31,6 +61,16 @@ export function resolveWardenTrialCardPlay({
   maxStamina = 100,
 } = {}) {
   const currentStamina = Math.max(0, Number(stamina) || 0);
+  if(direction === 'up'){
+    if(!started){
+      return Object.freeze({ accepted:false, reason:'starter-card-required', started:false, stamina:currentStamina, refill:false });
+    }
+    const arcanaId = wardenTrialUpArcanaIdForCard(card);
+    if(!arcanaId){
+      return Object.freeze({ accepted:false, reason:'direction-inert', started:true, stamina:currentStamina, refill:false });
+    }
+    return Object.freeze({ accepted:true, reason:'arcana-fired', started:true, stamina:currentStamina, refill:false, arcanaId });
+  }
   if(direction !== 'down'){
     return Object.freeze({ accepted:false, reason:'direction-inert', started:!!started, stamina:currentStamina, refill:false });
   }

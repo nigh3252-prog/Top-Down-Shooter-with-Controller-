@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { createStanceDeck } from '../src/stance-deck.js';
 import { STANCE_CARDS } from '../src/stance-cards.js';
+import { wizardArcanaCardById } from '../src/wizard-arcana-catalog.js';
 import {
+  dispatchWardenTrialUpArcana,
   isWardenTrialRuntime,
   isWardenTrialStaminaCard,
   resolveWardenTrialCardPlay,
   starterCardsForWardenTrialWeapon,
   wardenTrialStarterIdsForWeapon,
+  wardenTrialUpArcanaIdForCard,
 } from '../src/warden-trial-card-policy.js';
 
 assert.equal(isWardenTrialRuntime({ variant:'warden-trial' }), true);
@@ -33,12 +36,64 @@ assert.equal(isWardenTrialStaminaCard(longswordDeck[0], { weaponId:'longsword', 
   'non-stance cards cannot refill the trial');
 assert.equal(isWardenTrialStaminaCard(longswordDeck[3], { weaponId:'longsword', deckCards:[longswordDeck[1]] }), false,
   'a starter card must still be present in the active deck');
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[3]), 'RAPID-FIRE-AGENT');
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[1]), 'AQUA-VORTEX');
+assert.equal(wardenTrialUpArcanaIdForCard(longswordDeck[2]), null);
 
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'up', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
-  { accepted:false, reason:'direction-inert', started:false, stamina:0, refill:false },
-  'upward registration must not start the trial or refill stamina',
+  { accepted:false, reason:'starter-card-required', started:false, stamina:0, refill:false },
+  'the trial still begins with a downward starter play',
 );
+assert.deepEqual(
+  resolveWardenTrialCardPlay({ direction:'up', started:true, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck, stamina:42 }),
+  { accepted:true, reason:'arcana-fired', started:true, stamina:42, refill:false, arcanaId:'RAPID-FIRE-AGENT' },
+  'S26 fires Rapid Fire Agent upward without changing stamina',
+);
+assert.deepEqual(
+  resolveWardenTrialCardPlay({ direction:'up', started:true, card:longswordDeck[1], weaponId:'longsword', deckCards:longswordDeck, stamina:42 }),
+  { accepted:true, reason:'arcana-fired', started:true, stamina:42, refill:false, arcanaId:'AQUA-VORTEX' },
+  'S29 fires Aqua Vortex upward without changing stamina',
+);
+assert.deepEqual(
+  resolveWardenTrialCardPlay({ direction:'up', started:true, card:longswordDeck[2], weaponId:'longsword', deckCards:longswordDeck, stamina:42 }),
+  { accepted:false, reason:'direction-inert', started:true, stamina:42, refill:false },
+  'an unmapped stance remains inert upward',
+);
+const arcanaDispatches=[];
+const dispatcher={
+  canPlay(card,context){arcanaDispatches.push({phase:'can-play',card,context});return true;},
+  play(card,context){arcanaDispatches.push({phase:'play',card,context});return true;},
+};
+const rapidFireDispatch=dispatchWardenTrialUpArcana({
+  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[3]),
+  resolveArcanaCard:wizardArcanaCardById,
+  dispatcher,
+  context:{source:'warden-trial-card',stanceCardId:'S26'},
+});
+assert.equal(rapidFireDispatch.accepted,true);
+assert.equal(rapidFireDispatch.arcanaCard.name,'Rapid Fire Agent');
+assert.deepEqual(arcanaDispatches.map(entry=>[entry.phase,entry.card.arcanaId]),[
+  ['can-play','RAPID-FIRE-AGENT'],
+  ['play','RAPID-FIRE-AGENT'],
+]);
+const aquaVortexDispatch=dispatchWardenTrialUpArcana({
+  arcanaId:wardenTrialUpArcanaIdForCard(longswordDeck[1]),
+  resolveArcanaCard:wizardArcanaCardById,
+  dispatcher,
+});
+assert.equal(aquaVortexDispatch.accepted,true);
+assert.equal(aquaVortexDispatch.arcanaCard.name,'Aqua Vortex');
+let blockedPlay=false;
+assert.deepEqual(
+  dispatchWardenTrialUpArcana({
+    arcanaId:'RAPID-FIRE-AGENT',
+    resolveArcanaCard:wizardArcanaCardById,
+    dispatcher:{canPlay:()=>false,play:()=>{blockedPlay=true;return true;}},
+  }).reason,
+  'arcana-not-ready',
+);
+assert.equal(blockedPlay,false,'a rejected Arcana does not fire or consume the stance card');
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'down', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
   { accepted:true, reason:'stamina-card', started:true, stamina:100, refill:true },

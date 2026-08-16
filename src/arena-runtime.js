@@ -23,6 +23,7 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './room-encounters.js';
 import { createRoomTransitionController } from './room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './ability-capture.js';
+import { wizardArcanaCardById } from './wizard-arcana-catalog.js';
 import { getArenaMazeSettings, getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setArenaMazeCellSize, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
 import { installStanceGate3Runtime } from './stance-gate3-payoffs.js';
@@ -38,7 +39,7 @@ import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
-import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon } from './warden-trial-card-policy.js';
+import { dispatchWardenTrialUpArcana, isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon, wardenTrialUpArcanaIdForCard } from './warden-trial-card-policy.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -1593,10 +1594,12 @@ function renderTrialCard(){
   const card=currentTrialCard();
   const name=trialCardName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
+  const upArcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card));
   const art=trialCard.querySelector('.trialCardArt');
   trialCard.dataset.cardId=card?.id||'';
+  trialCard.dataset.arcanaId=upArcana?.arcanaId||'';
   trialCard.setAttribute('aria-label',card
-    ? `${name} card; swipe upward for inert registration or downward to ${staminaCard?'play and restore stamina':'play'}`
+    ? `${name} card; swipe upward to ${upArcana?`cast ${upArcana.name}`:'register with no mapped Arcana'} or downward to ${staminaCard?'play and restore stamina':'play'}`
     : 'No trial card available');
   if(art){
     art.textContent=name;
@@ -1656,6 +1659,49 @@ function playWardenTrialCardDown(){
   announce(trialCardName(played),.9);
   return true;
 }
+function playWardenTrialCardUp(){
+  if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
+  const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
+  if(!card){setTrialCardFeedback('up','NO TRIAL CARD');return false;}
+  const decision=resolveWardenTrialCardPlay({
+    direction:'up',
+    started:arena.started,
+    card,
+    weaponId:combatState.weapon,
+    deckCards:deck.pool,
+    stamina:arena.stamina.v,
+    maxStamina:STAMINA.max,
+  });
+  if(!decision.accepted){
+    const message=decision.reason==='starter-card-required'?'SWIPE DOWN TO START':'NO ARCANA MAPPED';
+    setTrialCardFeedback('up',message);
+    announce(message,.8);
+    return false;
+  }
+  const arcanaContext={source:'warden-trial-card',direction:'up',slot,stanceCardId:card.id};
+  const arcanaResult=dispatchWardenTrialUpArcana({
+    arcanaId:decision.arcanaId,
+    resolveArcanaCard:wizardArcanaCardById,
+    dispatcher:PC.cardEffectDispatcher,
+    context:arcanaContext,
+  });
+  if(!arcanaResult.accepted){
+    setTrialCardFeedback('up','ARCANA NOT READY');
+    announce('ARCANA NOT READY',.8);
+    return false;
+  }
+  const arcanaCard=arcanaResult.arcanaCard;
+  const played=deck.play(slot);
+  if(!played){
+    setTrialCardFeedback('up','CARD NOT READY');
+    announce('CARD NOT READY',.8);
+    return false;
+  }
+  renderCards();
+  setTrialCardFeedback('up',`UP FIRED · ${arcanaCard.name.toUpperCase()}`);
+  announce(arcanaCard.name,.9);
+  return true;
+}
 if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
     target:document,
@@ -1667,7 +1713,7 @@ if(wardenTrialMode&&trialCard){
       if(event?.target?.closest?.('#topBar,#panel'))return false;
       return true;
     },
-    onDirection:direction=>direction==='down'?playWardenTrialCardDown():setTrialCardFeedback('up'),
+    onDirection:direction=>direction==='down'?playWardenTrialCardDown():playWardenTrialCardUp(),
   });
 }
 menuBtn.addEventListener('click', toggleMenu);
@@ -2516,7 +2562,7 @@ if(wardenTrialMode){
   enemySystem.setPressureBudget(2);enemySystem.setAggression(.9);
   const title=document.querySelector('#startCard .sgTitle'),hint=document.querySelector('#startCard .sgHint'),start=document.getElementById('startBtn'),pauseTitle=document.querySelector('#panel .pauseTitle');
   if(title)title.textContent='WARDEN TRIAL';
-  if(hint)hint.textContent='Swipe down on the current starter card to begin. Swipe up only registers the gesture.';
+  if(hint)hint.textContent='Swipe down on a starter card to begin and restore stamina. Swipe up afterward to cast its mapped Arcana.';
   if(start)start.hidden=true;
   if(pauseTitle)pauseTitle.textContent='TRIAL PAUSED';
   startGate.classList.add('hidden');
