@@ -1471,6 +1471,7 @@ const menuBtn=document.getElementById('menuBtn');
 const resumeBtn=document.getElementById('resumeBtn');
 const themeButtons=[...document.querySelectorAll('[data-arena-theme-option]')];
 const trialEnemyButtons=[...document.querySelectorAll('[data-trial-enemy-set]')];
+const trialWeaponButtons=[...document.querySelectorAll('[data-trial-weapon]')];
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1493,6 +1494,13 @@ function syncTrialEnemyButtons(){
     button.setAttribute('aria-pressed',String(active));
   });
 }
+function syncTrialWeaponButtons(){
+  trialWeaponButtons.forEach(button=>{
+    const active=button.dataset.trialWeapon===combatState.weapon;
+    button.classList.toggle('on',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
 function selectWardenTrialEnemySet(value){
   if(!wardenTrialMode)return false;
   wardenTrialEnemySet=normalizeWardenTrialEnemySet(value);
@@ -1501,6 +1509,20 @@ function selectWardenTrialEnemySet(value){
   const selected=configureWardenTrialWave();
   respawn();
   announce(selected.label,.9);
+  return true;
+}
+function selectWardenTrialWeapon(value){
+  if(!wardenTrialMode||roomTransition?.active)return false;
+  const next=normalizeStoneWeaponId(value);
+  if(!WEAPON_ORDER.includes(next))return false;
+  if(next!==combatState.weapon){
+    PC.selectCombatWeapon(next);
+    StoneSettings.set('arena.weapon',next);
+    respawn();
+    announce(WEAPONS[next]?.label||next,.9);
+  }
+  syncTrialWeaponButtons();
+  if(!panel.classList.contains('hidden'))toggleMenu();
   return true;
 }
 function toggleMenu(){
@@ -1614,8 +1636,10 @@ menuBtn.addEventListener('click', toggleMenu);
 resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'))toggleMenu(); });
 themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
 trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialEnemySet(button.dataset.trialEnemySet)));
+trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
 syncThemeButtons();
 syncTrialEnemyButtons();
+syncTrialWeaponButtons();
 document.getElementById('startBtn').addEventListener('click', ()=>{
   if(wardenTrialMode)return;
   arena.started = true;
