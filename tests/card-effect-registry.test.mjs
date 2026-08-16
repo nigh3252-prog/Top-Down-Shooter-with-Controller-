@@ -23,6 +23,7 @@ import { POW_BUNKER_CARD } from '../src/powbunker-card.js';
 import { WIZARD_ARCANA_CATALOG } from '../src/wizard-arcana-catalog.js';
 import { WIZARD_NEXT_SOURCE_CARDS } from '../src/wizard-next-source-cards.js';
 import { createStanceDeck } from '../src/stance-deck.js';
+import { arcanaDownStanceId } from '../src/arcana-stance-pairings.js';
 
 if(typeof globalThis.CustomEvent==='undefined')globalThis.CustomEvent=class CustomEvent{
   constructor(type,init={}){this.type=type;this.detail=init.detail;}
@@ -36,6 +37,11 @@ assert.equal(listCards({family:'stance'}).length,30);
 assert.equal(listCards({family:'special-stance'}).length,1);
 assert.equal(listCards({family:'non-stance'}).length,2);
 assert.equal(listCards({family:'arcana'}).length,70);
+const arcanaCards=listCards({family:'arcana'});
+assert.ok(arcanaCards.every(card=>/^S\d+$/.test(arcanaDownStanceId(card.arcanaId))),'every Arcana must have a down-side stance pairing');
+const downStanceCounts=new Map(STANCE_CARDS.map(card=>[card.id,0]));
+for(const card of arcanaCards)downStanceCounts.set(arcanaDownStanceId(card.arcanaId),(downStanceCounts.get(arcanaDownStanceId(card.arcanaId))||0)+1);
+assert.ok([...downStanceCounts.values()].every(count=>count>=2&&count<=3),'the 70 Arcana pairings must distribute two or three cards to every stance');
 const effectCards=[...listCards({family:'non-stance'}),...listCards({family:'arcana'})];
 assert.equal(effectCards.length,72,'the canonical non-stance inventory is Pilebunker, Blood Slash, and 70 Arcana');
 assert.ok(effectCards.every(card=>card.effectId),'every canonical non-stance card must own an effectId');
@@ -153,5 +159,21 @@ assert.deepEqual(persistenceDeck.pool.find(card=>card.id===volt.id).manualSequen
 persistenceDeck.rebuild([{id:'S-REPLACEMENT',type:'stance',chain:[]}]);
 assert.equal(persistenceDeck.pool.find(card=>card.id===volt.id),volt,'rebuild must preserve saved Arcana IDs and metadata');
 assert.equal(WIZARD_ARCANA_CATALOG.find(card=>card.id===volt.id),volt,'Arcana catalog and registry must share object identity');
+
+const downCalls=[];
+const combinedDeck=createStanceDeck({rng:()=>0,stanceCatalog:STANCE_CARDS,effectDispatcher:createEffectDispatcher({handlers:{wizardNextSource:{canPlay:()=>true,play:()=>{downCalls.push('unexpected');return true;}}}})});
+combinedDeck.beginRun([STANCE_CARDS[0],volt],{openingStanceId:STANCE_CARDS[0].id});
+const combined=combinedDeck.play(0,{direction:'down'});
+assert.equal(combined.id,'S22','a downward Arcana play must resolve to its authored paired stance');
+assert.equal(combined.__pairedStanceId,'S22');
+assert.deepEqual(downCalls,[],'a downward Arcana play must not dispatch the Arcana effect');
+
+const upCalls=[];
+const upDeck=createStanceDeck({rng:()=>0,stanceCatalog:STANCE_CARDS,effectDispatcher:createEffectDispatcher({handlers:{wizardNextSource:{canPlay:()=>true,play:card=>{upCalls.push(card.arcanaId);return true;}}}})});
+upDeck.beginRun([STANCE_CARDS[0],volt],{openingStanceId:STANCE_CARDS[0].id});
+const up=upDeck.play(0,{direction:'up'});
+assert.equal(up.id,STANCE_CARDS[0].id,'an upward Arcana play must preserve the active stance');
+await Promise.resolve();
+assert.deepEqual(upCalls,['VOLT-DISC'],'an upward Arcana play must dispatch the Arcana effect');
 
 console.log('card/effect registry, dispatch ownership, stamina, and persistence tests passed');
