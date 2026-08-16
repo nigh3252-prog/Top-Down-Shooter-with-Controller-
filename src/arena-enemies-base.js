@@ -1132,10 +1132,19 @@ export function createArenaEnemySystem({
     waveKills = 0; spawnedThisWave = 0; waveClearT = 0;
     startWave();
   }
-  function reset(){
+  function reset({player=null}={}){
     clearEnemies();
     wave = 1; kills = 0; tuning.playerHp = 100; tuning.lastPlayerHit = '';
     activeEncounterRoomId = null;
+    time = 0; nextId = 1;
+    if(player){
+      lastPlayer={
+        ...lastPlayer,
+        ...player,
+        x:Number(player.x)||0,
+        z:Number(player.z)||0,
+      };
+    }else lastPlayer={x:0,z:0,invulnerable:false};
     if(!roomEncounterMode) startWave();
   }
 

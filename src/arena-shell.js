@@ -1,7 +1,7 @@
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
   <button class="tbtn icon" id="fsBtn" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button>
-  <div id="trialBadge">LONGSWORD · RAT STEP · AUTONOMOUS</div>
+  <div id="trialBadge">WARDEN TRIAL · READY</div>
 </div>
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
@@ -37,6 +37,14 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     </button>
   </div>
 </div>
+<div id="trialCardTray" aria-label="Warden Trial card interface">
+  <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
+  <div id="trialCardRail">
+    <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
+      <span class="trialCardArt" aria-hidden="true">CURRENT CARD</span>
+    </button>
+  </div>
+</div>
 <div id="panel" class="hidden" aria-label="Pause menu">
   <div class="pauseTitle">PAUSED</div>
   <section class="pauseSection" aria-labelledby="themeTitle">
@@ -53,6 +61,21 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="cylinders" aria-pressed="false">CYLINDERS</button>
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="goblins-lugaru" aria-pressed="false">GOBLINS + LUGARU</button>
       <button class="trialEnemyChoice" type="button" data-trial-enemy-set="accordion-2d" aria-pressed="false">2D ACCORDION + 3D</button>
+    </div>
+  </section>
+  <section class="pauseSection trialWeaponSection" aria-labelledby="trialWeaponTitle">
+    <h2 id="trialWeaponTitle">TRIAL WEAPON</h2>
+    <div class="trialWeaponGrid" role="group" aria-label="Trial weapon">
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="longsword" aria-pressed="false">LONGSWORD</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="dagger" aria-pressed="false">DAGGER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="rapier" aria-pressed="false">RAPIER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="katana" aria-pressed="false">KATANA</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="mace" aria-pressed="false">MACE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="spear" aria-pressed="false">SPEAR</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="battleaxe" aria-pressed="false">BATTLEAXE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="warhammer" aria-pressed="false">WARHAMMER</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="claymore" aria-pressed="false">CLAYMORE</button>
+      <button class="trialWeaponChoice" type="button" data-trial-weapon="greatsword" aria-pressed="false">GREATSWORD</button>
     </div>
   </section>
   <section class="pauseSection controlsHelp" aria-labelledby="controlsTitle">

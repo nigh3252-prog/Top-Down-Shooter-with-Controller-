@@ -169,7 +169,6 @@ export function createWardenTrialBrain(options={}){
 
     if(finite(context.stamina,100)<config.lowStamina&&!context.attackActive){
       state.restT+=elapsed;
-      if(state.restT>=config.staminaRestDelay){state.restT=0;return{move:{x:0,z:0},action:'refill',target};}
       return{move:{x:0,z:0},resting:true,target};
     }
     state.restT=0;

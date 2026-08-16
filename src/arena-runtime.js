@@ -37,6 +37,8 @@ import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
+import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
+import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon } from './warden-trial-card-policy.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -146,12 +148,23 @@ const ABILITY_CAPTURE_CLEAN = ABILITY_CAPTURE_MODE && CAPTURE_PARAMS.get('clean'
 document.body.classList.toggle('abilityCaptureClean',ABILITY_CAPTURE_CLEAN);
 
 /* ---------- scene ---------- */
+const trialCardTray=document.getElementById('trialCardTray');
+const readArenaViewport=()=>{
+  const trayHeight=wardenTrialMode
+    ? Math.max(0,Number(trialCardTray?.getBoundingClientRect?.().height)||0)
+    : 0;
+  return{
+    width:Math.max(1,Number(innerWidth)||1),
+    height:Math.max(1,(Number(innerHeight)||1)-trayHeight),
+  };
+};
+let arenaViewport=readArenaViewport();
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 // Cap device pixel ratio at 1.5: on high-DPI phones (DPR 2-3) this is the single
 // biggest GPU win (render resolution scales with the square of this) and is barely
 // perceptible with antialiasing on.
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
-renderer.setSize(innerWidth,innerHeight);
+renderer.setSize(arenaViewport.width,arenaViewport.height);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.22;
@@ -167,7 +180,7 @@ scene.fog = new THREE.Fog(
   arenaTheme.worldStyle.fogNear*fogDistanceScale,
   arenaTheme.worldStyle.fogFar*fogDistanceScale,
 );
-const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, innerWidth/innerHeight, .5, wardenTrialMode?660:220);
+const camera = new THREE.PerspectiveCamera(wardenTrialMode?44:40, arenaViewport.width/arenaViewport.height, .5, wardenTrialMode?660:220);
 
 scene.add(new THREE.AmbientLight(0xd8ecff, .5));
 const hemi = new THREE.HemisphereLight(0x9fd8d0, 0x1a2325, 1.9); scene.add(hemi);
@@ -233,14 +246,38 @@ const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
   projectWorldToScreen(point){
     accordionOverlayProjection.set(Number(point?.x)||0,Number(point?.y)||0,Number(point?.z)||0).project(camera);
     return{
-      x:(accordionOverlayProjection.x*.5+.5)*innerWidth,
-      y:(-accordionOverlayProjection.y*.5+.5)*innerHeight,
+      x:(accordionOverlayProjection.x*.5+.5)*arenaViewport.width,
+      y:(-accordionOverlayProjection.y*.5+.5)*arenaViewport.height,
       depth:accordionOverlayProjection.z,
     };
   },
-  getViewport:()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1}),
+  getViewport:()=>({width:arenaViewport.width,height:arenaViewport.height,dpr:devicePixelRatio||1}),
 }):null;
 if(accordionEnemyOverlay)document.body.appendChild(accordionEnemyOverlay.canvas);
+
+function syncAccordionEnemyOverlayCanvas(){
+  const canvas=accordionEnemyOverlay?.canvas;
+  if(!canvas)return;
+  Object.assign(canvas.style,{
+    inset:'auto',left:'0px',top:'0px',right:'auto',bottom:'auto',
+    width:`${arenaViewport.width}px`,height:`${arenaViewport.height}px`,
+  });
+}
+function syncArenaViewport(){
+  arenaViewport=readArenaViewport();
+  camera.aspect=arenaViewport.width/arenaViewport.height;
+  camera.updateProjectionMatrix();
+  if(wardenTrialStageCamera){
+    wardenTrialStageCamera.aspect=arenaViewport.width/arenaViewport.height;
+    wardenTrialStageCamera.updateProjectionMatrix();
+    wardenTrialStageCamera.updateMatrixWorld();
+  }
+  wardenTrialCenterField?.refresh?.();
+  renderer.setSize(arenaViewport.width,arenaViewport.height);
+  syncAccordionEnemyOverlayCanvas();
+  accordionEnemyOverlay?.resize();
+}
+syncArenaViewport();
 
 /* ---------- weapons / stances / audio ---------- */
 const WEAPON_ORDER = STONE_WEAPON_ORDER;
@@ -277,7 +314,7 @@ const arena = {
   arcanaInvulnerable:false, arcanaAirborne:false, arcanaPlayerHeight:0,
   paused:false, started:false, cycleMode:false,
   combatInputMode:getCombatInputMode(StoneSettings.get('arena.combatInputMode', DEFAULT_COMBAT_INPUT_MODE)).id,
-  stamina:{ v:STAMINA.start, pending:0, recoverDelayT:0 },
+  stamina:{ v:wardenTrialMode ? 0 : STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain():null;
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null });
@@ -292,13 +329,16 @@ function spendStamina(cost){
   return spent;
 }
 function queueRecoverableRefund(amount){
+  if(wardenTrialMode)return 0;
   const s = arena.stamina, refund = Math.max(0, amount);
   s.pending = Math.min(STAMINA.max - s.v, s.pending + refund);
   if(refund > 0) s.recoverDelayT = STAMINA.recoverDelay;
+  return refund;
 }
 function fullRefillStamina(){ arena.stamina.v = STAMINA.max; arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
 function wipeRecoverableStamina(){ arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
 function updateStamina(dt){
+  if(wardenTrialMode)return;
   const s = arena.stamina;
   if(s.pending <= 0) return;
   if(s.recoverDelayT > 0){ s.recoverDelayT = Math.max(0, s.recoverDelayT - dt); return; }
@@ -429,11 +469,21 @@ function ensureStanceMatchesWeapon(){
   setStance(idx >= 0 ? idx : 0);
 }
 /* ---------- stance-card deck ---------- */
+function starterDeckForWardenTrial(weaponId = combatState.weapon){
+  return starterCardsForWardenTrialWeapon(weaponId, STANCE_CARDS);
+}
 function rebuildDeck(){
-  deck.rebuild(stancePoolForWeapon());
+  if(wardenTrialMode){
+    const starterCards = starterDeckForWardenTrial();
+    // A weapon swap is a new trial run. beginRun must be used even when the
+    // previous run was locked, otherwise the deck preserves the old weapon's
+    // pool by design.
+    deck.beginRun(starterCards,{openingStanceId:null});
+  }else deck.rebuild(stancePoolForWeapon());
   renderCards();
 }
 function playCard(slot){
+  if(wardenTrialMode)return false;
   if(arena.deadT >= 0 || roomTransition?.active) return;
   if(arena.arcanaAirborne){exhaustFlash();announce('AIRBORNE COMMITMENT',.55);return;}
   if(arena.arcanaMovementLocked){exhaustFlash();announce('ARCANA COMMITMENT',.55);return;}
@@ -1209,6 +1259,8 @@ function flashVignette(){
   const v = document.getElementById('vig');
   v.style.opacity = 1; setTimeout(()=>v.style.opacity = 0, 180);
 }
+let trialCardGesture=null;
+let resetTrialCardFeedback=()=>{};
 function respawn(){
   resetStartupMilestones(null);
   traceArenaState('respawn-begin',{transition:{kind:'full-reset'}});
@@ -1228,13 +1280,22 @@ function respawn(){
   arena.arcanaPlayerHeight = 0;
   actorVisual.position.y = .02;
   actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
+  actorRoot.position.set(startPoint.x,0,startPoint.z);
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
-  fullRefillStamina();
+  if(wardenTrialMode){
+    arena.started = false;
+    arena.stanceIndex = -1;
+    applyStance(null);
+    arena.stamina.v = 0;
+    wipeRecoverableStamina();
+  }else fullRefillStamina();
   wardenTrialBrain?.reset?.();
+  trialCardGesture?.reset?.();
+  resetTrialCardFeedback();
   rebuildDeck();
   encounterState.reset();
-  enemySystem.reset();
+  enemySystem.reset({player:{x:actorPos.x,z:actorPos.y,targetable:true,invulnerable:false}});
   clearRoomEffects();
   loadActiveRoom(dungeon.startRoomId);
   encounterState.enterRoom(dungeon.startRoomId);
@@ -1306,6 +1367,7 @@ const joy = { id:null, sx:0, sy:0, x:0, z:0 };
 const joyBase=document.getElementById('joyBase'), joyKnob=document.getElementById('joyKnob');
 addEventListener('pointerdown', e=>{
   if(e.target.closest('button')||e.target.closest('#panel')) return;
+  if(wardenTrialMode && e.clientY >= arenaViewport.height) return;
   if(e.clientX > innerWidth*.55 || joy.id!==null) return;
   joy.id=e.pointerId; joy.sx=e.clientX; joy.sy=e.clientY;
   joyBase.style.display='block';
@@ -1404,7 +1466,6 @@ function updateWardenTrialAI(dt){
     input.mx=Number(decision.dodgeMove?.x)||0;input.mz=Number(decision.dodgeMove?.z)||0;
     defenseDown('warden-ai');
   }
-  else if(decision.action==='refill'){fullRefillStamina();announce('RAT STEP RESET',.45);}
 }
 
 /* ---------- UI ---------- */
@@ -1413,6 +1474,7 @@ const menuBtn=document.getElementById('menuBtn');
 const resumeBtn=document.getElementById('resumeBtn');
 const themeButtons=[...document.querySelectorAll('[data-arena-theme-option]')];
 const trialEnemyButtons=[...document.querySelectorAll('[data-trial-enemy-set]')];
+const trialWeaponButtons=[...document.querySelectorAll('[data-trial-weapon]')];
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1435,6 +1497,13 @@ function syncTrialEnemyButtons(){
     button.setAttribute('aria-pressed',String(active));
   });
 }
+function syncTrialWeaponButtons(){
+  trialWeaponButtons.forEach(button=>{
+    const active=button.dataset.trialWeapon===combatState.weapon;
+    button.classList.toggle('on',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
 function selectWardenTrialEnemySet(value){
   if(!wardenTrialMode)return false;
   wardenTrialEnemySet=normalizeWardenTrialEnemySet(value);
@@ -1445,6 +1514,20 @@ function selectWardenTrialEnemySet(value){
   announce(selected.label,.9);
   return true;
 }
+function selectWardenTrialWeapon(value){
+  if(!wardenTrialMode||roomTransition?.active)return false;
+  const next=normalizeStoneWeaponId(value);
+  if(!WEAPON_ORDER.includes(next))return false;
+  if(next!==combatState.weapon){
+    PC.selectCombatWeapon(next);
+    StoneSettings.set('arena.weapon',next);
+    respawn();
+    announce(WEAPONS[next]?.label||next,.9);
+  }
+  syncTrialWeaponButtons();
+  if(!panel.classList.contains('hidden'))toggleMenu();
+  return true;
+}
 function toggleMenu(){
   const opening = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !opening);
@@ -1453,16 +1536,118 @@ function toggleMenu(){
   emitRuntime({type:'menu',open:opening});
 }
 function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
+const startGate=document.getElementById('startGate');
+const trialCard=document.getElementById('trialCard');
+const trialCardStatus=document.getElementById('trialCardStatus');
+const trialBadge=document.getElementById('trialBadge');
+let trialCardDirection='neutral';
+function trialCardName(card){
+  return String(card?.name||card?.id||'NO CARD').replace(/^S\d+\s*/,'').toUpperCase();
+}
+function currentTrialCardSlot(){
+  if(deck.hand[0])return 0;
+  if(deck.hand[1])return 1;
+  return -1;
+}
+function currentTrialCard(){
+  const slot=currentTrialCardSlot();
+  return slot>=0?deck.hand[slot]:null;
+}
+function renderTrialCard(){
+  if(!wardenTrialMode||!trialCard)return;
+  const card=currentTrialCard();
+  const name=trialCardName(card);
+  const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
+  const art=trialCard.querySelector('.trialCardArt');
+  trialCard.dataset.cardId=card?.id||'';
+  trialCard.setAttribute('aria-label',card
+    ? `${name} card; swipe upward for inert registration or downward to ${staminaCard?'play and restore stamina':'play'}`
+    : 'No trial card available');
+  if(art){
+    art.textContent=name;
+    art.dataset.length=name.length>14?'long':'short';
+  }
+  if(trialBadge){
+    const weaponLabel=WEAPONS[combatState.weapon]?.label||combatState.weapon||'UNKNOWN WEAPON';
+    trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${name} · ${arena.started?'AUTONOMOUS':'READY'}`;
+  }
+  if(trialCardStatus&&trialCardDirection==='neutral'){
+    trialCardStatus.textContent=card
+      ? (arena.started?'':`SWIPE DOWN TO START · ${name}`)
+      : 'NO TRIAL CARD';
+  }
+}
+function setTrialCardFeedback(direction='neutral',message=''){
+  trialCardDirection=direction==='up'||direction==='down'?direction:'neutral';
+  if(trialCard)delete trialCard.dataset.direction;
+  if(trialCardStatus&&trialCardDirection==='neutral')trialCardStatus.textContent=message||'';
+  if(trialCardDirection==='neutral')renderTrialCard();
+  emitRuntime({type:'trial-card-direction',direction:trialCardDirection});
+}
+resetTrialCardFeedback=()=>setTrialCardFeedback('neutral');
+function playWardenTrialCardDown(){
+  if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
+  const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
+  if(!card){setTrialCardFeedback('down','NO TRIAL CARD');return false;}
+  const decision=resolveWardenTrialCardPlay({
+    direction:'down',
+    started:arena.started,
+    card,
+    weaponId:combatState.weapon,
+    deckCards:deck.pool,
+    stamina:arena.stamina.v,
+    maxStamina:STAMINA.max,
+  });
+  if(!decision.accepted){
+    setTrialCardFeedback('down',decision.reason==='starter-card-required'?'STARTER CARD REQUIRED':'CARD NOT READY');
+    announce('STARTER CARD REQUIRED',.8);
+    return false;
+  }
+  const wasWaiting=!arena.started;
+  const played=deck.play(slot);
+  if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
+  const pool=stancePoolForWeapon();
+  const index=pool.findIndex(stance=>stance.id===played.id);
+  if(index>=0)setStance(index);
+  else applyStance(played);
+  if(decision.refill)fullRefillStamina();
+  if(wasWaiting){
+    arena.started=true;
+    arena.paused=false;
+    startGate?.classList.add('hidden');
+  }
+  renderCards();
+  setTrialCardFeedback('down',wasWaiting?'DOWN REGISTERED · TRIAL STARTED':decision.refill?'DOWN REGISTERED · STAMINA RESTORED':`DOWN REGISTERED · ${trialCardName(played)}`);
+  announce(trialCardName(played),.9);
+  return true;
+}
+if(wardenTrialMode&&trialCard){
+  trialCardGesture=installWardenTrialSwipeSurface({
+    target:document,
+    visualElement:trialCard,
+    enabled:()=>!arena.paused&&arena.deadT<0&&!roomTransition?.active,
+    startGuard:event=>{
+      const startY=Number(event?.clientY)||0;
+      if(startY < (Number(innerHeight)||1)*.2)return false;
+      if(event?.target?.closest?.('#topBar,#panel'))return false;
+      return true;
+    },
+    onDirection:direction=>direction==='down'?playWardenTrialCardDown():setTrialCardFeedback('up'),
+  });
+}
 menuBtn.addEventListener('click', toggleMenu);
 resumeBtn?.addEventListener('click', ()=>{ if(!panel.classList.contains('hidden'))toggleMenu(); });
 themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThemeFromMenu(button.dataset.arenaThemeOption)));
 trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialEnemySet(button.dataset.trialEnemySet)));
+trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
 syncThemeButtons();
 syncTrialEnemyButtons();
-const startGate=document.getElementById('startGate');
+syncTrialWeaponButtons();
 document.getElementById('startBtn').addEventListener('click', ()=>{
+  if(wardenTrialMode)return;
   arena.started = true;
   startGate.classList.add('hidden');
+  resetTrialCardFeedback();
 });
 const fsBtn=document.getElementById('fsBtn'), sgFsBtn=document.getElementById('sgFsBtn');
 function inFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
@@ -1479,8 +1664,8 @@ function syncFsButtons(){
   fsBtn.setAttribute('aria-label', fsBtn.title);
   sgFsBtn.textContent = active?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
 }
-document.addEventListener('fullscreenchange', syncFsButtons);
-document.addEventListener('webkitfullscreenchange', syncFsButtons);
+document.addEventListener('fullscreenchange', ()=>{ syncFsButtons(); syncArenaViewport(); });
+document.addEventListener('webkitfullscreenchange', ()=>{ syncFsButtons(); syncArenaViewport(); });
 syncFsButtons();
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   respawn();
@@ -1653,6 +1838,7 @@ function renderCards(){
   }
   setTxt(shuffleBtn, deck.shuffling ? '…' : '↻');
   cardAnim.played = -1;
+  renderTrialCard();
 }
 window.addEventListener('stance-deck:changed',()=>renderCards());
 cardEls.forEach((el,i)=>{
@@ -2229,6 +2415,7 @@ function destroyRuntime(){
   stanceGate4Runtime?.destroy?.();stanceGate4Runtime=null;
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
+  trialCardGesture?.destroy?.();trialCardGesture=null;
   accordionEnemyOverlay?.destroy?.();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
@@ -2243,6 +2430,7 @@ const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Obje
 const runtimeHandle={
   config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},get defenseController(){return stanceGate5Runtime;},
+  get trialCardDirection(){return trialCardDirection;},
   get playerFacing(){return actorFacing;},getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
   start:startRuntime,stop:stopRuntime,destroy:destroyRuntime,reset:()=>respawn(),setStarted,setPaused,setMenuOpen,toggleFullscreen,
   getSnapshot:getRuntimeSnapshot,snapshot:getLabSnapshot,
@@ -2271,7 +2459,7 @@ spawnCharacter();
 const savedArenaWeapon=normalizeStoneWeaponId(StoneSettings.get('arena.weapon','longsword'));
 StoneSettings.set('arena.weapon',savedArenaWeapon);
 PC.selectCombatWeapon(savedArenaWeapon);
-if(!arena.stance) ensureStanceMatchesWeapon();
+if(!arena.stance&&!wardenTrialMode)ensureStanceMatchesWeapon();
 if(!deck.hand[0] && !deck.hand[1]) rebuildDeck();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 if(!runtimeConfig.enemyLab){
@@ -2289,15 +2477,14 @@ if(!runtimeConfig.enemyLab){
   }
 }
 if(wardenTrialMode){
-  selectWeapon('longsword',{reset:false,persist:false});
-  selectStance('S24',{allowAdapted:true});
   configureWardenTrialWave();
   enemySystem.setPressureBudget(2);enemySystem.setAggression(.9);
   const title=document.querySelector('#startCard .sgTitle'),hint=document.querySelector('#startCard .sgHint'),start=document.getElementById('startBtn'),pauseTitle=document.querySelector('#panel .pauseTitle');
   if(title)title.textContent='WARDEN TRIAL';
-  if(hint)hint.textContent='Watch the Warden hunt an incoming swarm using the real Longsword + Rat Step combat runtime.';
-  if(start)start.textContent='START TRIAL';
+  if(hint)hint.textContent='Swipe down on the current starter card to begin. Swipe up only registers the gesture.';
+  if(start)start.hidden=true;
   if(pauseTitle)pauseTitle.textContent='TRIAL PAUSED';
+  startGate.classList.add('hidden');
 }
 respawn();
 
@@ -2312,17 +2499,7 @@ if(ABILITY_CAPTURE_MODE){
   captureController.reset(captureInitialOptions());
 }else startRuntime();
 
-addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  if(wardenTrialStageCamera){
-    wardenTrialStageCamera.aspect=innerWidth/innerHeight;
-    wardenTrialStageCamera.updateProjectionMatrix();
-    wardenTrialStageCamera.updateMatrixWorld();
-  }
-  renderer.setSize(innerWidth, innerHeight);
-  accordionEnemyOverlay?.resize();
-});
+addEventListener('resize', syncArenaViewport);
 emitRuntime({type:'ready',runtime:runtimeHandle});
 return runtimeHandle;
 }
