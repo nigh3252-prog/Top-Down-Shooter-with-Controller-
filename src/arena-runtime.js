@@ -475,8 +475,10 @@ function starterDeckForWardenTrial(weaponId = combatState.weapon){
 function rebuildDeck(){
   if(wardenTrialMode){
     const starterCards = starterDeckForWardenTrial();
-    if(deck.runLocked)deck.rebuild(starterCards);
-    else deck.beginRun(starterCards,{openingStanceId:null});
+    // A weapon swap is a new trial run. beginRun must be used even when the
+    // previous run was locked, otherwise the deck preserves the old weapon's
+    // pool by design.
+    deck.beginRun(starterCards,{openingStanceId:null});
   }else deck.rebuild(stancePoolForWeapon());
   renderCards();
 }
@@ -1278,6 +1280,7 @@ function respawn(){
   arena.arcanaPlayerHeight = 0;
   actorVisual.position.y = .02;
   actorPos.set(startPoint.x, startPoint.z); actorFacing = 0;
+  actorRoot.position.set(startPoint.x,0,startPoint.z);
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
   if(wardenTrialMode){
@@ -1292,7 +1295,7 @@ function respawn(){
   resetTrialCardFeedback();
   rebuildDeck();
   encounterState.reset();
-  enemySystem.reset();
+  enemySystem.reset({player:{x:actorPos.x,z:actorPos.y,targetable:true,invulnerable:false}});
   clearRoomEffects();
   loadActiveRoom(dungeon.startRoomId);
   encounterState.enterRoom(dungeon.startRoomId);
