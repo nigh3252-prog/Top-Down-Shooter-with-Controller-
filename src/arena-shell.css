@@ -81,18 +81,16 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
     display:none;flex-direction:column;align-items:center;overflow:hidden;pointer-events:none;
     background:linear-gradient(180deg,rgba(10,20,22,.84),rgba(10,20,22,.98));border-top:1px solid rgba(110,58,36,.78)}
   @supports (height:100dvh){#trialCardTray{--trial-tray-h:clamp(160px,25dvh,198px)}}
-  #trialCardStatus{height:22px;flex:0 0 22px;color:#7fb8b0;font-size:9px;letter-spacing:.12em;line-height:22px;text-align:center;pointer-events:none}
+  #trialCardStatus{height:22px;flex:0 0 22px;max-width:100%;color:#7fb8b0;font-size:9px;letter-spacing:.12em;line-height:22px;text-align:center;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #trialCardRail{position:relative;width:min(100%,360px);min-height:0;flex:1;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}
   .trialCard{position:relative;z-index:3;width:90px;height:120px;box-sizing:border-box;flex:0 0 auto;padding:0;overflow:hidden;
     border:1px solid #2c4a47;border-radius:8px;color:#9fd2c9;background:rgba(14,28,30,.96);font:inherit;text-align:center;
-    box-shadow:0 3px 0 #081112;touch-action:none;user-select:none;pointer-events:auto;transition:transform .14s ease,opacity .14s ease,border-color .14s ease,box-shadow .14s ease}
+    box-shadow:0 3px 0 #081112;touch-action:none;user-select:none;pointer-events:auto;will-change:transform,opacity;transition:transform .17s ease,opacity .17s ease,border-color .14s ease,box-shadow .14s ease}
   .trialCard.dragging{transition:none;border-color:#e8a04c;box-shadow:0 0 0 2px rgba(232,160,76,.16),0 3px 0 #081112}
-  .trialCardUp,.trialCardDown{position:absolute;left:4px;right:4px;color:#e8a04c;font-size:9px;letter-spacing:.08em;line-height:1.1;pointer-events:none}
-  .trialCardUp{top:13px}.trialCardDown{bottom:9px}
-  .trialCardArt{position:absolute;left:8px;right:8px;top:40px;bottom:29px;display:flex;align-items:center;justify-content:center;
-    border:1px solid rgba(44,74,71,.65);border-radius:4px;color:#4a6f6a;font-size:10px;letter-spacing:.12em;pointer-events:none}
-  .trialCard[data-direction="up"]{border-color:#e8a04c;box-shadow:0 0 0 2px rgba(232,160,76,.22),0 3px 0 #081112}
-  .trialCard[data-direction="down"]{border-color:#7fd0a8;box-shadow:0 0 0 2px rgba(127,208,168,.18),0 3px 0 #081112}
+  .trialCardArt{position:absolute;inset:9px 8px;box-sizing:border-box;padding:8px 5px;display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(44,74,71,.65);border-radius:4px;color:#9fd2c9;font-size:11px;font-weight:600;line-height:1.15;letter-spacing:.06em;
+    text-align:center;text-wrap:balance;overflow-wrap:anywhere;overflow:hidden;pointer-events:none}
+  .trialCardArt[data-length="long"]{font-size:9px;letter-spacing:.04em}
   /* ---- player pause menu ---- */
   #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(82vw,318px);
     max-height:calc(100vh - 66px);overflow-y:auto;padding:13px 14px 15px;box-sizing:border-box;
@@ -174,9 +172,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   #trialCardStatus{color:var(--arena-subtle)}
   .trialCard{border-color:var(--arena-line);color:var(--arena-text);background:var(--arena-card);box-shadow:0 3px 0 var(--arena-shadow)}
   .trialCard.dragging{border-color:var(--arena-gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--arena-gold) 16%,transparent),0 3px 0 var(--arena-shadow)}
-  .trialCardUp,.trialCardDown{color:var(--arena-gold)}.trialCardArt{border-color:var(--arena-line-soft);color:var(--arena-muted)}
-  .trialCard[data-direction="up"]{border-color:var(--arena-gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--arena-gold) 22%,transparent),0 3px 0 var(--arena-shadow)}
-  .trialCard[data-direction="down"]{border-color:var(--arena-teal);box-shadow:0 0 0 2px color-mix(in srgb,var(--arena-teal) 18%,transparent),0 3px 0 var(--arena-shadow)}
+  .trialCardArt{border-color:var(--arena-line-soft);color:var(--arena-text)}
   #panel{background:linear-gradient(180deg,var(--arena-panel),var(--arena-panel-2));border-color:var(--arena-line);scrollbar-color:var(--arena-line-bright) var(--arena-panel-solid)}
   .pauseTitle{color:var(--arena-gold)}.pauseSection{border-color:var(--arena-line-soft)}.pauseSection h2{color:var(--arena-subtle)}
   .themeChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
@@ -204,5 +200,5 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-variant="warden-trial"] #hud{top:56px}
   :root[data-arena-variant="warden-trial"] #hpWrap{width:116px;height:7px;background:rgba(10,20,22,.58)}
   :root[data-arena-variant="warden-trial"] #stWrap{width:116px;height:4px;background:rgba(10,20,22,.48)}
-  @media (max-height:650px){#trialCardTray{--trial-tray-h:178px}.trialCard{width:81px;height:108px}.trialCardUp{top:11px}.trialCardArt{top:35px;bottom:26px}.trialCardDown{bottom:8px}}
+  @media (max-height:650px){#trialCardTray{--trial-tray-h:178px}.trialCard{width:81px;height:108px}.trialCardArt{inset:7px 6px;padding:6px 4px;font-size:10px}.trialCardArt[data-length="long"]{font-size:8px}}
   @media (max-width:560px){:root[data-arena-variant="warden-trial"] #trialBadge{font-size:8px;padding:0 8px;letter-spacing:.06em}}
