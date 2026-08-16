@@ -12,7 +12,10 @@ assert.equal(resolveWardenTrialCardDirection(0),null);
 assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-only card tray');
 assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial card');
 assert.match(ARENA_SHELL_HTML,/swipe up or down/,'the card exposes its vertical interaction to assistive technology');
-assert.doesNotMatch(ARENA_SHELL_HTML,/trialCardUp|trialCardDown/,'direction labels are kept out of the compact card face');
+assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardUp"/,'the upper card face names its Arcana action');
+assert.match(ARENA_SHELL_HTML,/class="trialCardName trialArcanaName"/,'the card has a dedicated Arcana name');
+assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower card face names its stance action');
+assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
@@ -28,7 +31,7 @@ function createFakeElement(){
     releasePointerCapture(pointerId){if(this.captured===pointerId)this.captured=null;},
     addEventListener(type,listener){listeners.set(type,listener);},
     removeEventListener(type,listener){if(listeners.get(type)===listener)listeners.delete(type);},
-    dispatch(type,event){listeners.get(type)?.(event);},
+    dispatch(type,event){event.currentTarget=this;listeners.get(type)?.(event);},
   };
 }
 
@@ -79,6 +82,22 @@ surface.dispatch('pointerup',{...event,pointerId:5,clientY:120,target:surface});
 assert.deepEqual(surfaceDirections,[{direction:'up',deltaY:-80}]);
 assert.equal(surface.style.transform,undefined,'the full-screen registration surface must not move the card');
 surfaceGesture.destroy();
+
+const nestedCardTarget=createFakeElement();
+const nestedCardDirections=[];
+const nestedCardGesture=installWardenTrialSwipeSurface({
+  target:nestedCardTarget,
+  visualElement:nestedCardTarget,
+  transitionDuration:0,
+  onDirection:(direction,detail)=>nestedCardDirections.push({direction,...detail}),
+});
+const nestedLabel={};
+nestedCardTarget.dispatch('pointerdown',{...event,pointerId:7,clientY:200,target:nestedLabel});
+assert.equal(nestedCardTarget.captured,7,'the card owns pointer capture even when the swipe starts on a nested label');
+nestedCardTarget.dispatch('pointermove',{...event,pointerId:7,clientY:270,target:nestedLabel});
+nestedCardTarget.dispatch('pointerup',{...event,pointerId:7,clientY:280,target:nestedLabel});
+assert.deepEqual(nestedCardDirections,[{direction:'down',deltaY:80}]);
+nestedCardGesture.destroy();
 
 const animatedSurface=createFakeElement();
 const animatedCard=createFakeElement();

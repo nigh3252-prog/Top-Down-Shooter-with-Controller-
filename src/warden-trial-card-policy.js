@@ -1,6 +1,13 @@
-import { starterStanceIdsForWeapon } from './weapon-stance-plan.js';
+import { starterArcanaIdsForWeapon, starterStanceIdsForWeapon } from './weapon-stance-plan.js';
 
-const NON_STANCE_CARD_TYPES = new Set(['ability', 'modifier']);
+const normalizeArcanaId = value => String(value?.arcanaId ?? value?.id ?? value ?? '')
+  .trim()
+  .toUpperCase()
+  .replace(/^WOL-/, '');
+
+export function isWardenTrialArcanaCard(card) {
+  return card?.type === 'ability' && typeof card?.arcanaId === 'string' && card.arcanaId.length > 0;
+}
 
 export function isWardenTrialRuntime(config = {}) {
   return config?.wardenTrial === true || config?.variant === 'warden-trial';
@@ -10,15 +17,25 @@ export function wardenTrialStarterIdsForWeapon(weaponId) {
   return [...starterStanceIdsForWeapon(weaponId)];
 }
 
+export function wardenTrialStarterArcanaIdsForWeapon(weaponId) {
+  return [...starterArcanaIdsForWeapon(weaponId)];
+}
+
 export function starterCardsForWardenTrialWeapon(weaponId, deckCards = []) {
-  const byId = new Map((Array.isArray(deckCards) ? deckCards : []).filter(Boolean).map(card => [card.id, card]));
-  return wardenTrialStarterIdsForWeapon(weaponId).map(id => byId.get(id)).filter(Boolean);
+  const byArcanaId = new Map((Array.isArray(deckCards) ? deckCards : [])
+    .filter(isWardenTrialArcanaCard)
+    .map(card => [normalizeArcanaId(card), card]));
+  return wardenTrialStarterArcanaIdsForWeapon(weaponId)
+    .map(id => byArcanaId.get(normalizeArcanaId(id)))
+    .filter(Boolean);
 }
 
 export function isWardenTrialStaminaCard(card, { weaponId, deckCards = [] } = {}) {
-  if (!card || NON_STANCE_CARD_TYPES.has(card.type)) return false;
-  if (!wardenTrialStarterIdsForWeapon(weaponId).includes(card.id)) return false;
-  return Array.isArray(deckCards) && deckCards.some(candidate => candidate?.id === card.id);
+  if (!isWardenTrialArcanaCard(card)) return false;
+  const arcanaId = normalizeArcanaId(card);
+  if (!wardenTrialStarterArcanaIdsForWeapon(weaponId).includes(arcanaId)) return false;
+  return Array.isArray(deckCards)
+    && deckCards.some(candidate => isWardenTrialArcanaCard(candidate) && normalizeArcanaId(candidate) === arcanaId);
 }
 
 export function resolveWardenTrialCardPlay({
@@ -31,18 +48,27 @@ export function resolveWardenTrialCardPlay({
   maxStamina = 100,
 } = {}) {
   const currentStamina = Math.max(0, Number(stamina) || 0);
+  if(direction === 'up'){
+    if(!started || !isWardenTrialArcanaCard(card)){
+      return Object.freeze({ accepted:false, reason:!started?'starter-card-required':'direction-inert', started:!!started, stamina:currentStamina, refill:false });
+    }
+    return Object.freeze({ accepted:true, reason:'arcana-fired', started:true, stamina:currentStamina, refill:false });
+  }
   if(direction !== 'down'){
     return Object.freeze({ accepted:false, reason:'direction-inert', started:!!started, stamina:currentStamina, refill:false });
   }
-  const refill = isWardenTrialStaminaCard(card,{weaponId,deckCards});
-  if(!started&&!refill){
+  if(!isWardenTrialArcanaCard(card)){
+    return Object.freeze({ accepted:false, reason:'direction-inert', started:!!started, stamina:currentStamina, refill:false });
+  }
+  const starterCard = isWardenTrialStaminaCard(card,{weaponId,deckCards});
+  if(!started&&!starterCard){
     return Object.freeze({ accepted:false, reason:'starter-card-required', started:false, stamina:currentStamina, refill:false });
   }
   return Object.freeze({
     accepted:true,
-    reason:refill?'stamina-card':'card-played',
+    reason:starterCard?'stamina-card':'card-played',
     started:true,
-    stamina:refill?Math.max(0,Number(maxStamina)||0):currentStamina,
-    refill,
+    stamina:Math.max(0,Number(maxStamina)||0),
+    refill:true,
   });
 }

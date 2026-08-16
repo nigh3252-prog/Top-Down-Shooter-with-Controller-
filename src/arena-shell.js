@@ -41,7 +41,16 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
   <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
   <div id="trialCardRail">
     <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
-      <span class="trialCardArt" aria-hidden="true">CURRENT CARD</span>
+      <span class="trialCardArt" aria-hidden="true">
+        <span class="trialCardHalf trialCardUp">
+          <span class="trialCardLabel">↑ ARCANA</span>
+          <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
+        </span>
+        <span class="trialCardHalf trialCardDown">
+          <span class="trialCardLabel">↓ STANCE</span>
+          <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
+        </span>
+      </span>
     </button>
   </div>
 </div>

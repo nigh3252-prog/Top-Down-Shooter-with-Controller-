@@ -38,7 +38,9 @@ import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
-import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon } from './warden-trial-card-policy.js';
+import { isWardenTrialStaminaCard, resolveWardenTrialCardPlay } from './warden-trial-card-policy.js';
+import { arcanaDownStanceId } from './arcana-stance-pairings.js';
+import { starterArcanaIdsForWeapon } from './weapon-stance-plan.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -321,7 +323,7 @@ const arena = {
   stamina:{ v:wardenTrialMode ? 0 : STAMINA.start, pending:0, recoverDelayT:0 },
 };
 const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain():null;
-const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null });
+const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, compatibilityAdapter: null, stanceCatalog: STANCE_CARDS });
 function staminaCostForGroup(group){
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
   return staminaCostForWeapon(base, PC.currentWeapon());
@@ -473,8 +475,10 @@ function ensureStanceMatchesWeapon(){
   setStance(idx >= 0 ? idx : 0);
 }
 /* ---------- stance-card deck ---------- */
-function starterDeckForWardenTrial(weaponId = combatState.weapon){
-  return starterCardsForWardenTrialWeapon(weaponId, STANCE_CARDS);
+function starterDeckForWardenTrial(){
+  // Every Warden Trial card is one Arcana with an authored down-side stance.
+  // Bare stance cards never enter this deck.
+  return gameContent.cards.list({family:'arcana'});
 }
 function rebuildDeck(){
   if(wardenTrialMode){
@@ -482,7 +486,10 @@ function rebuildDeck(){
     // A weapon swap is a new trial run. beginRun must be used even when the
     // previous run was locked, otherwise the deck preserves the old weapon's
     // pool by design.
-    deck.beginRun(starterCards,{openingStanceId:null});
+    deck.beginRun(starterCards,{
+      openingStanceId:null,
+      openingCardIds:starterArcanaIdsForWeapon(combatState.weapon),
+    });
   }else deck.rebuild(stancePoolForWeapon());
   renderCards();
 }
@@ -1579,6 +1586,14 @@ let trialCardDirection='neutral';
 function trialCardName(card){
   return String(card?.name||card?.id||'NO CARD').replace(/^S\d+\s*/,'').toUpperCase();
 }
+function trialCardStance(card){
+  const stanceId=arcanaDownStanceId(card?.arcanaId);
+  return stanceId?STANCE_CARDS.find(stance=>stance.id===stanceId)||null:null;
+}
+function trialCardStanceName(card){
+  const stance=trialCardStance(card);
+  return stance?`${stance.id} ${String(stance.name||'').replace(/^S\d+\s*/,'')}`.trim().toUpperCase():'NO STANCE';
+}
 function currentTrialCardSlot(){
   if(deck.hand[0])return 0;
   if(deck.hand[1])return 1;
@@ -1592,23 +1607,37 @@ function renderTrialCard(){
   if(!wardenTrialMode||!trialCard)return;
   const card=currentTrialCard();
   const name=trialCardName(card);
-  const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
+  const stance=trialCardStance(card);
+  const stanceName=trialCardStanceName(card);
+  const starterCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
+  const arcanaCard=card?.type==='ability'&&typeof card?.arcanaId==='string';
   const art=trialCard.querySelector('.trialCardArt');
+  const arcanaName=trialCard.querySelector('.trialArcanaName');
+  const stanceNameElement=trialCard.querySelector('.trialStanceName');
   trialCard.dataset.cardId=card?.id||'';
+  trialCard.dataset.arcanaId=card?.arcanaId||'';
+  trialCard.dataset.stanceId=stance?.id||'';
   trialCard.setAttribute('aria-label',card
-    ? `${name} card; swipe upward for inert registration or downward to ${staminaCard?'play and restore stamina':'play'}`
+    ? `${name} / ${stanceName} combined card; swipe upward to ${arcanaCard?`fire ${name}`:'register the card'} or downward to enter ${stanceName}${!arena.started&&starterCard?' and start the trial':' and restore stamina'}`
     : 'No trial card available');
   if(art){
-    art.textContent=name;
-    art.dataset.length=name.length>14?'long':'short';
+    art.dataset.element=String(card?.element||'').toLowerCase();
+  }
+  if(arcanaName){
+    arcanaName.textContent=name;
+    arcanaName.dataset.length=name.length>16?'long':'short';
+  }
+  if(stanceNameElement){
+    stanceNameElement.textContent=stanceName;
+    stanceNameElement.dataset.length=stanceName.length>18?'long':'short';
   }
   if(trialBadge){
     const weaponLabel=WEAPONS[combatState.weapon]?.label||combatState.weapon||'UNKNOWN WEAPON';
-    trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${name} · ${arena.started?'AUTONOMOUS':'READY'}`;
+    trialBadge.textContent=`${weaponLabel.toUpperCase()} · ${name} / ${stance?.id||'--'} · ${arena.started?'AUTONOMOUS':'READY'}`;
   }
   if(trialCardStatus&&trialCardDirection==='neutral'){
     trialCardStatus.textContent=card
-      ? (arena.started?'':`SWIPE DOWN TO START · ${name}`)
+      ? (arena.started?'':`SWIPE DOWN TO START · ${name} / ${stance?.id||'--'}`)
       : 'NO TRIAL CARD';
   }
 }
@@ -1639,7 +1668,7 @@ function playWardenTrialCardDown(){
     return false;
   }
   const wasWaiting=!arena.started;
-  const played=deck.play(slot);
+  const played=deck.play(slot,{direction:'down'});
   if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
   const pool=stancePoolForWeapon();
   const index=pool.findIndex(stance=>stance.id===played.id);
@@ -1656,18 +1685,39 @@ function playWardenTrialCardDown(){
   announce(trialCardName(played),.9);
   return true;
 }
+function playWardenTrialCardUp(){
+  if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
+  const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
+  if(!card){setTrialCardFeedback('up','NO TRIAL CARD');return false;}
+  const decision=resolveWardenTrialCardPlay({
+    direction:'up',
+    started:arena.started,
+    card,
+    weaponId:combatState.weapon,
+    deckCards:deck.pool,
+    stamina:arena.stamina.v,
+    maxStamina:STAMINA.max,
+  });
+  if(!decision.accepted){
+    setTrialCardFeedback('up',decision.reason==='starter-card-required'?'DOWN STARTS THE TRIAL':'ONLY ARCANA FIRES UP');
+    return false;
+  }
+  const played=deck.play(slot,{direction:'up'});
+  if(!played){setTrialCardFeedback('up','ARCANA NOT READY');return false;}
+  renderCards();
+  setTrialCardFeedback('up',`UP FIRED · ${trialCardName(card)}`);
+  announce(trialCardName(card),.9);
+  return true;
+}
 if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
-    target:document,
+    // Register on the actual card.  A document-wide capture listener is useful
+    // for a playfield gesture, but it is fragile on mobile when the card sits
+    // inside a pointer-events:none tray and the browser retargets the touch.
+    target:trialCard,
     visualElement:trialCard,
     enabled:()=>!arena.paused&&arena.deadT<0&&!roomTransition?.active,
-    startGuard:event=>{
-      const startY=Number(event?.clientY)||0;
-      if(startY < (Number(innerHeight)||1)*.2)return false;
-      if(event?.target?.closest?.('#topBar,#panel'))return false;
-      return true;
-    },
-    onDirection:direction=>direction==='down'?playWardenTrialCardDown():setTrialCardFeedback('up'),
+    onDirection:direction=>direction==='down'?playWardenTrialCardDown():playWardenTrialCardUp(),
   });
 }
 menuBtn.addEventListener('click', toggleMenu);
