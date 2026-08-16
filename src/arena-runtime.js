@@ -298,6 +298,10 @@ const actorPos = new THREE.Vector2(startPoint.x, startPoint.z);   // x = world X
 let actorFacing = 0;
 let actorYawCurrent = 0;
 let walkPhase = 0;
+// The autonomous trial can temporarily face the attacker that it is guarding
+// or parrying instead of whichever enemy happens to be nearest. Normal Arena
+// auto-facing remains unchanged.
+let wardenTrialDefenseTargetId = null;
 const yawQ = new THREE.Quaternion();
 const Y_AXIS = new THREE.Vector3(0,1,0);
 
@@ -841,6 +845,10 @@ function nearestEnemy(maxDist=Infinity){
 }
 function resolveDesiredFacing(){
   if(arena.arcanaFacingLock) return { angle:arena.arcanaFacingLock.angle, source:'arcana-lock' };
+  if(wardenTrialMode&&wardenTrialDefenseTargetId!==null){
+    const target=combatHostileEnemies().find(enemy=>String(enemy?.id)===String(wardenTrialDefenseTargetId));
+    if(target)return{angle:Math.atan2(target.x-actorPos.x,target.z-actorPos.y),source:'warden-defense'};
+  }
   const target = nearestEnemy(AUTO_FACE_RANGE);
   if(target) return { angle: Math.atan2(target.x-actorPos.x, target.z-actorPos.y), source:'auto' };
   if(Math.hypot(input.mx,input.mz) > .15) return { angle: Math.atan2(input.mx, input.mz), source:'move' };
@@ -1283,6 +1291,7 @@ function respawn(){
   actorRoot.position.set(startPoint.x,0,startPoint.z);
   arena.charge.active = false; arena.charge.queued = false; arena.charge.buttonHeld = false; combatState.chargePull = 0;
   combatState.attack = null; combatState.t = 0; resetChainState();
+  wardenTrialDefenseTargetId = null;
   if(wardenTrialMode){
     arena.started = false;
     arena.stanceIndex = -1;
@@ -1441,13 +1450,28 @@ function gatherInput(){
 
 function updateWardenTrialAI(dt){
   if(!wardenTrialBrain)return;
+  const activeAttack=combatState.attack?{
+    active:true,
+    t:Number(combatState.t)||0,
+    contactAt:Number(combatState.attack.contactAt)||0,
+    total:Number(combatState.attack.total)||0,
+    remaining:Math.max(0,(Number(combatState.attack.total)||0)-(Number(combatState.t)||0)),
+    commit:attackCommitWeight(),
+  }:null;
+  const defenseSnapshot=stanceGate5Runtime?.snapshot?.()||{kind:'existing-dodge',stamina:arena.stamina.v};
   const decision=wardenTrialBrain.update(dt,{
     player:{x:actorPos.x,z:actorPos.y},
     enemies:combatHostileEnemies(),
     weapon:PC.currentWeapon?.(),
     stamina:arena.stamina.v,
     attackActive:!!combatState.attack,
+    attack:activeAttack,
+    defense:defenseSnapshot,
+    stage:wardenTrialStage,
+    centerField:wardenTrialCenterField,
+    playerRadius:PLAYER_RADIUS,
   });
+  wardenTrialDefenseTargetId=decision.defenseTarget?.id??null;
   const centerSample=wardenTrialCenterField?.sample({x:actorPos.x,z:actorPos.y},PLAYER_RADIUS);
   const move=(!decision.action&&!combatState.attack&&centerSample)
     ?blendWardenTrialCenterMovement(decision.move,centerSample,{
@@ -1455,6 +1479,7 @@ function updateWardenTrialAI(dt){
     })
     :decision.move;
   input.mx=Number(move?.x)||0;input.mz=Number(move?.z)||0;
+  if(decision.releaseHeavy)heavyUp();
   if(decision.spawnWave){
     configureWardenTrialWave();enemySystem.startRoomEncounter(activeRoomId);
     announce('NEXT WAVE',.7);return;
@@ -1464,7 +1489,17 @@ function updateWardenTrialAI(dt){
   else if(decision.action==='heavy-up')heavyUp();
   else if(decision.action==='dodge'){
     input.mx=Number(decision.dodgeMove?.x)||0;input.mz=Number(decision.dodgeMove?.z)||0;
-    defenseDown('warden-ai');
+    const result=defenseDown('warden-ai');
+    wardenTrialBrain.acknowledgeDefense?.('dodge',result);
+  }else if(decision.action==='parry'){
+    const result=defenseDown('warden-ai');
+    wardenTrialBrain.acknowledgeDefense?.('parry',result);
+  }else if(decision.action==='guard-on'){
+    const accepted=stanceGate5Runtime?.setGuardRaised?.(true)===true;
+    wardenTrialBrain.acknowledgeDefense?.('guard-on',{accepted,guardRaised:accepted});
+  }else if(decision.action==='guard-off'){
+    const accepted=stanceGate5Runtime?.setGuardRaised?.(false)===true;
+    wardenTrialBrain.acknowledgeDefense?.('guard-off',{accepted,guardRaised:false});
   }
 }
 
