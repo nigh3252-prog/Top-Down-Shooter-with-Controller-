@@ -3,6 +3,7 @@ import { createStanceDeck } from '../src/stance-deck.js';
 import { STANCE_CARDS } from '../src/stance-cards.js';
 import {
   isWardenTrialRuntime,
+  isWardenTrialArcanaCard,
   isWardenTrialStaminaCard,
   resolveWardenTrialCardPlay,
   starterCardsForWardenTrialWeapon,
@@ -14,7 +15,7 @@ assert.equal(isWardenTrialRuntime({ wardenTrial:true }), true);
 assert.equal(isWardenTrialRuntime({ mode:'arena' }), false);
 
 const longswordDeck = [
-  { id:'A01', type:'ability' },
+  { id:'A01', arcanaId:'FLAME-STRIKE', type:'ability' },
   { id:'S29', name:'S29 Crossguard Bloom', type:'stance' },
   { id:'S24', name:'S24 Rat Step', type:'stance' },
   { id:'S26', name:'S26 Long Blade Form', type:'stance' },
@@ -31,13 +32,25 @@ assert.equal(isWardenTrialStaminaCard(longswordDeck[2], { weaponId:'longsword', 
   'Rat Step must not become a Longsword stamina card just because it exists in the registry');
 assert.equal(isWardenTrialStaminaCard(longswordDeck[0], { weaponId:'longsword', deckCards:longswordDeck }), false,
   'non-stance cards cannot refill the trial');
+assert.equal(isWardenTrialArcanaCard(longswordDeck[0]), true);
+assert.equal(isWardenTrialArcanaCard(longswordDeck[3]), false);
 assert.equal(isWardenTrialStaminaCard(longswordDeck[3], { weaponId:'longsword', deckCards:[longswordDeck[1]] }), false,
   'a starter card must still be present in the active deck');
 
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'up', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
-  { accepted:false, reason:'direction-inert', started:false, stamina:0, refill:false },
-  'upward registration must not start the trial or refill stamina',
+  { accepted:false, reason:'starter-card-required', started:false, stamina:0, refill:false },
+  'an upward play cannot start the trial; the first card must be played down',
+);
+assert.deepEqual(
+  resolveWardenTrialCardPlay({ direction:'up', started:true, card:longswordDeck[0], weaponId:'longsword', deckCards:longswordDeck, stamina:42 }),
+  { accepted:true, reason:'arcana-fired', started:true, stamina:42, refill:false },
+  'an upward Arcana play fires after the trial has started',
+);
+assert.deepEqual(
+  resolveWardenTrialCardPlay({ direction:'up', started:true, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck, stamina:42 }),
+  { accepted:false, reason:'direction-inert', started:true, stamina:42, refill:false },
+  'standalone stance cards remain down-only',
 );
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'down', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
