@@ -2,6 +2,10 @@ import { starterStanceIdsForWeapon } from './weapon-stance-plan.js';
 
 const NON_STANCE_CARD_TYPES = new Set(['ability', 'modifier']);
 
+export function isWardenTrialArcanaCard(card) {
+  return card?.type === 'ability' && typeof card?.arcanaId === 'string' && card.arcanaId.length > 0;
+}
+
 export function isWardenTrialRuntime(config = {}) {
   return config?.wardenTrial === true || config?.variant === 'warden-trial';
 }
@@ -31,6 +35,12 @@ export function resolveWardenTrialCardPlay({
   maxStamina = 100,
 } = {}) {
   const currentStamina = Math.max(0, Number(stamina) || 0);
+  if(direction === 'up'){
+    if(!started || !isWardenTrialArcanaCard(card)){
+      return Object.freeze({ accepted:false, reason:!started?'starter-card-required':'direction-inert', started:!!started, stamina:currentStamina, refill:false });
+    }
+    return Object.freeze({ accepted:true, reason:'arcana-fired', started:true, stamina:currentStamina, refill:false });
+  }
   if(direction !== 'down'){
     return Object.freeze({ accepted:false, reason:'direction-inert', started:!!started, stamina:currentStamina, refill:false });
   }
