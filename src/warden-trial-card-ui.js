@@ -1,34 +1,5 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const trialCardFromTarget = target => target?.getElementById?.('trialCard') || target?.querySelector?.('#trialCard') || null;
-const trialStatusFromTarget = target => target?.getElementById?.('trialCardStatus') || target?.querySelector?.('#trialCardStatus') || null;
-
-function simplifyDirectionLabel(element, direction){
-  if(!element) return;
-  const text = String(element.textContent || '');
-  element.textContent = direction === 'up'
-    ? text.replace(/^\s*↑\s*UP\s*·\s*/i, '↑ ')
-    : text.replace(/^\s*↓\s*DOWN\s*·\s*/i, '↓ ');
-}
-
-export function simplifyWardenTrialCardLabels(card){
-  if(!card?.querySelector) return;
-  simplifyDirectionLabel(card.querySelector('.trialCardUp'), 'up');
-  simplifyDirectionLabel(card.querySelector('.trialCardDown'), 'down');
-}
-
-function clearCommitVisual(card){
-  if(!card?.style) return;
-  card.classList?.remove('committing');
-  const priorTransition = card.style.transition;
-  card.style.transition = 'none';
-  card.style.transform = '';
-  card.style.opacity = '';
-  // Force the replacement/current card to appear at rest rather than flying back in.
-  void card.offsetWidth;
-  card.style.transition = priorTransition || '';
-}
-
 export function resolveWardenTrialCardDirection(deltaY, threshold = 55){
   const delta = Number(deltaY) || 0;
   const numericThreshold = Number(threshold);
@@ -145,18 +116,20 @@ export function installWardenTrialCardGesture({
 
 export function installWardenTrialSwipeSurface({
   target = globalThis.document,
+  visualElement = null,
   onDirection = () => {},
   enabled = () => true,
   startGuard = () => true,
   threshold = 55,
-  commitDistance = 96,
-  commitDuration = 160,
+  maxDrag = 52,
+  exitDistance = 136,
+  transitionDuration = 170,
 } = {}){
   if(!target?.addEventListener){
     return {
       reset(){},
       destroy(){},
-      getSnapshot(){ return { active:false, deltaY:0, committing:false }; },
+      getSnapshot(){ return { active:false, deltaY:0 }; },
     };
   }
 
@@ -165,36 +138,47 @@ export function installWardenTrialSwipeSurface({
   let deltaY = 0;
   let captureTarget = null;
   let destroyed = false;
-  let committing = false;
-  let commitTimer = null;
+  let animating = false;
+  let animationTimer = 0;
 
-  const syncCardPresentation = () => simplifyWardenTrialCardLabels(trialCardFromTarget(target));
-  const schedulePresentationSync = () => {
-    if(typeof queueMicrotask === 'function') queueMicrotask(syncCardPresentation);
-    else setTimeout(syncCardPresentation, 0);
+  const numericMaxDrag = Number(maxDrag);
+  const dragLimit = Number.isFinite(numericMaxDrag) ? Math.max(0, numericMaxDrag) : 52;
+  const numericExitDistance = Number(exitDistance);
+  const swipeExit = Number.isFinite(numericExitDistance) ? Math.max(0, numericExitDistance) : 136;
+  const numericDuration = Number(transitionDuration);
+  const swipeDuration = Number.isFinite(numericDuration) ? Math.max(0, numericDuration) : 170;
+
+  const clearVisualState = () => {
+    visualElement?.classList?.remove?.('dragging');
+    if(visualElement?.style){
+      visualElement.style.transition='';
+      visualElement.style.transform='';
+      visualElement.style.opacity='';
+    }
+  };
+
+  const clearAnimation = () => {
+    if(animationTimer){
+      clearTimeout(animationTimer);
+      animationTimer=0;
+    }
+    animating=false;
+    clearVisualState();
   };
 
   const reset = () => {
     if(pointerId !== null){
       try{ captureTarget?.releasePointerCapture?.(pointerId); }catch(_){ /* pointer already released */ }
     }
-    if(commitTimer !== null){
-      clearTimeout(commitTimer);
-      commitTimer = null;
-    }
     pointerId = null;
     startY = 0;
     deltaY = 0;
     captureTarget = null;
-    committing = false;
-    clearCommitVisual(trialCardFromTarget(target));
-    const status = trialStatusFromTarget(target);
-    if(status) status.hidden = false;
-    schedulePresentationSync();
+    clearAnimation();
   };
 
   const onDown = event => {
-    if(destroyed || committing || pointerId !== null || !enabled(event) || !startGuard(event)) return;
+    if(destroyed || animating || pointerId !== null || !enabled(event) || !startGuard(event)) return;
     event.preventDefault?.();
     event.stopPropagation?.();
     pointerId = event.pointerId;
@@ -202,56 +186,19 @@ export function installWardenTrialSwipeSurface({
     deltaY = 0;
     captureTarget = event.target?.setPointerCapture ? event.target : null;
     try{ captureTarget?.setPointerCapture?.(pointerId); }catch(_){ /* target cannot capture this pointer */ }
+    visualElement?.classList?.add?.('dragging');
+    if(visualElement?.style)visualElement.style.transition='none';
   };
 
   const onMove = event => {
     if(event.pointerId !== pointerId) return;
     event.preventDefault?.();
     deltaY = (Number(event.clientY) || 0) - startY;
-  };
-
-  const commitDirection = (direction, detail) => {
-    const card = trialCardFromTarget(target);
-    const status = trialStatusFromTarget(target);
-    const startupPrompt = status && /^\s*SWIPE DOWN TO START/i.test(String(status.textContent || ''))
-      ? String(status.textContent || '')
-      : '';
-    const numericDistance = Number(commitDistance);
-    const distance = Number.isFinite(numericDistance) ? Math.max(0, Math.abs(numericDistance)) : 96;
-    const numericDuration = Number(commitDuration);
-    const duration = Number.isFinite(numericDuration) ? Math.max(0, numericDuration) : 160;
-
-    committing = true;
-    syncCardPresentation();
-    if(status) status.textContent = '';
-    if(card?.style){
-      card.classList?.add('committing');
-      card.style.transform = `translateY(${direction === 'up' ? -distance : distance}px) scale(.96)`;
-      card.style.opacity = '0';
+    if(visualElement?.style){
+      const shownDelta=clamp(deltaY,-dragLimit,dragLimit);
+      visualElement.style.transform=`translateY(${shownDelta}px)`;
+      visualElement.style.opacity=String(Math.max(.45,1-Math.abs(deltaY)/220));
     }
-
-    const resolveCommit = () => {
-      commitTimer = null;
-      if(destroyed) return;
-      onDirection(direction, detail);
-      // onDirection can redraw the card immediately. Keep it hidden until that redraw
-      // is complete, then reveal the replacement/current card at its resting position.
-      syncCardPresentation();
-      if(status){
-        if(direction === 'up' && startupPrompt){
-          status.hidden = false;
-          status.textContent = startupPrompt;
-        }else{
-          status.textContent = '';
-          status.hidden = true;
-        }
-      }
-      clearCommitVisual(card);
-      committing = false;
-    };
-
-    if(duration <= 0) resolveCommit();
-    else commitTimer = setTimeout(resolveCommit, duration);
   };
 
   const finish = (event, cancelled = false) => {
@@ -263,10 +210,25 @@ export function installWardenTrialSwipeSurface({
     startY = 0;
     deltaY = 0;
     captureTarget = null;
-    if(!cancelled){
-      const direction = resolveWardenTrialCardDirection(finalDelta, threshold);
-      if(direction) commitDirection(direction, { deltaY:finalDelta });
+    if(cancelled){clearVisualState();return;}
+    const direction = resolveWardenTrialCardDirection(finalDelta, threshold);
+    if(!direction){clearVisualState();return;}
+    animating=true;
+    if(visualElement?.style){
+      const sign=direction==='up'?-1:1;
+      visualElement.style.transition=`transform ${swipeDuration}ms cubic-bezier(.2,.8,.2,1),opacity ${swipeDuration}ms ease-out`;
+      visualElement.style.transform=`translateY(${sign*swipeExit}px) scale(.9)`;
+      visualElement.style.opacity='0';
     }
+    const complete=()=>{
+      animationTimer=0;
+      if(destroyed){animating=false;clearVisualState();return;}
+      animating=false;
+      clearVisualState();
+      onDirection(direction, { deltaY:finalDelta });
+    };
+    if(swipeDuration>0)animationTimer=setTimeout(complete,swipeDuration);
+    else complete();
   };
 
   const onUp = event => finish(event, false);
@@ -280,7 +242,6 @@ export function installWardenTrialSwipeSurface({
   target.addEventListener('pointercancel', onCancel, listenerOptions);
   target.addEventListener('lostpointercapture', onCancel, listenerOptions);
   windowRef.addEventListener?.('blur', onBlur);
-  schedulePresentationSync();
 
   return {
     reset,
@@ -295,6 +256,6 @@ export function installWardenTrialSwipeSurface({
       target.removeEventListener?.('lostpointercapture', onCancel, listenerOptions);
       windowRef.removeEventListener?.('blur', onBlur);
     },
-    getSnapshot(){ return { active:pointerId !== null, deltaY, committing }; },
+    getSnapshot(){ return { active:pointerId !== null, animating, deltaY }; },
   };
 }
