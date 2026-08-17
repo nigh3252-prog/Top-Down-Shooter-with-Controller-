@@ -134,6 +134,7 @@ export function installWardenTrialSwipeSurface({
   }
 
   let pointerId = null;
+  let touchId = null;
   let startY = 0;
   let deltaY = 0;
   let captureTarget = null;
@@ -233,14 +234,22 @@ export function installWardenTrialSwipeSurface({
 
   const onUp = event => finish(event, false);
   const onCancel = event => finish(event, true);
+  const onTouchStart = event => { const t=event.touches?.[0]; if(!t||destroyed||animating||pointerId!==null||!enabled(event)||!startGuard(event))return; event.preventDefault?.();event.stopPropagation?.();touchId=t.identifier;pointerId=`touch:${t.identifier}`;startY=Number(t.clientY)||0;deltaY=0;visualElement?.classList?.add?.('dragging');if(visualElement?.style)visualElement.style.transition='none'; };
+  const onTouchMove = event => { const t=[...(event.touches||[])].find(x=>x.identifier===touchId);if(!t)return;event.preventDefault?.();deltaY=(Number(t.clientY)||0)-startY;if(visualElement?.style){const d=clamp(deltaY,-dragLimit,dragLimit);visualElement.style.transform=`translateY(${d}px)`;} };
+  const onTouchEnd = event => { const t=[...(event.changedTouches||[])].find(x=>x.identifier===touchId);if(!t)return;const id=touchId;touchId=null;finish({pointerId:`touch:${id}`,clientY:t.clientY},false); };
+  const onTouchCancel = () => { if(touchId!==null){touchId=null;pointerId=null;clearVisualState();} };
   const windowRef = globalThis.window || globalThis;
   const onBlur = () => reset();
-  const listenerOptions = { capture:true };
+  const listenerOptions = { capture:true, passive:false };
   target.addEventListener('pointerdown', onDown, listenerOptions);
   target.addEventListener('pointermove', onMove, listenerOptions);
   target.addEventListener('pointerup', onUp, listenerOptions);
   target.addEventListener('pointercancel', onCancel, listenerOptions);
   target.addEventListener('lostpointercapture', onCancel, listenerOptions);
+  target.addEventListener('touchstart', onTouchStart, listenerOptions);
+  target.addEventListener('touchmove', onTouchMove, listenerOptions);
+  target.addEventListener('touchend', onTouchEnd, listenerOptions);
+  target.addEventListener('touchcancel', onTouchCancel, listenerOptions);
   windowRef.addEventListener?.('blur', onBlur);
 
   return {
@@ -254,6 +263,10 @@ export function installWardenTrialSwipeSurface({
       target.removeEventListener?.('pointerup', onUp, listenerOptions);
       target.removeEventListener?.('pointercancel', onCancel, listenerOptions);
       target.removeEventListener?.('lostpointercapture', onCancel, listenerOptions);
+      target.removeEventListener?.('touchstart', onTouchStart, listenerOptions);
+      target.removeEventListener?.('touchmove', onTouchMove, listenerOptions);
+      target.removeEventListener?.('touchend', onTouchEnd, listenerOptions);
+      target.removeEventListener?.('touchcancel', onTouchCancel, listenerOptions);
       windowRef.removeEventListener?.('blur', onBlur);
     },
     getSnapshot(){ return { active:pointerId !== null, animating, deltaY }; },
