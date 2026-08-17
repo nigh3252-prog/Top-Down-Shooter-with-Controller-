@@ -158,5 +158,22 @@ weaponDeck.beginRun(longswordStarters,{openingStanceId:null});
 weaponDeck.beginRun(greatswordStarters,{openingStanceId:null});
 assert.deepEqual(weaponDeck.pool.map(card=>card.id),['S27','S28'],'a new Warden weapon run replaces the locked prior weapon pool');
 assert.equal(weaponDeck.pool.some(card=>card.id==='S22'),false,'Greatsword must not retain Spear starter Hook and Thrust');
+assert.equal(weaponDeck.handSize,2,'the shared deck keeps its normal two-card default');
+
+const trialQueueDeck=createStanceDeck({rng:()=>0,handSize:1,compatibilityAdapter:null});
+trialQueueDeck.beginRun(longswordStarters,{openingStanceId:null});
+assert.equal(trialQueueDeck.handSize,1,'Warden Trial can opt into one authoritative current card');
+assert.equal(trialQueueDeck.hand.length,1,'the one-card option does not park a second hidden hand card');
+assert.equal(trialQueueDeck.drawCount,1,'the other starter remains honestly counted in the draw pile');
+const expectedNextCard=trialQueueDeck.upcoming[0];
+const firstTrialCard=trialQueueDeck.hand[0];
+assert.ok(firstTrialCard&&expectedNextCard&&firstTrialCard!==expectedNextCard,'the active and next cards are distinct authored starters');
+assert.equal(trialQueueDeck.play(0),firstTrialCard,'the current Warden card plays through the shared deck');
+assert.equal(trialQueueDeck.hand[0],expectedNextCard,'the displayed preview becomes the next active card');
+assert.equal(trialQueueDeck.drawCount,0,'drawing the preview decrements the visible draw count');
+assert.equal(trialQueueDeck.discardCount,1,'playing the active card increments the visible discard count');
+trialQueueDeck.play(0);
+assert.equal(trialQueueDeck.discardCount,0,'exhausting the one-card queue reshuffles its discard pile');
+assert.equal(trialQueueDeck.drawCount,1,'the reshuffled two-card deck exposes one current and one upcoming card');
 
 console.log('Warden Trial card policy: ok');

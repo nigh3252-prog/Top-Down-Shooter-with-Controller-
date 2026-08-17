@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
+import { STANCE_CARDS } from '../src/stance-cards.js';
+import { getStanceCardBadge } from '../src/stance-card-presentation.js';
 import { STONE_WEAPON_ORDER } from '../src/weapons.js';
 import {
   installWardenTrialCardGesture,
@@ -19,8 +21,23 @@ for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning'
   assert.equal(isWardenTrialCardGestureEnabled({[blocker]:true}),false,`${blocker} blocks the full-screen card gesture`);
 }
 const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
+const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
+assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
+
+const stanceById=new Map(STANCE_CARDS.map(card=>[card.id,card]));
+for(const [stanceId,text,title] of [
+  ['S14','S / B','Speed / Block'],
+  ['S19','S / P','Speed / Parry'],
+  ['S07','P / P','Power / Parry'],
+  ['S15','B / D','Balanced / Dodge'],
+  ['S26','B / P','Balanced / Parry'],
+]){
+  const badge=getStanceCardBadge(stanceById.get(stanceId));
+  assert.equal(badge?.text,text,`${stanceId} uses the shared stance / defense abbreviation`);
+  assert.equal(badge?.title,title,`${stanceId} exposes the full stance / defense meaning`);
+}
 
 assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-only card tray');
 assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial card');
@@ -29,6 +46,15 @@ assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardUp"/,'the upper car
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialArcanaName"/,'the card has a dedicated Arcana name');
 assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower card face names its stance action');
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
+assert.match(ARENA_SHELL_HTML,/class="trialStanceBadge trialCardStanceBadge"/,'the current card exposes its stance / defense badge');
+assert.match(ARENA_SHELL_HTML,/id="trialDiscardCount"/,'the tray exposes a discard count at the left edge');
+assert.match(ARENA_SHELL_HTML,/id="trialCurrentStanceName"/,'the tray exposes the actual current stance beside the active card');
+assert.equal([...ARENA_SHELL_HTML.matchAll(/data-trial-upcoming-slot=/g)].length,2,'the tray reserves two ordered upcoming-card previews');
+assert.match(ARENA_SHELL_HTML,/id="trialDrawCount"/,'the tray exposes a draw count at the right edge');
+assert.match(arenaRuntimeSource,/deck\.upcoming\.slice\(0,trialUpcomingCardEls\.length\)/,'preview cards come from the real ordered draw pile');
+assert.match(arenaRuntimeSource,/className='wardenRewardClassBadge'/,'reward choices receive the same stance / defense badge');
+assert.match(arenaShellCss,/data-trial-upcoming-slot="0"[^}]*opacity:\.58/,'the first upcoming card is visibly secondary');
+assert.match(arenaShellCss,/data-trial-upcoming-slot="1"[^}]*opacity:\.32/,'the second upcoming card fades farther into the queue');
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);

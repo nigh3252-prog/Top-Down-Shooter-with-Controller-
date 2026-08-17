@@ -4,8 +4,7 @@ import { listCards } from './card-registry.js';
 import { applyActiveCombatProfileToArena } from './combat-profile.js';
 import { guardPoseFor } from './guard-poses.js';
 import { createRewardTotemGate } from './reward-totem-gate.js';
-import { getStanceClass, getStanceClassPresentation } from './stance-compatibility.js';
-import { stanceDefenseLetter } from './stance-defense-profiles.js';
+import { getStanceCardBadge } from './stance-card-presentation.js';
 import { StoneSettings } from './settings.js';
 import { STONE_WEAPON_ORDER, STONE_WEAPONS } from './weapons.js';
 import { resolveWorkingAbilityRunPools } from './working-ability-run-pools.js';
@@ -119,14 +118,12 @@ export function installRunDraft(deck){
     if(rewardHint)rewardHint.textContent=pools.active?`Choose from the ${pools.cards.length}-card Working Ability Pool, or skip.`:'Choose one card for the run, or skip.';
     rewardChoices.replaceChildren(...choices.map(card=>{
       const button=document.createElement('button');button.className='rewardChoice';
-      const presentation=!isNonStance(card)?getStanceClassPresentation(getStanceClass(card)):null;
-      const defenseLetter=!isNonStance(card)?stanceDefenseLetter(card):'';
-      const defenseLabel=defenseLetter==='D'?'Dodge':defenseLetter==='P'?'Parry':defenseLetter==='B'?'Block':'Unknown';
-      const badge=presentation&&defenseLetter&&defenseLetter!=='?'
-        ?`<div class="rewardClassBadge" title="${presentation.label} / ${defenseLabel}">${presentation.short} / ${defenseLetter}</div>`
+      const presentation=!isNonStance(card)?getStanceCardBadge(card):null;
+      const badge=presentation
+        ?`<div class="rewardClassBadge" title="${presentation.title}">${presentation.text}</div>`
         :'';
-      button.dataset.stanceType=presentation?.label||'';
-      button.dataset.stanceDefense=defenseLetter==='?'?'':defenseLabel;
+      button.dataset.stanceType=presentation?.stanceLabel||'';
+      button.dataset.stanceDefense=presentation?.defenseLabel||'';
       button.innerHTML=`${badge}<div class="rewardType">${isNonStance(card)?card.type.toUpperCase():'STANCE'}</div><b>${cleanName(card)}</b><span>${subtitle(card)}</span>`;
       button.addEventListener('click',()=>{deck.addCard(card);closeReward();});return button;
     }));
