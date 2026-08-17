@@ -1,13 +1,26 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 import { STONE_WEAPON_ORDER } from '../src/weapons.js';
-import { installWardenTrialCardGesture, installWardenTrialSwipeSurface, resolveWardenTrialCardDirection } from '../src/warden-trial-card-ui.js';
+import {
+  installWardenTrialCardGesture,
+  installWardenTrialSwipeSurface,
+  isWardenTrialCardGestureEnabled,
+  resolveWardenTrialCardDirection,
+} from '../src/warden-trial-card-ui.js';
 
 assert.equal(resolveWardenTrialCardDirection(-55),'up');
 assert.equal(resolveWardenTrialCardDirection(55),'down');
 assert.equal(resolveWardenTrialCardDirection(-54),null);
 assert.equal(resolveWardenTrialCardDirection(54),null);
 assert.equal(resolveWardenTrialCardDirection(0),null);
+assert.equal(isWardenTrialCardGestureEnabled(),true,'the opening downward swipe remains enabled before the trial starts');
+for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning']){
+  assert.equal(isWardenTrialCardGestureEnabled({[blocker]:true}),false,`${blocker} blocks the full-screen card gesture`);
+}
+const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
+assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
+assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 
 assert.match(ARENA_SHELL_HTML,/id="trialCardTray"/,'the shell reserves a trial-only card tray');
 assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial card');
@@ -103,5 +116,64 @@ assert.deepEqual(animatedDirections,[{direction:'up',deltaY:-80}]);
 assert.equal(animatedCard.style.transform,'','the next card can reuse the centered slot');
 assert.equal(animatedCard.style.opacity,'','the card visual state resets after the swipe');
 animatedGesture.destroy();
+
+const touchSurface=createFakeElement();
+const touchCard=createFakeElement();
+const touchDirections=[];
+const touchGesture=installWardenTrialSwipeSurface({
+  target:touchSurface,
+  visualElement:touchCard,
+  transitionDuration:0,
+  onDirection:(direction,detail)=>touchDirections.push({direction,...detail}),
+});
+const touchEvent={target:touchSurface,preventDefault(){},stopPropagation(){}};
+touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:7,clientY:120}]});
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:7,clientY:190}]});
+assert.equal(touchCard.style.transform,'translateY(52px)','legacy Android touch movement drags the visible card downward');
+touchSurface.dispatch('touchend',{...touchEvent,changedTouches:[{identifier:7,clientY:200}]});
+assert.deepEqual(touchDirections,[{direction:'down',deltaY:80}]);
+
+touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:8,clientY:200}]});
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:8,clientY:130}]});
+touchGesture.reset();
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:8,clientY:80}]});
+assert.equal(touchCard.style.transform,'','reset discards the active fallback touch instead of leaving a stuck card transform');
+touchGesture.destroy();
+
+const multiTouchSurface=createFakeElement();
+const multiTouchCard=createFakeElement();
+const multiTouchDirections=[];
+const multiTouchGesture=installWardenTrialSwipeSurface({
+  target:multiTouchSurface,
+  visualElement:multiTouchCard,
+  startGuard:event=>event.clientY>=100,
+  transitionDuration:0,
+  onDirection:(direction,detail)=>multiTouchDirections.push({direction,...detail}),
+});
+multiTouchSurface.dispatch('touchstart',{
+  ...touchEvent,
+  target:multiTouchSurface,
+  touches:[{identifier:9,clientY:40}],
+  changedTouches:[{identifier:9,clientY:40}],
+});
+multiTouchSurface.dispatch('touchstart',{
+  ...touchEvent,
+  target:multiTouchSurface,
+  touches:[{identifier:9,clientY:40},{identifier:10,clientY:180}],
+  changedTouches:[{identifier:10,clientY:180}],
+});
+multiTouchSurface.dispatch('touchmove',{
+  ...touchEvent,
+  target:multiTouchSurface,
+  touches:[{identifier:9,clientY:40},{identifier:10,clientY:250}],
+});
+assert.equal(multiTouchCard.style.transform,'translateY(52px)','the newly changed touch can begin a valid drag after another finger was rejected');
+multiTouchSurface.dispatch('touchend',{
+  ...touchEvent,
+  target:multiTouchSurface,
+  changedTouches:[{identifier:10,clientY:260}],
+});
+assert.deepEqual(multiTouchDirections,[{direction:'down',deltaY:80}]);
+multiTouchGesture.destroy();
 
 console.log('Warden Trial blank card gesture: ok');

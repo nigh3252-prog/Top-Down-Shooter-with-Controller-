@@ -9,6 +9,18 @@ export function resolveWardenTrialCardDirection(deltaY, threshold = 55){
   return null;
 }
 
+// Waiting for the opening downward card is an input-ready state, not a pause.
+// Only states that put another interaction in charge should block the surface.
+export function isWardenTrialCardGestureEnabled({
+  paused = false,
+  rewardPending = false,
+  menuOpen = false,
+  dead = false,
+  transitioning = false,
+} = {}){
+  return !paused && !rewardPending && !menuOpen && !dead && !transitioning;
+}
+
 export function installWardenTrialCardGesture({
   element,
   onDirection = () => {},
@@ -172,6 +184,7 @@ export function installWardenTrialSwipeSurface({
       try{ captureTarget?.releasePointerCapture?.(pointerId); }catch(_){ /* pointer already released */ }
     }
     pointerId = null;
+    touchId = null;
     startY = 0;
     deltaY = 0;
     captureTarget = null;
@@ -234,10 +247,22 @@ export function installWardenTrialSwipeSurface({
 
   const onUp = event => finish(event, false);
   const onCancel = event => finish(event, true);
-  const onTouchStart = event => { const t=event.touches?.[0]; const guardEvent=t?{...event,clientY:t.clientY,target:event.target}:event; if(!t||destroyed||animating||pointerId!==null||!enabled(guardEvent)||!startGuard(guardEvent))return; event.preventDefault?.();event.stopPropagation?.();touchId=t.identifier;pointerId=`touch:${t.identifier}`;startY=Number(t.clientY)||0;deltaY=0;visualElement?.classList?.add?.('dragging');if(visualElement?.style)visualElement.style.transition='none'; };
+  const onTouchStart = event => {
+    const touch=event.changedTouches?.[0]||event.touches?.[0];
+    const guardEvent=touch?{...event,clientY:touch.clientY,target:event.target}:event;
+    if(!touch||destroyed||animating||pointerId!==null||!enabled(guardEvent)||!startGuard(guardEvent))return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    touchId=touch.identifier;
+    pointerId=`touch:${touch.identifier}`;
+    startY=Number(touch.clientY)||0;
+    deltaY=0;
+    visualElement?.classList?.add?.('dragging');
+    if(visualElement?.style)visualElement.style.transition='none';
+  };
   const onTouchMove = event => { const t=[...(event.touches||[])].find(x=>x.identifier===touchId);if(!t)return;event.preventDefault?.();deltaY=(Number(t.clientY)||0)-startY;if(visualElement?.style){const d=clamp(deltaY,-dragLimit,dragLimit);visualElement.style.transform=`translateY(${d}px)`;} };
   const onTouchEnd = event => { const t=[...(event.changedTouches||[])].find(x=>x.identifier===touchId);if(!t)return;const id=touchId;touchId=null;finish({pointerId:`touch:${id}`,clientY:t.clientY},false); };
-  const onTouchCancel = () => { if(touchId!==null){touchId=null;pointerId=null;clearVisualState();} };
+  const onTouchCancel = () => { if(touchId!==null)reset(); };
   const windowRef = globalThis.window || globalThis;
   const onBlur = () => reset();
   const listenerOptions = { capture:true, passive:false };

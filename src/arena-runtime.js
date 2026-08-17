@@ -39,7 +39,7 @@ import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { DEFAULT_WARDEN_TEMPERAMENT_ID, normalizeWardenTemperament } from './warden-trial-temperaments.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
-import { installWardenTrialSwipeSurface } from './warden-trial-card-ui.js';
+import { installWardenTrialSwipeSurface, isWardenTrialCardGestureEnabled } from './warden-trial-card-ui.js';
 import { dispatchWardenTrialUpArcana, isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon, wardenTrialUpArcanaIdForCard } from './warden-trial-card-policy.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
@@ -1870,7 +1870,13 @@ if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
     target:document,
     visualElement:trialCard,
-    enabled:()=>!isPaused()&&arena.deadT<0&&!roomTransition?.active,
+    enabled:()=>isWardenTrialCardGestureEnabled({
+      paused:arena.paused,
+      rewardPending:wardenTrialRewardPending,
+      menuOpen:!panel.classList.contains('hidden'),
+      dead:arena.deadT>=0,
+      transitioning:!!roomTransition?.active,
+    }),
     startGuard:event=>{
       const startY=Number(event?.clientY)||0;
       if(startY < (Number(innerHeight)||1)*.2)return false;
