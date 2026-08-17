@@ -123,6 +123,12 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialWeaponChoice{font-family:inherit;font-size:9px;letter-spacing:.06em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 5px;min-height:38px}
   .trialWeaponChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
+  .trialTemperamentSection{display:none}
+  .trialTemperamentGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+  .trialTemperamentChoice{font-family:inherit;font-size:8px;letter-spacing:.045em;line-height:1.2;color:#9fd2c9;
+    background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:7px 4px;min-height:34px}
+  .trialTemperamentChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
+  .trialTemperamentNote{margin:7px 0 0;color:#7fb8b0;font-size:8px;line-height:1.35;letter-spacing:.03em}
   .controlsHelp p{display:flex;justify-content:space-between;gap:12px;margin:5px 0;color:#7fb8b0;font-size:9px;letter-spacing:.06em}
   .controlsHelp p span{color:#9fd2c9;text-align:right;white-space:nowrap}
   .wide{width:100%;font-family:inherit;font-size:10px;letter-spacing:.12em;color:#e8a04c;
@@ -191,6 +197,9 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialEnemyChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
   .trialWeaponChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
   .trialWeaponChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .trialTemperamentChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
+  .trialTemperamentChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .trialTemperamentNote{color:var(--arena-subtle)}
   .controlsHelp p{color:var(--arena-subtle)}.controlsHelp p span{color:var(--arena-text)}
   .wide{color:var(--arena-gold);background:var(--arena-red-soft);border-color:var(--arena-line-bright)}
   #startCard{background:var(--arena-panel);border-color:var(--arena-line-bright)}#startCard .sgTitle{color:var(--arena-gold)}#startCard .sgHint{color:var(--arena-text)}
@@ -204,6 +213,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-variant="warden-trial"] #trialBadge{display:flex}
   :root[data-arena-variant="warden-trial"] #panel .trialEnemySection{display:block}
   :root[data-arena-variant="warden-trial"] #panel .trialWeaponSection{display:block}
+  :root[data-arena-variant="warden-trial"] #panel .trialTemperamentSection{display:block}
   :root[data-arena-variant="warden-trial"] #trialCardTray{display:flex}
   :root[data-arena-variant="warden-trial"] #cardRow,
   :root[data-arena-variant="warden-trial"] .btnrow,

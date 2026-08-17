@@ -1,3 +1,5 @@
+import { normalizeWardenTemperament } from './warden-trial-temperaments.js';
+
 export const WARDEN_TRIAL_DEFAULTS = Object.freeze({
   approachRange:6.95,
   retreatRange:6.15,
@@ -21,6 +23,11 @@ export const WARDEN_TRIAL_DEFAULTS = Object.freeze({
   attackCommitLead:.34,
   defenseReserve:12,
   attackStaminaFloor:8,
+  emergencyHealthRatio:.30,
+  emergencyCrowdCount:3,
+  emergencyCommitLead:.64,
+  emergencyDefenseReserve:12,
+  emergencyAttackStaminaFloor:8,
   // The shared dodge curve travels DODGE_SPEED * DODGE_TIME * .75, about
   // 3.5 world units. Planning against that reachable endpoint keeps the
   // safety test honest instead of assuming a longer teleport.
@@ -234,6 +241,7 @@ export function chooseWardenTrialDodgeEndpoint({
   preferredRange=6.5,
   playerRadius=1.05,
   dodgeDistance=4.6,
+  centerBias=1,
 }={}){
   const allThreats=wardenTrialThreats(player,enemies,{defenseTelegraphAt:0,defenseBuffer:1.1,playerRadius});
   const primary=threat||allThreats[0]||null;
@@ -250,7 +258,7 @@ export function chooseWardenTrialDodgeEndpoint({
     if(resolved?.collided===true||travelled<dodgeDistance*.72)score-=10;
     score+=endpointThreatPenalty(endpoint,allThreats,{playerRadius});
     const edgeSample=centerField?.sample?.(endpoint,playerRadius);
-    if(edgeSample)score-=finite(edgeSample.pressure)*4.5;
+    if(edgeSample)score-=finite(edgeSample.pressure)*4.5*Math.max(0,finite(centerBias,1));
     if(target){
       const targetDistance=Math.hypot(endpoint.x-finite(target.x),endpoint.z-finite(target.z));
       score-=Math.abs(targetDistance-finite(preferredRange,6.5))*.22;
@@ -293,7 +301,10 @@ function defenseBusy(context,kind,state){
 }
 
 export function createWardenTrialBrain(options={}){
-  const config={...WARDEN_TRIAL_DEFAULTS,...options};
+  const {temperament:initialTemperament,...overrides}=options;
+  let temperament=normalizeWardenTemperament(initialTemperament);
+  const baseConfig={...WARDEN_TRIAL_DEFAULTS,...temperament};
+  let config={...baseConfig,...overrides};
   const state={
     decisionT:0,
     dodgeT:0,
@@ -309,6 +320,12 @@ export function createWardenTrialBrain(options={}){
     state.decisionT=state.dodgeT=state.defenseCooldownT=state.defenseRejectT=state.emptyT=state.heavyHeldT=0;
     state.attackCount=0;
     state.lastDefense=null;
+  }
+
+  function setTemperament(value){
+    temperament=normalizeWardenTemperament(value);
+    config={...WARDEN_TRIAL_DEFAULTS,...temperament,...overrides};
+    return temperament;
   }
 
   function acknowledgeDefense(action,result={}){
@@ -359,7 +376,32 @@ export function createWardenTrialBrain(options={}){
     if(distance>band.outer)move={x:dx/length,z:dz/length};
     else if(distance<band.inner)move={x:-dx/length,z:-dz/length};
 
-    const threats=wardenTrialThreats(context.player,context.enemies,config);
+    const rawThreats=wardenTrialThreats(context.player,context.enemies,{...config,defenseTelegraphAt:0});
+    const healthRatio=clamp(
+      finite(context.health,100)/Math.max(1,finite(context.maxHealth,100)),
+      0,
+      1,
+    );
+    const nearbyCount=living(context.enemies).filter(enemy=>{
+      const ex=finite(enemy.x)-finite(context.player?.x),ez=finite(enemy.z)-finite(context.player?.z);
+      return Math.hypot(ex,ez)<=band.outer+2.4;
+    }).length;
+    const emergencyFloor=healthRatio<=config.emergencyHealthRatio||
+      nearbyCount>=config.emergencyCrowdCount||
+      rawThreats.some(item=>item.hitLikely&&item.impactIn<=.12);
+    const tuning=emergencyFloor?{
+      ...config,
+      defenseTelegraphAt:Math.min(config.defenseTelegraphAt,.08),
+      parryLead:Math.max(config.parryLead,.20),
+      shieldLead:Math.max(config.shieldLead,.58),
+      dodgeLead:Math.max(config.dodgeLead,.58),
+      emergencyDefenseAt:Math.max(config.emergencyDefenseAt,.36),
+      attackCommitLead:Math.max(config.attackCommitLead,config.emergencyCommitLead),
+      defenseReserve:Math.max(config.defenseReserve,config.emergencyDefenseReserve),
+      attackStaminaFloor:Math.max(config.attackStaminaFloor,config.emergencyAttackStaminaFloor),
+      heavyEvery:Infinity,
+    }:config;
+    const threats=rawThreats.filter(item=>item.progress>=tuning.defenseTelegraphAt);
     const threat=threats[0]||null;
     const kind=defenseKind(context);
     const defense=context.defense||{};
@@ -376,13 +418,14 @@ export function createWardenTrialBrain(options={}){
       target,
       preferredRange:band.preferred,
       playerRadius:finite(context.playerRadius,1.05),
-      dodgeDistance:finite(config.dodgeDistance,4.6),
+      dodgeDistance:finite(tuning.dodgeDistance,4.6),
+      centerBias:finite(tuning.centerBias,1),
     }):null;
 
     // A parry is deliberately scheduled late. The attack's visible windup is
     // the only source of timing knowledge; there is no future-hit oracle.
     if(!activeAttack&&threat?.hitLikely&&parryReady&&threat.parryable&&
-      threat.impactIn<=config.parryLead&&threat.impactIn>=config.parryMinLead){
+      threat.impactIn<=tuning.parryLead&&threat.impactIn>=tuning.parryMinLead){
       return{move:{x:0,z:0},action:'parry',target,threat,defenseTarget:threat.enemy};
     }
 
@@ -390,20 +433,20 @@ export function createWardenTrialBrain(options={}){
     // or a short cluster, but the brain releases it as soon as no telegraph is
     // still threatening so it cannot accidentally remain toggled forever.
     if(kind==='shield'&&defense.guardRaised===true){
-      const stillThreatening=threats.some(item=>item.hitLikely&&item.impactIn<=config.shieldLead);
+      const stillThreatening=threats.some(item=>item.hitLikely&&item.impactIn<=tuning.shieldLead);
       if(!stillThreatening)return{move:{x:0,z:0},action:'guard-off',target,defenseTarget:threat?.enemy||target};
       return{move:{x:0,z:0},action:'guard-hold',target,defenseTarget:threat?.enemy||target};
     }
     if(!activeAttack&&threat?.hitLikely&&shieldReady&&kind==='shield'&&!defense.guardRaised&&
-      !defense.guardBroken&&threat.impactIn<=config.shieldLead){
+      !defense.guardBroken&&threat.impactIn<=tuning.shieldLead){
       return{move:{x:0,z:0},action:'guard-on',target,threat,defenseTarget:threat.enemy};
     }
 
     // Dodge is reserved for the stance that actually owns Rat Step. It can
     // interrupt a committed attack only for a genuinely late threat.
     const dodgeThreat=threat?.hitLikely&&dodgeReady&&(
-      threat.impactIn<=config.dodgeLead||
-      (activeAttack&&threat.impactIn<=config.emergencyDefenseAt)
+      threat.impactIn<=tuning.dodgeLead||
+      (activeAttack&&threat.impactIn<=tuning.emergencyDefenseAt)
     );
     if(dodgeThreat){
       return{
@@ -422,9 +465,9 @@ export function createWardenTrialBrain(options={}){
     // valid defense. Refuse a new attack if the Warden would be committed when
     // the incoming hit lands, and preserve enough stamina for the active
     // defense. This is the part that makes its attacks look intentional.
-    const pendingImpact=threat?.hitLikely&&threat.impactIn<=config.attackCommitLead;
+    const pendingImpact=threat?.hitLikely&&threat.impactIn<=tuning.attackCommitLead;
     const spacingNeeded=pendingImpact||(
-      activeAttack&&threat?.hitLikely&&threat.impactIn<=Math.max(config.attackCommitLead,attackRemaining(context))
+      activeAttack&&threat?.hitLikely&&threat.impactIn<=Math.max(tuning.attackCommitLead,attackRemaining(context))
     );
     if(spacingNeeded&&safeEndpoint){
       const releaseHeavy=state.heavyHeldT>0;
@@ -438,18 +481,25 @@ export function createWardenTrialBrain(options={}){
       return{move:{x:0,z:0},holdingHeavy:true,target};
     }
 
-    if(finite(context.stamina,100)<config.lowStamina&&!activeAttack){
+    if(finite(context.stamina,100)<tuning.lowStamina&&!activeAttack){
       return{move:{x:0,z:0},resting:true,target};
     }
-    const defenseReserve=(kind==='parry'||kind==='existing-dodge')?config.defenseReserve:kind==='shield'?8:0;
-    if(!activeAttack&&finite(context.stamina,100)<defenseReserve+config.attackStaminaFloor){
+    const defenseReserve=(kind==='parry'||kind==='existing-dodge'||kind==='shield')?tuning.defenseReserve:0;
+    const stamina=finite(context.stamina,100);
+    const attackReserve=defenseReserve+tuning.attackStaminaFloor;
+    if(!activeAttack&&stamina<attackReserve){
       return{move:{x:0,z:0},resting:true,target};
     }
 
     if(distance>=band.attackMin&&distance<=band.attackMax&&state.decisionT<=0){
-      state.decisionT=config.decisionInterval;
+      const lightCost=Math.max(0,finite(context.attackCosts?.light));
+      const heavyCost=Math.max(0,finite(context.attackCosts?.chargedHeavy,finite(context.attackCosts?.heavy)*1.75));
+      if(!activeAttack&&stamina<attackReserve+lightCost){
+        return{move:{x:0,z:0},resting:true,target};
+      }
+      state.decisionT=tuning.decisionInterval;
       state.attackCount++;
-      if(!activeAttack&&state.attackCount%config.heavyEvery===0){
+      if(!activeAttack&&state.attackCount%tuning.heavyEvery===0&&stamina>=attackReserve+heavyCost){
         state.heavyHeldT=config.heavyHold;
         return{move:{x:0,z:0},action:'heavy-down',target};
       }
@@ -458,5 +508,12 @@ export function createWardenTrialBrain(options={}){
     return{move,target};
   }
 
-  return{update,reset,acknowledgeDefense,snapshot:()=>Object.freeze({...state})};
+  return{
+    update,
+    reset,
+    setTemperament,
+    acknowledgeDefense,
+    temperament:()=>temperament,
+    snapshot:()=>Object.freeze({...state,temperamentId:temperament.id,temperamentLevel:temperament.level}),
+  };
 }

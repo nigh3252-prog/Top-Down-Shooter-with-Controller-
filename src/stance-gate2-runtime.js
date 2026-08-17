@@ -4,6 +4,7 @@ import { getArenaRuntime } from './arena-runtime-context.js';
 import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
 import { STONE_WEAPONS } from './weapons.js';
 import { getStanceAttackAdapter, withAdaptedStanceAttack } from './stance-attack-adapters.js';
+import { getWeaponStanceBalance } from './weapon-stance-plan.js';
 
 const STANCE_CARDS = listCards({family:'stance'});
 
@@ -121,6 +122,7 @@ export function resolveGate2PilotProfile({stance,weapon,weaponId=''}={}){
   const templateKey=classPairKey(compatibility.stanceClass,compatibility.weaponClass);
   const template=GATE2_CLASS_PAIR_TEMPLATES[templateKey]||null;
   const profile=materializeClassTemplateProfile({template,pilotProfile,stanceId,weaponId:resolvedWeaponId,compatibility});
+  const balance=getWeaponStanceBalance({weaponId:resolvedWeaponId,stanceClass:compatibility.stanceClass});
   const originalChain=BASELINE_CHAIN_BY_ID.get(stanceId)||Object.freeze([...(stance?.chain||[])]);
   const effectiveChain=profile?.failed&&profile?.moveKeys?profile.moveKeys:originalChain;
   return Object.freeze({
@@ -131,6 +133,7 @@ export function resolveGate2PilotProfile({stance,weapon,weaponId=''}={}){
     templateKey,
     sourceProfileId:profile?.sourceProfileId||profile?.id||null,
     profile,
+    balance,
     effectiveChain:Object.freeze([...effectiveChain]),
   });
 }
@@ -201,7 +204,7 @@ function restorePace(PC,baseline,currentWeaponId){
   return true;
 }
 
-function applyPace(PC,profile){
+function applyLegacyPace(PC,profile){
   const tune=PC.combatState.tune;
   const length=Number(tune.length)||1;
   const strike=Math.max(.36,Number(profile.pace.strike)||1);
@@ -210,6 +213,23 @@ function applyPace(PC,profile){
   tune.windup=Math.max(.2,(Number(profile.pace.windup)||strike)/strike);
   tune.follow=Math.max(.2,(Number(profile.pace.follow)||strike)/strike);
   tune.recovery=Math.max(.2,(Number(profile.pace.recovery)||strike)/strike);
+}
+
+function applyPace(PC,profile,balance){
+  const tune=PC.combatState.tune;
+  // Failed class pairings keep their authored failure timing. Every usable
+  // pairing starts from the weapon's own tune and receives only the bounded
+  // matrix adjustment, so a stance cannot erase the weapon's identity.
+  if(profile?.failed){
+    applyLegacyPace(PC,profile);
+    return;
+  }
+  const tempo=balance?.tempo||{};
+  const attack=Math.max(.84,Math.min(1.16,Number(tempo.attack)||1));
+  const recovery=Math.max(.84,Math.min(1.20,Number(tempo.recovery)||1));
+  tune.windup=Math.max(.2,Number(tune.windup||1)*attack);
+  tune.follow=Math.max(.2,Number(tune.follow||1)*attack);
+  tune.recovery=Math.max(.2,Number(tune.recovery||1)*recovery);
 }
 
 function gripSnapshot(PC){
@@ -339,7 +359,10 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
       }
     }
     if(resolved.active){
-      applyPace(PC,resolved.profile);
+      // Rebase every frame from the captured weapon tune so the matrix is
+      // idempotent while the stance/runtime hooks are evaluated repeatedly.
+      restorePace(PC,paceBaseline,weaponId);
+      applyPace(PC,resolved.profile,resolved.balance);
       restoreGrip(PC,gripBaseline);
       applyGrip(PC,resolved.profile);
     }
@@ -356,6 +379,7 @@ export function createStanceGate2Runtime({arenaHandle,windowRef=globalThis.windo
       effectiveChain:Object.freeze([...resolved.effectiveChain]),
       gripMode:resolved.profile?.gripMode||'normal',
       pace:resolved.profile?Object.freeze({...resolved.profile.pace}):null,
+      balance:resolved.balance||null,
     });
     PC.combatState.stance2Gate2=lastSnapshot;
     return resolved;
