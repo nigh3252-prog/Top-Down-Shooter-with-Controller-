@@ -1,7 +1,6 @@
-import {
-  WEAPON_STARTER_ARCANA_IDS,
-  WEAPON_STARTER_STANCE_IDS,
-} from './weapon-stance-plan.js';
+import { WEAPON_STARTER_ARCANA_IDS } from './weapon-stance-plan.js';
+import { arcanaDownStanceId } from './arcana-stance-pairings.js';
+import { WIZARD_ARCANA_CATALOG } from './wizard-arcana-catalog.js';
 
 // Warden Trial deliberately has a larger resource budget than the ordinary
 // Arena. Keep this value here with the trial's authored progression so the
@@ -27,19 +26,20 @@ export function wardenTrialWaveSize(waveNumber = 1) {
 
 const freezePair = pair => Object.freeze({ ...pair });
 
-// Every entry is an authored weapon/stance/Arcana pairing. The stance IDs are
-// allowed to repeat across weapons; the pairing ID keeps those cards distinct
-// once they enter a Warden run.
+const starterWeaponByArcanaId = new Map(Object.entries(WEAPON_STARTER_ARCANA_IDS)
+  .flatMap(([weaponId, arcanaIds]) => arcanaIds.map(arcanaId => [arcanaId, weaponId])));
+
+// Every canonical Arcana receives one authored down-side stance. Arcana IDs
+// are unique while stance IDs intentionally repeat, allowing all 70 Arcana to
+// live in the finite Warden Trial upgrade pool without duplicating an Arcana.
 export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze(
-  Object.entries(WEAPON_STARTER_STANCE_IDS).flatMap(([weaponId, stanceIds]) => {
-    const arcanaIds = WEAPON_STARTER_ARCANA_IDS[weaponId] || [];
-    return stanceIds.map((stanceId, index) => freezePair({
-      id: `${weaponId}:${stanceId}:${arcanaIds[index] || ''}`,
-      weaponId,
-      stanceId,
-      arcanaId: arcanaIds[index] || null,
-    }));
-  }),
+  WIZARD_ARCANA_CATALOG.map(arcana => freezePair({
+    id: arcana.arcanaId,
+    weaponId: starterWeaponByArcanaId.get(arcana.arcanaId) || null,
+    stanceId: arcanaDownStanceId(arcana.arcanaId),
+    arcanaId: arcana.arcanaId,
+    element: arcana.element,
+  })),
 );
 
 const pairById = new Map(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => [pair.id, pair]));
@@ -52,11 +52,10 @@ export function wardenTrialPairingForId(value) {
 export function wardenTrialPairingForCard(card) {
   const explicit = wardenTrialPairingForId(card?.__wardenTrialPairId);
   if (explicit) return explicit;
-  const weaponId = String(card?.__wardenTrialWeaponId || '').trim().toLowerCase();
   const stanceId = String(card?.__wardenTrialStanceId || card?.id || '').trim().toUpperCase();
   const arcanaId = String(card?.__wardenTrialArcanaId || '').trim().toUpperCase();
   return WARDEN_TRIAL_CARD_PAIRINGS.find(pair => (
-    pair.weaponId === weaponId && pair.stanceId === stanceId && pair.arcanaId === arcanaId
+    pair.stanceId === stanceId && pair.arcanaId === arcanaId
   )) || null;
 }
 
@@ -70,6 +69,7 @@ export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
     __wardenTrialWeaponId: pairing.weaponId,
     __wardenTrialStanceId: pairing.stanceId,
     __wardenTrialArcanaId: pairing.arcanaId,
+    __wardenTrialElement: pairing.element,
   });
 }
 
@@ -82,8 +82,8 @@ function stanceCardById(stanceCards) {
 export function starterWardenTrialCardsForWeapon(weaponId, stanceCards = []) {
   const normalizedWeapon = String(weaponId || '').trim().toLowerCase();
   const byId = stanceCardById(stanceCards);
-  return WARDEN_TRIAL_CARD_PAIRINGS
-    .filter(pair => pair.weaponId === normalizedWeapon)
+  return (WEAPON_STARTER_ARCANA_IDS[normalizedWeapon] || WEAPON_STARTER_ARCANA_IDS.longsword)
+    .map(arcanaId => pairById.get(arcanaId))
     .map(pair => createWardenTrialCard(byId.get(pair.stanceId), pair, { starter: true }))
     .filter(Boolean);
 }
@@ -112,4 +112,3 @@ export function drawWardenTrialRewardChoices(cards = [], count = WARDEN_TRIAL_RE
   }
   return pool.slice(0, wanted);
 }
-

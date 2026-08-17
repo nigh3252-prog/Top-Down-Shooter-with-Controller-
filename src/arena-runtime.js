@@ -1717,15 +1717,15 @@ function renderWardenTrialRewardChoices(){
     const arcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
     const badgeData=getStanceCardBadge(card);
     const badge=document.createElement('span');badge.className='wardenRewardClassBadge';badge.textContent=badgeData?.text||'';badge.title=badgeData?.title||'';badge.hidden=!badgeData;badge.setAttribute('aria-hidden','true');
-    const weapon=document.createElement('span');weapon.className='wardenRewardWeapon';weapon.textContent=String(card.__wardenTrialWeaponId||'').toUpperCase();
+    const elementLabel=document.createElement('span');elementLabel.className='wardenRewardWeapon';elementLabel.textContent=`${String(arcana?.element||card.__wardenTrialElement||'ARCANA').toUpperCase()} ARCANA`;
     const stance=document.createElement('strong');stance.className='wardenRewardStance';stance.textContent=trialCardStanceName(card);
     const arcanaName=document.createElement('span');arcanaName.className='wardenRewardArcana';arcanaName.textContent=`↑ ${String(arcana?.name||card.__wardenTrialArcanaId||'NO ARCANA').toUpperCase()}`;
     const meta=document.createElement('span');meta.className='wardenRewardMeta';meta.textContent='↓ CHANGE STANCE · REFILL 200';
-    button.append(badge,weapon,stance,arcanaName,meta);
+    button.append(badge,elementLabel,stance,arcanaName,meta);
     button.dataset.pairId=card.__wardenTrialPairId||'';
     button.dataset.stanceType=badgeData?.stanceLabel||'';
     button.dataset.stanceDefense=badgeData?.defenseLabel||'';
-    button.setAttribute('aria-label',`Add ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''} with ${arcana?.name||card.__wardenTrialArcanaId||'no Arcana'} from ${String(card.__wardenTrialWeaponId||'').toUpperCase()}`);
+    button.setAttribute('aria-label',`Add ${arcana?.name||card.__wardenTrialArcanaId||'Arcana'} with ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''}`);
   });
 }
 function startNextWardenTrialWave(card=null){
