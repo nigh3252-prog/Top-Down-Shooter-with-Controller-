@@ -18,6 +18,7 @@ import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
+export const ARENA_MAX_WAVE_SIZE = 100;
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 
 export function advanceWizardEnemyControl(enemy,dt=0){
@@ -1042,7 +1043,7 @@ export function createArenaEnemySystem({
   }
   function startWave(){
     waveKills = 0; spawnedThisWave = 0; waveClearT = 0;
-    const count = Math.max(1, Math.min(20, Math.round(tuning.waveSize)));
+    const count = Math.max(1, Math.min(ARENA_MAX_WAVE_SIZE, Math.round(tuning.waveSize)));
     for(let i = 0; i < count; i++){ const pos = spawnPos(); makeEnemy(chooseSpawnKind(i), pos.x, pos.z); spawnedThisWave++; }
   }
   function finishWave(){ wave++; director.onWaveClear(); startWave(); }
@@ -1199,7 +1200,7 @@ export function createArenaEnemySystem({
     setPressureBudget:(v)=>{ director.settings.pressureBudget = clamp(Number(v) || 2.25, .5, 4); },
     setAggression:(v)=>{ tuning.aggression = clamp(Number(v) || 1, .25, 3); director.settings.aggression = tuning.aggression; },
     setCycleOnWaveClear:(v)=>{ director.settings.cycleOnWaveClear = !!v; },
-    setWaveSize:(v)=>{ tuning.waveSize = clamp(Math.round(Number(v) || 6), 1, 20); },
+    setWaveSize:(v)=>{ tuning.waveSize = clamp(Math.round(Number(v) || 6), 1, ARENA_MAX_WAVE_SIZE); },
     setSpeedScale:(v)=>{ tuning.speedScale = clamp(Number(v) || 1, .25, 1.5); },
     setHeightScale:(v)=>{ tuning.heightScale = clamp(Number(v) || 1, .5, 3.5); },
     setHpScale:(v)=>{ tuning.hpScale = clamp(Number(v) || 1, .25, 5); },

@@ -137,12 +137,12 @@ assert.deepEqual(
 assert.equal(blockedPlay,false,'a rejected Arcana does not fire or consume the stance card');
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'down', started:false, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck }),
-  { accepted:true, reason:'stamina-card', started:true, stamina:100, refill:true },
-  'the first eligible downward card starts the trial and fills stamina',
+  { accepted:true, reason:'stamina-card', started:true, stamina:200, refill:true },
+  'the first eligible downward card starts the trial and fills the doubled stamina bar',
 );
 assert.deepEqual(
   resolveWardenTrialCardPlay({ direction:'down', started:true, card:longswordDeck[3], weaponId:'longsword', deckCards:longswordDeck, stamina:0 }),
-  { accepted:true, reason:'stamina-card', started:true, stamina:100, refill:true },
+  { accepted:true, reason:'stamina-card', started:true, stamina:200, refill:true },
   'an eligible starter card is the exhaustion recovery path',
 );
 assert.deepEqual(

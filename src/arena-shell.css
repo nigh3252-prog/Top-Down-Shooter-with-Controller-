@@ -95,6 +95,19 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialCardLabel{font-size:7px;font-weight:500;line-height:1;letter-spacing:.13em;color:#7fb8b0;white-space:nowrap}
   .trialCardName{font-size:9px;font-weight:700;line-height:1.08;letter-spacing:.045em;text-wrap:balance;overflow-wrap:anywhere;overflow:hidden}
   .trialCardName[data-length="long"]{font-size:8px;letter-spacing:.025em}
+  #wardenRewardGate{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;background:rgba(4,9,10,.93);touch-action:none}
+  #wardenRewardGate.hidden{display:none}
+  #wardenRewardPanel{width:min(760px,100%);box-sizing:border-box;padding:18px;background:rgba(14,28,30,.98);border:1px solid #6e3a24;border-radius:10px;box-shadow:0 8px 0 rgba(0,0,0,.3)}
+  #wardenRewardTitle{margin:0 0 5px;color:#e8a04c;font-size:15px;letter-spacing:.18em;text-align:center}
+  #wardenRewardHint{margin:0 0 14px;color:#8ebbb3;font-size:10px;line-height:1.4;text-align:center}
+  #wardenRewardChoices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  .wardenRewardChoice{min-height:130px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;font-family:inherit;text-align:center;color:#9fd2c9;background:rgba(18,36,38,.9);border:1px solid #2c4a47;border-radius:8px;touch-action:manipulation}
+  .wardenRewardChoice:active{transform:translateY(2px);background:#2c4a47}
+  .wardenRewardChoice:disabled{opacity:.45;pointer-events:none}
+  .wardenRewardWeapon{color:#6f9d96;font-size:8px;letter-spacing:.16em}
+  .wardenRewardStance{color:#e8a04c;font-size:12px;line-height:1.3}
+  .wardenRewardArcana{color:#9fd2c9;font-size:10px;line-height:1.35}
+  .wardenRewardMeta{color:#6f9d96;font-size:8px;line-height:1.3}
   /* ---- player pause menu ---- */
   #panel{position:fixed;top:52px;left:8px;z-index:29;width:min(82vw,318px);
     max-height:calc(100vh - 66px);overflow-y:auto;padding:13px 14px 15px;box-sizing:border-box;
@@ -145,7 +158,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   @keyframes hitFeelFlash{0%{opacity:var(--iop,.95)}100%{opacity:0}}
   body.abilityCaptureClean #topBar,body.abilityCaptureClean #hud,body.abilityCaptureClean #msg,body.abilityCaptureClean #vig,
   body.abilityCaptureClean #joyBase,body.abilityCaptureClean #joyKnob,body.abilityCaptureClean .btnrow,
-  body.abilityCaptureClean #cardRow,body.abilityCaptureClean #trialCardTray,body.abilityCaptureClean #panel,body.abilityCaptureClean #startGate,
+  body.abilityCaptureClean #cardRow,body.abilityCaptureClean #trialCardTray,body.abilityCaptureClean #wardenRewardGate,body.abilityCaptureClean #panel,body.abilityCaptureClean #startGate,
   body.abilityCaptureClean #hint{display:none!important}
   /* ---- start gate ---- */
   #startGate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
@@ -189,6 +202,11 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialCard.dragging{border-color:var(--arena-gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--arena-gold) 16%,transparent),0 3px 0 var(--arena-shadow)}
   .trialCardArt{border-color:var(--arena-line-soft);color:var(--arena-text)}
   .trialCardUp{border-color:var(--arena-line-soft)}.trialCardLabel{color:var(--arena-subtle)}
+  #wardenRewardPanel{background:var(--arena-panel);border-color:var(--arena-line-bright);box-shadow:0 8px 0 var(--arena-shadow)}
+  #wardenRewardTitle{color:var(--arena-gold)}#wardenRewardHint{color:var(--arena-subtle)}
+  .wardenRewardChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
+  .wardenRewardChoice:active{background:var(--arena-control-active)}.wardenRewardWeapon,.wardenRewardMeta{color:var(--arena-subtle)}
+  .wardenRewardStance{color:var(--arena-gold)}.wardenRewardArcana{color:var(--arena-text)}
   #panel{background:linear-gradient(180deg,var(--arena-panel),var(--arena-panel-2));border-color:var(--arena-line);scrollbar-color:var(--arena-line-bright) var(--arena-panel-solid)}
   .pauseTitle{color:var(--arena-gold)}.pauseSection{border-color:var(--arena-line-soft)}.pauseSection h2{color:var(--arena-subtle)}
   .themeChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
@@ -225,3 +243,4 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-variant="warden-trial"] #stWrap{width:116px;height:4px;background:rgba(10,20,22,.48)}
   @media (max-height:650px){#trialCardTray{--trial-tray-h:178px}.trialCard{width:81px;height:108px}.trialCardArt{inset:7px 6px}.trialCardHalf{padding:4px 3px}.trialCardLabel{font-size:6px}.trialCardName{font-size:8px}.trialCardName[data-length="long"]{font-size:7px}}
   @media (max-width:560px){:root[data-arena-variant="warden-trial"] #trialBadge{font-size:8px;padding:0 8px;letter-spacing:.06em}}
+  @media (max-width:680px){#wardenRewardGate{align-items:flex-start;overflow:auto;padding-top:max(14px,env(safe-area-inset-top))}#wardenRewardPanel{padding:12px}#wardenRewardChoices{grid-template-columns:1fr}.wardenRewardChoice{min-height:82px;padding:9px}}

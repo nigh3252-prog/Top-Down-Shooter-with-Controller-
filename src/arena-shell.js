@@ -59,6 +59,17 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     </button>
   </div>
 </div>
+<div id="wardenRewardGate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="wardenRewardTitle">
+  <div id="wardenRewardPanel">
+    <h2 id="wardenRewardTitle">WAVE CLEAR</h2>
+    <p id="wardenRewardHint">Choose one authored stance / Arcana card for the next wave.</p>
+    <div id="wardenRewardChoices" role="group" aria-label="Warden Trial reward cards">
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="0"></button>
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="1"></button>
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="2"></button>
+    </div>
+  </div>
+</div>
 <div id="panel" class="hidden" aria-label="Pause menu">
   <div class="pauseTitle">PAUSED</div>
   <section class="pauseSection" aria-labelledby="themeTitle">
