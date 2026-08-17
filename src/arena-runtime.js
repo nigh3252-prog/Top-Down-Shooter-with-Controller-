@@ -1639,7 +1639,7 @@ function toggleMenu(){
   syncMenuButton();
   emitRuntime({type:'menu',open:opening});
 }
-function isPaused(){ return !arena.started || arena.paused || !panel.classList.contains('hidden'); }
+function isPaused(){ return !arena.started || arena.paused || wardenTrialRewardPending || !panel.classList.contains('hidden'); }
 const startGate=document.getElementById('startGate');
 const trialCard=document.getElementById('trialCard');
 const trialCardStatus=document.getElementById('trialCardStatus');
@@ -1870,7 +1870,7 @@ if(wardenTrialMode&&trialCard){
   trialCardGesture=installWardenTrialSwipeSurface({
     target:document,
     visualElement:trialCard,
-    enabled:()=>!arena.paused&&arena.deadT<0&&!roomTransition?.active,
+    enabled:()=>!isPaused()&&arena.deadT<0&&!roomTransition?.active,
     startGuard:event=>{
       const startY=Number(event?.clientY)||0;
       if(startY < (Number(innerHeight)||1)*.2)return false;
