@@ -1647,6 +1647,7 @@ const trialBadge=document.getElementById('trialBadge');
 const wardenRewardGate=document.getElementById('wardenRewardGate');
 const wardenRewardTitle=document.getElementById('wardenRewardTitle');
 const wardenRewardHint=document.getElementById('wardenRewardHint');
+const wardenRewardSkipButton=document.getElementById('wardenRewardSkip');
 const wardenRewardChoiceEls=[...document.querySelectorAll('[data-warden-reward-slot]')];
 let trialCardDirection='neutral';
 function trialCardName(card){
@@ -1668,6 +1669,7 @@ function currentTrialCard(){
 }
 function hideWardenTrialReward(){
   wardenRewardGate?.classList.add('hidden');
+  if(wardenRewardSkipButton)wardenRewardSkipButton.disabled=true;
   wardenRewardChoiceEls.forEach(button=>{
     button.disabled=true;
     button.hidden=true;
@@ -1678,7 +1680,11 @@ function hideWardenTrialReward(){
 function renderWardenTrialRewardChoices(){
   const nextWave=wardenTrialWave+1;
   if(wardenRewardTitle)wardenRewardTitle.textContent=`WAVE ${wardenTrialWave} CLEAR`;
-  if(wardenRewardHint)wardenRewardHint.textContent=`Choose one authored stance / Arcana card · NEXT WAVE ${nextWave} · ${wardenTrialWaveSize(nextWave)} ENEMIES`;
+  if(wardenRewardHint)wardenRewardHint.textContent=`Choose a stance / Arcana card or skip · NEXT WAVE ${nextWave} · ${wardenTrialWaveSize(nextWave)} ENEMIES`;
+  if(wardenRewardSkipButton){
+    wardenRewardSkipButton.disabled=!wardenTrialRewardPending;
+    wardenRewardSkipButton.textContent=`SKIP REWARD · START WAVE ${nextWave}`;
+  }
   wardenRewardChoiceEls.forEach((button,index)=>{
     const card=wardenTrialRewardChoices[index];
     button.replaceChildren();
@@ -1743,6 +1749,10 @@ function chooseWardenTrialReward(index){
   const card=wardenTrialRewardChoices[choiceIndex];
   if(!card)return false;
   return startNextWardenTrialWave(card);
+}
+function skipWardenTrialReward(){
+  if(!wardenTrialMode||!wardenTrialRewardPending)return false;
+  return startNextWardenTrialWave();
 }
 function renderTrialCard(){
   if(!wardenTrialMode||!trialCard)return;
@@ -1893,6 +1903,7 @@ trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWard
 trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
 trialTemperamentButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialTemperament(button.dataset.trialTemperament)));
 wardenRewardChoiceEls.forEach((button,index)=>button.addEventListener('click',()=>chooseWardenTrialReward(index)));
+wardenRewardSkipButton?.addEventListener('click',skipWardenTrialReward);
 syncThemeButtons();
 syncTrialEnemyButtons();
 syncTrialWeaponButtons();
@@ -2701,7 +2712,7 @@ const runtimeHandle={
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
-  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,chooseWardenTrialReward,
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,chooseWardenTrialReward,skipWardenTrialReward,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };

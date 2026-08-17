@@ -68,6 +68,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="wardenRewardChoice" type="button" data-warden-reward-slot="1"></button>
       <button class="wardenRewardChoice" type="button" data-warden-reward-slot="2"></button>
     </div>
+    <button id="wardenRewardSkip" type="button" aria-label="Skip this card reward and start the next wave without adding a card">SKIP REWARD</button>
   </div>
 </div>
 <div id="panel" class="hidden" aria-label="Pause menu">

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { STANCE_CARDS } from '../src/stance-cards.js';
 import {
   WARDEN_TRIAL_CARD_PAIRINGS,
@@ -59,6 +60,15 @@ for (const card of [...starters, ...rewardPool]) {
 
 assert.match(ARENA_SHELL_HTML, /id="wardenRewardGate"/);
 assert.equal((ARENA_SHELL_HTML.match(/class="wardenRewardChoice"/g) || []).length, 3);
+assert.match(ARENA_SHELL_HTML, /id="wardenRewardSkip"/);
+assert.match(ARENA_SHELL_HTML, /Skip this card reward and start the next wave without adding a card/);
+
+const arenaRuntimeSource = await readFile(new URL('../src/arena-runtime.js', import.meta.url), 'utf8');
+assert.match(arenaRuntimeSource, /function skipWardenTrialReward\(\)[\s\S]*?return startNextWardenTrialWave\(\);/,
+  'skipping resumes play through the same no-card wave transition used by an exhausted reward pool');
+assert.match(arenaRuntimeSource, /wardenRewardSkipButton\?\.addEventListener\('click',skipWardenTrialReward\)/,
+  'the skip control is wired to the runtime action');
+assert.match(arenaRuntimeSource, /chooseWardenTrialReward,skipWardenTrialReward,/,
+  'the runtime exposes reward selection and skipping for integration checks');
 
 console.log('Warden Trial progression: ok');
-
