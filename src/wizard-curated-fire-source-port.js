@@ -364,8 +364,10 @@ export function createWizardCuratedFireSourcePort({
     if (d.hp <= 0 || targetDead(d.ref)) { d.dead = true; d.markers.length = 0; d.burn = null; }
   }
   function applyBurn(d) {
+    if (!d || d.dead || targetDead(d.ref)) return false;
     d.burn = { left: CURATED_FIRE_BURN.duration, next: CURATED_FIRE_BURN.interval };
     callbacksNow.onStatus?.(d.ref, 'burn', { duration: CURATED_FIRE_BURN.duration, interval: CURATED_FIRE_BURN.interval, tick: CURATED_FIRE_BURN.tick });
+    return true;
   }
   function knock(d, dx, dz, force, meta = {}) {
     const len = Math.hypot(dx, dz) || 1; const vx = dx / len * force, vz = dz / len * force;
@@ -478,7 +480,19 @@ export function createWizardCuratedFireSourcePort({
     for (const e of activeTargets()) for (let i = e.markers.length - 1; i >= 0; i--) { const m = e.markers[i]; m.fuse -= dt; if (m.fuse <= 0) { e.markers.splice(i, 1); detonate(e, m); } }
   }
   function updateBurns(dt) {
-    for (const d of activeTargets()) if (d.burn) { d.burn.left -= dt; d.burn.next -= dt; if (d.burn.next <= 0) { d.burn.next += CURATED_FIRE_BURN.interval; damage(d, CURATED_FIRE_BURN.tick, 'burn'); } if (d.burn.left <= 0) d.burn = null; }
+    for (const d of activeTargets()) {
+      const burn = d.burn;
+      if (!burn) continue;
+      burn.left -= dt;
+      burn.next -= dt;
+      if (burn.next <= 0) {
+        burn.next += CURATED_FIRE_BURN.interval;
+        damage(d, CURATED_FIRE_BURN.tick, 'burn');
+      }
+      // A burn tick can kill the target, and damage() clears d.burn in that
+      // case. Only expire the same status object if it is still attached.
+      if (d.burn === burn && burn.left <= 0) d.burn = null;
+    }
   }
   function updateParticles(dt) {
     for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.life += dt; if (p.life >= p.max) { particles.splice(i, 1); continue; } p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt; p.vy -= 5 * dt; if (p.y < 0.18) { p.y = 0.18; p.vy = 0; } p.vx *= Math.pow(0.06, dt); p.vz *= Math.pow(0.06, dt); }

@@ -38,6 +38,7 @@ const ACCORDION_GREATSWORD_ATTACK_MAX = getWardenTrialCombatBand({
 }).attackMax;
 export const ACCORDION_GREATSWORD_CLEAR_DISTANCE = ACCORDION_GREATSWORD_ATTACK_MAX + .60;
 export const ACCORDION_RETREAT_DASH_SPEED = 18;
+export const ACCORDION_RETREAT_DISTANCE_MULTIPLIER = 2;
 const ACCORDION_RETREAT_EPSILON = .04;
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -52,7 +53,8 @@ export function planAccordionPostAttackRetreat({ enemy = {}, player = {} } = {})
     : facingLength > .001
       ? { x:-finite(enemy.facing.x) / facingLength || 0, z:-finite(enemy.facing.z) / facingLength || 0 }
       : { x:0, z:1 };
-  const distance = Math.max(0, ACCORDION_GREATSWORD_CLEAR_DISTANCE - currentDistance);
+  const distance = Math.max(0, ACCORDION_GREATSWORD_CLEAR_DISTANCE - currentDistance)
+    * ACCORDION_RETREAT_DISTANCE_MULTIPLIER;
   return Object.freeze({
     shouldRetreat: distance > ACCORDION_RETREAT_EPSILON,
     direction,
@@ -79,6 +81,21 @@ export function wizardEnemyMovementScale(enemy){
     ?Math.max(.05,Math.min(1,Number.isFinite(Number(enemy.wizardSlowMultiplier))?Number(enemy.wizardSlowMultiplier):.45))
     :1;
   return Math.min(explicit,slow);
+}
+
+// Arcana movement locks are reference-counted by wizard-next-twenty-dash.
+// If an effect is interrupted by a runtime failure or a stale teardown, the
+// visual enemy can otherwise retain the copied lock flags forever. Accordion
+// enemies have no authored reason to remain permanently locked, so clear only
+// an unowned lock before their next AI update; active counted locks remain
+// authoritative.
+export function recoverStaleAccordionMovementLock(enemy){
+  if(!enemy?.accordion2d)return false;
+  if(Number(enemy.__wizardArcanaMovementLockCount)>0)return false;
+  let recovered=false;
+  if(enemy.movementLocked===true){delete enemy.movementLocked;recovered=true;}
+  if(Number(enemy.moveSpeedMultiplier)===0){delete enemy.moveSpeedMultiplier;recovered=true;}
+  return recovered;
 }
 
 export function wizardEnemyAttackLocked(enemy){
@@ -853,6 +870,7 @@ export function createArenaEnemySystem({
   /* ---------- per-enemy update ---------- */
   function updateEnemy(e, dt, p){
     if(e.hp <= 0) return;
+    if(e.accordion2d)recoverStaleAccordionMovementLock(e);
     const movementScale=wizardEnemyMovementScale(e);
     const previous = { x:e.x, z:e.z };
     e.stateTime += dt;
