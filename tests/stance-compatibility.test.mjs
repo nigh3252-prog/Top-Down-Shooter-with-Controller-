@@ -57,10 +57,12 @@ assert.equal(resolveStanceWeaponCompatibility({stance:{id:'missing'},weapon:dagg
 
 const deckSource=readFileSync(new URL('../src/stance-deck.js',import.meta.url),'utf8');
 const draftSource=readFileSync(new URL('../src/run-draft.js',import.meta.url),'utf8');
+const presentationSource=readFileSync(new URL('../src/stance-card-presentation.js',import.meta.url),'utf8');
 assert.match(deckSource,/stanceBadge/);
-assert.match(deckSource,/stanceDefenseLetter/);
-assert.match(deckSource,/`\$\{stancePresentation\.short\} \/ \$\{defenseLetter\}`/);
+assert.match(deckSource,/getStanceCardBadge/);
+assert.match(presentationSource,/stanceDefenseLetter/);
+assert.match(presentationSource,/`\$\{stance\.short\} \/ \$\{defenseLetter\}`/);
 assert.match(draftSource,/rewardClassBadge/);
-assert.match(draftSource,/presentation\.short} \/ \$\{defenseLetter\}/);
+assert.match(draftSource,/getStanceCardBadge/);
 
 console.log('stance compatibility tests passed');

@@ -45,9 +45,51 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
 <div id="trialCardTray" aria-label="Warden Trial card interface">
   <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
   <div id="trialCardRail">
+    <div id="trialDiscardPile" class="trialPileCounter" aria-label="0 cards discarded">
+      <span>DISCARD</span><strong id="trialDiscardCount">0</strong>
+    </div>
+    <div id="trialCurrentStance" aria-live="polite" aria-label="Current stance: no stance">
+      <span class="trialSideLabel">CURRENT STANCE</span>
+      <strong id="trialCurrentStanceName">NO STANCE</strong>
+      <span id="trialCurrentStanceBadge" class="trialStanceBadge" hidden></span>
+    </div>
     <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
-      <span class="trialCardArt" aria-hidden="true">CURRENT CARD</span>
+      <span class="trialCardArt" aria-hidden="true">
+        <span class="trialCardHalf trialCardUp">
+          <span class="trialCardLabel">↑ ARCANA</span>
+          <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
+        </span>
+        <span class="trialCardHalf trialCardDown">
+          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ STANCE</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
+          <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
+        </span>
+      </span>
     </button>
+    <div id="trialUpcomingCards" aria-label="Next Warden Trial cards">
+      <div class="trialUpcomingCard" data-trial-upcoming-slot="0" role="img" hidden>
+        <span class="trialUpcomingHalf trialUpcomingUp"><strong class="trialUpcomingArcanaName">ARCANA</strong></span>
+        <span class="trialUpcomingHalf trialUpcomingDown"><strong class="trialUpcomingStanceName">STANCE</strong><span class="trialStanceBadge trialUpcomingStanceBadge" hidden></span></span>
+      </div>
+      <div class="trialUpcomingCard" data-trial-upcoming-slot="1" role="img" hidden>
+        <span class="trialUpcomingHalf trialUpcomingUp"><strong class="trialUpcomingArcanaName">ARCANA</strong></span>
+        <span class="trialUpcomingHalf trialUpcomingDown"><strong class="trialUpcomingStanceName">STANCE</strong><span class="trialStanceBadge trialUpcomingStanceBadge" hidden></span></span>
+      </div>
+    </div>
+    <div id="trialDrawPile" class="trialPileCounter" aria-label="0 cards left to draw">
+      <span>DRAW</span><strong id="trialDrawCount">0</strong>
+    </div>
+  </div>
+</div>
+<div id="wardenRewardGate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="wardenRewardTitle">
+  <div id="wardenRewardPanel">
+    <h2 id="wardenRewardTitle">WAVE CLEAR</h2>
+    <p id="wardenRewardHint">Choose one authored stance / Arcana card for the next wave.</p>
+    <div id="wardenRewardChoices" role="group" aria-label="Warden Trial reward cards">
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="0"></button>
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="1"></button>
+      <button class="wardenRewardChoice" type="button" data-warden-reward-slot="2"></button>
+    </div>
+    <button id="wardenRewardSkip" type="button" aria-label="Skip this card reward and start the next wave without adding a card">SKIP REWARD</button>
   </div>
 </div>
 <div id="panel" class="hidden" aria-label="Pause menu">
