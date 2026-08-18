@@ -16,10 +16,51 @@ import { createAttackInterpreter } from './attack-interpreter.js';
 import { FUSION_ARCHETYPES, FUSION_ATTACKS, FUSION_ENEMY_IDS, isFusionEnemy } from './fusion-enemies.js';
 import { installFusionEnemyRig } from './fusion-enemy-rig.js';
 import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
+import { getWardenTrialCombatBand } from './warden-trial-ai.js';
 
 const S = 4.3;                       // meters -> arena-unit scale (player 8.5 u/s vs punch 1.95)
 export const ARENA_MAX_WAVE_SIZE = 100;
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+// Accordion enemies are meant to dart in, swing, and give the Warden room to
+// answer with the greatsword. The trial currently installs the Red Toll visual
+// variant, whose longer blade is also reflected in the Warden's combat band.
+// Clear that band by a small margin instead of retreating to an arbitrary
+// distance that can still leave the puppet inside the greatsword's hit space.
+const ACCORDION_RADIUS = .86;
+const GREATSWORD_TRIAL_LENGTH = Math.min(2.45, Number(STONE_WEAPONS.greatsword?.tune?.length || 1.78) * 1.30);
+const ACCORDION_GREATSWORD_ATTACK_MAX = getWardenTrialCombatBand({
+  weapon: {
+    ...STONE_WEAPONS.greatsword,
+    tune: { ...STONE_WEAPONS.greatsword.tune, length:GREATSWORD_TRIAL_LENGTH },
+  },
+  target: { radius:ACCORDION_RADIUS },
+}).attackMax;
+export const ACCORDION_GREATSWORD_CLEAR_DISTANCE = ACCORDION_GREATSWORD_ATTACK_MAX + .60;
+export const ACCORDION_RETREAT_DASH_SPEED = 18;
+const ACCORDION_RETREAT_EPSILON = .04;
+
+const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+export function planAccordionPostAttackRetreat({ enemy = {}, player = {} } = {}) {
+  const dx = finite(enemy.x) - finite(player.x);
+  const dz = finite(enemy.z) - finite(player.z);
+  const currentDistance = Math.hypot(dx, dz);
+  const facingLength = Math.hypot(finite(enemy.facing?.x), finite(enemy.facing?.z));
+  const direction = currentDistance > .001
+    ? { x:dx / currentDistance, z:dz / currentDistance }
+    : facingLength > .001
+      ? { x:-finite(enemy.facing.x) / facingLength || 0, z:-finite(enemy.facing.z) / facingLength || 0 }
+      : { x:0, z:1 };
+  const distance = Math.max(0, ACCORDION_GREATSWORD_CLEAR_DISTANCE - currentDistance);
+  return Object.freeze({
+    shouldRetreat: distance > ACCORDION_RETREAT_EPSILON,
+    direction,
+    distance,
+    targetDistance:ACCORDION_GREATSWORD_CLEAR_DISTANCE,
+    duration:distance / ACCORDION_RETREAT_DASH_SPEED,
+  });
+}
 
 export function advanceWizardEnemyControl(enemy,dt=0){
   if(!enemy)return enemy;
@@ -404,6 +445,7 @@ export function createArenaEnemySystem({
       gesture:null, gestureTime:0, gestureDuration:1.3, rallyFacingAngle:initialFacingAngle,
       rallyTimer:THREE.MathUtils.randFloat(a.rallyMin || 7, a.rallyMax || 13), rallyMin:a.rallyMin || 7, rallyMax:a.rallyMax || 13,
       deniedTimer:0, deniedMode:'orbit', nearEligible:true, slotIndex:-1,
+      accordionRetreatX:0, accordionRetreatZ:1, accordionRetreatRemaining:0,
       knockX:0, knockZ:0, flash:0, bobPhase:Math.random()*6.28,
       yOff:0, vyOff:0, squash:0, squashT:0, squashMax:.001, spin:0, spinVel:0,
       visualGroundSpeed:0, maxGroundSpeed:a.speed*tuning.speedScale,
@@ -714,6 +756,18 @@ export function createArenaEnemySystem({
     e.hitDone=false;e.attackTargetX=p.x;e.attackTargetZ=p.z;e.animAttackT=0;e.animAttackSide=p.x>=e.x?1:-1;
     e.cooldown=attack.cooldown;
   }
+  function startAccordionRetreat(e,p){
+    const plan=planAccordionPostAttackRetreat({enemy:e,player:p});
+    if(!plan.shouldRetreat){
+      e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.animAttackT=99;e.vx=e.vz=0;
+      e.accordionRetreatRemaining=0;
+      return false;
+    }
+    e.state='retreat';e.stateTime=0;e.attack=null;e.hitDone=false;e.animAttackT=99;
+    e.accordionRetreatX=plan.direction.x;e.accordionRetreatZ=plan.direction.z;
+    e.accordionRetreatRemaining=plan.distance;
+    return true;
+  }
   function updateAccordionEnemy(e,p,dt,movementScale,previous){
     const attack=EATK.accordionStrike;
     e.drawVx=0;e.drawVz=0;
@@ -735,7 +789,18 @@ export function createArenaEnemySystem({
       if(e.stateTime>=e.active){e.state='recovery';e.stateTime=0;}
     }else if(e.state==='recovery'){
       e.vx=e.vz=0;e.animAttackT=e.windup+e.active+e.stateTime;
-      if(e.stateTime>=e.recovery){e.state='idle';e.stateTime=0;e.attack=null;e.animAttackT=99;}
+      if(e.stateTime>=e.recovery)startAccordionRetreat(e,p);
+    }else if(e.state==='retreat'){
+      const dashSpeed=ACCORDION_RETREAT_DASH_SPEED*movementScale;
+      const step=Math.min(e.accordionRetreatRemaining,Math.max(0,dashSpeed*dt));
+      e.vx=e.accordionRetreatX*dashSpeed;e.vz=e.accordionRetreatZ*dashSpeed;
+      e.x+=e.accordionRetreatX*step;e.z+=e.accordionRetreatZ*step;
+      turnFacingToPoint(e,p,dt,e.turnSpeed*1.15);
+      e.accordionRetreatRemaining=Math.max(0,e.accordionRetreatRemaining-step);
+      if(e.accordionRetreatRemaining<=ACCORDION_RETREAT_EPSILON){
+        e.state='idle';e.stateTime=0;e.attack=null;e.hitDone=false;e.animAttackT=99;e.vx=e.vz=0;
+        e.accordionRetreatRemaining=0;
+      }
     }else if(movementScale>0){
       const dx=p.x-e.x,dz=p.z-e.z,distance=Math.hypot(dx,dz)||1,baseAngle=Math.atan2(dz,dx);
       e.rethink-=dt;
