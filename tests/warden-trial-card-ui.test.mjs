@@ -17,12 +17,15 @@ assert.equal(resolveWardenTrialCardDirection(-54),null);
 assert.equal(resolveWardenTrialCardDirection(54),null);
 assert.equal(resolveWardenTrialCardDirection(0),null);
 assert.equal(isWardenTrialCardGestureEnabled(),true,'the opening downward swipe remains enabled before the trial starts');
-for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning']){
+for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning','coolingDown']){
   assert.equal(isWardenTrialCardGestureEnabled({[blocker]:true}),false,`${blocker} blocks the full-screen card gesture`);
 }
 const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
 const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
+assert.match(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'the active cooldown blocks a second full-screen swipe');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('up'\)/,'an accepted upward play starts the three-second card lock');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('down'\)/,'an accepted downward play starts the one-second card lock');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
 
@@ -47,6 +50,9 @@ assert.match(ARENA_SHELL_HTML,/class="trialCardName trialArcanaName"/,'the card 
 assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower card face names its stance action');
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
 assert.match(ARENA_SHELL_HTML,/class="trialStanceBadge trialCardStanceBadge"/,'the current card exposes its stance / defense badge');
+assert.match(ARENA_SHELL_HTML,/id="trialCardCooldown"/,'the current card exposes a visible cooldown layer');
+assert.match(ARENA_SHELL_HTML,/↑ ARCANA · 3s/,'the upward card face states its cooldown');
+assert.match(ARENA_SHELL_HTML,/↓ 1s/,'the downward card face states its cooldown without crowding the stance badge');
 assert.match(ARENA_SHELL_HTML,/id="trialDiscardCount"/,'the tray exposes a discard count at the left edge');
 assert.match(ARENA_SHELL_HTML,/id="trialCurrentStanceName"/,'the tray exposes the actual current stance beside the active card');
 assert.equal([...ARENA_SHELL_HTML.matchAll(/data-trial-upcoming-slot=/g)].length,2,'the tray reserves two ordered upcoming-card previews');
@@ -55,6 +61,7 @@ assert.match(arenaRuntimeSource,/deck\.upcoming\.slice\(0,trialUpcomingCardEls\.
 assert.match(arenaRuntimeSource,/className='wardenRewardClassBadge'/,'reward choices receive the same stance / defense badge');
 assert.match(arenaShellCss,/data-trial-upcoming-slot="0"[^}]*opacity:\.58/,'the first upcoming card is visibly secondary');
 assert.match(arenaShellCss,/data-trial-upcoming-slot="1"[^}]*opacity:\.32/,'the second upcoming card fades farther into the queue');
+assert.match(arenaShellCss,/\.trialCard\.cooling/,'the active card has a distinct cooling state');
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);

@@ -16,10 +16,33 @@ import {
   wardenTrialStarterIdsForWeapon,
   wardenTrialUpArcanaIdForCard,
 } from '../src/warden-trial-card-policy.js';
+import {
+  WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS,
+  WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS,
+  createWardenTrialCardCooldown,
+  wardenTrialCardCooldownSeconds,
+} from '../src/warden-trial-card-cooldown.js';
 
 assert.equal(isWardenTrialRuntime({ variant:'warden-trial' }), true);
 assert.equal(isWardenTrialRuntime({ wardenTrial:true }), true);
 assert.equal(isWardenTrialRuntime({ mode:'arena' }), false);
+assert.equal(WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS,3);
+assert.equal(WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS,1);
+assert.equal(wardenTrialCardCooldownSeconds('up'),3);
+assert.equal(wardenTrialCardCooldownSeconds('down'),1);
+assert.equal(wardenTrialCardCooldownSeconds('sideways'),0);
+
+const cardCooldown=createWardenTrialCardCooldown();
+assert.deepEqual(cardCooldown.snapshot(),{active:false,direction:null,duration:0,remaining:0,progress:0});
+assert.deepEqual(cardCooldown.begin('up'),{active:true,direction:'up',duration:3,remaining:3,progress:1});
+const partialUpCooldown=cardCooldown.update(1.25);
+assert.equal(partialUpCooldown.direction,'up');
+assert.equal(partialUpCooldown.remaining,1.75);
+assert.ok(Math.abs(partialUpCooldown.progress-(1.75/3))<1e-9);
+assert.deepEqual(cardCooldown.begin('down'),{active:true,direction:'down',duration:1,remaining:1,progress:1},
+  'a successful downward play starts its shorter cooldown immediately');
+assert.deepEqual(cardCooldown.update(1),{active:false,direction:null,duration:0,remaining:0,progress:0});
+assert.deepEqual(cardCooldown.reset(),{active:false,direction:null,duration:0,remaining:0,progress:0});
 
 assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_STARTER_STANCE_IDS));
 const allStarterArcanaIds=Object.values(WEAPON_STARTER_ARCANA_IDS).flat();

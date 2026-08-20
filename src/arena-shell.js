@@ -56,13 +56,17 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
       <span class="trialCardArt" aria-hidden="true">
         <span class="trialCardHalf trialCardUp">
-          <span class="trialCardLabel">↑ ARCANA</span>
+          <span class="trialCardLabel">↑ ARCANA · 3s</span>
           <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
         </span>
         <span class="trialCardHalf trialCardDown">
-          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ STANCE</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
+          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ 1s</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
           <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
         </span>
+      </span>
+      <span id="trialCardCooldown" class="trialCardCooldown" aria-hidden="true" hidden>
+        <span id="trialCardCooldownLabel">CARD COOLDOWN</span>
+        <strong id="trialCardCooldownTime">0.0s</strong>
       </span>
     </button>
     <div id="trialUpcomingCards" aria-label="Next Warden Trial cards">
