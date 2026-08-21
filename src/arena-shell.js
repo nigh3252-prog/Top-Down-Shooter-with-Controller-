@@ -129,6 +129,13 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="trialWeaponChoice" type="button" data-trial-weapon="greatsword" aria-pressed="false">GREATSWORD</button>
     </div>
   </section>
+  <section class="pauseSection trialAbilityEnergySection" aria-labelledby="trialAbilityEnergyTitle">
+    <h2 id="trialAbilityEnergyTitle">ABILITY ENERGY</h2>
+    <button id="trialAbilityEnergyToggle" class="trialAbilityEnergyToggle" type="button" aria-pressed="true">
+      <span>ENERGY USE</span><strong id="trialAbilityEnergyState">ON</strong>
+    </button>
+    <p id="trialAbilityEnergyNote" class="trialAbilityEnergyNote" aria-live="polite">Attacks and defensive moves spend stamina.</p>
+  </section>
   <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
     <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>
     <div id="trialTemperamentGrid" class="trialTemperamentGrid" role="group" aria-label="Warden defense level">${WARDEN_TEMPERAMENT_BUTTONS}

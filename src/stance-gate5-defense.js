@@ -40,6 +40,13 @@ export function createStanceGate5Runtime({arenaHandle,gate4Runtime=null,windowRe
   let destroyed=false;
 
   const currentProfile=()=>resolveStanceDefenseProfile(arena.stance);
+  function resolveStaminaCost(cost,source='stance-defense'){
+    const requested=Math.max(0,Number(cost)||0);
+    const resolved=typeof handle.resolveStaminaCost==='function'
+      ?handle.resolveStaminaCost(requested,{source})
+      :requested;
+    return Math.max(0,Number(resolved)||0);
+  }
   function shieldOwned(){
     if(currentProfile()?.kind==='shield')return true;
     try{return Array.isArray(deck?.pool)&&deck.pool.some(card=>card?.id==='S01');}
@@ -90,7 +97,7 @@ export function createStanceGate5Runtime({arenaHandle,gate4Runtime=null,windowRe
     if(!canStartDefense())return{handled:true,accepted:false,reason:'busy',source};
     if(profile.kind==='parry'){
       if(state.parryRemaining>0||state.parryRecoveryRemaining>0)return{handled:true,accepted:false,reason:'parry-recovery',source};
-      const missCost=Math.max(0,Number(profile.missStaminaCost)||0);
+      const missCost=resolveStaminaCost(profile.missStaminaCost,'parry');
       if(missCost>EPSILON&&(Number(arena.stamina.v)||0)<=EPSILON)return{handled:true,accepted:false,reason:'empty-reserve',source};
       state.parryRemaining=profile.parryWindow;state.parrySuccessRemaining=0;state.lastParryMissCost=0;state.lastOutcome='parry-open';
       visuals.pulse('parry-open');publish();return{handled:true,accepted:true,kind:'parry',source};
@@ -119,7 +126,8 @@ export function createStanceGate5Runtime({arenaHandle,gate4Runtime=null,windowRe
   function spendStanceDefense(cost,attackKey){
     const before=Math.max(0,Number(arena.stamina.v)||0);
     const phase=gate4Engine?.snapshot?.().phase||'idle';
-    const decision=evaluateStanceSpend({available:before,cost,source:STANCE_SPEND_SOURCES.defense,catchPhase:phase,epsilon:EPSILON});
+    const requestedCost=resolveStaminaCost(cost,attackKey);
+    const decision=evaluateStanceSpend({available:before,cost:requestedCost,source:STANCE_SPEND_SOURCES.defense,catchPhase:phase,epsilon:EPSILON});
     if(decision.allowed){
       arena.stamina.v=Math.max(0,before-decision.actualSpent);
       triggerCatchForDefense(decision,before,attackKey);
@@ -134,7 +142,7 @@ export function createStanceGate5Runtime({arenaHandle,gate4Runtime=null,windowRe
   }
   function spendDodge(){
     const profile=syncStance();
-    const cost=Math.max(0,Number(profile?.dodgeCost)||0);
+    const cost=resolveStaminaCost(profile?.dodgeCost,'dodge');
     if(profile?.kind!=='existing-dodge'||cost<=EPSILON){
       return Object.freeze({
         allowed:true,source:STANCE_SPEND_SOURCES.defense,available:Math.max(0,Number(arena.stamina.v)||0),
@@ -188,7 +196,7 @@ export function createStanceGate5Runtime({arenaHandle,gate4Runtime=null,windowRe
       state.parryRemaining=Math.max(0,state.parryRemaining-amount);
       if(state.parryRemaining<=0&&state.lastOutcome==='parry-open'){
         state.parryRecoveryRemaining=profile?.missRecovery||0;
-        const missCost=Math.max(0,Number(profile?.missStaminaCost)||0);
+        const missCost=resolveStaminaCost(profile?.missStaminaCost,'parry');
         if(missCost>EPSILON){
           const {decision}=spendStanceDefense(missCost,'long-blade-parry-whiff');
           state.lastParryMissCost=decision.actualSpent;state.lastOverdrawAmount=decision.overdrawAmount;

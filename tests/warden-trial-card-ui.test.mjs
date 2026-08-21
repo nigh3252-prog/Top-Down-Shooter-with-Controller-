@@ -63,6 +63,12 @@ assert.match(arenaShellCss,/data-trial-upcoming-slot="0"[^}]*opacity:\.58/,'the 
 assert.match(arenaShellCss,/data-trial-upcoming-slot="1"[^}]*opacity:\.32/,'the second upcoming card fades farther into the queue');
 assert.match(arenaShellCss,/\.trialCard\.cooling/,'the active card has a distinct cooling state');
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
+assert.match(ARENA_SHELL_HTML,/id="trialAbilityEnergyToggle"/,'the Warden Trial menu exposes the ability energy toggle');
+assert.match(ARENA_SHELL_HTML,/id="trialAbilityEnergyState">ON/,'energy usage starts with the current stamina economy enabled');
+assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityEnergyUsage'/,'the energy choice persists through the existing settings service');
+assert.match(arenaRuntimeSource,/return resolveActionStaminaCost\(staminaCostForWeapon/,'light, heavy, and charged attacks use the toggle policy');
+assert.match(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive actions share the same Warden-only energy policy');
+assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityEnergySection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
 }

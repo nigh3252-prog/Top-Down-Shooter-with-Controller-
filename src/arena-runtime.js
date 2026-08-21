@@ -37,7 +37,7 @@ import * as arenaThemeRegistry from './arena-theme-registry.js';
 import { readArenaStandardSetup } from './arena-standard-setup.js';
 import { createArenaStartupTrace } from './arena-startup-trace.js';
 import { blendWardenTrialCenterMovement, createWardenTrialBrain } from './warden-trial-ai.js';
-import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
+import { WARDEN_TRIAL_SETTINGS, wardenTrialAbilityEnergyCost } from './warden-trial-settings.js';
 import { DEFAULT_WARDEN_TEMPERAMENT_ID, normalizeWardenTemperament } from './warden-trial-temperaments.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface, isWardenTrialCardGestureEnabled } from './warden-trial-card-ui.js';
@@ -67,6 +67,7 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   const wardenTrialMode=runtimeConfig.wardenTrial===true||runtimeConfig.variant==='warden-trial';
   let wardenTrialEnemySet=normalizeWardenTrialEnemySet(StoneSettings.get('wardenTrial.enemySet',WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS));
   let wardenTrialTemperament=normalizeWardenTemperament(StoneSettings.get('wardenTrial.temperament',DEFAULT_WARDEN_TEMPERAMENT_ID));
+  let wardenTrialAbilityEnergyUsage=StoneSettings.get('wardenTrial.abilityEnergyUsage',WARDEN_TRIAL_SETTINGS.abilityEnergyUsage)!==false;
   let wardenTrialWave=1;
   const wardenTrialSelectedPairIds=new Set();
   let wardenTrialRewardChoices=[];
@@ -343,9 +344,12 @@ const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain({temperament:warde
 // its two-card hand; the option also leaves a clean switch for later trials.
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, handSize:wardenTrialMode?1:2, compatibilityAdapter: null });
 const wardenTrialCardCooldown=createWardenTrialCardCooldown();
+function resolveActionStaminaCost(cost){
+  return wardenTrialAbilityEnergyCost(cost,!wardenTrialMode||wardenTrialAbilityEnergyUsage);
+}
 function staminaCostForGroup(group){
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
-  return staminaCostForWeapon(base, PC.currentWeapon());
+  return resolveActionStaminaCost(staminaCostForWeapon(base, PC.currentWeapon()));
 }
 function hasStamina(cost){ return arena.stamina.v >= cost - 1e-6; }
 function spendStamina(cost){
@@ -1566,6 +1570,9 @@ const trialEnemyButtons=[...document.querySelectorAll('[data-trial-enemy-set]')]
 const trialWeaponButtons=[...document.querySelectorAll('[data-trial-weapon]')];
 const trialTemperamentButtons=[...document.querySelectorAll('[data-trial-temperament]')];
 const trialTemperamentNote=document.getElementById('trialTemperamentNote');
+const trialAbilityEnergyToggle=document.getElementById('trialAbilityEnergyToggle');
+const trialAbilityEnergyState=document.getElementById('trialAbilityEnergyState');
+const trialAbilityEnergyNote=document.getElementById('trialAbilityEnergyNote');
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1604,6 +1611,27 @@ function syncTrialTemperamentButtons(){
   if(trialTemperamentNote){
     trialTemperamentNote.textContent=`LEVEL ${wardenTrialTemperament.level} · ${wardenTrialTemperament.description}`;
   }
+}
+function syncTrialAbilityEnergyToggle(){
+  if(!trialAbilityEnergyToggle)return;
+  trialAbilityEnergyToggle.setAttribute('aria-pressed',String(wardenTrialAbilityEnergyUsage));
+  trialAbilityEnergyToggle.setAttribute('aria-label',`Ability energy use ${wardenTrialAbilityEnergyUsage?'on':'off'}. Activate to turn it ${wardenTrialAbilityEnergyUsage?'off':'on'}.`);
+  trialAbilityEnergyToggle.classList.toggle('energyOff',!wardenTrialAbilityEnergyUsage);
+  if(trialAbilityEnergyState)trialAbilityEnergyState.textContent=wardenTrialAbilityEnergyUsage?'ON':'OFF';
+  if(trialAbilityEnergyNote)trialAbilityEnergyNote.textContent=wardenTrialAbilityEnergyUsage
+    ? 'Attacks and defensive moves spend stamina.'
+    : 'Attacks and defensive moves are free. Card cooldowns stay active.';
+}
+function setWardenTrialAbilityEnergyUsage(value,{persist=true,announceChange=true}={}){
+  if(!wardenTrialMode)return false;
+  wardenTrialAbilityEnergyUsage=value!==false;
+  if(persist)StoneSettings.set('wardenTrial.abilityEnergyUsage',wardenTrialAbilityEnergyUsage);
+  if(!wardenTrialAbilityEnergyUsage&&arena.started)fullRefillStamina();
+  syncTrialAbilityEnergyToggle();
+  stanceGate5Runtime?.update?.(0);
+  if(announceChange)announce(wardenTrialAbilityEnergyUsage?'ENERGY COSTS ON':'ENERGY COSTS OFF',.9);
+  emitRuntime({type:'warden-trial-ability-energy',enabled:wardenTrialAbilityEnergyUsage});
+  return true;
 }
 function selectWardenTrialEnemySet(value){
   if(!wardenTrialMode)return false;
@@ -2041,12 +2069,14 @@ themeButtons.forEach(button=>button.addEventListener('click',()=>selectArenaThem
 trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialEnemySet(button.dataset.trialEnemySet)));
 trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
 trialTemperamentButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialTemperament(button.dataset.trialTemperament)));
+trialAbilityEnergyToggle?.addEventListener('click',()=>setWardenTrialAbilityEnergyUsage(!wardenTrialAbilityEnergyUsage));
 wardenRewardChoiceEls.forEach((button,index)=>button.addEventListener('click',()=>chooseWardenTrialReward(index)));
 wardenRewardSkipButton?.addEventListener('click',skipWardenTrialReward);
 syncThemeButtons();
 syncTrialEnemyButtons();
 syncTrialWeaponButtons();
 syncTrialTemperamentButtons();
+syncTrialAbilityEnergyToggle();
 document.getElementById('startBtn').addEventListener('click', ()=>{
   if(wardenTrialMode)return;
   arena.started = true;
@@ -2841,7 +2871,7 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityEnergyUsage:wardenTrialMode?wardenTrialAbilityEnergyUsage:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
@@ -2857,7 +2887,8 @@ const runtimeHandle={
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
-  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,chooseWardenTrialReward,skipWardenTrialReward,
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityEnergyUsage,chooseWardenTrialReward,skipWardenTrialReward,
+  resolveStaminaCost:resolveActionStaminaCost,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };

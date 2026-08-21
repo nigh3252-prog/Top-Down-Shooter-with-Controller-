@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { blendWardenTrialCenterMovement, chooseWardenTrialDodgeEndpoint, createWardenTrialBrain, getWardenTrialCombatBand, getWardenTrialThreatSnapshot, nearestWardenTrialTarget, nearestWardenTrialThreat } from '../src/warden-trial-ai.js';
-import { WARDEN_TRIAL_SETTINGS } from '../src/warden-trial-settings.js';
+import { WARDEN_TRIAL_SETTINGS, wardenTrialAbilityEnergyCost } from '../src/warden-trial-settings.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from '../src/warden-trial-stage.js';
 import {
   WARDEN_TRIAL_ENEMY_SET_IDS,
@@ -14,6 +14,9 @@ import { rewardTotemEnabledForRuntime } from '../src/run-draft.js';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
+assert.equal(WARDEN_TRIAL_SETTINGS.abilityEnergyUsage,true,'ordinary Warden stamina costs remain the default');
+assert.equal(wardenTrialAbilityEnergyCost(18),18);
+assert.equal(wardenTrialAbilityEnergyCost(18,false),0,'the Trial energy toggle makes an authored action cost free');
 assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
 const longswordBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:1}},target:{radius:.9}});
 const daggerBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:.55}},target:{radius:.9}});
