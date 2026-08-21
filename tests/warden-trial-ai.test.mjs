@@ -15,6 +15,9 @@ import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_SETTINGS.viewScale,3,'the trial camera keeps its angle while moving three times farther away');
 assert.equal(WARDEN_TRIAL_SETTINGS.abilityCooldowns,true,'upward ability cooldowns remain enabled by default');
+assert.equal(WARDEN_TRIAL_SETTINGS.cardHandSize,3,'the trial deals exactly three independent cards');
+assert.ok(WARDEN_TRIAL_SETTINGS.discardDraw.proximityRange>6,'the redeal meter covers the Warden combat band');
+assert.ok(WARDEN_TRIAL_SETTINGS.discardDraw.chargeSeconds>0,'proximity redeal uses an explicit tunable duration');
 assert.ok(WARDEN_TRIAL_SETTINGS.enemyHeight>=4.5,'trial cylinders expose a Warden-height melee target');
 const longswordBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:1}},target:{radius:.9}});
 const daggerBand=getWardenTrialCombatBand({weapon:{kind:'blade',tune:{length:.55}},target:{radius:.9}});
