@@ -43,6 +43,7 @@ export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze(
 );
 
 const pairById = new Map(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => [pair.id, pair]));
+const arcanaById = new Map(WIZARD_ARCANA_CATALOG.map(card => [card.arcanaId, card]));
 
 export function wardenTrialPairingForId(value) {
   const id = String(value || '').trim();
@@ -52,25 +53,49 @@ export function wardenTrialPairingForId(value) {
 export function wardenTrialPairingForCard(card) {
   const explicit = wardenTrialPairingForId(card?.__wardenTrialPairId);
   if (explicit) return explicit;
-  const stanceId = String(card?.__wardenTrialStanceId || card?.id || '').trim().toUpperCase();
   const arcanaId = String(card?.__wardenTrialArcanaId || '').trim().toUpperCase();
-  return WARDEN_TRIAL_CARD_PAIRINGS.find(pair => (
-    pair.stanceId === stanceId && pair.arcanaId === arcanaId
-  )) || null;
+  return arcanaId ? pairById.get(arcanaId) || null : null;
 }
 
-export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
-  if (!card || !pairing?.id) return null;
+const timingForCard = card => Object.freeze({
+  setupSeconds:0,
+  ...(card?.__wardenTrialTiming || {}),
+});
+
+export function createWardenTrialAbilityCard(card, { starter = false } = {}) {
+  if (!card?.arcanaId) return null;
   return Object.freeze({
     ...card,
     __wardenTrialCard: true,
     __wardenTrialStarter: starter === true,
-    __wardenTrialPairId: pairing.id,
-    __wardenTrialWeaponId: pairing.weaponId,
-    __wardenTrialStanceId: pairing.stanceId,
-    __wardenTrialArcanaId: pairing.arcanaId,
-    __wardenTrialElement: pairing.element,
+    __wardenTrialCardId: `up:${card.id}`,
+    __wardenTrialDirection: 'up',
+    __wardenTrialArcanaId: card.arcanaId,
+    __wardenTrialElement: card.element,
+    __wardenTrialTiming: timingForCard(card),
   });
+}
+
+export function createWardenTrialStanceCard(card, { starter = false } = {}) {
+  if (!card?.id) return null;
+  return Object.freeze({
+    ...card,
+    type:'stance',
+    __wardenTrialCard: true,
+    __wardenTrialStarter: starter === true,
+    __wardenTrialCardId: `down:${card.id}`,
+    __wardenTrialDirection: 'down',
+    __wardenTrialStanceId: card.id,
+    __wardenTrialTiming: timingForCard(card),
+  });
+}
+
+// Kept as a compatibility constructor for callers that still have the old
+// Arcana/stance pairing data. New Warden play uses the two independent helpers
+// above and never builds a dual-purpose card.
+export function createWardenTrialCard(card, pairing, { starter = false, direction = 'down' } = {}) {
+  if (direction === 'up') return createWardenTrialAbilityCard(arcanaById.get(pairing?.arcanaId), { starter });
+  return createWardenTrialStanceCard(card, { starter });
 }
 
 function stanceCardById(stanceCards) {
@@ -82,24 +107,36 @@ function stanceCardById(stanceCards) {
 export function starterWardenTrialCardsForWeapon(weaponId, stanceCards = []) {
   const normalizedWeapon = String(weaponId || '').trim().toLowerCase();
   const byId = stanceCardById(stanceCards);
-  return (WEAPON_STARTER_ARCANA_IDS[normalizedWeapon] || WEAPON_STARTER_ARCANA_IDS.longsword)
-    .map(arcanaId => pairById.get(arcanaId))
-    .map(pair => createWardenTrialCard(byId.get(pair.stanceId), pair, { starter: true }))
-    .filter(Boolean);
+  const arcanaIds = WEAPON_STARTER_ARCANA_IDS[normalizedWeapon] || WEAPON_STARTER_ARCANA_IDS.longsword;
+  return arcanaIds.flatMap(arcanaId => {
+    const pairing = pairById.get(arcanaId);
+    return [
+      createWardenTrialAbilityCard(arcanaById.get(arcanaId), { starter:true }),
+      createWardenTrialStanceCard(byId.get(pairing?.stanceId), { starter:true }),
+    ].filter(Boolean);
+  });
 }
 
 export function wardenTrialRewardCards({
   stanceCards = [],
+  selectedCardIds = [],
   selectedPairIds = [],
 } = {}) {
-  const selected = new Set((Array.isArray(selectedPairIds) ? selectedPairIds : [])
+  const selected = new Set((Array.isArray(selectedCardIds) ? selectedCardIds : [])
     .map(value => String(value || '').trim())
     .filter(Boolean));
+  // Accepting the former option keeps stacked callers from crashing while the
+  // runtime migrates; pair IDs exclude only their Up card in the independent
+  // catalog because Down stances are no longer owned by a pairing.
+  (Array.isArray(selectedPairIds) ? selectedPairIds : []).forEach(value => {
+    const arcana = arcanaById.get(String(value || '').trim().toUpperCase());
+    if (arcana) selected.add(`up:${arcana.id}`);
+  });
   const byId = stanceCardById(stanceCards);
-  return WARDEN_TRIAL_CARD_PAIRINGS
-    .filter(pair => !selected.has(pair.id))
-    .map(pair => createWardenTrialCard(byId.get(pair.stanceId), pair))
-    .filter(Boolean);
+  return [
+    ...WIZARD_ARCANA_CATALOG.map(card => createWardenTrialAbilityCard(card)),
+    ...[...byId.values()].map(card => createWardenTrialStanceCard(card)),
+  ].filter(card => card && !selected.has(card.__wardenTrialCardId));
 }
 
 export function drawWardenTrialRewardChoices(cards = [], count = WARDEN_TRIAL_REWARD_CHOICE_COUNT, rng = Math.random) {

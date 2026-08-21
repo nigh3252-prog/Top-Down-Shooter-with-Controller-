@@ -9,8 +9,8 @@ export function resolveWardenTrialCardDirection(deltaY, threshold = 55){
   return null;
 }
 
-// Waiting for the opening downward card is an input-ready state, not a pause.
-// Only states that put another interaction in charge should block the surface.
+// The initial hand is dealt by a separate button. Once cards exist, only
+// states that put another interaction in charge should block their gestures.
 export function isWardenTrialCardGestureEnabled({
   paused = false,
   rewardPending = false,

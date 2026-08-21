@@ -43,42 +43,48 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
   </div>
 </div>
 <div id="trialCardTray" aria-label="Warden Trial card interface">
-  <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
+  <div id="trialCardStatus" aria-live="polite">DRAW 3 TO START</div>
+  <div id="trialCardGlobalCooldown" aria-live="off" hidden>
+    <span id="trialCardCooldownLabel">CARD SYSTEM COOLDOWN</span>
+    <strong id="trialCardCooldownTime">0.0s</strong>
+    <span id="trialCardCooldownFill" aria-hidden="true"></span>
+  </div>
   <div id="trialCardRail">
+    <div id="trialUpSlot" class="trialCardSlot trialCardSlotUp" aria-label="Up slot empty">
+      <span class="trialSideLabel">↑ UP SLOT</span>
+      <strong id="trialUpSlotName" class="trialSlotCardName">EMPTY</strong>
+      <span id="trialUpSlotMeta" class="trialSlotMeta">ABILITY</span>
+    </div>
+    <div id="trialHandCards" role="group" aria-label="Three-card hand">
+      <button class="trialHandCard" type="button" data-trial-hand-slot="0" aria-keyshortcuts="1" aria-label="Empty hand slot">
+        <span class="trialHandDirection">—</span><strong class="trialHandName">EMPTY</strong><span class="trialHandMeta">DRAW A CARD</span>
+      </button>
+      <button class="trialHandCard" type="button" data-trial-hand-slot="1" aria-keyshortcuts="2" aria-label="Empty hand slot">
+        <span class="trialHandDirection">—</span><strong class="trialHandName">EMPTY</strong><span class="trialHandMeta">DRAW A CARD</span>
+      </button>
+      <button class="trialHandCard" type="button" data-trial-hand-slot="2" aria-keyshortcuts="3" aria-label="Empty hand slot">
+        <span class="trialHandDirection">—</span><strong class="trialHandName">EMPTY</strong><span class="trialHandMeta">DRAW A CARD</span>
+      </button>
+    </div>
+    <div id="trialDownSlot" class="trialCardSlot trialCardSlotDown" aria-label="Down slot empty; current stance no stance">
+      <span class="trialSideLabel">↓ DOWN SLOT</span>
+      <strong id="trialDownSlotName" class="trialSlotCardName">EMPTY</strong>
+      <span id="trialDownSlotMeta" class="trialSlotMeta">STANCE</span>
+      <span id="trialCurrentStance" aria-live="polite">
+        <span class="trialSideLabel">ACTIVE</span>
+        <strong id="trialCurrentStanceName">NO STANCE</strong>
+        <span id="trialCurrentStanceBadge" class="trialStanceBadge" hidden></span>
+      </span>
+    </div>
+  </div>
+  <div id="trialDrawRow">
     <div id="trialDiscardPile" class="trialPileCounter" aria-label="0 cards discarded">
       <span>DISCARD</span><strong id="trialDiscardCount">0</strong>
     </div>
-    <div id="trialCurrentStance" aria-live="polite" aria-label="Current stance: no stance">
-      <span class="trialSideLabel">CURRENT STANCE</span>
-      <strong id="trialCurrentStanceName">NO STANCE</strong>
-      <span id="trialCurrentStanceBadge" class="trialStanceBadge" hidden></span>
-    </div>
-    <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
-      <span class="trialCardArt" aria-hidden="true">
-        <span class="trialCardHalf trialCardUp">
-          <span id="trialCardUpLabel" class="trialCardLabel">↑ ARCANA · 3s</span>
-          <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
-        </span>
-        <span class="trialCardHalf trialCardDown">
-          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ 1s</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
-          <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
-        </span>
-      </span>
-      <span id="trialCardCooldown" class="trialCardCooldown" aria-hidden="true" hidden>
-        <span id="trialCardCooldownLabel">CARD COOLDOWN</span>
-        <strong id="trialCardCooldownTime">0.0s</strong>
-      </span>
+    <button id="trialDiscardDraw" type="button" aria-keyshortcuts="R" aria-label="Draw three cards and start the trial">
+      <span id="trialDiscardDrawLabel">DRAW 3 · START</span>
+      <span id="trialDiscardDrawProgress" aria-hidden="true"><span id="trialDiscardDrawFill"></span></span>
     </button>
-    <div id="trialUpcomingCards" aria-label="Next Warden Trial cards">
-      <div class="trialUpcomingCard" data-trial-upcoming-slot="0" role="img" hidden>
-        <span class="trialUpcomingHalf trialUpcomingUp"><strong class="trialUpcomingArcanaName">ARCANA</strong></span>
-        <span class="trialUpcomingHalf trialUpcomingDown"><strong class="trialUpcomingStanceName">STANCE</strong><span class="trialStanceBadge trialUpcomingStanceBadge" hidden></span></span>
-      </div>
-      <div class="trialUpcomingCard" data-trial-upcoming-slot="1" role="img" hidden>
-        <span class="trialUpcomingHalf trialUpcomingUp"><strong class="trialUpcomingArcanaName">ARCANA</strong></span>
-        <span class="trialUpcomingHalf trialUpcomingDown"><strong class="trialUpcomingStanceName">STANCE</strong><span class="trialStanceBadge trialUpcomingStanceBadge" hidden></span></span>
-      </div>
-    </div>
     <div id="trialDrawPile" class="trialPileCounter" aria-label="0 cards left to draw">
       <span>DRAW</span><strong id="trialDrawCount">0</strong>
     </div>
@@ -87,7 +93,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
 <div id="wardenRewardGate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="wardenRewardTitle">
   <div id="wardenRewardPanel">
     <h2 id="wardenRewardTitle">WAVE CLEAR</h2>
-    <p id="wardenRewardHint">Choose one authored stance / Arcana card for the next wave.</p>
+    <p id="wardenRewardHint">Choose one independent Ability or Stance card for the next wave.</p>
     <div id="wardenRewardChoices" role="group" aria-label="Warden Trial reward cards">
       <button class="wardenRewardChoice" type="button" data-warden-reward-slot="0"></button>
       <button class="wardenRewardChoice" type="button" data-warden-reward-slot="1"></button>
@@ -134,7 +140,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <button id="trialAbilityCooldownToggle" class="trialAbilityCooldownToggle" type="button" aria-pressed="true">
       <span>UPWARD ARCANA</span><strong id="trialAbilityCooldownState">ON</strong>
     </button>
-    <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Upward ability cards wait 3 seconds.</p>
+    <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Playing an Up ability locks the whole card system for 3 seconds.</p>
   </section>
   <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
     <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>

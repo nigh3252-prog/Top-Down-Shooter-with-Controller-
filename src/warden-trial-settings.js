@@ -1,6 +1,11 @@
 export const WARDEN_TRIAL_SETTINGS = Object.freeze({
   viewScale: 3,
   abilityCooldowns: true,
+  cardHandSize: 3,
+  discardDraw: Object.freeze({
+    proximityRange: 8,
+    chargeSeconds: 4,
+  }),
   spawnRadiusMin: 18,
   spawnRadiusMax: 30,
   enemyHeight: 4.6,
