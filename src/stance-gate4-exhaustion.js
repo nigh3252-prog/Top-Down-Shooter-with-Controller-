@@ -238,21 +238,29 @@ export function createStanceGate4Runtime({arenaHandle,gate3Runtime=null,windowRe
     engine.setWindowDuration(CATCH_WINDOW_BASE*windowMultiplier);controls.setValue(windowMultiplier);publish();return windowMultiplier;
   }
 
+  function observeDeckPlay(result){
+    const card=result?.card||result;
+    if(card&&cardRestoresStamina(card)&&engine.snapshot().phase==='open'){
+      engine.playStance({cardId:String(card.id||''),stanceId:String(card.id||'')});processEvents();publish();
+      const clear=()=>clearGate3MovementRecovery();
+      if(typeof queueMicrotask==='function')queueMicrotask(clear);else setTimeout(clear,0);
+    }
+    return result;
+  }
+
   PC.startCombatAttack=function(...args){
     lastStamina=Number(arena.stamina.v)||0;pendingSpendQuote=null;if(arena.swing)arena.swing.overdrawAmount=0;
     spendContext='attack';let result;
     try{result=original.startCombatAttack.apply(this,args);}finally{spendContext=null;}
     observeStamina('attack-start');processEvents();publish();return result;
   };
-  deck.play=function(slot){
-    const result=original.deckPlay.call(this,slot);
-    if(result&&cardRestoresStamina(result)&&engine.snapshot().phase==='open'){
-      engine.playStance({cardId:String(result.id||''),stanceId:String(result.id||'')});processEvents();publish();
-      const clear=()=>clearGate3MovementRecovery();
-      if(typeof queueMicrotask==='function')queueMicrotask(clear);else setTimeout(clear,0);
-    }
-    return result;
-  };
+  const deckPlayDescriptor=Object.getOwnPropertyDescriptor(deck,'play');
+  const canWrapDeckPlay=deckPlayDescriptor
+    ? deckPlayDescriptor.writable===true||typeof deckPlayDescriptor.set==='function'
+    : Object.isExtensible(deck);
+  const wrappedDeckPlay=function(...args){return observeDeckPlay(original.deckPlay.apply(this,args));};
+  let deckPlayWrapped=false;
+  if(canWrapDeckPlay){deck.play=wrappedDeckPlay;deckPlayWrapped=deck.play===wrappedDeckPlay;}
   PC.updateCombat=function(...args){
     const dt=Math.max(0,Number(args[0])||0);
     if(arena.deadT>=0){engine.reset('player-down');pendingFailure=false;clearGate4Lock();}
@@ -267,11 +275,12 @@ export function createStanceGate4Runtime({arenaHandle,gate3Runtime=null,windowRe
   };
 
   publish();
-  const api={installed:true,engine,snapshot:()=>lastSnapshot,setWindowMultiplier,
+  const api={installed:true,engine,snapshot:()=>lastSnapshot,setWindowMultiplier,observeDeckPlay,
     reset(reason='manual'){engine.reset(reason);pendingFailure=false;pendingSpendQuote=null;clearGate4Lock();publish();},
     destroy(){
       engine.reset('destroy');pendingFailure=false;pendingSpendQuote=null;clearGate4Lock();
-      PC.updateCombat=original.updateCombat;PC.startCombatAttack=original.startCombatAttack;deck.play=original.deckPlay;
+      PC.updateCombat=original.updateCombat;PC.startCombatAttack=original.startCombatAttack;
+      if(deckPlayWrapped&&deck.play===wrappedDeckPlay)deck.play=original.deckPlay;
       if(globalThis.__STANCE_SPEND_QUOTE__===quoteStanceSpend){if(typeof original.spendQuote==='function')globalThis.__STANCE_SPEND_QUOTE__=original.spendQuote;else delete globalThis.__STANCE_SPEND_QUOTE__;}
       delete PC.combatState.stance2Gate4;renderHud(engine.snapshot());visual.destroy();controls.destroy();
       if(windowRef?.__stance2Gate4Runtime===api)delete windowRef.__stance2Gate4Runtime;

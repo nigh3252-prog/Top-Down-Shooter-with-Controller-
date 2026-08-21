@@ -58,6 +58,7 @@ const runtimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta
 assert.match(runtimeSource,/createWardenTrialHand\(\{ handSize:WARDEN_TRIAL_SETTINGS\.cardHandSize \}\)/);
 assert.match(runtimeSource,/deck\.discardAndDraw\(\)/);
 assert.match(runtimeSource,/hasNearbyWardenTrialEnemy\(\{/);
+assert.match(runtimeSource,/stanceGate4Runtime\?\.observeDeckPlay\?\.\(played\)/,'Warden plays reach Gate 4 without mutating the frozen hand API');
 assert.match(runtimeSource,/selectedCardIds:\[\.\.\.wardenTrialSelectedCardIds\]/);
 assert.doesNotMatch(runtimeSource,/handSize:wardenTrialMode\?1:2/);
 

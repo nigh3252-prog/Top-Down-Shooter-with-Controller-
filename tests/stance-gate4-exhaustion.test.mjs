@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createStanceGate4Runtime } from '../src/stance-gate4-exhaustion.js';
+import { createWardenTrialHand } from '../src/warden-trial-hand.js';
 import { staminaCostForWeapon } from '../src/weapon-balance.js';
 
-function makeHarness({staminaStart=10,requestedCost=10}={}){
+function makeHarness({staminaStart=10,requestedCost=10,deck:injectedDeck=null}={}){
   const stamina={v:staminaStart,pending:0,recoverDelayT:0};
   const weapon={id:'longsword',staminaClass:'Medium'};
   const combatState={weapon:'longsword',attack:null,attackKey:'vertical5',pending:null,pendingGroup:null,readyLock:0};
@@ -27,7 +28,7 @@ function makeHarness({staminaStart=10,requestedCost=10}={}){
     },
     updateCombat(){},
   };
-  const deck={
+  const deck=injectedDeck||{
     play(){const card={id:'S24',type:'stance'};stamina.v=100;stamina.pending=0;return card;},
   };
   let clearedRecovery=0;
@@ -36,6 +37,27 @@ function makeHarness({staminaStart=10,requestedCost=10}={}){
   const handle={PC,arena,deck,actorPos,arenaMoveInput:()=>({...move})};
   const runtime=createStanceGate4Runtime({arenaHandle:handle,gate3Runtime,windowRef,documentRef:null,basePlayerSpeed:8.5});
   return{runtime,PC,arena,deck,stamina,combatState,actorPos,move,weapon,get clearedRecovery(){return clearedRecovery;}};
+}
+
+{
+  const stanceCard=Object.freeze({
+    id:'S24',type:'stance',__wardenTrialCard:true,
+    __wardenTrialCardId:'down:S24',__wardenTrialDirection:'down',
+  });
+  const deck=createWardenTrialHand({rng:()=>.999999,handSize:1});
+  deck.beginRun([stanceCard]);deck.discardAndDraw();
+  const originalPlay=deck.play;
+  const h=makeHarness({deck});
+  assert.equal(Object.isFrozen(deck),true,'the Warden hand keeps its read-only public API');
+  assert.equal(deck.play,originalPlay,'Gate 4 must not overwrite a frozen deck method');
+  h.PC.startCombatAttack('vertical5','vertical');
+  assert.equal(h.runtime.snapshot().phase,'open');
+  const played=deck.play(0,'down');
+  h.stamina.v=100;
+  h.runtime.observeDeckPlay(played);
+  assert.equal(h.runtime.snapshot().phase,'success','the public observer accepts the Warden play result envelope');
+  assert.doesNotThrow(()=>h.runtime.destroy(),'destroy must not restore a method on the frozen deck');
+  assert.equal(deck.play,originalPlay);
 }
 
 {

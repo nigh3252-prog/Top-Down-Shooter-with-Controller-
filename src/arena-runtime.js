@@ -2067,6 +2067,9 @@ function playWardenTrialCard(handSlot,requestedDirection=null){
   }
   const played=deck.play(slot,direction);
   if(!played){setTrialCardFeedback(direction,'CARD NOT READY');return false;}
+  // The Warden hand API is intentionally frozen, so Gate 4 cannot install its
+  // legacy deck.play wrapper. Forward the play result through its public hook.
+  stanceGate4Runtime?.observeDeckPlay?.(played);
   const resolveEffect=()=>{
     if(direction==='up'){
       const result=dispatchWardenTrialUpArcana({
