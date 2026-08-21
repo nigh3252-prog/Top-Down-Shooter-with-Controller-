@@ -56,13 +56,17 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
       <span class="trialCardArt" aria-hidden="true">
         <span class="trialCardHalf trialCardUp">
-          <span class="trialCardLabel">↑ ARCANA</span>
+          <span id="trialCardUpLabel" class="trialCardLabel">↑ ARCANA · 3s</span>
           <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
         </span>
         <span class="trialCardHalf trialCardDown">
-          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ STANCE</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
+          <span class="trialCardLabelRow"><span class="trialCardLabel">↓ 1s</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
           <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
         </span>
+      </span>
+      <span id="trialCardCooldown" class="trialCardCooldown" aria-hidden="true" hidden>
+        <span id="trialCardCooldownLabel">CARD COOLDOWN</span>
+        <strong id="trialCardCooldownTime">0.0s</strong>
       </span>
     </button>
     <div id="trialUpcomingCards" aria-label="Next Warden Trial cards">
@@ -124,6 +128,13 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <button class="trialWeaponChoice" type="button" data-trial-weapon="claymore" aria-pressed="false">CLAYMORE</button>
       <button class="trialWeaponChoice" type="button" data-trial-weapon="greatsword" aria-pressed="false">GREATSWORD</button>
     </div>
+  </section>
+  <section class="pauseSection trialAbilityCooldownSection" aria-labelledby="trialAbilityCooldownTitle">
+    <h2 id="trialAbilityCooldownTitle">ABILITY COOLDOWNS</h2>
+    <button id="trialAbilityCooldownToggle" class="trialAbilityCooldownToggle" type="button" aria-pressed="true">
+      <span>UPWARD ARCANA</span><strong id="trialAbilityCooldownState">ON</strong>
+    </button>
+    <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Upward ability cards wait 3 seconds.</p>
   </section>
   <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
     <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>

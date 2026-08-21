@@ -40,7 +40,7 @@ class EventTargetMock{
 globalThis.CustomEvent=class CustomEvent{constructor(type,init={}){this.type=type;this.detail=init.detail;}};
 globalThis.location={search:'?enemyLab=1&capture=1&stage=style',pathname:'/combat-arena.html'};
 globalThis.window=new EventTargetMock();globalThis.window.__abilityCapture={snapshot:()=>({stage:'style'})};
-globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+globalThis.localStorage={getItem:()=>JSON.stringify({sizeMultiplier:1,damageMultiplier:1}),setItem:()=>{}};
 
 const controlledEnemy={movementLocked:true,moveSpeedMultiplier:0,wizardSlowRemaining:0,stunned:0};
 assert.equal(wizardEnemyMovementScale(controlledEnemy),0,'reference-counted Arcana movement locks must stop real arena locomotion');

@@ -40,7 +40,7 @@ globalThis.CustomEvent=class CustomEvent{constructor(type,init={}){this.type=typ
 globalThis.location={search:'?enemyLab=1&capture=1&stage=motion',pathname:'/combat-arena.html'};
 globalThis.window=new EventTargetMock();
 globalThis.window.__abilityCapture={snapshot:()=>({stage:'motion'})};
-globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+globalThis.localStorage={getItem:()=>JSON.stringify({sizeMultiplier:1,damageMultiplier:1}),setItem:()=>{}};
 
 const scene=new Group();
 const player={x:0,z:0,forwardX:0,forwardZ:1};

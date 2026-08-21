@@ -79,6 +79,7 @@ assert.deepEqual(getArenaCollisionSegments(wardenRuntime),[],'Warden Trial must 
 const normalRuntime={config:{mode:'arena'},mazeWorld:{getCollisionSegments:()=>[theoreticalWardenWall]}};
 assert.deepEqual(getArenaCollisionSegments(normalRuntime),[theoreticalWardenWall],'normal Arena must preserve maze wall collision');
 
+globalThis.localStorage={getItem:()=>JSON.stringify({sizeMultiplier:1,damageMultiplier:1}),setItem:()=>{}};
 const scene=new Group();
 const player={x:0,z:0,forwardX:0,forwardZ:1,targetable:true,invulnerable:false};
 const factionService=createArenaFactionService();

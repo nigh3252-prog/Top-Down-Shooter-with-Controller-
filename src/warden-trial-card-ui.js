@@ -17,8 +17,9 @@ export function isWardenTrialCardGestureEnabled({
   menuOpen = false,
   dead = false,
   transitioning = false,
+  coolingDown = false,
 } = {}){
-  return !paused && !rewardPending && !menuOpen && !dead && !transitioning;
+  return !paused && !rewardPending && !menuOpen && !dead && !transitioning && !coolingDown;
 }
 
 export function installWardenTrialCardGesture({
