@@ -30,6 +30,8 @@ assert.equal(WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS,3);
 assert.equal(WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS,1);
 assert.equal(wardenTrialCardCooldownSeconds('up'),3);
 assert.equal(wardenTrialCardCooldownSeconds('down'),1);
+assert.equal(wardenTrialCardCooldownSeconds('up',{abilityCooldowns:false}),0,'the toggle removes only the upward ability cooldown');
+assert.equal(wardenTrialCardCooldownSeconds('down',{abilityCooldowns:false}),1,'the downward stance cooldown remains authored');
 assert.equal(wardenTrialCardCooldownSeconds('sideways'),0);
 
 const cardCooldown=createWardenTrialCardCooldown();
@@ -43,6 +45,11 @@ assert.deepEqual(cardCooldown.begin('down'),{active:true,direction:'down',durati
   'a successful downward play starts its shorter cooldown immediately');
 assert.deepEqual(cardCooldown.update(1),{active:false,direction:null,duration:0,remaining:0,progress:0});
 assert.deepEqual(cardCooldown.reset(),{active:false,direction:null,duration:0,remaining:0,progress:0});
+assert.deepEqual(cardCooldown.begin('up',{abilityCooldowns:false}),{active:false,direction:null,duration:0,remaining:0,progress:0},
+  'an upward ability play skips the card lock when the toggle is off');
+assert.deepEqual(cardCooldown.begin('down',{abilityCooldowns:false}),{active:true,direction:'down',duration:1,remaining:1,progress:1},
+  'a downward stance play still starts its one-second lock when ability cooldowns are off');
+cardCooldown.reset();
 
 assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_STARTER_STANCE_IDS));
 const allStarterArcanaIds=Object.values(WEAPON_STARTER_ARCANA_IDS).flat();

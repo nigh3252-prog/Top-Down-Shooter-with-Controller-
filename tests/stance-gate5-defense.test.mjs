@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createStanceGate5Runtime } from '../src/stance-gate5-defense.js';
-function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase='idle',freeEnergy=false}={}){
+function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase='idle'}={}){
   let defenseResolver=hit=>hit;
   let phase=catchPhase;
   const catchEvents=[];
@@ -11,7 +11,7 @@ function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase
   const deck={pool:[{id:'S01'},{id:'S24'},{id:'S26'}]};
   const engine={snapshot(){return{phase};},trigger(event){catchEvents.push(event);phase='catch';return event;}};
   const windowRef={location:{search:''}};
-  const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck,enemySystem,getPlayerForward:()=>forward,roomTransition:null,resolveStaminaCost:cost=>freeEnergy?0:cost},gate4Runtime:{engine},windowRef,documentRef:null});
+  const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck,enemySystem,getPlayerForward:()=>forward,roomTransition:null},gate4Runtime:{engine},windowRef,documentRef:null});
   return{runtime,PC,arena,enemySystem,combatState,catchEvents};
 }
 {
@@ -78,31 +78,6 @@ function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase
   result=h.enemySystem.hit({damage:10,dir:{x:0,z:-1}});
   assert.equal(result.damage,0);
   assert.equal(h.arena.stamina.v,5);
-  h.runtime.destroy();
-}
-{
-  const h=makeHarness({stance:{id:'S24'},stamina:0,freeEnergy:true});
-  const spend=h.runtime.spendDodge();
-  assert.equal(spend.allowed,true);
-  assert.equal(spend.requestedCost,0);
-  assert.equal(spend.actualSpent,0);
-  assert.equal(h.arena.stamina.v,0,'free Warden defense leaves the stamina reserve untouched');
-  h.runtime.destroy();
-}
-{
-  const h=makeHarness({stance:{id:'S01'},stamina:0,freeEnergy:true});
-  h.runtime.defenseDown('cross');
-  const result=h.enemySystem.hit({damage:10,dir:{x:0,z:-1}});
-  assert.equal(result.damage,0,'free Warden energy keeps authored shield defense available at zero stamina');
-  assert.equal(h.arena.stamina.v,0);
-  h.runtime.destroy();
-}
-{
-  const h=makeHarness({stance:{id:'S26'},stamina:0,freeEnergy:true});
-  assert.equal(h.runtime.defenseDown('cross').accepted,true,'free Warden energy can open a parry at zero stamina');
-  h.runtime.update(1);
-  assert.equal(h.runtime.snapshot().lastParryMissCost,0);
-  assert.equal(h.arena.stamina.v,0);
   h.runtime.destroy();
 }
 

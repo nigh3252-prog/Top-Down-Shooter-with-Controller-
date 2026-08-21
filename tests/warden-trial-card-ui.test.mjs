@@ -26,6 +26,7 @@ assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(
 assert.match(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'the active cooldown blocks a second full-screen swipe');
 assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('up'\)/,'an accepted upward play starts the three-second card lock');
 assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('down'\)/,'an accepted downward play starts the one-second card lock');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.begin\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns\}\)/,'the existing card cooldown policy receives the live upward-ability setting');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
 
@@ -63,12 +64,13 @@ assert.match(arenaShellCss,/data-trial-upcoming-slot="0"[^}]*opacity:\.58/,'the 
 assert.match(arenaShellCss,/data-trial-upcoming-slot="1"[^}]*opacity:\.32/,'the second upcoming card fades farther into the queue');
 assert.match(arenaShellCss,/\.trialCard\.cooling/,'the active card has a distinct cooling state');
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
-assert.match(ARENA_SHELL_HTML,/id="trialAbilityEnergyToggle"/,'the Warden Trial menu exposes the ability energy toggle');
-assert.match(ARENA_SHELL_HTML,/id="trialAbilityEnergyState">ON/,'energy usage starts with the current stamina economy enabled');
-assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityEnergyUsage'/,'the energy choice persists through the existing settings service');
-assert.match(arenaRuntimeSource,/return resolveActionStaminaCost\(staminaCostForWeapon/,'light, heavy, and charged attacks use the toggle policy');
-assert.match(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive actions share the same Warden-only energy policy');
-assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityEnergySection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
+assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownToggle"/,'the Warden Trial menu exposes the upward ability cooldown toggle');
+assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownState">ON/,'upward ability cooldowns remain enabled by default');
+assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityCooldowns'/,'the ability cooldown choice persists through the existing settings service');
+assert.match(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns&&cooldown\.direction==='up'\)wardenTrialCardCooldown\.reset\(\)/,'turning the toggle off clears only an active upward cooldown');
+assert.match(arenaRuntimeSource,/staminaCostForGroup\(group\)[^{]*\{[^}]*return staminaCostForWeapon/s,'attacks retain their ordinary stamina policy');
+assert.doesNotMatch(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive stamina costs are not controlled by the ability toggle');
+assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityCooldownSection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
 }

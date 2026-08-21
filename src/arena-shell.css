@@ -174,12 +174,12 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialWeaponChoice{font-family:inherit;font-size:9px;letter-spacing:.06em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 5px;min-height:38px}
   .trialWeaponChoice[aria-pressed="true"]{border-color:#e8a04c;color:#e8a04c;background:rgba(232,160,76,.1)}
-  .trialAbilityEnergySection{display:none}
-  .trialAbilityEnergyToggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:inherit;font-size:9px;letter-spacing:.08em;line-height:1.25;color:#9fd2c9;
+  .trialAbilityCooldownSection{display:none}
+  .trialAbilityCooldownToggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:inherit;font-size:9px;letter-spacing:.08em;line-height:1.25;color:#9fd2c9;
     background:rgba(30,52,52,.55);border:1px solid #24403e;border-radius:5px;padding:9px 10px;min-height:38px}
-  .trialAbilityEnergyToggle strong{color:#e8a04c;font-size:10px}
-  .trialAbilityEnergyToggle.energyOff{border-color:#e8a04c;background:rgba(232,160,76,.1)}
-  .trialAbilityEnergyNote{margin:7px 0 0;color:#7fb8b0;font-size:8px;line-height:1.35;letter-spacing:.03em}
+  .trialAbilityCooldownToggle strong{color:#e8a04c;font-size:10px}
+  .trialAbilityCooldownToggle.cooldownOff{border-color:#e8a04c;background:rgba(232,160,76,.1)}
+  .trialAbilityCooldownNote{margin:7px 0 0;color:#7fb8b0;font-size:8px;line-height:1.35;letter-spacing:.03em}
   .trialTemperamentSection{display:none}
   .trialTemperamentGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
   .trialTemperamentChoice{font-family:inherit;font-size:8px;letter-spacing:.045em;line-height:1.2;color:#9fd2c9;
@@ -267,10 +267,10 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .trialEnemyChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
   .trialWeaponChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
   .trialWeaponChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
-  .trialAbilityEnergyToggle{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
-  .trialAbilityEnergyToggle strong{color:var(--arena-gold)}
-  .trialAbilityEnergyToggle.energyOff{border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
-  .trialAbilityEnergyNote{color:var(--arena-subtle)}
+  .trialAbilityCooldownToggle{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
+  .trialAbilityCooldownToggle strong{color:var(--arena-gold)}
+  .trialAbilityCooldownToggle.cooldownOff{border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
+  .trialAbilityCooldownNote{color:var(--arena-subtle)}
   .trialTemperamentChoice{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line-soft)}
   .trialTemperamentChoice[aria-pressed="true"]{color:var(--arena-gold);border-color:var(--arena-line-bright);background:var(--arena-red-soft)}
   .trialTemperamentNote{color:var(--arena-subtle)}
@@ -287,7 +287,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   :root[data-arena-variant="warden-trial"] #trialBadge{display:flex}
   :root[data-arena-variant="warden-trial"] #panel .trialEnemySection{display:block}
   :root[data-arena-variant="warden-trial"] #panel .trialWeaponSection{display:block}
-  :root[data-arena-variant="warden-trial"] #panel .trialAbilityEnergySection{display:block}
+  :root[data-arena-variant="warden-trial"] #panel .trialAbilityCooldownSection{display:block}
   :root[data-arena-variant="warden-trial"] #panel .trialTemperamentSection{display:block}
   :root[data-arena-variant="warden-trial"] #trialCardTray{display:flex}
   :root[data-arena-variant="warden-trial"] #cardRow,

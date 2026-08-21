@@ -1,6 +1,6 @@
 export const WARDEN_TRIAL_SETTINGS = Object.freeze({
   viewScale: 3,
-  abilityEnergyUsage: true,
+  abilityCooldowns: true,
   spawnRadiusMin: 18,
   spawnRadiusMax: 30,
   enemyHeight: 4.6,
@@ -19,8 +19,3 @@ export const WARDEN_TRIAL_SETTINGS = Object.freeze({
     flankerBias: 0.72,
   }),
 });
-
-export function wardenTrialAbilityEnergyCost(cost, enabled = WARDEN_TRIAL_SETTINGS.abilityEnergyUsage) {
-  const amount = Math.max(0, Number(cost) || 0);
-  return enabled === false ? 0 : amount;
-}
