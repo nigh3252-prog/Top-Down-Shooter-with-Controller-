@@ -50,7 +50,7 @@ globalThis.CustomEvent=class CustomEvent{constructor(type,init={}){this.type=typ
 globalThis.location={search:'?enemyLab=1&capture=1&stage=contract',pathname:'/combat-arena.html'};
 globalThis.window=new EventTargetMock();
 globalThis.window.__abilityCapture={snapshot:()=>({stage:'contract'})};
-globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+globalThis.localStorage={getItem:()=>JSON.stringify({sizeMultiplier:1,damageMultiplier:1}),setItem:()=>{}};
 
 assert.deepEqual(ICE_DAGGER_BEATS.map(beat=>beat.damage),[6,6,8,10]);
 assert.deepEqual(RIP_TIDE_BEATS.map(beat=>beat.damage),[8,7,5]);

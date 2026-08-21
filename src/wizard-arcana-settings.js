@@ -26,8 +26,8 @@ export function clampArcanaDamage(value){
 
 export function normalizeArcanaTweaks(value={}){
   return Object.freeze({
-    sizeMultiplier:clampArcanaSize(value?.sizeMultiplier),
-    damageMultiplier:clampArcanaDamage(value?.damageMultiplier),
+    sizeMultiplier:clampArcanaSize(value?.sizeMultiplier??3),
+    damageMultiplier:clampArcanaDamage(value?.damageMultiplier??3),
   });
 }
 

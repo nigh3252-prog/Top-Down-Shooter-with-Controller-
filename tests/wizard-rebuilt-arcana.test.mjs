@@ -48,7 +48,7 @@ class EventTargetMock{
 globalThis.CustomEvent=class CustomEvent{constructor(type,init={}){this.type=type;this.detail=init.detail;}};
 globalThis.location={search:'?enemyLab=1',pathname:'/combat-arena.html'};
 globalThis.window=new EventTargetMock();
-globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+globalThis.localStorage={getItem:()=>JSON.stringify({sizeMultiplier:1,damageMultiplier:1}),setItem:()=>{}};
 
 const scene=new Group();
 const player={x:0,z:0,forwardX:0,forwardZ:1};
