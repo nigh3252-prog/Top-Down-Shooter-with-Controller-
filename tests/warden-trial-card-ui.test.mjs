@@ -17,18 +17,25 @@ assert.equal(resolveWardenTrialCardDirection(-54),null);
 assert.equal(resolveWardenTrialCardDirection(54),null);
 assert.equal(resolveWardenTrialCardDirection(0),null);
 assert.equal(isWardenTrialCardGestureEnabled(),true,'the opening downward swipe remains enabled before the trial starts');
-for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning','coolingDown']){
+for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning']){
   assert.equal(isWardenTrialCardGestureEnabled({[blocker]:true}),false,`${blocker} blocks the full-screen card gesture`);
 }
 const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
 const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
-assert.match(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'the active cooldown blocks a second full-screen swipe');
-assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('up'\)/,'an accepted upward play starts the three-second card lock');
-assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('down'\)/,'an accepted downward play starts the one-second card lock');
-assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.begin\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns\}\)/,'the existing card cooldown policy receives the live upward-ability setting');
+assert.doesNotMatch(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'pending cards can receive a rejected direction without disabling the gesture surface');
+assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('up'\)\)/,'an upward play checks the current pending card');
+assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('down'\)\)/,'a downward play checks the same current pending card');
+assert.equal((arenaRuntimeSource.match(/beginWardenTrialCardPending\(currentTrialCard\(\)\)/g)||[]).length,2,
+  'either successful direction deals the replacement as the new pending current card');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.deal\(card\)/,'pending timing begins when a card becomes current');
+assert.match(arenaRuntimeSource,/canResolveDirection:direction=>canPlayWardenTrialCard\(direction\)/,
+  'pending directions are rejected before the current card animates away');
+assert.match(arenaRuntimeSource,/bazaarItem:card\.__wardenTrialBazaar\|\|null/,
+  'the Up dispatcher receives the immutable Bazaar output and behavior record for later translation passes');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
+assert.doesNotMatch(arenaRuntimeSource,/handSize:wardenTrialMode\?3/,'the Bazaar runtime does not introduce a three-card hand');
 
 const stanceById=new Map(STANCE_CARDS.map(card=>[card.id,card]));
 for(const [stanceId,text,title] of [
@@ -52,8 +59,8 @@ assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower c
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
 assert.match(ARENA_SHELL_HTML,/class="trialStanceBadge trialCardStanceBadge"/,'the current card exposes its stance / defense badge');
 assert.match(ARENA_SHELL_HTML,/id="trialCardCooldown"/,'the current card exposes a visible cooldown layer');
-assert.match(ARENA_SHELL_HTML,/↑ ARCANA · 3s/,'the upward card face states its cooldown');
-assert.match(ARENA_SHELL_HTML,/↓ 1s/,'the downward card face states its cooldown without crowding the stance badge');
+assert.match(ARENA_SHELL_HTML,/↑ ARCANA · PENDING/,'the upward card face describes the pre-play pending state');
+assert.match(ARENA_SHELL_HTML,/↓ STANCE · PENDING/,'the downward face shares the same pending card state');
 assert.match(ARENA_SHELL_HTML,/id="trialDiscardCount"/,'the tray exposes a discard count at the left edge');
 assert.match(ARENA_SHELL_HTML,/id="trialCurrentStanceName"/,'the tray exposes the actual current stance beside the active card');
 assert.equal([...ARENA_SHELL_HTML.matchAll(/data-trial-upcoming-slot=/g)].length,2,'the tray reserves two ordered upcoming-card previews');
@@ -67,7 +74,12 @@ assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exp
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownToggle"/,'the Warden Trial menu exposes the upward ability cooldown toggle');
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownState">ON/,'upward ability cooldowns remain enabled by default');
 assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityCooldowns'/,'the ability cooldown choice persists through the existing settings service');
-assert.match(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns&&cooldown\.direction==='up'\)wardenTrialCardCooldown\.reset\(\)/,'turning the toggle off clears only an active upward cooldown');
+assert.doesNotMatch(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns[^\n]*wardenTrialCardCooldown\.reset\(\)/,
+  'turning the Up bypass on does not erase the current timer needed by Down');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.canPlay\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns\}\)/,
+  'the saved setting is applied as an Up-only play-time bypass');
+assert.match(arenaRuntimeSource,/only when this preview becomes the current card/,
+  'upcoming queue previews do not run hidden hand timers');
 assert.match(arenaRuntimeSource,/staminaCostForGroup\(group\)[^{]*\{[^}]*return staminaCostForWeapon/s,'attacks retain their ordinary stamina policy');
 assert.doesNotMatch(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive stamina costs are not controlled by the ability toggle');
 assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityCooldownSection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
@@ -137,6 +149,25 @@ assert.deepEqual(surfaceDirections,[{direction:'up',deltaY:-80}]);
 assert.equal(surface.style.transform,undefined,'the full-screen registration surface must not move the card');
 surfaceGesture.destroy();
 
+const pendingSurface=createFakeElement();
+const pendingCard=createFakeElement();
+const pendingDirections=[];
+const pendingGesture=installWardenTrialSwipeSurface({
+  target:pendingSurface,
+  visualElement:pendingCard,
+  canResolveDirection:()=>false,
+  transitionDuration:5,
+  onDirection:(direction,detail)=>pendingDirections.push({direction,...detail}),
+});
+pendingSurface.dispatch('pointerdown',{...event,pointerId:6,clientY:200,target:pendingSurface});
+pendingSurface.dispatch('pointermove',{...event,pointerId:6,clientY:130,target:pendingSurface});
+pendingSurface.dispatch('pointerup',{...event,pointerId:6,clientY:120,target:pendingSurface});
+assert.deepEqual(pendingDirections,[{direction:'up',deltaY:-80}],
+  'a rejected pending gesture still reaches runtime feedback');
+assert.equal(pendingCard.style.transform,'','a pending card snaps back instead of animating out');
+assert.equal(pendingGesture.getSnapshot().animating,false);
+pendingGesture.destroy();
+
 const animatedSurface=createFakeElement();
 const animatedCard=createFakeElement();
 const animatedDirections=[];
@@ -146,10 +177,10 @@ const animatedGesture=installWardenTrialSwipeSurface({
   transitionDuration:5,
   onDirection:(direction,detail)=>animatedDirections.push({direction,...detail}),
 });
-animatedSurface.dispatch('pointerdown',{...event,pointerId:6,clientY:200,target:animatedSurface});
-animatedSurface.dispatch('pointermove',{...event,pointerId:6,clientY:160,target:animatedSurface});
+animatedSurface.dispatch('pointerdown',{...event,pointerId:7,clientY:200,target:animatedSurface});
+animatedSurface.dispatch('pointermove',{...event,pointerId:7,clientY:160,target:animatedSurface});
 assert.equal(animatedCard.style.transform,'translateY(-40px)','the card follows the swipe before release');
-animatedSurface.dispatch('pointerup',{...event,pointerId:6,clientY:120,target:animatedSurface});
+animatedSurface.dispatch('pointerup',{...event,pointerId:7,clientY:120,target:animatedSurface});
 assert.equal(animatedCard.style.transform,'translateY(-136px) scale(.9)','a completed upward swipe sends the card out');
 assert.equal(animatedCard.style.opacity,'0','a completed swipe fades the card out');
 await new Promise(resolve=>setTimeout(resolve,12));
@@ -168,16 +199,16 @@ const touchGesture=installWardenTrialSwipeSurface({
   onDirection:(direction,detail)=>touchDirections.push({direction,...detail}),
 });
 const touchEvent={target:touchSurface,preventDefault(){},stopPropagation(){}};
-touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:7,clientY:120}]});
-touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:7,clientY:190}]});
+touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:8,clientY:120}]});
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:8,clientY:190}]});
 assert.equal(touchCard.style.transform,'translateY(52px)','legacy Android touch movement drags the visible card downward');
-touchSurface.dispatch('touchend',{...touchEvent,changedTouches:[{identifier:7,clientY:200}]});
+touchSurface.dispatch('touchend',{...touchEvent,changedTouches:[{identifier:8,clientY:200}]});
 assert.deepEqual(touchDirections,[{direction:'down',deltaY:80}]);
 
-touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:8,clientY:200}]});
-touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:8,clientY:130}]});
+touchSurface.dispatch('touchstart',{...touchEvent,touches:[{identifier:9,clientY:200}]});
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:9,clientY:130}]});
 touchGesture.reset();
-touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:8,clientY:80}]});
+touchSurface.dispatch('touchmove',{...touchEvent,touches:[{identifier:9,clientY:80}]});
 assert.equal(touchCard.style.transform,'','reset discards the active fallback touch instead of leaving a stuck card transform');
 touchGesture.destroy();
 

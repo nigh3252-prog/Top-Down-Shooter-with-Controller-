@@ -17,9 +17,11 @@ export function isWardenTrialCardGestureEnabled({
   menuOpen = false,
   dead = false,
   transitioning = false,
-  coolingDown = false,
 } = {}){
-  return !paused && !rewardPending && !menuOpen && !dead && !transitioning && !coolingDown;
+  // Pending readiness is direction-aware because the saved cooldown setting
+  // may bypass Up while Down still waits. Let the runtime reject a direction
+  // without disabling or consuming the gesture itself.
+  return !paused && !rewardPending && !menuOpen && !dead && !transitioning;
 }
 
 export function installWardenTrialCardGesture({
@@ -131,6 +133,7 @@ export function installWardenTrialSwipeSurface({
   target = globalThis.document,
   visualElement = null,
   onDirection = () => {},
+  canResolveDirection = () => true,
   enabled = () => true,
   startGuard = () => true,
   threshold = 55,
@@ -228,6 +231,12 @@ export function installWardenTrialSwipeSurface({
     if(cancelled){clearVisualState();return;}
     const direction = resolveWardenTrialCardDirection(finalDelta, threshold);
     if(!direction){clearVisualState();return;}
+    const detail={deltaY:finalDelta};
+    if(canResolveDirection(direction,detail)===false){
+      clearVisualState();
+      onDirection(direction,detail);
+      return;
+    }
     animating=true;
     if(visualElement?.style){
       const sign=direction==='up'?-1:1;
@@ -240,7 +249,7 @@ export function installWardenTrialSwipeSurface({
       if(destroyed){animating=false;clearVisualState();return;}
       animating=false;
       clearVisualState();
-      onDirection(direction, { deltaY:finalDelta });
+      onDirection(direction,detail);
     };
     if(swipeDuration>0)animationTimer=setTimeout(complete,swipeDuration);
     else complete();
