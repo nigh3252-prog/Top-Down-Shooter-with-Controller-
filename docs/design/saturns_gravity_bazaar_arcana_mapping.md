@@ -344,8 +344,49 @@ This preserves relative relationships while letting the action-game scale remain
 
 ---
 
-## 10. Implementation handoff
+## 10. Playable behavior-demo pass
+
+The first gameplay pass is an opt-in 13-card vertical slice at:
+
+```text
+combat-arena.html?variant=warden-trial&bazaarDemo=1
+```
+
+It deliberately validates the shared runtime rules before expanding them over all 113 active catalog entries. It retains the single authoritative current card: choose a source in the pause menu, swipe Down once to start or change stance, then swipe Up to resolve the selected Arcana or Tactic. Selecting another demo source replaces the one-card test deck; it does not create a hand.
+
+| Source | Saturn action | Behavior proven in the demo |
+|---|---|---|
+| Cauterizing Blade | Flame Strike | Damage + Burn-over-time |
+| Dart Launcher | Perforating Jet | Ammo, Poison-over-time, enemy Slow |
+| Ice Pick | Ice Dagger | Damage, enemy Freeze, persistent self-Damage gain |
+| Butterfly Swords | Flame Cross | Printed Multicast |
+| Rifle | Bolt Rail | Ammo and persistent on-use self-Damage gain |
+| Anchor | Heroic Leap | Exact percentage-of-Max-Health damage |
+| Calico | Rapid Fire Agent | Friend target for Card Table Multicast |
+| Astrolabe | Tactic Up / S26 Down | Haste the replacement current card for 1 second |
+| Port | Tactic Up / S26 Down | Reload all registered Ammo by 2 and Charge the replacement current card 1 second |
+| Barrel | Tactic Up / S26 Down | Add 30 combat Shield; Shield absorbs later player damage |
+| Coral | Tactic Up / S26 Down | Heal 20, capped at the normal 100 HP maximum |
+| Card Table | Tactic Up / S26 Down | Demo Friends gain +1 Multicast for the fight |
+| Honing Steel | Tactic Up / S26 Down | Demo Weapons gain +5 printed Damage for the fight |
+
+The reversible demo transform is pinned as:
+
+```text
+20 printed Bazaar Damage = 12 Saturn HP
+4 printed Bazaar Burn   = 6 Saturn HP over 3 ticks
+4 printed Bazaar Poison = 6 Saturn HP over 3 ticks
+percentage-health Damage uses the target's real Max HP
+```
+
+During this opt-in demo only, the selected Arcana keeps its existing motion and visuals while its old native Arcana damage is suppressed. The translated Bazaar payload is authoritative, preventing the old and new damage models from stacking. The pending-card timer remains the only ability cooldown gate in this mode.
+
+The pause menu also exposes Haste, Charge, Slow, and Freeze test buttons that act directly on the current pending instance. These controls are instrumentation for validating timer math; they are not additional cards.
+
+Board-dependent translations are explicit provisional demo rules. With no multi-item board yet, Astrolabe and Port affect the replacement current card; Card Table applies to demo Friends; Honing Steel applies to demo Weapons. Shop, day, value, adjacency, and acquisition passives remain out of the slice rather than being silently invented.
+
+## 11. Implementation handoff
 
 The runtime stack keeps immutable Bazaar catalog data separate from the mutable current-card pending instance, uses the explicit 5-second pending fallback when the raw cooldown is `null`, and registers the 43 non-direct entries as a Warden-only Tactic data family. Tactic execution and unsupported board/economy translations must land explicitly in later behavior passes rather than pretending those systems already exist.
 
-The pending-timer layer does not yet replace Saturn's existing Arcana damage/effect values. Any source-to-Saturn behavior or damage pass must retain the raw Bazaar fields beside translated runtime values so later tuning remains reversible.
+Outside the opt-in behavior demo, the pending-timer layer does not replace Saturn's existing Arcana damage/effect values. Any full-roster source-to-Saturn behavior or damage pass must retain the raw Bazaar fields beside translated runtime values so later tuning remains reversible.

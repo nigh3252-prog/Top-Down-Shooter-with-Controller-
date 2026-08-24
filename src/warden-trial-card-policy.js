@@ -7,6 +7,7 @@ import {
 const NON_STANCE_CARD_TYPES = new Set(['ability', 'modifier']);
 
 export function wardenTrialUpArcanaIdForCard(card, weaponId) {
+  if(wardenTrialUpTacticIdForCard(card))return null;
   const authoredArcana = String(card?.__wardenTrialArcanaId || '').trim().toUpperCase();
   if (authoredArcana) return authoredArcana;
   const stanceId = String(card?.id ?? card ?? '').trim().toUpperCase();
@@ -14,6 +15,11 @@ export function wardenTrialUpArcanaIdForCard(card, weaponId) {
   const arcanaIds = starterArcanaIdsForWeapon(weaponId);
   const index = stanceIds.indexOf(stanceId);
   return index >= 0 ? arcanaIds[index] || null : null;
+}
+
+export function wardenTrialUpTacticIdForCard(card) {
+  const authoredTactic = String(card?.__wardenTrialTacticId || '').trim().toUpperCase();
+  return authoredTactic || null;
 }
 
 export function dispatchWardenTrialUpArcana({
@@ -79,6 +85,10 @@ export function resolveWardenTrialCardPlay({
   if(direction === 'up'){
     if(!started){
       return Object.freeze({ accepted:false, reason:'starter-card-required', started:false, stamina:currentStamina, refill:false });
+    }
+    const tacticId = wardenTrialUpTacticIdForCard(card);
+    if(tacticId){
+      return Object.freeze({ accepted:true, reason:'tactic-fired', started:true, stamina:currentStamina, refill:false, tacticId });
     }
     const arcanaId = wardenTrialUpArcanaIdForCard(card, weaponId);
     if(!arcanaId){

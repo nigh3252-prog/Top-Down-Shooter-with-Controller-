@@ -32,6 +32,13 @@ assert.equal(trial.variant,'warden-trial');
 assert.equal(trial.wardenTrial,true);
 assert.equal(trial.layout,'arena');
 assert.equal(trial.seed,'warden-trial-001');
+assert.equal(trial.bazaarDemo,false);
+
+const bazaarDemo=resolveArenaRuntimeConfig({search:'?variant=warden-trial&bazaarDemo=1&demoCard=ASTROLABE',pathname:'/combat-arena.html'});
+assert.equal(bazaarDemo.wardenTrial,true);
+assert.equal(bazaarDemo.bazaarDemo,true);
+assert.equal(bazaarDemo.query.demoCard,'ASTROLABE');
+assert.equal(resolveArenaRuntimeConfig({search:'?bazaarDemo=1'}).bazaarDemo,false,'the demo cannot activate outside Warden Trial');
 
 const explicit=resolveArenaRuntimeConfig({search:'?enemyLab=1&layout=maze',mode:'arena',seed:'explicit'});
 assert.equal(explicit.mode,'arena');

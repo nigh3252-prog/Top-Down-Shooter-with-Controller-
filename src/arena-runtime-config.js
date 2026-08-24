@@ -34,11 +34,13 @@ export function resolveArenaRuntimeConfig({
   const resolvedMode=explicitMode?normalizeArenaRuntimeMode(explicitMode):(legacyLab?ARENA_RUNTIME_MODES.ENEMY_LAB:ARENA_RUNTIME_MODES.ARENA);
   const requestedVariant=text(variant||params.get('variant')).toLowerCase();
   const wardenTrial=['warden-trial','trial','auto-battler','autobattler'].includes(requestedVariant);
+  const bazaarDemo=wardenTrial&&flag(params.get('bazaarDemo'));
   return Object.freeze({
     mode:resolvedMode,
     variant:wardenTrial?'warden-trial':requestedVariant||null,
     enemyLab:resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB,
     wardenTrial,
+    bazaarDemo,
     layout:wardenTrial?'arena':requestedLayout||(resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'arena':'maze'),
     seed:text(seed||params.get('seed'))||(wardenTrial?'warden-trial-001':resolvedMode===ARENA_RUNTIME_MODES.ENEMY_LAB?'enemy-lab-001':'arena-001'),
     cellSize:text(cellSize||params.get('cellSize')).toLowerCase()||null,

@@ -395,6 +395,20 @@ export function createArenaEnemySystem(options={}){
     globalPlayerHp=Math.max(0,globalPlayerHp-Math.max(0,before-after));hpSnapshots.set(active,after);return applied;
   }
 
+  function healPlayer(amount){
+    const requested=Math.max(0,Number(amount)||0);
+    if(requested<=0)return 0;
+    if(!combinedMode)return active.healPlayer?.(requested)??0;
+    const before=globalPlayerHp;
+    globalPlayerHp=Math.min(100,globalPlayerHp+requested);
+    const healed=globalPlayerHp-before;
+    if(healed>0)for(const system of combinedSystems()){
+      system.healPlayer?.(healed);
+      hpSnapshots.set(system,system.playerHp);
+    }
+    return healed;
+  }
+
   function setPlayerDefenseResolver(resolver){return playerDamageRoute.setDefenseResolver(resolver);}
   function setPlayerDamageInterceptor(interceptor){playerDamageInterceptors.setLegacy(interceptor);}
   function registerPlayerDamageInterceptor(id,interceptor,priority=0){return playerDamageInterceptors.register(id,interceptor,priority);}
@@ -457,7 +471,7 @@ export function createArenaEnemySystem(options={}){
     get hostileProjectiles(){return visibleSystems().flatMap(system=>system.hostileProjectiles||[]);},
     get group(){return active.group;},
     get director(){return active.director;},
-    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,setPlayerDefenseResolver,setPlayerDamageInterceptor,registerPlayerDamageInterceptor,unregisterPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
+    update,damageEnemy,moveEnemy,moveEnemyResolved,damagePlayer,healPlayer,setPlayerDefenseResolver,setPlayerDamageInterceptor,registerPlayerDamageInterceptor,unregisterPlayerDamageInterceptor,applyStatus,stunEnemy,registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,
     registerAlliedTarget,unregisterAlliedTarget,registerDamageModifier,unregisterDamageModifier,charmEnemy,releaseCharmedEnemy,getNearestHostile,
     launchRigidBody,isRigidBodyActive,reset,startRoomEncounter,startLabScenario,clearRoomRuntime,setSpawnKind,
     setDirectorMode:all('setDirectorMode'),setPressureBudget:all('setPressureBudget'),setAggression:all('setAggression'),
