@@ -36,6 +36,8 @@ assert.match(arenaRuntimeSource,/bazaarItem:card\.__wardenTrialBazaar\|\|null/,
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
 assert.doesNotMatch(arenaRuntimeSource,/handSize:wardenTrialMode\?3/,'the Bazaar runtime does not introduce a three-card hand');
+assert.match(arenaRuntimeSource,/wardenTrialAbilityCooldowns=wardenTrialBazaarDemo\s*\?true/,
+  'the opt-in behavior demo starts with Bazaar source cooldowns enforced despite an older saved bypass');
 
 const stanceById=new Map(STANCE_CARDS.map(card=>[card.id,card]));
 for(const [stanceId,text,title] of [
@@ -73,6 +75,12 @@ assert.match(arenaShellCss,/\.trialCard\.cooling/,'the active card has a distinc
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownToggle"/,'the Warden Trial menu exposes the upward ability cooldown toggle');
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownState">ON/,'upward ability cooldowns remain enabled by default');
+assert.match(ARENA_SHELL_HTML,/id="trialBazaarDemoSelect"/,'the behavior-demo menu exposes direct card selection');
+assert.equal((ARENA_SHELL_HTML.match(/<option value="BAZAAR-/g)||[]).length,13,'the behavior demo exposes all thirteen slice cards');
+for(const effect of ['haste','charge','slow','freeze']){
+  assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-bazaar-timer-effect="${effect}"`),`${effect} has a pending-timer test control`);
+}
+assert.match(ARENA_SHELL_HTML,/id="trialBazaarDemoHud"/,'the demo has a persistent combat-state readout');
 assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityCooldowns'/,'the ability cooldown choice persists through the existing settings service');
 assert.doesNotMatch(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns[^\n]*wardenTrialCardCooldown\.reset\(\)/,
   'turning the Up bypass on does not erase the current timer needed by Down');
@@ -83,6 +91,7 @@ assert.match(arenaRuntimeSource,/only when this preview becomes the current card
 assert.match(arenaRuntimeSource,/staminaCostForGroup\(group\)[^{]*\{[^}]*return staminaCostForWeapon/s,'attacks retain their ordinary stamina policy');
 assert.doesNotMatch(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive stamina costs are not controlled by the ability toggle');
 assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityCooldownSection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
+assert.match(arenaShellCss,/data-arena-bazaar-demo="true"[^}]*trialBazaarDemoSection[^}]*display:block/,'demo controls require the explicit Bazaar demo mode');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
 }

@@ -726,6 +726,11 @@ export function createArenaEnemySystem({
     tuning.lastPlayerHitDir = dir ? { x:dir.x, z:dir.z } : null;
     return applied;
   }
+  function healPlayer(amount){
+    const requested=Math.max(0,Number(amount)||0),before=tuning.playerHp;
+    tuning.playerHp=Math.min(100,tuning.playerHp+requested);
+    return tuning.playerHp-before;
+  }
   const playerDead = () => tuning.playerHp <= 0;
 
   /* ---------- projectiles (rock) ---------- */
@@ -1275,6 +1280,7 @@ export function createArenaEnemySystem({
   return {
     enemies, group, director, update, damageEnemy, moveEnemy, moveEnemyResolved, setEnemyFaction, reset, startRoomEncounter, clearRoomRuntime:clearEnemies,
     damagePlayer:(damage,{kind='capture',name='fixture',dir=null,ignoreInvulnerability=false,targetableIndependent=false}={})=>hitPlayer(damage,kind,name,dir,{ignoreInvulnerability:ignoreInvulnerability||targetableIndependent}),
+    healPlayer,
     setPlayerDamageInterceptor:(interceptor)=>{playerDamageInterceptor=typeof interceptor==='function'?interceptor:null;},
     applyStatus,stunEnemy,
     registerWizardDecoy,unregisterWizardDecoy,consumeWizardDecoyAttacks,

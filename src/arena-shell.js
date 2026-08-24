@@ -1,7 +1,10 @@
 import { WARDEN_TEMPERAMENTS } from './warden-trial-temperaments.js';
+import { WARDEN_TRIAL_BAZAAR_DEMO_ROSTER } from './warden-trial-bazaar-demo.js';
 
 const WARDEN_TEMPERAMENT_BUTTONS=WARDEN_TEMPERAMENTS.map(option=>`
       <button class="trialTemperamentChoice" type="button" data-trial-temperament="${option.level}" aria-pressed="false" aria-label="Defense level ${option.level}: ${option.label}. ${option.description}" title="${option.description}">${option.level} ${option.label}</button>`).join('');
+const WARDEN_BAZAAR_DEMO_OPTIONS=WARDEN_TRIAL_BAZAAR_DEMO_ROSTER.map(entry=>`
+      <option value="${entry.id}">${entry.index}. ${entry.name} · ${entry.family==='tactic'?'Tactic':entry.arcanaId.replaceAll('-',' ')}</option>`).join('');
 
 export const ARENA_SHELL_HTML = `<div id="topBar">
   <button class="tbtn" id="menuBtn">MENU</button>
@@ -11,6 +14,12 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
 <div id="hud">
   <div id="hpWrap"><div id="hpFill"></div></div>
   <div id="stWrap"><div id="stPending"></div><div id="stFill"></div></div>
+</div>
+<div id="trialBazaarDemoHud" hidden aria-live="polite">
+  <strong>BAZAAR DEMO · 13 CARDS</strong>
+  <span id="trialBazaarDemoSource">SELECT A CARD IN MENU</span>
+  <span id="trialBazaarDemoState">SHIELD 0 · NO BUFFS</span>
+  <span id="trialBazaarDemoLast">READY</span>
 </div>
 <div id="msg"></div>
 <div id="vig"></div>
@@ -135,6 +144,21 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
       <span>UPWARD ARCANA</span><strong id="trialAbilityCooldownState">ON</strong>
     </button>
     <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Upward ability cards wait 3 seconds.</p>
+  </section>
+  <section class="pauseSection trialBazaarDemoSection" aria-labelledby="trialBazaarDemoTitle">
+    <h2 id="trialBazaarDemoTitle">BAZAAR BEHAVIOR DEMO</h2>
+    <label class="trialBazaarDemoLabel" for="trialBazaarDemoSelect">CURRENT TEST CARD</label>
+    <select id="trialBazaarDemoSelect" aria-label="Choose a Bazaar demo card">${WARDEN_BAZAAR_DEMO_OPTIONS}
+    </select>
+    <button id="trialBazaarDemoLoad" class="trialBazaarDemoWide" type="button">LOAD SELECTED CARD</button>
+    <div class="trialBazaarTimerGrid" role="group" aria-label="Apply a timer effect to the current pending card">
+      <button type="button" data-trial-bazaar-timer-effect="haste" data-seconds="2">HASTE 2s</button>
+      <button type="button" data-trial-bazaar-timer-effect="charge" data-seconds="2">CHARGE 2s</button>
+      <button type="button" data-trial-bazaar-timer-effect="slow" data-seconds="2">SLOW 2s</button>
+      <button type="button" data-trial-bazaar-timer-effect="freeze" data-seconds="2">FREEZE 2s</button>
+    </div>
+    <button id="trialBazaarDemoReset" class="trialBazaarDemoWide secondary" type="button">RESET DEMO BUFFS + AMMO</button>
+    <p id="trialBazaarDemoNote" class="trialBazaarDemoNote">Swipe Down once to start. Swipe Up to fire the selected Arcana or Tactic. Loading a card keeps accumulated demo buffs so interactions can be tested.</p>
   </section>
   <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
     <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>
