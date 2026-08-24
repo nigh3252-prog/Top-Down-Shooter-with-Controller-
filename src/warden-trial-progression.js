@@ -1,6 +1,7 @@
 import { WEAPON_STARTER_ARCANA_IDS } from './weapon-stance-plan.js';
 import { arcanaDownStanceId } from './arcana-stance-pairings.js';
 import { WIZARD_ARCANA_CATALOG } from './wizard-arcana-catalog.js';
+import { wardenTrialBazaarItemForArcana } from './warden-trial-bazaar-catalog.js';
 
 // Warden Trial deliberately has a larger resource budget than the ordinary
 // Arena. Keep this value here with the trial's authored progression so the
@@ -33,13 +34,18 @@ const starterWeaponByArcanaId = new Map(Object.entries(WEAPON_STARTER_ARCANA_IDS
 // are unique while stance IDs intentionally repeat, allowing all 70 Arcana to
 // live in the finite Warden Trial upgrade pool without duplicating an Arcana.
 export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze(
-  WIZARD_ARCANA_CATALOG.map(arcana => freezePair({
-    id: arcana.arcanaId,
-    weaponId: starterWeaponByArcanaId.get(arcana.arcanaId) || null,
-    stanceId: arcanaDownStanceId(arcana.arcanaId),
-    arcanaId: arcana.arcanaId,
-    element: arcana.element,
-  })),
+  WIZARD_ARCANA_CATALOG.map(arcana => {
+    const bazaarItem = wardenTrialBazaarItemForArcana(arcana.arcanaId);
+    return freezePair({
+      id: arcana.arcanaId,
+      weaponId: starterWeaponByArcanaId.get(arcana.arcanaId) || null,
+      stanceId: arcanaDownStanceId(arcana.arcanaId),
+      arcanaId: arcana.arcanaId,
+      element: arcana.element,
+      bazaarItemId: bazaarItem?.id || null,
+      pendingCooldownSeconds: bazaarItem?.pendingCooldownSeconds ?? null,
+    });
+  }),
 );
 
 const pairById = new Map(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => [pair.id, pair]));
@@ -61,6 +67,7 @@ export function wardenTrialPairingForCard(card) {
 
 export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
   if (!card || !pairing?.id) return null;
+  const bazaarItem = wardenTrialBazaarItemForArcana(pairing.arcanaId);
   return Object.freeze({
     ...card,
     __wardenTrialCard: true,
@@ -70,6 +77,8 @@ export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
     __wardenTrialStanceId: pairing.stanceId,
     __wardenTrialArcanaId: pairing.arcanaId,
     __wardenTrialElement: pairing.element,
+    __wardenTrialBazaarItemId: bazaarItem?.id || null,
+    __wardenTrialBazaar: bazaarItem,
   });
 }
 

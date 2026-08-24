@@ -87,10 +87,20 @@ const choices = drawWardenTrialRewardChoices(rewardPool, 3, () => 0);
 assert.equal(choices.length, 3);
 assert.equal(new Set(choices.map(card => card.__wardenTrialPairId)).size, 3);
 for (const card of [...starters, ...rewardPool]) {
-  assert.equal(wardenTrialCardCooldownSeconds('up'), 3, `${card.__wardenTrialArcanaId} uses the shared upward cooldown`);
-  assert.equal(wardenTrialCardCooldownSeconds('down'), 1, `${card.id} uses the shared downward cooldown`);
-  assert.equal(wardenTrialCardCooldownSeconds('up', { abilityCooldowns:false }), 0, `${card.__wardenTrialArcanaId} can skip its upward cooldown`);
-  assert.equal(wardenTrialCardCooldownSeconds('down', { abilityCooldowns:false }), 1, `${card.id} keeps its downward cooldown`);
+  assert.ok(card.__wardenTrialBazaar, `${card.__wardenTrialArcanaId} carries its immutable Bazaar source record`);
+  assert.equal(card.__wardenTrialBazaarItemId, card.__wardenTrialBazaar.id);
+  assert.equal(
+    wardenTrialCardCooldownSeconds(card, { direction:'up' }),
+    card.__wardenTrialBazaar.pendingCooldownSeconds,
+    `${card.__wardenTrialArcanaId} uses its Bazaar pending cooldown`,
+  );
+  assert.equal(
+    wardenTrialCardCooldownSeconds(card, { direction:'down' }),
+    card.__wardenTrialBazaar.pendingCooldownSeconds,
+    `${card.id} shares the current card's pending cooldown`,
+  );
+  assert.equal(wardenTrialCardCooldownSeconds(card, { direction:'up', abilityCooldowns:false }), 0,
+    `${card.__wardenTrialArcanaId} can bypass its upward pending cooldown`);
   const upward = resolveWardenTrialCardPlay({
     direction: 'up',
     started: true,

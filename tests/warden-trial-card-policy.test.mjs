@@ -17,39 +17,86 @@ import {
   wardenTrialUpArcanaIdForCard,
 } from '../src/warden-trial-card-policy.js';
 import {
-  WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS,
-  WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS,
   createWardenTrialCardCooldown,
   wardenTrialCardCooldownSeconds,
 } from '../src/warden-trial-card-cooldown.js';
+import { wardenTrialBazaarItemForArcana } from '../src/warden-trial-bazaar-catalog.js';
 
 assert.equal(isWardenTrialRuntime({ variant:'warden-trial' }), true);
 assert.equal(isWardenTrialRuntime({ wardenTrial:true }), true);
 assert.equal(isWardenTrialRuntime({ mode:'arena' }), false);
-assert.equal(WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS,3);
-assert.equal(WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS,1);
-assert.equal(wardenTrialCardCooldownSeconds('up'),3);
-assert.equal(wardenTrialCardCooldownSeconds('down'),1);
-assert.equal(wardenTrialCardCooldownSeconds('up',{abilityCooldowns:false}),0,'the toggle removes only the upward ability cooldown');
-assert.equal(wardenTrialCardCooldownSeconds('down',{abilityCooldowns:false}),1,'the downward stance cooldown remains authored');
-assert.equal(wardenTrialCardCooldownSeconds('sideways'),0);
+
+const pendingCard = arcanaId => ({
+  id:`CARD-${arcanaId}`,
+  __wardenTrialPairId:arcanaId,
+  __wardenTrialBazaar:wardenTrialBazaarItemForArcana(arcanaId),
+});
+const flameStrikePendingCard=pendingCard('FLAME-STRIKE');
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'up'}),5);
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down'}),5,
+  'both directions wait on the same pending card instance');
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'up',abilityCooldowns:false}),0,
+  'the compatibility toggle bypasses only an upward play');
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down',abilityCooldowns:false}),5,
+  'the downward play still waits on the Bazaar source timer');
+assert.equal(wardenTrialCardCooldownSeconds(null),0);
 
 const cardCooldown=createWardenTrialCardCooldown();
-assert.deepEqual(cardCooldown.snapshot(),{active:false,direction:null,duration:0,remaining:0,progress:0});
-assert.deepEqual(cardCooldown.begin('up'),{active:true,direction:'up',duration:3,remaining:3,progress:1});
-const partialUpCooldown=cardCooldown.update(1.25);
-assert.equal(partialUpCooldown.direction,'up');
-assert.equal(partialUpCooldown.remaining,1.75);
-assert.ok(Math.abs(partialUpCooldown.progress-(1.75/3))<1e-9);
-assert.deepEqual(cardCooldown.begin('down'),{active:true,direction:'down',duration:1,remaining:1,progress:1},
-  'a successful downward play starts its shorter cooldown immediately');
-assert.deepEqual(cardCooldown.update(1),{active:false,direction:null,duration:0,remaining:0,progress:0});
-assert.deepEqual(cardCooldown.reset(),{active:false,direction:null,duration:0,remaining:0,progress:0});
-assert.deepEqual(cardCooldown.begin('up',{abilityCooldowns:false}),{active:false,direction:null,duration:0,remaining:0,progress:0},
-  'an upward ability play skips the card lock when the toggle is off');
-assert.deepEqual(cardCooldown.begin('down',{abilityCooldowns:false}),{active:true,direction:'down',duration:1,remaining:1,progress:1},
-  'a downward stance play still starts its one-second lock when ability cooldowns are off');
-cardCooldown.reset();
+assert.equal(cardCooldown.snapshot().instanceId,null);
+let pending=cardCooldown.deal(flameStrikePendingCard);
+assert.equal(pending.duration,5);
+assert.equal(pending.remaining,5);
+assert.equal(pending.sourceCooldownSeconds,5);
+assert.equal(pending.ready,false);
+assert.equal(cardCooldown.canPlay('up'),false);
+assert.equal(cardCooldown.canPlay('down'),false);
+assert.equal(cardCooldown.canPlay('up',{abilityCooldowns:false}),true,
+  'the legacy setting bypasses this timer only when playing Up');
+assert.equal(cardCooldown.canPlay('down',{abilityCooldowns:false}),false);
+const firstInstanceId=pending.instanceId;
+pending=cardCooldown.update(1.25);
+assert.equal(pending.remaining,3.75);
+assert.ok(Math.abs(pending.progress-.75)<1e-9);
+const secondInstance=cardCooldown.deal(flameStrikePendingCard);
+assert.notEqual(secondInstance.instanceId,firstInstanceId,'redealing the same catalog card creates fresh mutable timing state');
+assert.equal(secondInstance.remaining,5);
+const passivePending=cardCooldown.deal(pendingCard('SEARING-RUSH'));
+assert.equal(passivePending.sourceCooldownSeconds,null,'a passive Bazaar source keeps its raw missing cooldown');
+assert.equal(passivePending.duration,5,'the passive source receives the explicit Saturn pending fallback');
+
+const tenSecondCard=pendingCard('EARTHEN-AEGIS');
+cardCooldown.deal(tenSecondCard);
+cardCooldown.haste(2);
+cardCooldown.haste(1);
+pending=cardCooldown.update(1);
+assert.equal(pending.remaining,8,'Haste doubles cooldown drain');
+assert.equal(pending.hasteRemaining,2,'additional Haste extends the active duration');
+
+cardCooldown.deal(tenSecondCard);
+assert.equal(cardCooldown.snapshot().hasteRemaining,0,'a replacement never inherits the previous card\'s Haste');
+cardCooldown.slow(2);
+pending=cardCooldown.update(1);
+assert.equal(pending.remaining,9.5,'Slow halves cooldown drain');
+
+cardCooldown.deal(tenSecondCard);
+cardCooldown.haste(1);
+cardCooldown.slow(1);
+pending=cardCooldown.update(1);
+assert.equal(pending.remaining,9,'Haste and Slow combine multiplicatively to normal drain');
+
+cardCooldown.deal(tenSecondCard);
+cardCooldown.freeze(1);
+assert.equal(cardCooldown.update(1).remaining,10,'Freeze pauses cooldown drain');
+assert.equal(cardCooldown.update(1).remaining,9,'normal drain resumes after Freeze expires');
+
+cardCooldown.deal(tenSecondCard);
+assert.equal(cardCooldown.charge(3).remaining,7,'Charge subtracts seconds immediately');
+pending=cardCooldown.charge(99);
+assert.equal(pending.remaining,0);
+assert.equal(pending.ready,true);
+assert.equal(cardCooldown.canPlay('up'),true);
+assert.equal(cardCooldown.canPlay('down'),true);
+assert.equal(cardCooldown.reset().instanceId,null);
 
 assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_STARTER_STANCE_IDS));
 const allStarterArcanaIds=Object.values(WEAPON_STARTER_ARCANA_IDS).flat();

@@ -25,12 +25,12 @@ This document is the implementation source of truth for the Vanessa/The Bazaar c
 
 This is the implementation starting point for the stack above PR #137:
 
-1. Every dealt or queued hand entry is a distinct pending card instance with its own `remainingCooldown`.
-2. An instance starts from its printed Bazaar cooldown. If the source prints no cooldown, it uses the explicit **5-second Saturn pending fallback**, chosen from the documented starting-tier median below.
-3. All pending instances advance independently and concurrently; there is no shared slot state or global timer.
-4. At zero, an individual instance becomes **Ready** and stays Ready until played.
-5. The player may resolve any Ready instance Up or Down. Either direction consumes only that instance.
-6. Its replacement enters the same hand/queue position with a fresh instance timer. Playing one card creates no universal post-play lock and does not reset other cards.
+1. Warden Trial keeps PR #137's **single authoritative current card** with one Up face and one Down face. This work does not introduce a three-card hand.
+2. Each time a card becomes current, it receives a fresh mutable pending instance with its own `remainingCooldown`.
+3. That instance starts from its printed Bazaar cooldown. If the source prints no cooldown, it uses the explicit **5-second Saturn pending fallback**, chosen from the documented starting-tier median below.
+4. Only the current card's timer advances. Upcoming cards remain ordered previews and do not run hidden timers; a preview gets a fresh timer when it becomes current.
+5. At zero, the current instance becomes **Ready** and stays Ready until played.
+6. The player may resolve the Ready card Up or Down. Either direction consumes that same instance, then its replacement becomes current with a fresh timer. Playing creates no universal post-play lock.
 
 Bazaar-style timer effects act on the mutable pending instance, not the catalog value:
 
@@ -42,7 +42,7 @@ Bazaar-style timer effects act on the mutable pending instance, not the catalog 
 
 Sixteen active source items are passive or purely reactive and therefore print no Bazaar cooldown: 3 direct and 13 non-direct. Their raw source cooldown remains **—**, never zero; their initial Saturn translation is the explicit **5-second pending fallback**. A later tuning pass may replace that fallback per item while keeping the raw source field unchanged.
 
-PR #137 currently supplies a single directional post-play cooldown. The runtime follow-up should replace that singleton with per-card pending instances; this data-only PR records the target behavior and source values first.
+PR #137 supplies a single directional post-play cooldown. The runtime follow-up replaces it with one mutable pending instance attached to the single current card; the immutable catalog values remain the source of truth.
 
 ---
 
@@ -346,6 +346,6 @@ This preserves relative relationships while letting the action-game scale remain
 
 ## 10. Implementation handoff
 
-This starting-tier source snapshot intentionally precedes the runtime conversion. The next stacked change should keep immutable Bazaar catalog data separate from each mutable pending-card instance, use the explicit 5-second pending fallback when the raw cooldown is `null`, add the 43 non-direct entries as a Warden-only Tactic family, and translate unsupported board/economy rules explicitly rather than pretending they already exist.
+The runtime stack keeps immutable Bazaar catalog data separate from the mutable current-card pending instance, uses the explicit 5-second pending fallback when the raw cooldown is `null`, and registers the 43 non-direct entries as a Warden-only Tactic data family. Tactic execution and unsupported board/economy translations must land explicitly in later behavior passes rather than pretending those systems already exist.
 
-The current Saturn values remain unchanged by this documentation PR. Any source-to-Saturn scaling must retain the raw Bazaar fields beside the translated fields so later tuning remains reversible.
+The pending-timer layer does not yet replace Saturn's existing Arcana damage/effect values. Any source-to-Saturn behavior or damage pass must retain the raw Bazaar fields beside translated runtime values so later tuning remains reversible.
