@@ -22,13 +22,15 @@ for(const blocker of ['paused','rewardPending','menuOpen','dead','transitioning'
 }
 const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import.meta.url),'utf8');
 const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
+const launcherSource=await readFile(new URL('../index.html',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
 assert.doesNotMatch(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'pending cards can receive a rejected direction without disabling the gesture surface');
 assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('up'\)\)/,'an upward play checks the current pending card');
 assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('down'\)\)/,'a downward play checks the same current pending card');
-assert.equal((arenaRuntimeSource.match(/beginWardenTrialCardPending\(currentTrialCard\(\)\)/g)||[]).length,2,
-  'either successful direction deals the replacement as the new pending current card');
-assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.deal\(card\)/,'pending timing begins when a card becomes current');
+assert.equal((arenaRuntimeSource.match(/beginWardenTrialCardPending\(currentTrialCard\(\)\)/g)||[]).length,3,
+  'run start and either successful direction deal the authoritative current card as pending');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.deal\(card,\{durationSeconds:pending\?\.durationSeconds\}\)/,
+  'pending timing begins with the full-board Bazaar cooldown when a card becomes current');
 assert.match(arenaRuntimeSource,/canResolveDirection:direction=>canPlayWardenTrialCard\(direction\)/,
   'pending directions are rejected before the current card animates away');
 assert.match(arenaRuntimeSource,/bazaarItem:card\.__wardenTrialBazaar\|\|null/,
@@ -36,8 +38,10 @@ assert.match(arenaRuntimeSource,/bazaarItem:card\.__wardenTrialBazaar\|\|null/,
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
 assert.doesNotMatch(arenaRuntimeSource,/handSize:wardenTrialMode\?3/,'the Bazaar runtime does not introduce a three-card hand');
-assert.match(arenaRuntimeSource,/wardenTrialAbilityCooldowns=wardenTrialBazaarDemo\s*\?true/,
-  'the opt-in behavior demo starts with Bazaar source cooldowns enforced despite an older saved bypass');
+assert.match(arenaRuntimeSource,/createWardenTrialBazaarRuntime\(\{/,
+  'the full Bazaar behavior engine is part of ordinary Warden Trial');
+assert.match(arenaRuntimeSource,/getBoardCards:\(\)=>deck\.pool/,
+  'the owned run deck is the Bazaar board for adjacency and passive effects');
 
 const stanceById=new Map(STANCE_CARDS.map(card=>[card.id,card]));
 for(const [stanceId,text,title] of [
@@ -57,6 +61,7 @@ assert.match(ARENA_SHELL_HTML,/id="trialCard"/,'the shell includes one trial car
 assert.match(ARENA_SHELL_HTML,/swipe up or down/,'the card exposes its vertical interaction to assistive technology');
 assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardUp"/,'the upper card face names its Arcana action');
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialArcanaName"/,'the card has a dedicated Arcana name');
+assert.match(ARENA_SHELL_HTML,/id="trialCardRule"/,'the ordinary current card shows its Bazaar behavior');
 assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower card face names its stance action');
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
 assert.match(ARENA_SHELL_HTML,/class="trialStanceBadge trialCardStanceBadge"/,'the current card exposes its stance / defense badge');
@@ -75,12 +80,8 @@ assert.match(arenaShellCss,/\.trialCard\.cooling/,'the active card has a distinc
 assert.match(ARENA_SHELL_HTML,/id="trialWeaponTitle"/,'the Warden Trial menu exposes a weapon selector');
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownToggle"/,'the Warden Trial menu exposes the upward ability cooldown toggle');
 assert.match(ARENA_SHELL_HTML,/id="trialAbilityCooldownState">ON/,'upward ability cooldowns remain enabled by default');
-assert.match(ARENA_SHELL_HTML,/id="trialBazaarDemoSelect"/,'the behavior-demo menu exposes direct card selection');
-assert.equal((ARENA_SHELL_HTML.match(/<option value="BAZAAR-/g)||[]).length,13,'the behavior demo exposes all thirteen slice cards');
-for(const effect of ['haste','charge','slow','freeze']){
-  assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-bazaar-timer-effect="${effect}"`),`${effect} has a pending-timer test control`);
-}
-assert.match(ARENA_SHELL_HTML,/id="trialBazaarDemoHud"/,'the demo has a persistent combat-state readout');
+assert.doesNotMatch(ARENA_SHELL_HTML,/trialBazaarDemo|BAZAAR BEHAVIOR DEMO|CURRENT TEST CARD/,
+  'there is no selector-only demo surface alongside the real deck flow');
 assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityCooldowns'/,'the ability cooldown choice persists through the existing settings service');
 assert.doesNotMatch(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns[^\n]*wardenTrialCardCooldown\.reset\(\)/,
   'turning the Up bypass on does not erase the current timer needed by Down');
@@ -91,7 +92,10 @@ assert.match(arenaRuntimeSource,/only when this preview becomes the current card
 assert.match(arenaRuntimeSource,/staminaCostForGroup\(group\)[^{]*\{[^}]*return staminaCostForWeapon/s,'attacks retain their ordinary stamina policy');
 assert.doesNotMatch(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive stamina costs are not controlled by the ability toggle');
 assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityCooldownSection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
-assert.match(arenaShellCss,/data-arena-bazaar-demo="true"[^}]*trialBazaarDemoSection[^}]*display:block/,'demo controls require the explicit Bazaar demo mode');
+assert.doesNotMatch(arenaShellCss,/data-arena-bazaar-demo|trialBazaarDemo/,'the stylesheet has no hidden selector-demo state');
+assert.match(launcherSource,/combat-arena\.html\?variant=warden-trial"><strong>Warden Trial/,
+  'the launcher opens the ordinary Warden Trial URL');
+assert.doesNotMatch(launcherSource,/bazaarDemo=/,'the launcher cannot opt into a separate test deck');
 for(const weaponId of STONE_WEAPON_ORDER){
   assert.match(ARENA_SHELL_HTML,new RegExp(`data-trial-weapon="${weaponId}"`),`${weaponId} is available in the trial weapon selector`);
 }

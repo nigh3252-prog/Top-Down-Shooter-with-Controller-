@@ -78,14 +78,16 @@ export function createWardenTrialCardCooldown() {
     return snapshot();
   };
 
-  const begin = card => {
+  const begin = (card, { durationSeconds } = {}) => {
     if (!card) return reset();
     const item = bazaarItemForCard(card);
     const rawCooldown = item?.cooldownSeconds;
     sourceCooldownSeconds = rawCooldown === null || rawCooldown === undefined
       ? null
       : finiteSeconds(rawCooldown);
-    duration = wardenTrialBazaarPendingCooldownSeconds(item);
+    duration = durationSeconds !== null && durationSeconds !== undefined && Number.isFinite(Number(durationSeconds))
+      ? finiteSeconds(durationSeconds)
+      : wardenTrialBazaarPendingCooldownSeconds(item);
     remaining = duration;
     cardId = String(card.__wardenTrialPairId || card.id || item?.id || '').trim() || null;
     itemId = String(item?.id || card.__wardenTrialBazaarItemId || '').trim() || null;

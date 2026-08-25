@@ -344,49 +344,69 @@ This preserves relative relationships while letting the action-game scale remain
 
 ---
 
-## 10. Playable behavior-demo pass
+## 10. Full-catalog Warden Trial runtime
 
-The first gameplay pass is an opt-in 13-card vertical slice at:
+The playable implementation is the ordinary Warden Trial at:
 
 ```text
-combat-arena.html?variant=warden-trial&bazaarDemo=1
+combat-arena.html?variant=warden-trial
 ```
 
-It deliberately validates the shared runtime rules before expanding them over all 113 active catalog entries. It retains the single authoritative current card: choose a source in the pause menu, swipe Down once to start or change stance, then swipe Up to resolve the selected Arcana or Tactic. Selecting another demo source replaces the one-card test deck; it does not create a hand.
+There is no selector-only demo mode. The existing run loop remains authoritative:
 
-| Source | Saturn action | Behavior proven in the demo |
-|---|---|---|
-| Cauterizing Blade | Flame Strike | Damage + Burn-over-time |
-| Dart Launcher | Perforating Jet | Ammo, Poison-over-time, enemy Slow |
-| Ice Pick | Ice Dagger | Damage, enemy Freeze, persistent self-Damage gain |
-| Butterfly Swords | Flame Cross | Printed Multicast |
-| Rifle | Bolt Rail | Ammo and persistent on-use self-Damage gain |
-| Anchor | Heroic Leap | Exact percentage-of-Max-Health damage |
-| Calico | Rapid Fire Agent | Friend target for Card Table Multicast |
-| Astrolabe | Tactic Up / S26 Down | Haste the replacement current card for 1 second |
-| Port | Tactic Up / S26 Down | Reload all registered Ammo by 2 and Charge the replacement current card 1 second |
-| Barrel | Tactic Up / S26 Down | Add 30 combat Shield; Shield absorbs later player damage |
-| Coral | Tactic Up / S26 Down | Heal 20, capped at the normal 100 HP maximum |
-| Card Table | Tactic Up / S26 Down | Demo Friends gain +1 Multicast for the fight |
-| Honing Steel | Tactic Up / S26 Down | Demo Weapons gain +5 printed Damage for the fight |
+1. Start with the weapon's two authored cards.
+2. Swipe Down on the first Ready card to begin the trial.
+3. Clear a wave and choose one of three rewards, or skip.
+4. A chosen card is added to the persistent run deck and enters through the existing discard/draw flow.
+5. Continue drawing and playing one authoritative current card Up or Down.
 
-The reversible demo transform is pinned as:
+The reward catalog contains all **70 Arcana + 43 Tactics = 113 cards**. Arcana keep their mapped Up action and authored Down stance. Tactics use their Bazaar item as the Up action and deterministically reuse the existing 30 Down stances; no new hand model or PR #138 three-card experiment is introduced.
+
+### Runtime translations
+
+| Bazaar concept | Warden Trial implementation |
+|---|---|
+| Board | The persistent owned deck. `deck.pool` order is stable board order. |
+| Left / right / adjacent | Neighboring cards in owned-deck order; first and last are the board edges. |
+| Item cooldown | The current card's mutable pending timer, starting from the pinned source cooldown or labeled 5-second fallback. |
+| Haste / Charge / Slow / Freeze on an off-current item | Stored by item ID and applied when that card next becomes current. |
+| Start of fight / start of day | Start of a Warden wave. |
+| End of fight / win a fight | Wave clear. |
+| Buy / acquire an item | Add a reward or generated card to the run deck. |
+| Sell an item | Skip a reward; this supplies Cove's progression trigger without deleting an owned card. |
+| Gold gained this run | A reversible progress proxy: 5 per won wave + 2 per acquired card. |
+| Enemy uses an item | An enemy attack reaches the player-damage pipeline. |
+| Generate an item | Select a matching, not-yet-owned authored card and add it through the normal discard path. |
+| Coconut + Citrus | Two stored provisions, each healing 10 at the next fight start. |
+| Crit | Deterministic **Focus**. Crit chance fills a per-item meter; each 100 points produces the extra activation and Crit-triggered effects, with no random roll. |
+| Flying | Per-fight **Momentum** state, used by the mapped Flying triggers and cooldown reductions. |
+
+Ammo refills at fight start, is spent on use, and blocks an empty item's Up play. Multicast repeats translated outputs without spending extra Ammo. Shield intercepts incoming player damage; Regen, Heal, Lifesteal, permanent gains, per-fight gains, acquisition triggers, reactive uses, tag synergies, and edge/adjacency rules are owned-deck behaviors rather than special test controls.
+
+The reversible combat transform is pinned as:
 
 ```text
-20 printed Bazaar Damage = 12 Saturn HP
-4 printed Bazaar Burn   = 6 Saturn HP over 3 ticks
-4 printed Bazaar Poison = 6 Saturn HP over 3 ticks
+20 printed Bazaar Damage = 12 Saturn enemy HP
+4 printed Bazaar Burn   = 6 Saturn enemy HP over 3 ticks
+4 printed Bazaar Poison = 6 Saturn enemy HP over 3 ticks
 percentage-health Damage uses the target's real Max HP
+printed Shield, Heal, Ammo, seconds, and Multicast remain literal
 ```
 
-During this opt-in demo only, the selected Arcana keeps its existing motion and visuals while its old native Arcana damage is suppressed. The translated Bazaar payload is authoritative, preventing the old and new damage models from stacking. The pending-card timer remains the only ability cooldown gate in this mode.
+Mapped Arcana retain their existing motion, timing, and visuals. Native Arcana damage is suppressed inside Warden Trial so the translated Bazaar payload is the single authoritative damage result rather than stacking old and new values. The immutable source fields remain beside the mutable runtime state so later balance changes are reversible.
 
-The pause menu also exposes Haste, Charge, Slow, and Freeze test buttons that act directly on the current pending instance. These controls are instrumentation for validating timer math; they are not additional cards.
+## 11. Verification and tuning boundary
 
-Board-dependent translations are explicit provisional demo rules. With no multi-item board yet, Astrolabe and Port affect the replacement current card; Card Table applies to demo Friends; Honing Steel applies to demo Weapons. Shop, day, value, adjacency, and acquisition passives remain out of the slice rather than being silently invented.
+The full runtime is implemented in `src/warden-trial-bazaar-runtime.js`; catalog and reward-card construction remain separate in `src/warden-trial-bazaar-catalog.js` and `src/warden-trial-progression.js`.
 
-## 11. Implementation handoff
+Automated coverage verifies that:
 
-The runtime stack keeps immutable Bazaar catalog data separate from the mutable current-card pending instance, uses the explicit 5-second pending fallback when the raw cooldown is `null`, and registers the 43 non-direct entries as a Warden-only Tactic data family. Tactic execution and unsupported board/economy translations must land explicitly in later behavior passes rather than pretending those systems already exist.
+- all 113 catalog IDs enter the ordinary Up play path;
+- every rule trigger used by all 43 Tactics has a runtime lifecycle seam;
+- reward construction produces 70 unique Arcana and 43 unique Tactics;
+- source cooldowns and the 5-second passive fallback remain intact;
+- off-current timer effects wait for the targeted card;
+- representative damage, DoT, Ammo, Multicast, Shield, Heal, acquisition, passive, fight-start, and fight-end behaviors resolve;
+- Warden Trial still uses one current card, three reward choices, and the original add/draw/discard progression.
 
-Outside the opt-in behavior demo, the pending-timer layer does not replace Saturn's existing Arcana damage/effect values. Any full-roster source-to-Saturn behavior or damage pass must retain the raw Bazaar fields beside translated runtime values so later tuning remains reversible.
+This is a complete first implementation, not a claim that the balance is final. The explicit transform constants, deterministic target selection, Focus/Momentum translations, and progression proxies are expected tuning points. Changes should preserve the pinned Bazaar source data and adjust only the Saturn translation layer.
