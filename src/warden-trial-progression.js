@@ -1,7 +1,11 @@
 import { WEAPON_STARTER_ARCANA_IDS } from './weapon-stance-plan.js';
 import { arcanaDownStanceId } from './arcana-stance-pairings.js';
 import { WIZARD_ARCANA_CATALOG } from './wizard-arcana-catalog.js';
-import { wardenTrialBazaarItemForArcana } from './warden-trial-bazaar-catalog.js';
+import {
+  WARDEN_TRIAL_BAZAAR_TACTICS,
+  wardenTrialBazaarItemForArcana,
+  wardenTrialBazaarTacticById,
+} from './warden-trial-bazaar-catalog.js';
 
 // Warden Trial deliberately has a larger resource budget than the ordinary
 // Arena. Keep this value here with the trial's authored progression so the
@@ -33,20 +37,44 @@ const starterWeaponByArcanaId = new Map(Object.entries(WEAPON_STARTER_ARCANA_IDS
 // Every canonical Arcana receives one authored down-side stance. Arcana IDs
 // are unique while stance IDs intentionally repeat, allowing all 70 Arcana to
 // live in the finite Warden Trial upgrade pool without duplicating an Arcana.
-export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze(
-  WIZARD_ARCANA_CATALOG.map(arcana => {
-    const bazaarItem = wardenTrialBazaarItemForArcana(arcana.arcanaId);
-    return freezePair({
-      id: arcana.arcanaId,
-      weaponId: starterWeaponByArcanaId.get(arcana.arcanaId) || null,
-      stanceId: arcanaDownStanceId(arcana.arcanaId),
-      arcanaId: arcana.arcanaId,
-      element: arcana.element,
-      bazaarItemId: bazaarItem?.id || null,
-      pendingCooldownSeconds: bazaarItem?.pendingCooldownSeconds ?? null,
-    });
-  }),
+const arcanaPairings = WIZARD_ARCANA_CATALOG.map(arcana => {
+  const bazaarItem = wardenTrialBazaarItemForArcana(arcana.arcanaId);
+  return freezePair({
+    id: arcana.arcanaId,
+    family: 'arcana',
+    weaponId: starterWeaponByArcanaId.get(arcana.arcanaId) || null,
+    stanceId: arcanaDownStanceId(arcana.arcanaId),
+    arcanaId: arcana.arcanaId,
+    tacticId: null,
+    element: arcana.element,
+    bazaarItemId: bazaarItem?.id || null,
+    pendingCooldownSeconds: bazaarItem?.pendingCooldownSeconds ?? null,
+  });
+});
+
+// Tactics reuse the same 30 authored Down stances. Their Up side is a Bazaar
+// setup/payoff action instead of an Arcana, while the existing one-card draw,
+// reward, discard, and stance flow remains unchanged.
+export const WARDEN_TRIAL_TACTIC_STANCE_IDS = Object.freeze(
+  Array.from({ length:30 }, (_,index)=>`S${String(index+1).padStart(2,'0')}`),
 );
+
+const tacticPairings = WARDEN_TRIAL_BAZAAR_TACTICS.map((item,index)=>freezePair({
+  id:`TACTIC:${item.tacticId}`,
+  family:'tactic',
+  weaponId:null,
+  stanceId:WARDEN_TRIAL_TACTIC_STANCE_IDS[index%WARDEN_TRIAL_TACTIC_STANCE_IDS.length],
+  arcanaId:null,
+  tacticId:item.tacticId,
+  element:null,
+  bazaarItemId:item.id,
+  pendingCooldownSeconds:item.pendingCooldownSeconds,
+}));
+
+export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze([
+  ...arcanaPairings,
+  ...tacticPairings,
+]);
 
 const pairById = new Map(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => [pair.id, pair]));
 
@@ -60,14 +88,18 @@ export function wardenTrialPairingForCard(card) {
   if (explicit) return explicit;
   const stanceId = String(card?.__wardenTrialStanceId || card?.id || '').trim().toUpperCase();
   const arcanaId = String(card?.__wardenTrialArcanaId || '').trim().toUpperCase();
+  const tacticId = String(card?.__wardenTrialTacticId || '').trim().toUpperCase();
   return WARDEN_TRIAL_CARD_PAIRINGS.find(pair => (
-    pair.stanceId === stanceId && pair.arcanaId === arcanaId
+    pair.stanceId === stanceId
+      && (pair.arcanaId === arcanaId || pair.tacticId === tacticId)
   )) || null;
 }
 
 export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
   if (!card || !pairing?.id) return null;
-  const bazaarItem = wardenTrialBazaarItemForArcana(pairing.arcanaId);
+  const bazaarItem = pairing.family==='tactic'
+    ?wardenTrialBazaarTacticById(pairing.tacticId)
+    :wardenTrialBazaarItemForArcana(pairing.arcanaId);
   return Object.freeze({
     ...card,
     __wardenTrialCard: true,
@@ -76,6 +108,8 @@ export function createWardenTrialCard(card, pairing, { starter = false } = {}) {
     __wardenTrialWeaponId: pairing.weaponId,
     __wardenTrialStanceId: pairing.stanceId,
     __wardenTrialArcanaId: pairing.arcanaId,
+    __wardenTrialTacticId: pairing.tacticId,
+    __wardenTrialUpKind: pairing.family,
     __wardenTrialElement: pairing.element,
     __wardenTrialBazaarItemId: bazaarItem?.id || null,
     __wardenTrialBazaar: bazaarItem,

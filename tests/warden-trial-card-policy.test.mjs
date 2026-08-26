@@ -17,6 +17,7 @@ import {
   wardenTrialUpArcanaIdForCard,
 } from '../src/warden-trial-card-policy.js';
 import {
+  WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS,
   createWardenTrialCardCooldown,
   wardenTrialCardCooldownSeconds,
 } from '../src/warden-trial-card-cooldown.js';
@@ -33,39 +34,49 @@ const pendingCard = arcanaId => ({
 });
 const flameStrikePendingCard=pendingCard('FLAME-STRIKE');
 assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'up'}),5);
-assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down'}),5,
-  'both directions wait on the same pending card instance');
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down'}),1,
+  'Down uses the short held-card recovery instead of the Bazaar Up cooldown');
 assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'up',abilityCooldowns:false}),0,
-  'the compatibility toggle bypasses only an upward play');
-assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down',abilityCooldowns:false}),5,
-  'the downward play still waits on the Bazaar source timer');
+  'the compatibility toggle removes only upward recovery');
+assert.equal(wardenTrialCardCooldownSeconds(flameStrikePendingCard,{direction:'down',abilityCooldowns:false}),WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS,
+  'the downward play still has its one-second cadence');
 assert.equal(wardenTrialCardCooldownSeconds(null),0);
 
 const cardCooldown=createWardenTrialCardCooldown();
 assert.equal(cardCooldown.snapshot().instanceId,null);
 let pending=cardCooldown.deal(flameStrikePendingCard);
 assert.equal(pending.duration,5);
-assert.equal(pending.remaining,5);
+assert.equal(pending.remaining,0);
 assert.equal(pending.sourceCooldownSeconds,5);
-assert.equal(pending.ready,false);
+assert.equal(pending.phase,'ready');
+assert.equal(pending.ready,true);
+assert.equal(cardCooldown.canPlay('up'),true);
+assert.equal(cardCooldown.canPlay('down'),true);
+assert.equal(cardCooldown.update(1.25).ready,true,'drawn cards never gain a pre-play wait');
+pending=cardCooldown.begin(flameStrikePendingCard,{direction:'up'});
+assert.equal(pending.remaining,5);
+assert.equal(pending.phase,'recovering');
 assert.equal(cardCooldown.canPlay('up'),false);
 assert.equal(cardCooldown.canPlay('down'),false);
-assert.equal(cardCooldown.canPlay('up',{abilityCooldowns:false}),true,
-  'the legacy setting bypasses this timer only when playing Up');
-assert.equal(cardCooldown.canPlay('down',{abilityCooldowns:false}),false);
 const firstInstanceId=pending.instanceId;
 pending=cardCooldown.update(1.25);
 assert.equal(pending.remaining,3.75);
 assert.ok(Math.abs(pending.progress-.75)<1e-9);
 const secondInstance=cardCooldown.deal(flameStrikePendingCard);
 assert.notEqual(secondInstance.instanceId,firstInstanceId,'redealing the same catalog card creates fresh mutable timing state');
-assert.equal(secondInstance.remaining,5);
+assert.equal(secondInstance.remaining,0);
+assert.equal(secondInstance.ready,true);
+const modifiedInstance=cardCooldown.deal(flameStrikePendingCard,{durationSeconds:3.5});
+assert.equal(modifiedInstance.sourceCooldownSeconds,5,'board modifiers never rewrite the immutable Bazaar source cooldown');
+assert.equal(modifiedInstance.duration,3.5,'the ready instance remembers the runtime-adjusted recovery duration');
+assert.equal(cardCooldown.begin(flameStrikePendingCard,{direction:'up'}).remaining,3.5);
 const passivePending=cardCooldown.deal(pendingCard('SEARING-RUSH'));
 assert.equal(passivePending.sourceCooldownSeconds,null,'a passive Bazaar source keeps its raw missing cooldown');
-assert.equal(passivePending.duration,5,'the passive source receives the explicit Saturn pending fallback');
+assert.equal(passivePending.duration,5,'the passive source receives the explicit Saturn recovery fallback');
 
 const tenSecondCard=pendingCard('EARTHEN-AEGIS');
 cardCooldown.deal(tenSecondCard);
+cardCooldown.begin(tenSecondCard,{direction:'up'});
 cardCooldown.haste(2);
 cardCooldown.haste(1);
 pending=cardCooldown.update(1);
@@ -74,28 +85,37 @@ assert.equal(pending.hasteRemaining,2,'additional Haste extends the active durat
 
 cardCooldown.deal(tenSecondCard);
 assert.equal(cardCooldown.snapshot().hasteRemaining,0,'a replacement never inherits the previous card\'s Haste');
+cardCooldown.begin(tenSecondCard,{direction:'up'});
 cardCooldown.slow(2);
 pending=cardCooldown.update(1);
 assert.equal(pending.remaining,9.5,'Slow halves cooldown drain');
 
 cardCooldown.deal(tenSecondCard);
+cardCooldown.begin(tenSecondCard,{direction:'up'});
 cardCooldown.haste(1);
 cardCooldown.slow(1);
 pending=cardCooldown.update(1);
 assert.equal(pending.remaining,9,'Haste and Slow combine multiplicatively to normal drain');
 
 cardCooldown.deal(tenSecondCard);
+cardCooldown.begin(tenSecondCard,{direction:'up'});
 cardCooldown.freeze(1);
 assert.equal(cardCooldown.update(1).remaining,10,'Freeze pauses cooldown drain');
 assert.equal(cardCooldown.update(1).remaining,9,'normal drain resumes after Freeze expires');
 
 cardCooldown.deal(tenSecondCard);
+cardCooldown.begin(tenSecondCard,{direction:'up'});
 assert.equal(cardCooldown.charge(3).remaining,7,'Charge subtracts seconds immediately');
 pending=cardCooldown.charge(99);
 assert.equal(pending.remaining,0);
-assert.equal(pending.ready,true);
-assert.equal(cardCooldown.canPlay('up'),true);
-assert.equal(cardCooldown.canPlay('down'),true);
+assert.equal(pending.complete,true);
+assert.equal(pending.ready,false,'a completed played card must cycle before another direction can resolve');
+assert.equal(cardCooldown.canPlay('up'),false);
+assert.equal(cardCooldown.canPlay('down'),false);
+cardCooldown.deal(tenSecondCard);
+pending=cardCooldown.begin(tenSecondCard,{direction:'down',durationSeconds:WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS});
+assert.equal(pending.duration,WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS);
+assert.equal(pending.remaining,WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS);
 assert.equal(cardCooldown.reset().instanceId,null);
 
 assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_STARTER_STANCE_IDS));
@@ -245,11 +265,11 @@ assert.equal(trialQueueDeck.drawCount,1,'the other starter remains honestly coun
 const expectedNextCard=trialQueueDeck.upcoming[0];
 const firstTrialCard=trialQueueDeck.hand[0];
 assert.ok(firstTrialCard&&expectedNextCard&&firstTrialCard!==expectedNextCard,'the active and next cards are distinct authored starters');
-assert.equal(trialQueueDeck.play(0),firstTrialCard,'the current Warden card plays through the shared deck');
+assert.equal(trialQueueDeck.discard(0),firstTrialCard,'the recovered Warden card cycles through the shared randomized deck');
 assert.equal(trialQueueDeck.hand[0],expectedNextCard,'the displayed preview becomes the next active card');
 assert.equal(trialQueueDeck.drawCount,0,'drawing the preview decrements the visible draw count');
-assert.equal(trialQueueDeck.discardCount,1,'playing the active card increments the visible discard count');
-trialQueueDeck.play(0);
+assert.equal(trialQueueDeck.discardCount,1,'finishing recovery increments the visible discard count');
+trialQueueDeck.discard(0);
 assert.equal(trialQueueDeck.discardCount,0,'exhausting the one-card queue reshuffles its discard pile');
 assert.equal(trialQueueDeck.drawCount,1,'the reshuffled two-card deck exposes one current and one upcoming card');
 

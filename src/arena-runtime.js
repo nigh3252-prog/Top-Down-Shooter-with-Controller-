@@ -41,14 +41,9 @@ import { WARDEN_TRIAL_SETTINGS } from './warden-trial-settings.js';
 import { DEFAULT_WARDEN_TEMPERAMENT_ID, normalizeWardenTemperament } from './warden-trial-temperaments.js';
 import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './warden-trial-stage.js';
 import { installWardenTrialSwipeSurface, isWardenTrialCardGestureEnabled } from './warden-trial-card-ui.js';
-import { createWardenTrialCardCooldown } from './warden-trial-card-cooldown.js';
+import { WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS, createWardenTrialCardCooldown } from './warden-trial-card-cooldown.js';
 import { dispatchWardenTrialUpArcana, isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon, wardenTrialUpArcanaIdForCard, wardenTrialUpTacticIdForCard } from './warden-trial-card-policy.js';
-import {
-  WARDEN_TRIAL_BAZAAR_DEMO_ROSTER,
-  createWardenTrialBazaarDemoRuntime,
-  wardenTrialBazaarDemoCards,
-  wardenTrialBazaarDemoEntry,
-} from './warden-trial-bazaar-demo.js';
+import { createWardenTrialBazaarRuntime } from './warden-trial-bazaar-runtime.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_REWARD_CHOICE_COUNT,
@@ -71,22 +66,14 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   const wardenTrialMode=runtimeConfig.wardenTrial===true||runtimeConfig.variant==='warden-trial';
-  const wardenTrialBazaarDemo=wardenTrialMode&&runtimeConfig.bazaarDemo===true;
   let wardenTrialEnemySet=normalizeWardenTrialEnemySet(StoneSettings.get('wardenTrial.enemySet',WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS));
   let wardenTrialTemperament=normalizeWardenTemperament(StoneSettings.get('wardenTrial.temperament',DEFAULT_WARDEN_TEMPERAMENT_ID));
-  // Entering the behavior demo always starts with source cooldowns enforced,
-  // even if an earlier ordinary Warden session saved the Up-only bypass.
-  // The existing menu toggle remains available as explicit instrumentation.
-  let wardenTrialAbilityCooldowns=wardenTrialBazaarDemo
-    ?true
-    :StoneSettings.get('wardenTrial.abilityCooldowns',WARDEN_TRIAL_SETTINGS.abilityCooldowns)!==false;
+  let wardenTrialAbilityCooldowns=StoneSettings.get('wardenTrial.abilityCooldowns',WARDEN_TRIAL_SETTINGS.abilityCooldowns)!==false;
   let wardenTrialWave=1;
   const wardenTrialSelectedPairIds=new Set();
   let wardenTrialRewardChoices=[];
   let wardenTrialRewardPending=false;
-  let wardenTrialBazaarDemoCardId=wardenTrialBazaarDemoEntry(runtimeConfig.query?.demoCard)?.id
-    ||WARDEN_TRIAL_BAZAAR_DEMO_ROSTER[0]?.id||null;
-  let wardenTrialBazaarDemoRuntime=null;
+  let wardenTrialBazaarRuntime=null;
   const lockedStandard=runtimeConfig.enemyLab||wardenTrialMode?null:readArenaStandardSetup();
   const startupTrace=createArenaStartupTrace({location:globalThis.location});
   const summarizeStandard=standard=>{
@@ -127,14 +114,11 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   ]);
   document.documentElement.dataset.arenaMode = runtimeConfig.mode;
   if(runtimeConfig.variant)document.documentElement.dataset.arenaVariant=runtimeConfig.variant;
-  if(wardenTrialBazaarDemo)document.documentElement.dataset.arenaBazaarDemo='true';
   document.documentElement.dataset.arenaTheme = arenaTheme.id;
   provideArenaRuntimeConfig(runtimeConfig);
   const runtimeListeners=new Set();
   const emitRuntime=event=>{for(const listener of [...runtimeListeners])listener(event);};
 const STANCE_CARDS = gameContent.cards.list({family:'stance'});
-const WARDEN_BAZAAR_DEMO_CARDS=wardenTrialBazaarDemo?wardenTrialBazaarDemoCards(STANCE_CARDS):[];
-const WARDEN_BAZAAR_DEMO_CARD_BY_ID=new Map(WARDEN_BAZAAR_DEMO_CARDS.map(card=>[card.__wardenTrialDemoId,card]));
 
 /* ============================================================
    COMBAT ARENA
@@ -516,16 +500,9 @@ function ensureStanceMatchesWeapon(){
 function starterDeckForWardenTrial(weaponId = combatState.weapon){
   return starterCardsForWardenTrialWeapon(weaponId, STANCE_CARDS);
 }
-function selectedWardenTrialBazaarDemoCard(){
-  return WARDEN_BAZAAR_DEMO_CARD_BY_ID.get(wardenTrialBazaarDemoCardId)
-    ||WARDEN_BAZAAR_DEMO_CARDS[0]
-    ||null;
-}
-function rebuildDeck(){
+function rebuildDeck({dealReady=true}={}){
   if(wardenTrialMode){
-    const starterCards = wardenTrialBazaarDemo
-      ?[selectedWardenTrialBazaarDemoCard()].filter(Boolean)
-      :starterDeckForWardenTrial();
+    const starterCards=starterDeckForWardenTrial();
     wardenTrialSelectedPairIds.clear();
     starterCards.forEach(card=>{
       if(card?.__wardenTrialPairId)wardenTrialSelectedPairIds.add(card.__wardenTrialPairId);
@@ -534,7 +511,8 @@ function rebuildDeck(){
     // previous run was locked, otherwise the deck preserves the old weapon's
     // pool by design.
     deck.beginRun(starterCards,{openingStanceId:null});
-    beginWardenTrialCardPending(deck.hand.find(Boolean)||null);
+    wardenTrialBazaarRuntime?.syncBoard?.(deck.pool);
+    if(dealReady)dealWardenTrialCardReady(deck.hand.find(Boolean)||null);
   }else deck.rebuild(stancePoolForWeapon());
   renderCards();
 }
@@ -708,11 +686,7 @@ const enemySystem = createArenaEnemySystem({
     encounterState?.clearRoom(roomId);
     syncDoorStates();
     if(wardenTrialMode){
-      if(wardenTrialBazaarDemo){
-        const continueDemo=()=>startNextWardenTrialWave();
-        if(typeof queueMicrotask==='function')queueMicrotask(continueDemo);else setTimeout(continueDemo,0);
-        return;
-      }
+      wardenTrialBazaarRuntime?.endFight?.({won:true,wave:wardenTrialWave});
       openWardenTrialReward(roomId);
       return;
     }
@@ -720,12 +694,17 @@ const enemySystem = createArenaEnemySystem({
     announce(progress?.cleared === progress?.total ? 'DUNGEON CLEAR' : `ROOM ${roomId + 1} CLEAR · STRIKE A DOOR`, 1.8);
   }
 });
-if(wardenTrialBazaarDemo){
-  wardenTrialBazaarDemoRuntime=createWardenTrialBazaarDemoRuntime({
+if(wardenTrialMode){
+  wardenTrialBazaarRuntime=createWardenTrialBazaarRuntime({
     enemySystem,
     getPlayer:()=>({x:actorPos.x,z:actorPos.y}),
+    getBoardCards:()=>deck.pool,
+    getCurrentCard:()=>currentTrialCard(),
+    getWave:()=>wardenTrialWave,
+    applyCurrentTimerEffect:(effect,seconds)=>applyWardenTrialCardTimerEffect(effect,seconds,{source:'bazaar'}),
+    grantCard:(criteria,detail)=>grantGeneratedWardenTrialCard(criteria,detail),
     emit:emitRuntime,
-    onChange:()=>renderWardenTrialBazaarDemoHud(),
+    onChange:()=>renderTrialCard(),
   });
 }
 function configureWardenTrialWave(){
@@ -1381,13 +1360,19 @@ function respawn(){
     wipeRecoverableStamina();
   }else fullRefillStamina();
   wardenTrialBrain?.reset?.();
-  wardenTrialBazaarDemoRuntime?.reset?.();
+  wardenTrialBazaarRuntime?.resetRun?.();
+  wardenTrialCardCooldown.reset();
   trialCardGesture?.reset?.();
   resetTrialCardFeedback();
-  rebuildDeck();
+  rebuildDeck({dealReady:!wardenTrialMode});
   encounterState.reset();
   enemySystem.reset({player:{x:actorPos.x,z:actorPos.y,targetable:true,invulnerable:false}});
-  if(wardenTrialMode)configureWardenTrialWave();
+  if(wardenTrialMode){
+    configureWardenTrialWave();
+    wardenTrialBazaarRuntime?.syncBoard?.(deck.pool);
+    wardenTrialBazaarRuntime?.startFight?.({wave:wardenTrialWave});
+    dealWardenTrialCardReady(currentTrialCard());
+  }
   clearRoomEffects();
   loadActiveRoom(dungeon.startRoomId);
   encounterState.enterRoom(dungeon.startRoomId);
@@ -1610,10 +1595,6 @@ const trialTemperamentNote=document.getElementById('trialTemperamentNote');
 const trialAbilityCooldownToggle=document.getElementById('trialAbilityCooldownToggle');
 const trialAbilityCooldownState=document.getElementById('trialAbilityCooldownState');
 const trialAbilityCooldownNote=document.getElementById('trialAbilityCooldownNote');
-const trialBazaarDemoSelect=document.getElementById('trialBazaarDemoSelect');
-const trialBazaarDemoLoad=document.getElementById('trialBazaarDemoLoad');
-const trialBazaarDemoReset=document.getElementById('trialBazaarDemoReset');
-const trialBazaarTimerButtons=[...document.querySelectorAll('[data-trial-bazaar-timer-effect]')];
 function syncMenuButton(){ menuBtn.textContent = panel.classList.contains('hidden') ? 'MENU' : 'RESUME'; }
 function syncThemeButtons(){
   themeButtons.forEach(button=>{
@@ -1660,8 +1641,8 @@ function syncTrialAbilityCooldownToggle(){
   trialAbilityCooldownToggle.classList.toggle('cooldownOff',!wardenTrialAbilityCooldowns);
   if(trialAbilityCooldownState)trialAbilityCooldownState.textContent=wardenTrialAbilityCooldowns?'ON':'OFF';
   if(trialAbilityCooldownNote)trialAbilityCooldownNote.textContent=wardenTrialAbilityCooldowns
-    ? 'Upward and downward plays wait for the current card\'s Bazaar pending timer.'
-    : 'Upward Arcana may bypass the pending timer. Downward stances still wait for it.';
+    ? 'Upward plays resolve immediately, then the same card recovers for its Bazaar cooldown. Downward stance plays recover for 1 second.'
+    : 'Upward plays resolve and cycle immediately. Downward stance plays still recover for 1 second.';
 }
 function setWardenTrialAbilityCooldowns(value,{persist=true,announceChange=true}={}){
   if(!wardenTrialMode)return false;
@@ -1723,10 +1704,7 @@ const trialCardDownLabel=document.getElementById('trialCardDownLabel');
 const trialCardCooldownOverlay=document.getElementById('trialCardCooldown');
 const trialCardCooldownLabel=document.getElementById('trialCardCooldownLabel');
 const trialCardCooldownTime=document.getElementById('trialCardCooldownTime');
-const trialBazaarDemoHud=document.getElementById('trialBazaarDemoHud');
-const trialBazaarDemoSource=document.getElementById('trialBazaarDemoSource');
-const trialBazaarDemoState=document.getElementById('trialBazaarDemoState');
-const trialBazaarDemoLast=document.getElementById('trialBazaarDemoLast');
+const trialCardRule=document.getElementById('trialCardRule');
 const trialBadge=document.getElementById('trialBadge');
 const trialDiscardPile=document.getElementById('trialDiscardPile');
 const trialDiscardCount=document.getElementById('trialDiscardCount');
@@ -1744,55 +1722,23 @@ const wardenRewardChoiceEls=[...document.querySelectorAll('[data-warden-reward-s
 let trialCardDirection='neutral';
 let trialCardCooldownDisplayedTenths=-1;
 function canPlayWardenTrialCard(direction){
-  return wardenTrialMode&&wardenTrialCardCooldown.canPlay(direction,{abilityCooldowns:wardenTrialAbilityCooldowns});
+  return wardenTrialMode&&wardenTrialCardCooldown.canPlay(direction);
 }
-function formatWardenTrialPendingSeconds(value){
+function formatWardenTrialRecoverySeconds(value){
   const numeric=Number(value);
   const seconds=value!==null&&value!==undefined&&Number.isFinite(numeric)?Math.max(0,numeric):5;
   return Number.isInteger(seconds)?String(seconds):seconds.toFixed(1).replace(/\.0$/,'');
 }
-function wardenTrialBazaarDemoSourceText(item){
-  if(!item)return'NO BAZAAR SOURCE';
-  const output=item.output||{},parts=[];
-  if(Number(output.damage)>0)parts.push(`DAMAGE ${output.damage}`);
-  if(Number(output.healthDamagePercent)>0)parts.push(`${output.healthDamagePercent}% MAX HP`);
-  if(Number(output.burn)>0)parts.push(`BURN ${output.burn}`);
-  if(Number(output.poison)>0)parts.push(`POISON ${output.poison}`);
-  if(Number(output.ammo)>0)parts.push(`AMMO ${output.ammo}`);
-  if(Number(output.multicast)>1)parts.push(`MULTICAST ${output.multicast}`);
-  if(!parts.length){
-    const firstRule=Array.isArray(item.rules)?item.rules[0]:null;
-    const text=typeof firstRule==='string'?firstRule:firstRule?.effect;
-    if(text)parts.push(String(text).replace(/\.$/,''));
-  }
-  return `${item.name.toUpperCase()} · ${parts.join(' · ')||'SUPPORT EFFECT'} · ${formatWardenTrialPendingSeconds(item.pendingCooldownSeconds)}s`;
-}
-function renderWardenTrialBazaarDemoHud(){
-  if(!wardenTrialBazaarDemo||!trialBazaarDemoHud)return;
-  const card=currentTrialCard?.()||selectedWardenTrialBazaarDemoCard();
-  const item=card?.__wardenTrialBazaar||wardenTrialBazaarDemoEntry(wardenTrialBazaarDemoCardId)?.item||null;
-  const state=wardenTrialBazaarDemoRuntime?.snapshot?.();
-  trialBazaarDemoHud.hidden=false;
-  if(trialBazaarDemoSelect&&item?.id)trialBazaarDemoSelect.value=item.id;
-  if(trialBazaarDemoSource)trialBazaarDemoSource.textContent=wardenTrialBazaarDemoSourceText(item);
-  if(trialBazaarDemoState&&state){
-    const selectedAmmo=state.ammo.find(row=>row.itemId===item?.id);
-    const parts=[`SHIELD ${state.shield}`];
-    if(state.weaponDamageBonus>0)parts.push(`WEAPONS +${state.weaponDamageBonus}`);
-    if(state.friendMulticastBonus>0)parts.push(`FRIENDS +${state.friendMulticastBonus} MULTI`);
-    if(selectedAmmo)parts.push(`AMMO ${selectedAmmo.current}/${selectedAmmo.max}`);
-    if(state.activeDots>0)parts.push(`${state.activeDots} DOT`);
-    trialBazaarDemoState.textContent=parts.join(' · ');
-  }
-  if(trialBazaarDemoLast&&state)trialBazaarDemoLast.textContent=state.lastAction;
+function wardenTrialBazaarRuleText(item,{all=false}={}){
+  const rules=(Array.isArray(item?.rules)?item.rules:[]).map(rule=>typeof rule==='string'?rule:rule?.effect).filter(Boolean);
+  return (all?rules.join(' · '):rules[0])||'Owned-board support effect.';
 }
 function renderWardenTrialCardCooldown(){
   if(!wardenTrialMode||!trialCard)return;
   const cooldown=wardenTrialCardCooldown.snapshot();
   const active=cooldown.active;
   trialCard.classList.toggle('cooling',active);
-  const upwardBypass=active&&!wardenTrialAbilityCooldowns;
-  trialCard.setAttribute('aria-disabled',active&&!upwardBypass?'true':'false');
+  trialCard.setAttribute('aria-disabled',active?'true':'false');
   if(trialCardCooldownOverlay){
     trialCardCooldownOverlay.hidden=!active;
     trialCardCooldownOverlay.style.setProperty('--trial-card-cooldown-progress',String(cooldown.progress));
@@ -1807,32 +1753,65 @@ function renderWardenTrialCardCooldown(){
     :cooldown.hasteRemaining>0&&cooldown.slowRemaining>0?' · HASTE + SLOW'
       :cooldown.drainRate===2?' · HASTE ×2'
         :cooldown.drainRate===.5?' · SLOW ×0.5':'';
-  if(trialCardCooldownLabel)trialCardCooldownLabel.textContent=`CARD PENDING${modifier}`;
+  if(trialCardCooldownLabel)trialCardCooldownLabel.textContent=`${String(cooldown.direction||'CARD').toUpperCase()} RECOVERY${modifier}`;
   if(trialCardCooldownTime)trialCardCooldownTime.textContent=`${shownSeconds}s`;
-  trialCard.setAttribute('aria-label',`Current card pending, ${shownSeconds} seconds remaining${upwardBypass?'; upward Arcana may bypass': ''}. ${readyLabel}`);
-  if(trialCardStatus)trialCardStatus.textContent=`PENDING · ${shownSeconds}s${modifier}${upwardBypass?' · ↑ BYPASS':''}`;
+  trialCard.setAttribute('aria-label',`Played card recovering, ${shownSeconds} seconds remaining. The next card will be drawn when recovery finishes.`);
+  if(trialCardStatus)trialCardStatus.textContent=`${String(cooldown.direction||'CARD').toUpperCase()} RECOVERY · ${shownSeconds}s${modifier}`;
 }
-function beginWardenTrialCardPending(card=currentTrialCard()){
-  const cooldown=wardenTrialCardCooldown.deal(card);
+function dealWardenTrialCardReady(card=currentTrialCard()){
+  if(card)wardenTrialBazaarRuntime?.onCardDrawn?.(card);
+  const preparation=wardenTrialBazaarRuntime?.preparationFor?.(card)||null;
+  const cooldown=wardenTrialCardCooldown.deal(card,{durationSeconds:preparation?.durationSeconds});
   trialCardDirection='neutral';
   trialCardCooldownDisplayedTenths=-1;
   renderWardenTrialCardCooldown();
-  emitRuntime({type:'trial-card-pending',phase:cooldown.active?'started':'ready',...cooldown});
+  emitRuntime({type:'trial-card-recovery',phase:'ready',preparation,...cooldown});
   return cooldown;
+}
+function beginWardenTrialCardRecovery(card=currentTrialCard(),direction='up'){
+  const playedDirection=direction==='down'?'down':'up';
+  const preparation=playedDirection==='up'&&wardenTrialAbilityCooldowns
+    ?wardenTrialBazaarRuntime?.prepareRecovery?.(card)||null
+    :null;
+  const durationSeconds=playedDirection==='down'
+    ?WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS
+    :wardenTrialAbilityCooldowns?preparation?.durationSeconds:0;
+  const cooldown=wardenTrialCardCooldown.begin(card,{
+    direction:playedDirection,
+    durationSeconds,
+    effects:playedDirection==='up'&&wardenTrialAbilityCooldowns?preparation?.effects||[]:[],
+  });
+  trialCardDirection=playedDirection;
+  trialCardCooldownDisplayedTenths=-1;
+  renderWardenTrialCardCooldown();
+  emitRuntime({type:'trial-card-recovery',phase:cooldown.active?'started':'complete',preparation,...cooldown});
+  return cooldown;
+}
+function finishWardenTrialCardRecovery(){
+  if(!wardenTrialMode)return false;
+  const completed=wardenTrialCardCooldown.snapshot();
+  if(!completed.complete)return false;
+  const slot=currentTrialCardSlot(),playedCard=slot>=0?deck.discard(slot):null;
+  if(!playedCard)return false;
+  wardenTrialCardCooldown.reset();
+  trialCardGesture?.reset?.();
+  const nextCard=currentTrialCard();
+  dealWardenTrialCardReady(nextCard);
+  renderCards();
+  emitRuntime({type:'trial-card-recovery',phase:'cycled',playedCardId:playedCard.id||null,nextCardId:nextCard?.id||null,direction:completed.direction});
+  return true;
 }
 function applyWardenTrialCardTimerEffect(effect,seconds,{source='manual'}={}){
   if(!wardenTrialMode)return null;
-  const before=wardenTrialCardCooldown.snapshot();
   const cooldown=wardenTrialCardCooldown.applyEffect(effect,seconds);
-  if(before.active&&!cooldown.active)renderTrialCard();
-  else renderWardenTrialCardCooldown();
-  if(source==='manual')wardenTrialBazaarDemoRuntime?.applyTimerEffect?.(effect,seconds);
-  emitRuntime({type:'trial-card-timer-effect',effect,seconds:Number(seconds)||0,...cooldown});
+  renderWardenTrialCardCooldown();
+  emitRuntime({type:'trial-card-timer-effect',source,effect,seconds:Number(seconds)||0,...cooldown});
   return cooldown;
 }
 function updateWardenTrialCardCooldown(deltaSeconds){
   if(!wardenTrialMode)return;
   const before=wardenTrialCardCooldown.snapshot();
+  if(before.complete){finishWardenTrialCardRecovery();return;}
   if(!before.active)return;
   const cooldown=wardenTrialCardCooldown.update(deltaSeconds);
   const displayedTenths=Math.ceil(cooldown.remaining*10);
@@ -1840,10 +1819,7 @@ function updateWardenTrialCardCooldown(deltaSeconds){
     trialCardCooldownDisplayedTenths=displayedTenths;
     renderWardenTrialCardCooldown();
   }
-  if(before.active&&!cooldown.active){
-    renderTrialCard();
-    emitRuntime({type:'trial-card-pending',phase:'ready',...cooldown});
-  }
+  if(before.active&&cooldown.complete)finishWardenTrialCardRecovery();
 }
 function trialCardName(card){
   return String(card?.name||card?.id||'NO CARD').replace(/^S\d+\s*/,'').toUpperCase();
@@ -1872,31 +1848,6 @@ function currentTrialCard(){
   const slot=currentTrialCardSlot();
   return slot>=0?deck.hand[slot]:null;
 }
-function loadWardenTrialBazaarDemoCard(value,{closeMenu=true}={}){
-  if(!wardenTrialBazaarDemo)return false;
-  const entry=wardenTrialBazaarDemoEntry(value),card=entry&&WARDEN_BAZAAR_DEMO_CARD_BY_ID.get(entry.id);
-  if(!entry||!card)return false;
-  wardenTrialBazaarDemoCardId=entry.id;
-  wardenTrialBazaarDemoRuntime?.select?.(entry.id);
-  PC.resetArcanaRuntimeState?.({preserveResources:false});
-  wardenTrialSelectedPairIds.clear();
-  wardenTrialSelectedPairIds.add(card.__wardenTrialPairId);
-  deck.beginRun([card],{openingStanceId:null});
-  beginWardenTrialCardPending(card);
-  renderCards();
-  renderWardenTrialBazaarDemoHud();
-  announce(`${entry.name.toUpperCase()} LOADED`,.9);
-  emitRuntime({type:'warden-bazaar-demo-card-loaded',itemId:entry.id,family:entry.family});
-  if(closeMenu&&!panel.classList.contains('hidden'))toggleMenu();
-  return true;
-}
-function resetWardenTrialBazaarDemo(){
-  if(!wardenTrialBazaarDemo)return false;
-  wardenTrialBazaarDemoRuntime?.reset?.();
-  renderWardenTrialBazaarDemoHud();
-  announce('BAZAAR DEMO RESET',.8);
-  return true;
-}
 function hideWardenTrialReward(){
   wardenRewardGate?.classList.add('hidden');
   if(wardenRewardSkipButton)wardenRewardSkipButton.disabled=true;
@@ -1923,21 +1874,52 @@ function renderWardenTrialRewardChoices(){
     button.hidden=!card;
     button.disabled=!card||!wardenTrialRewardPending;
     if(!card)return;
+    const tacticId=wardenTrialUpTacticIdForCard(card);
+    const bazaarItem=card.__wardenTrialBazaar;
     const arcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
+    const upName=String(tacticId?bazaarItem?.name:arcana?.name||card.__wardenTrialArcanaId||'NO UP ACTION').toUpperCase();
     const badgeData=getStanceCardBadge(card);
     const badge=document.createElement('span');badge.className='wardenRewardClassBadge';badge.textContent=badgeData?.text||'';badge.title=badgeData?.title||'';badge.hidden=!badgeData;badge.setAttribute('aria-hidden','true');
-    const elementLabel=document.createElement('span');elementLabel.className='wardenRewardWeapon';elementLabel.textContent=`${String(arcana?.element||card.__wardenTrialElement||'ARCANA').toUpperCase()} ARCANA`;
+    const elementLabel=document.createElement('span');elementLabel.className='wardenRewardWeapon';elementLabel.textContent=tacticId?'BAZAAR TACTIC':`${String(arcana?.element||card.__wardenTrialElement||'ARCANA').toUpperCase()} ARCANA`;
     const stance=document.createElement('strong');stance.className='wardenRewardStance';stance.textContent=trialCardStanceName(card);
-    const pendingSeconds=formatWardenTrialPendingSeconds(card.__wardenTrialBazaar?.pendingCooldownSeconds);
-    const sourceName=String(card.__wardenTrialBazaar?.name||'BAZAAR SOURCE').toUpperCase();
-    const arcanaName=document.createElement('span');arcanaName.className='wardenRewardArcana';arcanaName.textContent=`↑ ${String(arcana?.name||card.__wardenTrialArcanaId||'NO ARCANA').toUpperCase()} · ${wardenTrialAbilityCooldowns?`${pendingSeconds}s PENDING`:'BYPASS'}`;
-    const meta=document.createElement('span');meta.className='wardenRewardMeta';meta.textContent=`↓ CHANGE STANCE · REFILL 200 · ${pendingSeconds}s PENDING · ${sourceName}`;
+    const recoverySeconds=formatWardenTrialRecoverySeconds(bazaarItem?.pendingCooldownSeconds);
+    const sourceName=String(bazaarItem?.name||'BAZAAR SOURCE').toUpperCase();
+    const arcanaName=document.createElement('span');arcanaName.className='wardenRewardArcana';arcanaName.textContent=`↑ ${upName} · ${wardenTrialAbilityCooldowns?`${recoverySeconds}s RECOVERY`:'NO RECOVERY'}`;
+    const meta=document.createElement('span');meta.className='wardenRewardMeta';meta.textContent=`↓ CHANGE STANCE · REFILL 200 · 1s RECOVERY · ${wardenTrialBazaarRuleText(bazaarItem)}`;
     button.append(badge,elementLabel,stance,arcanaName,meta);
     button.dataset.pairId=card.__wardenTrialPairId||'';
     button.dataset.stanceType=badgeData?.stanceLabel||'';
     button.dataset.stanceDefense=badgeData?.defenseLabel||'';
-    button.setAttribute('aria-label',`Add ${arcana?.name||card.__wardenTrialArcanaId||'Arcana'} with ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''}; when drawn, ${sourceName} starts a ${pendingSeconds} second pending timer for both directions${wardenTrialAbilityCooldowns?'':'; upward Arcana may bypass it'}`);
+    button.setAttribute('aria-label',`Add ${upName} with ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''}; ${wardenTrialBazaarRuleText(bazaarItem,{all:true})} ${sourceName} is ready when drawn. Playing upward starts ${wardenTrialAbilityCooldowns?`a ${recoverySeconds} second recovery`:'no recovery'}; playing downward starts a 1 second recovery.`);
   });
+}
+function grantGeneratedWardenTrialCard(criteria={},detail={}){
+  if(!wardenTrialMode)return null;
+  const available=wardenTrialRewardCards({
+    stanceCards:STANCE_CARDS,
+    selectedPairIds:[...wardenTrialSelectedPairIds],
+  });
+  const preferredItemId=String(criteria?.preferredItemId||'').trim().toUpperCase();
+  const requestedSize=String(criteria?.size||'').trim().toLowerCase();
+  const requestedTags=(Array.isArray(criteria?.tags)?criteria.tags:[]).map(value=>String(value||'').trim()).filter(Boolean);
+  const matches=available.filter(card=>{
+    const item=card.__wardenTrialBazaar;
+    if(preferredItemId&&item?.id!==preferredItemId)return false;
+    if(requestedSize&&String(item?.size||'').toLowerCase()!==requestedSize)return false;
+    if(requestedTags.length){
+      const tags=new Set(Array.isArray(item?.tags)?item.tags:[]);
+      const matched=requestedTags.filter(tag=>tags.has(tag)).length;
+      if(criteria?.matchAnyTag?matched===0:matched!==requestedTags.length)return false;
+    }
+    return true;
+  });
+  const card=drawWardenTrialRewardChoices(matches,1)[0]||null;
+  if(!card||!deck.addCard(card))return null;
+  const pairId=wardenTrialPairingForCard(card)?.id||card.__wardenTrialPairId;
+  if(pairId)wardenTrialSelectedPairIds.add(pairId);
+  wardenTrialBazaarRuntime?.syncBoard?.(deck.pool);
+  emitRuntime({type:'warden-trial-card-generated',pairId,itemId:card.__wardenTrialBazaarItemId,sourceItemId:detail?.sourceItemId||null});
+  return card;
 }
 function startNextWardenTrialWave(card=null){
   if(!wardenTrialMode)return false;
@@ -1945,6 +1927,8 @@ function startNextWardenTrialWave(card=null){
     const pairId=wardenTrialPairingForCard(card)?.id||card.__wardenTrialPairId;
     if(pairId)wardenTrialSelectedPairIds.add(pairId);
     if(!deck.addCard(card))return false;
+    wardenTrialBazaarRuntime?.syncBoard?.(deck.pool);
+    wardenTrialBazaarRuntime?.onCardAcquired?.(card);
   }
   wardenTrialWave=Math.max(1,wardenTrialWave+1);
   wardenTrialRewardChoices=[];
@@ -1952,6 +1936,8 @@ function startNextWardenTrialWave(card=null){
   hideWardenTrialReward();
   arena.paused=false;
   const configured=configureWardenTrialWave();
+  wardenTrialBazaarRuntime?.syncBoard?.(deck.pool);
+  wardenTrialBazaarRuntime?.startFight?.({wave:wardenTrialWave});
   enemySystem.startRoomEncounter(activeRoomId);
   renderCards();
   resetTrialCardFeedback();
@@ -1960,6 +1946,7 @@ function startNextWardenTrialWave(card=null){
 }
 function openWardenTrialReward(roomId=activeRoomId){
   if(!wardenTrialMode||!arena.started||wardenTrialRewardPending)return false;
+  wardenTrialBazaarRuntime?.endFight?.({won:true,wave:wardenTrialWave});
   const pool=wardenTrialRewardCards({
     stanceCards:STANCE_CARDS,
     selectedPairIds:[...wardenTrialSelectedPairIds],
@@ -1990,6 +1977,7 @@ function chooseWardenTrialReward(index){
 }
 function skipWardenTrialReward(){
   if(!wardenTrialMode||!wardenTrialRewardPending)return false;
+  wardenTrialBazaarRuntime?.onRewardSkipped?.();
   return startNextWardenTrialWave();
 }
 function renderTrialPileCounts(){
@@ -2015,18 +2003,20 @@ function renderTrialUpcomingCards(){
     element.dataset.cardId=card?.id||'';
     element.dataset.arcanaId=card?.__wardenTrialArcanaId||'';
     if(!card){element.removeAttribute('aria-label');return;}
+    const tacticId=wardenTrialUpTacticIdForCard(card);
+    const bazaarItem=card.__wardenTrialBazaar;
     const arcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
-    const arcanaName=String(arcana?.name||card.__wardenTrialArcanaId||'NO ARCANA').toUpperCase();
+    const arcanaName=String(tacticId?bazaarItem?.name:arcana?.name||card.__wardenTrialArcanaId||'NO UP ACTION').toUpperCase();
     const stanceName=trialCardStanceName(card);
     const stanceId=String(card.id||'STANCE').toUpperCase();
-    const pendingSeconds=formatWardenTrialPendingSeconds(card.__wardenTrialBazaar?.pendingCooldownSeconds);
-    const sourceName=String(card.__wardenTrialBazaar?.name||'Bazaar source');
+    const recoverySeconds=formatWardenTrialRecoverySeconds(bazaarItem?.pendingCooldownSeconds);
+    const sourceName=String(bazaarItem?.name||'Bazaar source');
     const arcanaNameElement=element.querySelector('.trialUpcomingArcanaName');
     const stanceNameElement=element.querySelector('.trialUpcomingStanceName');
     if(arcanaNameElement)arcanaNameElement.textContent=arcanaName;
     if(stanceNameElement)stanceNameElement.textContent=stanceId;
     const badge=renderStanceBadge(element.querySelector('.trialUpcomingStanceBadge'),card);
-    element.setAttribute('aria-label',`Next card ${index+1}: ${arcanaName} up or ${stanceName} down; ${sourceName} begins a ${pendingSeconds} second pending timer only when this preview becomes the current card${wardenTrialAbilityCooldowns?'':'; upward Arcana may bypass it'}${badge?`; ${badge.title}`:''}`);
+    element.setAttribute('aria-label',`Upcoming card ${index+1}: ${arcanaName} up or ${stanceName} down; ${wardenTrialBazaarRuleText(bazaarItem)} ${sourceName} will be ready when randomly drawn. Upward recovery is ${wardenTrialAbilityCooldowns?`${recoverySeconds} seconds`:'disabled'}; downward recovery is 1 second${badge?`; ${badge.title}`:''}`);
   });
 }
 function renderTrialCard(){
@@ -2041,10 +2031,15 @@ function renderTrialCard(){
   const stanceNameElement=trialCard.querySelector('.trialStanceName');
   const stanceBadge=renderStanceBadge(trialCard.querySelector('.trialCardStanceBadge'),card);
   const bazaarItem=card?.__wardenTrialBazaar||null;
+  const bazaarBehavior=wardenTrialBazaarRuntime?.describeCard?.(card)||null;
   const upKind=upTacticId?'TACTIC':'ARCANA';
   const arcanaName=String(upTacticId?bazaarItem?.name:upArcana?.name||'NO ARCANA').toUpperCase();
-  const pendingSeconds=formatWardenTrialPendingSeconds(bazaarItem?.pendingCooldownSeconds);
+  const recoverySeconds=formatWardenTrialRecoverySeconds(bazaarBehavior?.cooldownSeconds??bazaarItem?.pendingCooldownSeconds);
   const bazaarName=String(bazaarItem?.name||'BAZAAR SOURCE').toUpperCase();
+  const ruleText=wardenTrialBazaarRuleText(bazaarItem);
+  const preparation=bazaarBehavior?.preparation||null;
+  const preparationText=(preparation?.effects||[]).map(({effect,seconds})=>`${String(effect).toUpperCase()} ${formatWardenTrialRecoverySeconds(seconds)}s`).join(' + ');
+  const stateText=`${bazaarBehavior?.ammo?` · AMMO ${bazaarBehavior.ammo.current}/${bazaarBehavior.ammo.max}`:bazaarBehavior?.disabled?' · DISABLED THIS FIGHT':''}${preparationText?` · PREP ${preparationText}${preparation.saturated?' · MAX':''}`:''}`;
   trialCard.dataset.cardId=card?.id||'';
   trialCard.dataset.arcanaId=upArcana?.arcanaId||'';
   trialCard.dataset.stanceId=card?.id||'';
@@ -2052,16 +2047,20 @@ function renderTrialCard(){
   trialCard.dataset.stanceDefense=stanceBadge?.defenseLabel||'';
   trialCard.dataset.bazaarItemId=bazaarItem?.id||'';
   const readyAriaLabel=card
-    ? `${bazaarName} demo card is ready${stanceBadge?`, ${stanceBadge.title}`:''}; swipe upward to ${upTacticId?`play Tactic ${arcanaName}`:upArcana?`cast ${arcanaName}`:'register the card'}${wardenTrialAbilityCooldowns?'':' with pending-timer bypass'}; or downward to enter ${stanceName}${!arena.started&&staminaCard?' and start the trial with 200 stamina':staminaCard?' and restore stamina to 200':''}`
+    ? `${bazaarName} card is ready${stanceBadge?`, ${stanceBadge.title}`:''}. ${wardenTrialBazaarRuleText(bazaarItem,{all:true})}${preparationText?` Stored preparation: ${preparationText}${preparation.saturated?', maximum preparation reached':''}.`:''} Swipe upward to ${upTacticId?`play Tactic ${arcanaName}`:upArcana?`cast ${arcanaName}`:'register the card'} immediately, then recover ${wardenTrialAbilityCooldowns?`for ${recoverySeconds} seconds`:'with no delay'}; or downward to enter ${stanceName}${!arena.started&&staminaCard?' and start the trial with 200 stamina':staminaCard?' and restore stamina to 200':''}, then recover for 1 second.`
     : 'No trial card available';
   trialCard.dataset.readyAriaLabel=readyAriaLabel;
   trialCard.setAttribute('aria-label',readyAriaLabel);
-  if(trialCardUpLabel)trialCardUpLabel.textContent=wardenTrialAbilityCooldowns?`↑ ${upKind} · ${pendingSeconds}s`:`↑ ${upKind} · BYPASS`;
-  if(trialCardDownLabel)trialCardDownLabel.textContent=`↓ STANCE · ${pendingSeconds}s`;
+  if(trialCardUpLabel)trialCardUpLabel.textContent=wardenTrialAbilityCooldowns?`↑ ${upKind} · ${recoverySeconds}s RECOVERY`:`↑ ${upKind} · NO RECOVERY`;
+  if(trialCardDownLabel)trialCardDownLabel.textContent=`↓ STANCE · 1s RECOVERY`;
   if(art)art.dataset.element=String(upArcana?.element||'').toLowerCase();
   if(arcanaNameElement){
     arcanaNameElement.textContent=arcanaName;
     arcanaNameElement.dataset.length=arcanaName.length>16?'long':'short';
+  }
+  if(trialCardRule){
+    trialCardRule.textContent=`${ruleText}${stateText}`;
+    trialCardRule.title=wardenTrialBazaarRuleText(bazaarItem,{all:true});
   }
   if(stanceNameElement){
     stanceNameElement.textContent=stanceName;
@@ -2076,11 +2075,10 @@ function renderTrialCard(){
   }
   if(trialCardStatus&&trialCardDirection==='neutral'){
     trialCardStatus.textContent=card
-      ? (arena.started?`READY · ↑ ${upKind} / ↓ STANCE · ${bazaarName}`:`READY · SWIPE DOWN TO START · ${arcanaName} / ${card?.id||'--'} · REFILL 200`)
+      ? (arena.started?`READY · ↑ ${upKind} / ↓ STANCE · ${bazaarName}${preparationText?` · PREP ${preparationText}${preparation.saturated?' · MAX':''}`:''}`:`READY · SWIPE DOWN TO START · ${arcanaName} / ${card?.id||'--'} · REFILL 200`)
       : 'NO TRIAL CARD';
   }
   renderWardenTrialCardCooldown();
-  renderWardenTrialBazaarDemoHud();
 }
 function setTrialCardFeedback(direction='neutral',message=''){
   trialCardDirection=direction==='up'||direction==='down'?direction:'neutral';
@@ -2094,7 +2092,7 @@ function playWardenTrialCardDown(){
   if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
   if(!canPlayWardenTrialCard('down')){
     renderWardenTrialCardCooldown();
-    announce('CARD PENDING',.45);
+    announce('CARD RECOVERING',.45);
     return false;
   }
   const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
@@ -2114,29 +2112,28 @@ function playWardenTrialCardDown(){
     return false;
   }
   const wasWaiting=!arena.started;
-  const played=deck.play(slot);
-  if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
   const pool=stancePoolForWeapon();
-  const index=pool.findIndex(stance=>stance.id===played.id);
+  const index=pool.findIndex(stance=>stance.id===card.id);
   if(index>=0)setStance(index);
-  else applyStance(played);
+  else applyStance(card);
   if(decision.refill)fullRefillStamina();
   if(wasWaiting){
     arena.started=true;
     arena.paused=false;
     startGate?.classList.add('hidden');
   }
-  setTrialCardFeedback('down',wasWaiting?'DOWN REGISTERED · TRIAL STARTED':decision.refill?'DOWN REGISTERED · STAMINA RESTORED':`DOWN REGISTERED · ${trialCardName(played)}`);
-  beginWardenTrialCardPending(currentTrialCard());
+  setTrialCardFeedback('down',wasWaiting?'DOWN REGISTERED · TRIAL STARTED':decision.refill?'DOWN REGISTERED · STAMINA RESTORED':`DOWN REGISTERED · ${trialCardName(card)}`);
+  const recovery=beginWardenTrialCardRecovery(card,'down');
+  if(recovery.complete)finishWardenTrialCardRecovery();
   renderCards();
-  announce(trialCardName(played),.9);
+  announce(trialCardName(card),.9);
   return true;
 }
 function playWardenTrialCardUp(){
   if(!wardenTrialMode||arena.deadT>=0||roomTransition?.active)return false;
   if(!canPlayWardenTrialCard('up')){
     renderWardenTrialCardCooldown();
-    announce('CARD PENDING',.45);
+    announce('CARD RECOVERING',.45);
     return false;
   }
   const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
@@ -2156,10 +2153,10 @@ function playWardenTrialCardUp(){
     announce(message,.8);
     return false;
   }
-  if(wardenTrialBazaarDemoRuntime){
-    const demoReadiness=wardenTrialBazaarDemoRuntime.canPlay(card);
-    if(!demoReadiness.accepted){
-      const message=demoReadiness.reason==='out-of-ammo'?'OUT OF AMMO · PLAY PORT':'DEMO CARD NOT READY';
+  if(wardenTrialBazaarRuntime){
+    const bazaarReadiness=wardenTrialBazaarRuntime.canPlay(card);
+    if(!bazaarReadiness.accepted){
+      const message=bazaarReadiness.reason==='out-of-ammo'?'OUT OF AMMO · CYCLE OR RELOAD':'CARD EFFECT NOT READY';
       setTrialCardFeedback('up',message);
       announce(message,.8);
       return false;
@@ -2167,10 +2164,10 @@ function playWardenTrialCardUp(){
   }
   let arcanaCard=null;
   if(decision.arcanaId){
-    // The pending-card timer is authoritative in the demo. Reset only the
+    // The held-card recovery is authoritative in Warden Trial. Reset only the
     // legacy Arcana resource banks before firing so their old cooldowns cannot
-    // create a second, hidden gate behind the selected Bazaar cooldown.
-    if(wardenTrialBazaarDemo)PC.resetArcanaRuntimeState?.({preserveResources:false});
+    // create a second, hidden gate behind the card's Bazaar cooldown.
+    PC.resetArcanaRuntimeState?.({preserveResources:false});
     const arcanaResult=dispatchWardenTrialUpArcana({
       arcanaId:decision.arcanaId,
       resolveArcanaCard:wizardArcanaCardById,
@@ -2181,7 +2178,7 @@ function playWardenTrialCardUp(){
         slot,
         weaponId:combatState.weapon,
         stanceCardId:card.id,
-        bazaarDemo:wardenTrialBazaarDemo,
+        bazaarRuntime:true,
         bazaarItem:card.__wardenTrialBazaar||null,
       },
     });
@@ -2191,26 +2188,18 @@ function playWardenTrialCardUp(){
       return false;
     }
     arcanaCard=arcanaResult.arcanaCard;
-  }else if(!decision.tacticId||!wardenTrialBazaarDemoRuntime){
+  }else if(!decision.tacticId||!wardenTrialBazaarRuntime){
     setTrialCardFeedback('up','TACTIC RUNTIME UNAVAILABLE');
     announce('TACTIC RUNTIME UNAVAILABLE',.8);
     return false;
   }
-  const played=deck.play(slot);
-  if(!played){
-    setTrialCardFeedback('up','CARD NOT READY');
-    announce('CARD NOT READY',.8);
-    return false;
-  }
-  const demoResult=wardenTrialBazaarDemoRuntime?.play?.(played)||null;
-  const upName=String(demoResult?.entry?.name||arcanaCard?.name||decision.tacticId||'CARD').toUpperCase();
+  beginWardenTrialCardRecovery(card,'up');
+  let bazaarResult=null;
+  bazaarResult=wardenTrialBazaarRuntime?.play?.(card)||null;
+  const upName=String(bazaarResult?.entry?.item?.name||arcanaCard?.name||decision.tacticId||'CARD').toUpperCase();
   setTrialCardFeedback('up',`UP FIRED · ${upName}`);
-  beginWardenTrialCardPending(currentTrialCard());
-  for(const timerEffect of demoResult?.timerEffects||[]){
-    applyWardenTrialCardTimerEffect(timerEffect.effect,timerEffect.seconds,{source:'tactic'});
-  }
+  if(wardenTrialCardCooldown.snapshot().complete)finishWardenTrialCardRecovery();
   renderCards();
-  renderWardenTrialBazaarDemoHud();
   announce(upName,.9);
   return true;
 }
@@ -2232,6 +2221,7 @@ if(wardenTrialMode&&trialCard){
       if(event?.target?.closest?.('#topBar,#panel'))return false;
       return true;
     },
+    exitOnResolve:false,
     onDirection:direction=>direction==='down'?playWardenTrialCardDown():playWardenTrialCardUp(),
   });
 }
@@ -2242,13 +2232,6 @@ trialEnemyButtons.forEach(button=>button.addEventListener('click',()=>selectWard
 trialWeaponButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialWeapon(button.dataset.trialWeapon)));
 trialTemperamentButtons.forEach(button=>button.addEventListener('click',()=>selectWardenTrialTemperament(button.dataset.trialTemperament)));
 trialAbilityCooldownToggle?.addEventListener('click',()=>setWardenTrialAbilityCooldowns(!wardenTrialAbilityCooldowns));
-trialBazaarDemoLoad?.addEventListener('click',()=>loadWardenTrialBazaarDemoCard(trialBazaarDemoSelect?.value));
-trialBazaarDemoReset?.addEventListener('click',resetWardenTrialBazaarDemo);
-trialBazaarTimerButtons.forEach(button=>button.addEventListener('click',()=>applyWardenTrialCardTimerEffect(
-  button.dataset.trialBazaarTimerEffect,
-  button.dataset.seconds,
-  {source:'manual'},
-)));
 wardenRewardChoiceEls.forEach((button,index)=>button.addEventListener('click',()=>chooseWardenTrialReward(index)));
 wardenRewardSkipButton?.addEventListener('click',skipWardenTrialReward);
 syncThemeButtons();
@@ -2605,9 +2588,9 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
   // + HUD keep animating on rawDt so the freeze reads as impact, not lag
   const dt = HitFeel.update(rawDt);
   if(!capture&&!wardenTrialMode){pollPad();gatherInput();}
-  // The one current card's pending timer uses real time. It continues through
+  // The played current card's recovery uses real time. It continues through
   // hitstop and menus so returning from another interaction never extends its
-  // displayed Bazaar wait; upcoming previews do not tick here.
+  // displayed Bazaar recovery; upcoming cards are ready when drawn.
   if(wardenTrialMode)updateWardenTrialCardCooldown(rawDt);
   if(capture||!isPaused()){
     if(roomTransition.active){
@@ -2621,7 +2604,7 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
       }   // countdown done: fresh hand
       if(wardenTrialMode)updateWardenTrialAI(dt);
       updatePlayer(dt, rawDt, simulationNow);
-      wardenTrialBazaarDemoRuntime?.update?.(dt);
+      wardenTrialBazaarRuntime?.update?.(dt);
       const activeCell = findCellAtPoint(dungeon, { x:actorPos.x, z:actorPos.y }, HEX_SIZE);
       if(activeCell && activeCell.roomId !== activeRoomId){
         const door = findTransitionDoor(activeCell.roomId);
@@ -3044,7 +3027,7 @@ function destroyRuntime(){
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
   trialCardGesture?.destroy?.();trialCardGesture=null;
-  wardenTrialBazaarDemoRuntime?.destroy?.();wardenTrialBazaarDemoRuntime=null;
+  wardenTrialBazaarRuntime?.destroy?.();wardenTrialBazaarRuntime=null;
   accordionEnemyOverlay?.destroy?.();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
@@ -3053,7 +3036,7 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialCardPending:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,wardenTrialBazaarDemo:wardenTrialBazaarDemo?wardenTrialBazaarDemoRuntime?.snapshot?.()||null:null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialCardPending:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,wardenTrialBazaar:wardenTrialMode?wardenTrialBazaarRuntime?.snapshot?.()||null:null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
@@ -3069,7 +3052,7 @@ const runtimeHandle={
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
-  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityCooldowns,applyWardenTrialCardTimerEffect,chooseWardenTrialReward,skipWardenTrialReward,loadWardenTrialBazaarDemoCard,resetWardenTrialBazaarDemo,
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityCooldowns,applyWardenTrialCardTimerEffect,chooseWardenTrialReward,skipWardenTrialReward,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };
@@ -3110,7 +3093,7 @@ if(wardenTrialMode){
   enemySystem.setPressureBudget(2);enemySystem.setAggression(.9);
   const title=document.querySelector('#startCard .sgTitle'),hint=document.querySelector('#startCard .sgHint'),start=document.getElementById('startBtn'),pauseTitle=document.querySelector('#panel .pauseTitle');
   if(title)title.textContent='WARDEN TRIAL';
-  if(hint)hint.textContent='Wait for the current card\'s Bazaar pending timer, then swipe down to change stance and refill 200 stamina or up to cast its mapped Arcana.';
+  if(hint)hint.textContent='Swipe down to change stance and refill 200 stamina, or up to fire the mapped Arcana. The played card stays in place until its recovery finishes, then the deck draws a random ready card.';
   if(start)start.hidden=true;
   if(pauseTitle)pauseTitle.textContent='TRIAL PAUSED';
   startGate.classList.add('hidden');
