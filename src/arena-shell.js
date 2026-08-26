@@ -56,17 +56,17 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <button id="trialCard" class="trialCard" type="button" aria-label="Current trial card; swipe up or down">
       <span class="trialCardArt" aria-hidden="true">
         <span class="trialCardHalf trialCardUp">
-          <span id="trialCardUpLabel" class="trialCardLabel">↑ ARCANA · PENDING</span>
+          <span id="trialCardUpLabel" class="trialCardLabel">↑ ARCANA · RECOVERY</span>
           <strong class="trialCardName trialArcanaName">CURRENT ARCANA</strong>
           <span id="trialCardRule" class="trialCardRule">BAZAAR EFFECT</span>
         </span>
         <span class="trialCardHalf trialCardDown">
-          <span class="trialCardLabelRow"><span id="trialCardDownLabel" class="trialCardLabel">↓ STANCE · PENDING</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
+          <span class="trialCardLabelRow"><span id="trialCardDownLabel" class="trialCardLabel">↓ STANCE · 1s RECOVERY</span><span class="trialStanceBadge trialCardStanceBadge" hidden></span></span>
           <strong class="trialCardName trialStanceName">CURRENT STANCE</strong>
         </span>
       </span>
       <span id="trialCardCooldown" class="trialCardCooldown" aria-hidden="true" hidden>
-        <span id="trialCardCooldownLabel">CARD PENDING</span>
+        <span id="trialCardCooldownLabel">CARD RECOVERY</span>
         <strong id="trialCardCooldownTime">0.0s</strong>
       </span>
     </button>
@@ -135,7 +135,7 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     <button id="trialAbilityCooldownToggle" class="trialAbilityCooldownToggle" type="button" aria-pressed="true">
       <span>UPWARD ARCANA</span><strong id="trialAbilityCooldownState">ON</strong>
     </button>
-    <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Upward ability cards wait 3 seconds.</p>
+    <p id="trialAbilityCooldownNote" class="trialAbilityCooldownNote" aria-live="polite">Upward plays fire immediately, then the same card recovers.</p>
   </section>
   <section class="pauseSection trialTemperamentSection" aria-labelledby="trialTemperamentTitle">
     <h2 id="trialTemperamentTitle">DEFENSE LEVEL</h2>

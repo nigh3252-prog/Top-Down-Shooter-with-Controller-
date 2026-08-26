@@ -54,7 +54,7 @@ function createHarness(items,{enemyHp=300,playerHp=100,currentIndex=0,grantCard=
     getPlayer:()=>({x:0,z:0}),
     getBoardCards:()=>board,
     getCurrentCard:()=>current,
-    applyCurrentTimerEffect:(effect,seconds)=>{timerCalls.push({effect,seconds});return{instanceId:'current-card'};},
+    applyCurrentTimerEffect:(effect,seconds)=>{timerCalls.push({effect,seconds});return{instanceId:'current-card',effectApplied:true};},
     grantCard,
   });
   runtime.syncBoard(board);
@@ -139,8 +139,11 @@ for(const item of WARDEN_TRIAL_BAZAAR_ITEMS){
   const {runtime,board}=createHarness([astrolabe,katana]);
   runtime.startFight({wave:1});
   runtime.play(board[0]);
-  assert.deepEqual(runtime.preparePending(board[1]).effects,[{effect:'haste',seconds:1}],
-    'Haste aimed at an off-current card waits for that card to become current');
+  assert.deepEqual(runtime.preparationFor(board[1]).effects,[],
+    'a catalog neighbor is not treated as an adjacent card before it is drawn');
+  runtime.onCardDrawn(board[1]);
+  assert.deepEqual(runtime.prepareRecovery(board[1]).effects,[{effect:'haste',seconds:1}],
+    'the actual next randomly drawn card receives temporal Haste preparation');
   runtime.destroy();
 }
 
@@ -151,7 +154,8 @@ for(const item of WARDEN_TRIAL_BAZAAR_ITEMS){
   runtime.startFight({wave:1});
   const result=runtime.play(board[0]);
   assert.equal(result.multicast,5,'Dive Weights has base use plus Multicast equal to its 4 current Ammo');
-  assert.deepEqual(runtime.preparePending(board[1]).effects,[{effect:'haste',seconds:5}]);
+  runtime.onCardDrawn(board[1]);
+  assert.deepEqual(runtime.prepareRecovery(board[1]).effects,[{effect:'haste',seconds:5}]);
   runtime.destroy();
 }
 
@@ -162,9 +166,65 @@ for(const item of WARDEN_TRIAL_BAZAAR_ITEMS){
   const {runtime,board}=createHarness([shotGlasses,katana,crowsNest]);
   runtime.startFight({wave:1});
   runtime.play(board[0]);
-  const effects=runtime.preparePending(board[1]).effects;
+  runtime.onCardDrawn(board[1]);
+  const effects=runtime.prepareRecovery(board[1]).effects;
   assert.deepEqual(effects,[{effect:'haste',seconds:1},{effect:'slow',seconds:.5}],
     'Crow\'s Nest halves Slow duration on the only Weapon without changing Haste');
+  runtime.destroy();
+}
+
+{
+  const rowboat=wardenTrialBazaarTacticById('ROWBOAT');
+  const katana=wardenTrialBazaarItemForArcana('WIND-SLASH');
+  const cauterizingBlade=wardenTrialBazaarItemForArcana('FLAME-STRIKE');
+  const {runtime,board}=createHarness([rowboat,katana,cauterizingBlade]);
+  runtime.startFight({wave:1});
+  runtime.play(board[0]);
+  assert.deepEqual(runtime.preparationFor(board[1]).effects,[],
+    'Rowboat does not assign Charge by stable catalog position');
+  runtime.onCardDrawn(board[2]);
+  assert.deepEqual(runtime.preparationFor(board[2]).effects,[{effect:'charge',seconds:2}],
+    'Rowboat assigns Charge to whichever card the shuffled deck actually draws next');
+  runtime.destroy();
+}
+
+{
+  const divingHelmet=wardenTrialBazaarTacticById('DIVING-HELMET');
+  const fishingRod=wardenTrialBazaarTacticById('FISHING-ROD');
+  const katana=wardenTrialBazaarItemForArcana('WIND-SLASH');
+  const {runtime,board}=createHarness([divingHelmet,fishingRod,katana]);
+  runtime.startFight({wave:1});
+  runtime.play(board[0]);
+  runtime.play(board[1]);
+  runtime.onCardDrawn(board[2]);
+  assert.deepEqual(runtime.preparationFor(board[2]).effects,[{effect:'haste',seconds:2}],
+    'draw-time temporal tags are established before matching next-card packets resolve');
+  runtime.destroy();
+}
+
+{
+  const port=wardenTrialBazaarTacticById('PORT');
+  const katana=wardenTrialBazaarItemForArcana('WIND-SLASH');
+  const astrolabe=wardenTrialBazaarTacticById('ASTROLABE');
+  const {runtime,board}=createHarness([port,katana,astrolabe]);
+  runtime.startFight({wave:1});
+  runtime.play(board[0]);
+  runtime.play(board[0]);
+  let preparation=runtime.preparationFor(board[1]);
+  assert.deepEqual(preparation.effects,[{effect:'charge',seconds:2}]);
+  assert.equal(preparation.saturated,true,'stored Charge stops at the card\'s full next recovery');
+  runtime.play(board[0]);
+  assert.deepEqual(runtime.preparationFor(board[1]).effects,[{effect:'charge',seconds:2}],
+    'additional Charge cannot overfill a zero-recovery preparation');
+  runtime.play(board[2]);
+  runtime.onCardDrawn(board[1]);
+  preparation=runtime.preparationFor(board[1]);
+  assert.deepEqual(preparation.effects,[{effect:'charge',seconds:2}],
+    'positive Haste preparation is also rejected after the next recovery is fully Charged');
+  assert.deepEqual(runtime.prepareRecovery(board[1]).effects,[{effect:'charge',seconds:2}],
+    'the capped preparation remains stored until that card is played Up');
+  assert.deepEqual(runtime.preparationFor(board[1]).effects,[],
+    'consuming the prepared Up recovery reopens the card for future preparation');
   runtime.destroy();
 }
 

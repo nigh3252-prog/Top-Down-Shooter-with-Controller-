@@ -22,7 +22,7 @@ import {
   wardenTrialUpArcanaIdForCard,
   wardenTrialUpTacticIdForCard,
 } from '../src/warden-trial-card-policy.js';
-import { wardenTrialCardCooldownSeconds } from '../src/warden-trial-card-cooldown.js';
+import { WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS, wardenTrialCardCooldownSeconds } from '../src/warden-trial-card-cooldown.js';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_STAMINA_MAX, 200);
@@ -103,15 +103,15 @@ for (const card of [...starters, ...rewardPool]) {
   assert.equal(
     wardenTrialCardCooldownSeconds(card, { direction:'up' }),
     card.__wardenTrialBazaar.pendingCooldownSeconds,
-    `${upId} uses its Bazaar pending cooldown`,
+    `${upId} uses its Bazaar post-play recovery`,
   );
   assert.equal(
     wardenTrialCardCooldownSeconds(card, { direction:'down' }),
-    card.__wardenTrialBazaar.pendingCooldownSeconds,
-    `${card.id} shares the current card's pending cooldown`,
+    WARDEN_TRIAL_CARD_DOWN_RECOVERY_SECONDS,
+    `${card.id} uses the shared short Down recovery`,
   );
   assert.equal(wardenTrialCardCooldownSeconds(card, { direction:'up', abilityCooldowns:false }), 0,
-    `${upId} can bypass its upward pending cooldown`);
+    `${upId} can disable its upward post-play recovery`);
   const upward = resolveWardenTrialCardPlay({
     direction: 'up',
     started: true,

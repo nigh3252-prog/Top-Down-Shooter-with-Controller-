@@ -24,15 +24,21 @@ const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import
 const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
 const launcherSource=await readFile(new URL('../index.html',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
-assert.doesNotMatch(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'pending cards can receive a rejected direction without disabling the gesture surface');
-assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('up'\)\)/,'an upward play checks the current pending card');
-assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('down'\)\)/,'a downward play checks the same current pending card');
-assert.equal((arenaRuntimeSource.match(/beginWardenTrialCardPending\(currentTrialCard\(\)\)/g)||[]).length,3,
-  'run start and either successful direction deal the authoritative current card as pending');
-assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.deal\(card,\{durationSeconds:pending\?\.durationSeconds\}\)/,
-  'pending timing begins with the full-board Bazaar cooldown when a card becomes current');
+assert.doesNotMatch(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'recovering cards can receive rejected-direction feedback without disabling the gesture surface');
+assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('up'\)\)/,'an upward play checks that the held card is ready');
+assert.match(arenaRuntimeSource,/if\(!canPlayWardenTrialCard\('down'\)\)/,'a downward play checks that the same held card is ready');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.deal\(card,\{durationSeconds:preparation\?\.durationSeconds\}\)/,
+  'a randomly drawn card is dealt ready while retaining its prepared recovery duration');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardRecovery\(card,'up'\)/,
+  'an accepted Up play starts recovery on the card that just fired');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardRecovery\(card,'down'\)/,
+  'an accepted Down play starts the short recovery on that same card');
+assert.match(arenaRuntimeSource,/deck\.discard\(slot\)/,
+  'only recovery completion discards the held card and draws its replacement');
 assert.match(arenaRuntimeSource,/canResolveDirection:direction=>canPlayWardenTrialCard\(direction\)/,
-  'pending directions are rejected before the current card animates away');
+  'recovering directions are rejected before the current card can resolve again');
+assert.match(arenaRuntimeSource,/exitOnResolve:false/,
+  'accepted directions leave the played card visible in its slot during recovery');
 assert.match(arenaRuntimeSource,/bazaarItem:card\.__wardenTrialBazaar\|\|null/,
   'the Up dispatcher receives the immutable Bazaar output and behavior record for later translation passes');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
@@ -41,7 +47,7 @@ assert.doesNotMatch(arenaRuntimeSource,/handSize:wardenTrialMode\?3/,'the Bazaar
 assert.match(arenaRuntimeSource,/createWardenTrialBazaarRuntime\(\{/,
   'the full Bazaar behavior engine is part of ordinary Warden Trial');
 assert.match(arenaRuntimeSource,/getBoardCards:\(\)=>deck\.pool/,
-  'the owned run deck is the Bazaar board for adjacency and passive effects');
+  'the owned run deck remains the Bazaar ownership set for passive effects');
 
 const stanceById=new Map(STANCE_CARDS.map(card=>[card.id,card]));
 for(const [stanceId,text,title] of [
@@ -66,8 +72,8 @@ assert.match(ARENA_SHELL_HTML,/class="trialCardHalf trialCardDown"/,'the lower c
 assert.match(ARENA_SHELL_HTML,/class="trialCardName trialStanceName"/,'the card has a dedicated stance name');
 assert.match(ARENA_SHELL_HTML,/class="trialStanceBadge trialCardStanceBadge"/,'the current card exposes its stance / defense badge');
 assert.match(ARENA_SHELL_HTML,/id="trialCardCooldown"/,'the current card exposes a visible cooldown layer');
-assert.match(ARENA_SHELL_HTML,/↑ ARCANA · PENDING/,'the upward card face describes the pre-play pending state');
-assert.match(ARENA_SHELL_HTML,/↓ STANCE · PENDING/,'the downward face shares the same pending card state');
+assert.match(ARENA_SHELL_HTML,/↑ ARCANA · RECOVERY/,'the upward card face describes post-play recovery');
+assert.match(ARENA_SHELL_HTML,/↓ STANCE · 1s RECOVERY/,'the downward face shows its short post-play recovery');
 assert.match(ARENA_SHELL_HTML,/id="trialDiscardCount"/,'the tray exposes a discard count at the left edge');
 assert.match(ARENA_SHELL_HTML,/id="trialCurrentStanceName"/,'the tray exposes the actual current stance beside the active card');
 assert.equal([...ARENA_SHELL_HTML.matchAll(/data-trial-upcoming-slot=/g)].length,2,'the tray reserves two ordered upcoming-card previews');
@@ -84,11 +90,11 @@ assert.doesNotMatch(ARENA_SHELL_HTML,/trialBazaarDemo|BAZAAR BEHAVIOR DEMO|CURRE
   'there is no selector-only demo surface alongside the real deck flow');
 assert.match(arenaRuntimeSource,/StoneSettings\.set\('wardenTrial\.abilityCooldowns'/,'the ability cooldown choice persists through the existing settings service');
 assert.doesNotMatch(arenaRuntimeSource,/if\(!wardenTrialAbilityCooldowns[^\n]*wardenTrialCardCooldown\.reset\(\)/,
-  'turning the Up bypass on does not erase the current timer needed by Down');
-assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.canPlay\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns\}\)/,
-  'the saved setting is applied as an Up-only play-time bypass');
-assert.match(arenaRuntimeSource,/only when this preview becomes the current card/,
-  'upcoming queue previews do not run hidden hand timers');
+  'turning future Up recovery off does not erase a recovery already in progress');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.canPlay\(direction\)/,
+  'a played card cannot be bypassed in either direction while it remains held');
+assert.match(arenaRuntimeSource,/will be ready when randomly drawn/,
+  'upcoming previews never run hidden pre-play timers');
 assert.match(arenaRuntimeSource,/staminaCostForGroup\(group\)[^{]*\{[^}]*return staminaCostForWeapon/s,'attacks retain their ordinary stamina policy');
 assert.doesNotMatch(arenaRuntimeSource,/resolveStaminaCost:resolveActionStaminaCost/,'defensive stamina costs are not controlled by the ability toggle');
 assert.match(arenaShellCss,/warden-trial[^}]*trialAbilityCooldownSection[^}]*display:block/,'the toggle is visible only on the Warden Trial menu');
@@ -180,6 +186,26 @@ assert.deepEqual(pendingDirections,[{direction:'up',deltaY:-80}],
 assert.equal(pendingCard.style.transform,'','a pending card snaps back instead of animating out');
 assert.equal(pendingGesture.getSnapshot().animating,false);
 pendingGesture.destroy();
+
+const heldSurface=createFakeElement();
+const heldCard=createFakeElement();
+const heldDirections=[];
+const heldGesture=installWardenTrialSwipeSurface({
+  target:heldSurface,
+  visualElement:heldCard,
+  exitOnResolve:false,
+  transitionDuration:5,
+  onDirection:(direction,detail)=>heldDirections.push({direction,...detail}),
+});
+heldSurface.dispatch('pointerdown',{...event,pointerId:61,clientY:200,target:heldSurface});
+heldSurface.dispatch('pointermove',{...event,pointerId:61,clientY:130,target:heldSurface});
+heldSurface.dispatch('pointerup',{...event,pointerId:61,clientY:120,target:heldSurface});
+assert.deepEqual(heldDirections,[{direction:'up',deltaY:-80}],
+  'the held-card mode resolves immediately without waiting for an exit animation');
+assert.equal(heldCard.style.transform,'','the played card returns to center and remains visible for recovery');
+assert.equal(heldCard.style.opacity,'');
+assert.equal(heldGesture.getSnapshot().animating,false);
+heldGesture.destroy();
 
 const animatedSurface=createFakeElement();
 const animatedCard=createFakeElement();

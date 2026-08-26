@@ -97,7 +97,7 @@ function newFightState(){
     disabled:new Set(),flying:new Set(),used:new Map(),focusMeter:new Map(),
     damage:new Map(),burn:new Map(),poison:new Map(),shieldBonus:new Map(),heal:new Map(),
     multicast:new Map(),focus:new Map(),cooldownPercent:new Map(),cooldownFlat:new Map(),
-    quest:new Map(),dots:[],lastEndedWave:null,
+    tags:new Map(),quest:new Map(),dots:[],lastEndedWave:null,
   };
 }
 
@@ -123,9 +123,9 @@ export function createWardenTrialBazaarRuntime({
   let suppressedNativeHits=0;
   let actionSerial=0;
   let reactiveDepth=0;
-  let deferTimerEffects=false;
   let provisions=0;
-  const ammo=new Map(),maxAmmo=new Map(),pendingTimers=new Map();
+  const ammo=new Map(),maxAmmo=new Map(),pendingTimers=new Map(),reactiveLinks=new Map();
+  const nextCardPackets=[];
   const permanent={damage:new Map(),shield:new Map(),heal:new Map(),maxAmmo:new Map(),value:new Map()};
 
   const snapshot=()=>Object.freeze({
@@ -135,6 +135,10 @@ export function createWardenTrialBazaarRuntime({
     ammo:Object.freeze([...maxAmmo].map(([itemId,maximum])=>Object.freeze({
       itemId,current:round(ammo.get(itemId)||0),max:round(maximum),
     }))),
+    preparations:Object.freeze([...pendingTimers].map(([preparedItemId,effects])=>Object.freeze({
+      itemId:preparedItemId,...Object.fromEntries(Object.entries(effects).map(([effect,seconds])=>[effect,round(seconds)])),
+    }))),
+    nextCardPreparationCount:nextCardPackets.length,
   });
 
   const notify=event=>{
@@ -158,22 +162,65 @@ export function createWardenTrialBazaarRuntime({
     return item?byItemId(item.id)||{card:value?.__wardenTrialBazaar?value:null,item,index:-1}:null;
   };
   const owns=value=>!!byItemId(value);
-  const adjacentTo=entry=>entry?.index<0?[]:boardNow().filter(candidate=>Math.abs(candidate.index-entry.index)===1);
-  const leftOf=entry=>entry?.index>0?boardNow()[entry.index-1]||null:null;
-  const rightOf=entry=>entry?.index>=0?boardNow()[entry.index+1]||null:null;
   const effectiveTags=entry=>{
     const tags=tagsFor(entry?.item);
-    if(adjacentTo(entry).some(candidate=>candidate.item.tacticId==='DIVING-HELMET'))tags.add('Aquatic');
+    for(const tag of fight.tags.get(entry?.item?.id)||[])tags.add(tag);
     return tags;
   };
   const hasTag=(entry,tag)=>effectiveTags(entry).has(tag);
   const entriesWithTag=tag=>boardNow().filter(entry=>hasTag(entry,tag));
   const otherEntries=entry=>boardNow().filter(candidate=>candidate.item.id!==entry?.item?.id);
-  const deterministicTargets=(source,count=1,predicate=()=>true)=>{
-    const ordered=[...adjacentTo(source),...otherEntries(source)].filter((entry,index,array)=>
-      predicate(entry)&&array.findIndex(value=>value.item.id===entry.item.id)===index);
-    return ordered.slice(0,Math.max(0,Math.trunc(positive(count))));
-  };
+
+  function queueNextCardPacket(kind,amount,{count=1,tags=[],matchAll=false,sourceItemId=null}={}){
+    const remaining=Math.max(1,Math.trunc(positive(count)||1));
+    const value=finite(amount);
+    if(kind!=='observer'&&kind!=='tag'&&Math.abs(value)<=1e-9)return false;
+    nextCardPackets.push({kind,value,remaining,tags:[...new Set(tags)].filter(Boolean),matchAll:matchAll===true,sourceItemId});
+    return true;
+  }
+  const queueNextTimer=(effect,seconds,options={})=>positive(seconds)>0&&queueNextCardPacket(`timer:${String(effect||'').toLowerCase()}`,positive(seconds),options);
+  const queueNextObserver=(entry,options={})=>entry?queueNextCardPacket('observer',0,{...options,sourceItemId:entry.item.id}):false;
+  const nextPacketMatches=(packet,entry)=>!packet.tags.length
+    ||(packet.matchAll?packet.tags.every(tag=>hasTag(entry,tag)):packet.tags.some(tag=>hasTag(entry,tag)));
+
+  function applyNextCardPacket(packet,entry){
+    if(packet.kind.startsWith('timer:'))queueTimer(entry,packet.kind.slice(6),packet.value);
+    else if(packet.kind==='damage')addMap(fight.damage,entry.item.id,packet.value);
+    else if(packet.kind==='shield')addMap(fight.shieldBonus,entry.item.id,packet.value);
+    else if(packet.kind==='focus')addMap(fight.focus,entry.item.id,packet.value);
+    else if(packet.kind==='cooldown-percent')addMap(fight.cooldownPercent,entry.item.id,packet.value);
+    else if(packet.kind==='cooldown-flat')addMap(fight.cooldownFlat,entry.item.id,packet.value);
+    else if(packet.kind==='multicast')addMap(fight.multicast,entry.item.id,packet.value);
+    else if(packet.kind==='flying')markFlying(entry);
+    else if(packet.kind==='tag'){
+      const tags=fight.tags.get(entry.item.id)||new Set();tags.add(String(packet.sourceItemId||'Aquatic'));fight.tags.set(entry.item.id,tags);
+    }else if(packet.kind==='observer'){
+      const links=reactiveLinks.get(entry.item.id)||[];links.push(packet.sourceItemId);reactiveLinks.set(entry.item.id,links);
+    }
+  }
+
+  function onCardDrawn(value){
+    const entry=cardEntry(value);if(!entry)return null;
+    const consumed=[];
+    const applyPass=predicate=>{
+      for(const packet of nextCardPackets){
+        if(consumed.includes(packet)||!predicate(packet)||!nextPacketMatches(packet,entry))continue;
+        applyNextCardPacket(packet,entry);consumed.push(packet);
+      }
+    };
+    // Tags establish the temporal equivalent of placement before tag filters
+    // are evaluated. Static cooldown modifiers also land before Charge is
+    // capped against the prepared recovery duration.
+    applyPass(packet=>packet.kind==='tag');
+    applyPass(packet=>!packet.kind.startsWith('timer:'));
+    applyPass(packet=>packet.kind.startsWith('timer:'));
+    for(let index=nextCardPackets.length-1;index>=0;index--){
+      const packet=nextCardPackets[index];if(!consumed.includes(packet))continue;
+      packet.remaining--;
+      if(packet.remaining<=0)nextCardPackets.splice(index,1);
+    }
+    return preparationFor(entry);
+  }
 
   const maximumAmmoFor=entry=>{
     const base=positive(entry?.item?.output?.ammo);
@@ -231,8 +278,6 @@ export function createWardenTrialBazaarRuntime({
   function auraDamage(entry){
     let bonus=0;
     const lockbox=byItemId('BAZAAR-TACTIC-LOCKBOX');if(lockbox)bonus+=valueFor(lockbox);
-    const figurehead=byItemId('BAZAAR-TACTIC-FIGUREHEAD');if(figurehead&&entry.index>figurehead.index)bonus+=25;
-    const suppressor=byItemId('BAZAAR-TACTIC-SUPPRESSOR');if(suppressor&&leftOf(suppressor)?.item.id===entry.item.id&&hasTag(entry,'Weapon'))bonus+=25;
     if(owns('BAZAAR-HANDAXE')&&hasTag(entry,'Weapon'))bonus+=5;
     return bonus;
   }
@@ -249,8 +294,6 @@ export function createWardenTrialBazaarRuntime({
     if(owns('BAZAAR-TACTIC-KORXENA-CREST'))chance+=15;
     if(hasTag(entry,'Weapon')&&owns('BAZAAR-TACTIC-CROWS-NEST'))chance+=40;
     const petRock=byItemId('BAZAAR-PET-ROCK');if(petRock&&entriesWithTag('Friend').length===1)chance+=10;
-    const hud=byItemId('BAZAAR-TACTIC-INTEGRATED-HUD');if(hud&&rightOf(hud)?.item.id===entry.item.id)chance+=20;
-    const chart=byItemId('BAZAAR-TACTIC-STAR-CHART');if(chart&&adjacentTo(chart).some(value=>value.item.id===entry.item.id))chance+=10;
     return Math.max(0,chance);
   }
 
@@ -269,7 +312,6 @@ export function createWardenTrialBazaarRuntime({
   function multicastFor(entry,ammoBefore){
     let total=baseMulticast(entry,ammoBefore)+mapValue(fight.multicast,entry.item.id);
     if(entry.item.tacticId==='DIVE-WEIGHTS')total+=positive(ammoBefore);
-    if(entry.item.tacticId==='ILLUSORAY')total+=adjacentTo(entry).filter(value=>hasTag(value,'Friend')||hasTag(value,'Ray')).length;
     if(entry.item.tacticId==='SEADOGS-SALOON')total+=entriesWithTag('Friend').length;
     if(hasTag(entry,'Aquatic')&&owns('BAZAAR-TACTIC-SHIPWRECK'))total+=1;
     return Math.max(1,Math.trunc(total));
@@ -278,15 +320,10 @@ export function createWardenTrialBazaarRuntime({
   function cooldownDuration(entry){
     let duration=wardenTrialBazaarPendingCooldownSeconds(entry.item);
     let percent=mapValue(fight.cooldownPercent,entry.item.id),flat=mapValue(fight.cooldownFlat,entry.item.id);
-    const figurehead=byItemId('BAZAAR-TACTIC-FIGUREHEAD');
-    if(figurehead&&entry.index<figurehead.index&&hasTag(entry,'Aquatic'))percent-=.10;
-    const chart=byItemId('BAZAAR-TACTIC-STAR-CHART');
-    if(chart&&adjacentTo(chart).some(value=>value.item.id===entry.item.id))percent-=.05;
     const suppressor=byItemId('BAZAAR-TACTIC-SUPPRESSOR');
     if(suppressor&&onlyWeapon(entry))percent-=.05;
     if(fight.flying.has(entry.item.id)&&owns('BAZAAR-TACTIC-STEALTH-GLIDER'))flat-=1;
     if(entry.item.tacticId==='CAPTAINS-WHEEL'&&boardNow().some(value=>value.item.id!==entry.item.id&&(hasTag(value,'Vehicle')||value.item.size==='Large')))flat-=2.5;
-    if(entry.item.tacticId==='DIVE-WEIGHTS')flat-=adjacentTo(entry).filter(value=>hasTag(value,'Aquatic')).length;
     if(entry.item.tacticId==='ROWBOAT'&&new Set(boardNow().flatMap(value=>[...effectiveTags(value)])).size>=7)flat-=5;
     if(entry.item.tacticId==='SUBMERSIBLE'&&boardNow().some(value=>value.item.id!==entry.item.id&&(hasTag(value,'Vehicle')||value.item.size==='Large')))flat-=2;
     return round(Math.max(.5,duration*(1+percent)+flat));
@@ -297,15 +334,32 @@ export function createWardenTrialBazaarRuntime({
     const kind=String(effect||'').toLowerCase();let amount=positive(seconds);
     if(kind==='slow'&&onlyWeapon(entry)&&owns('BAZAAR-TACTIC-CROWS-NEST'))amount*=.5;
     if((kind==='slow'||kind==='freeze')&&entry.item.arcanaId==='AQUA-BREAKER'&&onlyWeapon(entry))amount*=.5;
-    if(kind==='haste')recordHaste(entry);
     const current=cardEntry(getCurrentCard?.());
-    if(!deferTimerEffects&&current?.item.id===entry.item.id){
+    if(current?.item.id===entry.item.id){
       const applied=applyCurrentTimerEffect(kind,amount,{source:'bazaar'});
-      if(applied?.instanceId)return true;
+      if(applied?.effectApplied){if(kind==='haste')recordHaste(entry);return true;}
+      if(applied?.complete)return false;
     }
     const queued=pendingTimers.get(entry.item.id)||{charge:0,haste:0,slow:0,freeze:0};
-    if(Object.hasOwn(queued,kind))queued[kind]+=amount;
-    pendingTimers.set(entry.item.id,queued);return true;
+    const duration=cooldownDuration(entry);
+    if((kind==='charge'||kind==='haste')&&queued.charge>=duration-1e-9)return false;
+    if(kind==='charge')amount=Math.min(amount,Math.max(0,duration-queued.charge));
+    if(!Object.hasOwn(queued,kind)||amount<=0)return false;
+    queued[kind]+=amount;
+    pendingTimers.set(entry.item.id,queued);
+    if(kind==='haste')recordHaste(entry);
+    return true;
+  }
+  function preparationFor(value){
+    const entry=cardEntry(value);if(!entry)return null;
+    const durationSeconds=cooldownDuration(entry),queued=pendingTimers.get(entry.item.id)||{charge:0,haste:0,slow:0,freeze:0};
+    return Object.freeze({
+      itemId:entry.item.id,
+      durationSeconds,
+      saturated:queued.charge>=durationSeconds-1e-9,
+      effects:Object.freeze(Object.entries(queued).filter(([,seconds])=>seconds>0)
+        .map(([effect,seconds])=>Object.freeze({effect,seconds:round(seconds)}))),
+    });
   }
   function takePendingEffects(value){
     const entry=cardEntry(value);if(!entry)return Object.freeze([]);
@@ -318,6 +372,7 @@ export function createWardenTrialBazaarRuntime({
     const entry=cardEntry(value);if(!entry)return null;
     return Object.freeze({itemId:entry.item.id,durationSeconds:cooldownDuration(entry),effects:takePendingEffects(entry)});
   }
+  const prepareRecovery=preparePending;
 
   function canPlay(value){
     if(!enabled)return Object.freeze({accepted:false,reason:'runtime-disabled'});
@@ -362,7 +417,7 @@ export function createWardenTrialBazaarRuntime({
     }
     const mantis=byItemId('BAZAAR-MANTIS-SHRIMP');if(mantis){addMap(fight.damage,mantis.item.id,10);addMap(fight.burn,mantis.item.id,2);}
     const jitte=byItemId('BAZAAR-JITTE');if(jitte)addMap(fight.damage,jitte.item.id,10);
-    const kusar=byItemId('BAZAAR-KUSARIGAMA');if(kusar){addMap(fight.damage,kusar.item.id,4);for(const entry of adjacentTo(kusar).filter(value=>hasTag(value,'Weapon')))addMap(fight.damage,entry.item.id,4);}
+    const kusar=byItemId('BAZAAR-KUSARIGAMA');if(kusar){addMap(fight.damage,kusar.item.id,4);queueNextCardPacket('damage',4,{tags:['Weapon']});}
     const salt=byItemId('BAZAAR-OLD-SALTCLAW');if(salt)addMap(fight.damage,salt.item.id,5);
     if(owns('BAZAAR-TACTIC-TROPICAL-ISLAND'))fight.regen+=5;
     const lighthouse=byItemId('BAZAAR-LIGHTHOUSE');if(lighthouse)dealPrintedDot(lighthouse,'burn',8);
@@ -371,7 +426,7 @@ export function createWardenTrialBazaarRuntime({
 
   function recordBurn(source){
     const primordial=byItemId('BAZAAR-SLUMBERING-PRIMORDIAL');if(primordial){queueTimer(primordial,'charge',2);addMap(fight.damage,primordial.item.id,15);}
-    const bonfire=byItemId('BAZAAR-BONFIRE');if(bonfire){const target=deterministicTargets(bonfire,1)[0];if(target)queueTimer(target,'haste',1);}
+    const bonfire=byItemId('BAZAAR-BONFIRE');if(bonfire)queueNextTimer('haste',1);
     const keg=byItemId('BAZAAR-POWDER-KEG');if(keg)queueTimer(keg,'charge',2);
     const blunderbuss=byItemId('BAZAAR-BLUNDERBUSS');if(blunderbuss?.item.id!==source?.item?.id)autoActivate(blunderbuss,'burn-trigger');
     const zoarcid=byItemId('BAZAAR-ZOARCID');if(zoarcid)queueTimer(zoarcid,'charge',1);
@@ -402,8 +457,10 @@ export function createWardenTrialBazaarRuntime({
     const scimitar=byItemId('BAZAAR-SCIMITAR-OF-THE-DEEP');if(scimitar)dealPrintedDot(scimitar,'poison',Math.round(damageRaw(scimitar)*.25));
     const knives=byItemId('BAZAAR-THROWING-KNIVES');if(knives?.item.id!==source.item.id)autoActivate(knives,'focus-trigger');
     if(owns('BAZAAR-ONI-MASK'))addBurnToTagged(4);
-    const kusar=byItemId('BAZAAR-KUSARIGAMA');if(kusar){addMap(fight.damage,kusar.item.id,4);for(const entry of adjacentTo(kusar).filter(value=>hasTag(value,'Weapon')))addMap(fight.damage,entry.item.id,4);}
-    const hud=byItemId('BAZAAR-TACTIC-INTEGRATED-HUD');if(hud&&rightOf(hud)?.item.id===source.item.id)applySlow(hud,1,1);
+    const kusar=byItemId('BAZAAR-KUSARIGAMA');if(kusar){addMap(fight.damage,kusar.item.id,4);queueNextCardPacket('damage',4,{tags:['Weapon']});}
+    if(activeTemporalObservers.has('BAZAAR-TACTIC-INTEGRATED-HUD')){
+      const hud=byItemId('BAZAAR-TACTIC-INTEGRATED-HUD');if(hud)applySlow(hud,1,1);
+    }
     notify({phase:'focus',itemId:source.item.id});
   }
   function focusProcCount(entry,activationCount=1){
@@ -449,11 +506,11 @@ export function createWardenTrialBazaarRuntime({
   function resolveArcanaSpecial(entry){
     const id=entry.item.arcanaId;
     if(id==='BOLT-RAIL')addMap(fight.damage,entry.item.id,10);
-    if(id==='IGNITION-RUSH'){const target=deterministicTargets(entry,1)[0];if(target)queueTimer(target,'haste',1);}
+    if(id==='IGNITION-RUSH')queueNextTimer('haste',1);
     if(id==='WAVE-FRONT'||id==='CYCLONE-BOOMERANG')for(const target of otherEntries(entry))queueTimer(target,'haste',1);
-    if(id==='MENTIS-IMPERIUM'){const target=deterministicTargets(entry,1)[0];if(target)markFlying(target);}
-    if(id==='BLURRING-FALCONRY'){markFlying(entry);const target=deterministicTargets(entry,1)[0];if(target)markFlying(target);}
-    if(id==='BALL-LIGHTNING')for(const target of adjacentTo(entry))queueTimer(target,'haste',2);
+    if(id==='MENTIS-IMPERIUM')queueNextCardPacket('flying',1);
+    if(id==='BLURRING-FALCONRY'){markFlying(entry);queueNextCardPacket('flying',1);}
+    if(id==='BALL-LIGHTNING')queueNextTimer('haste',2,{count:2});
     if(id==='IGNITION-DRIVE')fight.disabled.add(entry.item.id);
     if(id==='ROCK-N-ROLL')addDamageToWeapons(10);
   }
@@ -461,39 +518,42 @@ export function createWardenTrialBazaarRuntime({
   function resolveTactic(entry,{ammoBefore=0}={}){
     const id=entry.item.tacticId,activations=multicastFor(entry,ammoBefore);let detail='AURA ACTIVE';
     if(id==='AMBERGRIS'){const amount=(valueFor(entry)+healBonus(entry))*activations;detail=`HEAL ${healPlayer(amount)}`;}
-    else if(id==='ASTROLABE'){for(const target of deterministicTargets(entry,2))queueTimer(target,'haste',activations);detail=`HASTE 2 ITEMS · ${activations}s`;}
+    else if(id==='ASTROLABE'){queueNextTimer('haste',activations,{count:2});detail=`NEXT 2 CARDS HASTED · ${activations}s`;}
     else if(id==='BARREL'){detail=`SHIELD ${round(addShield((30+shieldBonus(entry))*activations))}`;}
-    else if(id==='BEACH-BALL'){for(const target of deterministicTargets(entry,2,value=>hasTag(value,'Aquatic')||hasTag(value,'Toy')))queueTimer(target,'haste',2*activations);detail=`HASTE AQUATIC / TOY · ${2*activations}s`;}
+    else if(id==='BEACH-BALL'){queueNextTimer('haste',2*activations,{count:2,tags:['Aquatic','Toy']});detail=`NEXT 2 AQUATIC / TOY CARDS HASTED · ${2*activations}s`;}
     else if(id==='CAPTAINS-QUARTERS'){for(const target of otherEntries(entry).filter(value=>hasTag(value,'Tool')||hasTag(value,'Vehicle')))queueTimer(target,'haste',activations);const loaded=reloadAll(activations);for(const target of entriesWithTag('Weapon'))addMap(fight.damage,target.item.id,20*activations);detail=`TOOLS + VEHICLES HASTED · RELOAD ${loaded} · WEAPONS +${20*activations}`;}
-    else if(id==='CAPTAINS-WHEEL'){for(const target of adjacentTo(entry).slice(0,2))queueTimer(target,'haste',activations);detail=`ADJACENT HASTE · ${activations}s`;}
-    else if(id==='CARD-TABLE'){const target=deterministicTargets(entry,1,value=>hasTag(value,'Friend'))[0];if(target)addMap(fight.multicast,target.item.id,activations);detail=target?`${target.item.name} +${activations} MULTICAST`:'NO FRIEND TARGET';}
+    else if(id==='CAPTAINS-WHEEL'){queueNextTimer('haste',activations,{count:2});detail=`NEXT 2 CARDS HASTED · ${activations}s`;}
+    else if(id==='CARD-TABLE'){queueNextCardPacket('multicast',activations,{tags:['Friend']});detail=`NEXT FRIEND +${activations} MULTICAST`;}
     else if(id==='CHUM'){for(const target of boardNow().filter(value=>hasTag(value,'Aquatic')||hasTag(value,'Food')))addMap(fight.focus,target.item.id,3*activations);detail=`AQUATIC + FOOD +${3*activations} FOCUS`;}
     else if(id==='CLAMERA'){applySlow(entry,activations,2);detail=`SLOW ${activations} ENEMY ITEM${activations===1?'':'S'} · 2s`;}
     else if(id==='CORAL'){detail=`HEAL ${healPlayer((20+healBonus(entry))*activations)}`;}
     else if(id==='CORAL-ARMOR'){detail=`SHIELD ${round(addShield((50+shieldBonus(entry))*activations))}`;}
     else if(id==='COVE'){detail=`SHIELD ${round(addShield((valueFor(entry)+shieldBonus(entry))*activations))}`;}
     else if(id==='DAM'){for(const target of boardNow())if(target.item.id===entry.item.id||target.item.size!=='Large')fight.disabled.add(target.item.id);detail='SMALL + MEDIUM ITEMS DESTROYED FOR FIGHT';}
-    else if(id==='DIVE-WEIGHTS'){const target=deterministicTargets(entry,1)[0];if(target)queueTimer(target,'haste',activations);detail=`HASTE 1 ITEM · ${activations}s`;}
+    else if(id==='DIVE-WEIGHTS'){queueNextTimer('haste',activations);detail=`NEXT CARD HASTED · ${activations}s`;}
+    else if(id==='DIVING-HELMET'){queueNextCardPacket('tag',0,{sourceItemId:'Aquatic'});detail='NEXT CARD IS AQUATIC THIS FIGHT';}
     else if(id==='DOCK-LINES'){applySlow(entry,2*activations,3);detail=`SLOW ${2*activations} ENEMY ITEMS · 3s`;}
+    else if(id==='FIGUREHEAD'){queueNextCardPacket('damage',25*activations);queueNextCardPacket('cooldown-percent',-.10*activations,{tags:['Aquatic']});detail='NEXT CARD +25 DAMAGE · NEXT AQUATIC COOLDOWN -10%';}
     else if(id==='FISHING-NET'){applySlow(entry,activations,2);detail=`SLOW ${activations} ENEMY ITEM${activations===1?'':'S'} · 2s`;}
-    else if(id==='FISHING-ROD'){const target=boardNow().slice(entry.index+1).find(value=>hasTag(value,'Aquatic'));if(target)queueTimer(target,'haste',2*activations);detail=target?`${target.item.name} HASTED · ${2*activations}s`:'NO AQUATIC TO RIGHT';}
+    else if(id==='FISHING-ROD'){queueNextTimer('haste',2*activations,{tags:['Aquatic']});detail=`NEXT AQUATIC CARD HASTED · ${2*activations}s`;}
     else if(id==='ILLUSORAY'){applySlow(entry,activations,1);detail=`SLOW ${activations} ENEMY ITEM${activations===1?'':'S'} · 1s`;}
+    else if(id==='INTEGRATED-HUD'){queueNextCardPacket('focus',20*activations);queueNextObserver(entry);detail='NEXT CARD +20 FOCUS';}
     else if(id==='LIFE-PRESERVER'){detail=`SHIELD ${round(addShield((10+shieldBonus(entry))*activations))}`;}
     else if(id==='NESTING-DOLL'){detail=`SHIELD ${round(addShield((ammoBefore*10+shieldBonus(entry))*activations))}`;}
     else if(id==='PEARL'){detail=`SHIELD ${round(addShield((10+shieldBonus(entry))*activations))}`;}
     else if(id==='PORT'){const loaded=reloadAll(2*activations);for(const target of boardNow())queueTimer(target,'charge',activations);detail=`RELOAD ${loaded} · CHARGE ALL ${activations}s`;}
-    else if(id==='ROWBOAT'){for(const target of adjacentTo(entry))queueTimer(target,'charge',2*activations);detail=`CHARGE ADJACENT · ${2*activations}s`;}
-    else if(id==='SEADOGS-SALOON'){const target=deterministicTargets(entry,1)[0];if(target)queueTimer(target,'haste',2*activations);applySlow(entry,activations,2);detail=`HASTE + SLOW · ${activations}×`;}
+    else if(id==='ROWBOAT'){queueNextTimer('charge',2*activations);detail=`NEXT CARD CHARGED · ${2*activations}s`;}
+    else if(id==='SEADOGS-SALOON'){queueNextTimer('haste',2*activations);applySlow(entry,activations,2);detail=`NEXT CARD HASTED + ENEMY SLOWED · ${activations}×`;}
     else if(id==='SEASHADOW'){for(const target of otherEntries(entry))addMap(fight.cooldownPercent,target.item.id,-.08*activations);addMap(fight.cooldownFlat,entry.item.id,4*activations);detail=`OTHER COOLDOWNS -${8*activations}% · SELF +${4*activations}s`;}
-    else if(id==='SHOT-GLASSES'){for(const target of deterministicTargets(entry,4))queueTimer(target,'haste',activations);for(const target of deterministicTargets(entry,4))queueTimer(target,'slow',activations);detail=`HASTE 4 + SLOW 4 · ${activations}s`;}
-    else if(id==='STEALTH-GLIDER'){const targets=deterministicTargets(entry,activations);for(const target of targets)markFlying(target);detail=targets.length?`${targets.length} ITEM${targets.length===1?'':'S'} GAIN MOMENTUM`:'NO TARGET';}
+    else if(id==='SHOT-GLASSES'){queueNextTimer('haste',activations,{count:4});queueNextTimer('slow',activations,{count:4});detail=`NEXT 4 CARDS HASTED + SLOWED · ${activations}s`;}
+    else if(id==='STEALTH-GLIDER'){queueNextCardPacket('flying',1,{count:activations});detail=`NEXT ${activations} CARD${activations===1?'':'S'} GAIN MOMENTUM`;}
     else if(id==='SUBMERSIBLE'){
-      const weapons=entriesWithTag('Weapon').filter(value=>hasTag(value,'Aquatic'));
-      const shields=boardNow().filter(value=>hasTag(value,'Aquatic')&&hasTag(value,'Shield'));
-      for(const target of [weapons[0],weapons.at(-1)].filter(Boolean))addMap(fight.damage,target.item.id,10*activations);
-      for(const target of [shields[0],shields.at(-1)].filter(Boolean))addMap(fight.shieldBonus,target.item.id,10*activations);
-      detail=`EDGE AQUATIC WEAPONS +${10*activations} · SHIELDS +${10*activations}`;
-    }else if(id==='HONING-STEEL'){const weapons=entriesWithTag('Weapon');for(const target of [weapons[0],weapons.at(-1)].filter(Boolean))addMap(fight.damage,target.item.id,5*activations);detail=`EDGE WEAPONS +${5*activations} DAMAGE`;}
+      queueNextCardPacket('damage',10*activations,{count:2,tags:['Aquatic','Weapon'],matchAll:true});
+      queueNextCardPacket('shield',10*activations,{count:2,tags:['Aquatic','Shield'],matchAll:true});
+      detail=`NEXT 2 AQUATIC WEAPONS +${10*activations} · NEXT 2 AQUATIC SHIELDS +${10*activations}`;
+    }else if(id==='HONING-STEEL'){queueNextCardPacket('damage',5*activations,{count:2,tags:['Weapon']});detail=`NEXT 2 WEAPONS +${5*activations} DAMAGE`;}
+    else if(id==='STAR-CHART'){queueNextCardPacket('focus',10*activations);queueNextCardPacket('cooldown-percent',-.05*activations);detail='NEXT CARD +10 FOCUS · COOLDOWN -5%';}
+    else if(id==='SUPPRESSOR'){queueNextCardPacket('damage',25*activations,{tags:['Weapon']});detail='NEXT WEAPON +25 DAMAGE';}
     else if(id==='ORANGE-JULIAN'){const amount=Math.floor(runGold()/2)*activations;for(const target of boardNow())addMap(fight.damage,target.item.id,amount);detail=`ALL ITEMS +${amount} DAMAGE`;}
     const rawDamage=damageRaw(entry),focusProcs=rawDamage>0?focusProcCount(entry,activations):0,target=nearestTargets(1)[0];
     const damageActivations=activations+focusProcs;
@@ -508,52 +568,72 @@ export function createWardenTrialBazaarRuntime({
     reactiveDepth++;try{return activate(entry,{automatic:true,trigger});}finally{reactiveDepth--;}
   }
 
-  function onItemUsed(source){
+  const temporalObserverIds=new Set([
+    'BAZAAR-BLADED-HOVERBOARD','BAZAAR-JETBIKE','BAZAAR-SWITCHBLADE','BAZAAR-INCENDIARY-ROUNDS',
+    'BAZAAR-ANCHOR','BAZAAR-JELLYFISH','BAZAAR-TACTIC-BARREL','BAZAAR-TACTIC-DIVE-WEIGHTS','BAZAAR-TACTIC-ILLUSORAY',
+  ]);
+  let activeTemporalObservers=new Set();
+
+  function takeTemporalObservers(source){
+    const ids=reactiveLinks.get(source.item.id)||[];reactiveLinks.delete(source.item.id);
+    const observers=ids.map(byItemId).filter(Boolean);
+    activeTemporalObservers=new Set(observers.map(value=>value.item.id));
+    for(const observer of observers){
+      const id=observer.item.arcanaId||observer.item.tacticId;
+      if(id==='SEARING-RUSH'){resolveArcana(observer,{forced:true,trigger:'next-card-use'});markFlying(source);}
+      if(id==='FLARE-RUSH'){markFlying(observer);markFlying(source);}
+      if(id==='BLADED-VINE'&&hasTag(source,'Weapon'))addMap(fight.damage,source.item.id,4);
+      if(id==='FLAME-FUSION')dealPrintedDot(observer,'burn',2);
+      if(id==='HEROIC-LEAP')queueTimer(observer,'haste',2);
+      if(id==='WATER-PRISON'&&hasTag(source,'Aquatic'))queueTimer(observer,'haste',1);
+      if(id==='BARREL')addMap(fight.shieldBonus,observer.item.id,15);
+      if(id==='DIVE-WEIGHTS'&&hasTag(source,'Aquatic'))addMap(fight.cooldownFlat,observer.item.id,-1);
+      if(id==='ILLUSORAY'&&(hasTag(source,'Friend')||hasTag(source,'Ray')))addMap(fight.multicast,observer.item.id,1);
+    }
+    return observers;
+  }
+  function armTemporalObserver(source){if(temporalObserverIds.has(source.item.id))queueNextObserver(source);}
+
+  function onItemUsed(source,{temporal=false}={}){
     if(reactiveDepth>=8)return;
     const sourceTags=effectiveTags(source),sourceFlying=fight.flying.has(source.item.id);
     for(const observer of boardNow()){
-      const id=observer.item.arcanaId||observer.item.tacticId,same=observer.item.id===source.item.id,adjacent=Math.abs(observer.index-source.index)===1;
+      const id=observer.item.arcanaId||observer.item.tacticId,same=observer.item.id===source.item.id;
       if(id==='AIR-SPINNER'&&sourceTags.has('Ammo')){const target=nearestTargets(1)[0];if(target)damageTarget(target,normalizedDamage(15),{bazaarItemId:observer.item.id,trigger:'ammo-use'});}
-      if(id==='SEARING-RUSH'&&!same&&adjacent){resolveArcana(observer,{forced:true,trigger:'adjacent-use'});markFlying(source);}
-      if(id==='FLARE-RUSH'&&!same&&adjacent){markFlying(observer);markFlying(source);}
       if(id==='FLARE-RUSH'&&!same&&sourceFlying)queueTimer(observer,'charge',1);
-      if(id==='BLADED-VINE'&&!same&&adjacent&&sourceTags.has('Weapon'))addMap(fight.damage,source.item.id,4);
       if(id==='CIRCUIT-LINE'&&!same&&(sourceTags.has('Weapon')||sourceTags.has('Burn')))queueTimer(observer,'charge',2);
       if(id==='WAVE-FRONT'&&!same&&sourceTags.has('Friend'))queueTimer(observer,'charge',2);
       if(id==='HOMING-FLARES'&&!same&&sourceTags.has('Ammo'))autoActivate(observer,'ammo-trigger');
       if(id==='DRAGON-ARC'&&!same&&sourceTags.has('Ammo'))addMap(fight.multicast,observer.item.id,1);
-      if(id==='FLAME-FUSION'&&!same&&adjacent)dealPrintedDot(observer,'burn',2);
       if(id==='RAPID-FIRE-AGENT'&&!same&&sourceTags.has('Weapon'))addMap(fight.focus,observer.item.id,5);
       if(id==='WHIRLING-TORNADO'&&!same&&(sourceTags.has('Friend')||sourceTags.has('Food')))queueTimer(observer,'charge',1);
       if(id==='MENTIS-IMPERIUM'&&sourceFlying)addMap(fight.focus,observer.item.id,20);
-      if(id==='HEROIC-LEAP'&&!same&&adjacent)queueTimer(observer,'haste',2);
       if(id==='BLURRING-FALCONRY'&&sourceFlying)queueTimer(observer,'haste',1);
       if(id==='TERRA-RING'&&!same&&sourceTags.has('Weapon'))queueTimer(observer,'charge',2);
       if(id==='TECTONIC-DRILL'&&!same&&(sourceTags.has('Aquatic')||sourceTags.has('Ammo')))addMap(fight.damage,observer.item.id,source.item.size==='Large'?80:40);
-      if(id==='WATER-PRISON'&&!same&&adjacent&&sourceTags.has('Aquatic'))queueTimer(observer,'haste',1);
       if(id==='BUBBLE-BARRAGE'&&!same&&sourceTags.has('Ammo'))reloadItem(observer,1);
       if(id==='ASTROLABE'&&!same&&!sourceTags.has('Weapon'))queueTimer(observer,'charge',1);
-      if(id==='BARREL'&&!same&&adjacent)addMap(fight.shieldBonus,observer.item.id,15);
       if(id==='DIVING-HELMET'&&sourceTags.has('Aquatic'))addShield(50+shieldBonus(observer));
       if(id==='DAM'&&!same&&sourceTags.has('Aquatic'))queueTimer(observer,'charge',1);
       if(id==='PEARL'&&!same&&sourceTags.has('Aquatic'))queueTimer(observer,'charge',1);
     }
+    if(temporal)armTemporalObserver(source);
     notify({phase:'item-used',itemId:source.item.id});
   }
 
   function activate(entry,{automatic=false,trigger='play'}={}){
     const readiness=canPlay(entry.card||entry.item);if(!readiness.accepted)return readiness;
-    const ammoBefore=consumeAmmo(entry),previousDefer=deferTimerEffects;
-    if(!automatic)deferTimerEffects=true;
+    const ammoBefore=consumeAmmo(entry);
     let payload;
     try{
+      if(!automatic)takeTemporalObservers(entry);else activeTemporalObservers=new Set();
       payload=entry.item.family==='arcana'
         ?resolveArcana(entry,{forced:automatic,trigger,ammoBefore})
         :resolveTactic(entry,{ammoBefore});
       if(entry.item.family==='arcana')resolveArcanaSpecial(entry);
       addMap(fight.used,entry.item.id,1);
-      onItemUsed(entry);
-    }finally{deferTimerEffects=previousDefer;}
+      onItemUsed(entry,{temporal:!automatic});
+    }finally{activeTemporalObservers=new Set();}
     lastAction=`${entry.item.name.toUpperCase()} · ${payload.detail||[
       payload.damage?`${payload.damage} DAMAGE`:'',payload.burn?`${payload.burn} BURN`:'',payload.poison?`${payload.poison} POISON`:'',payload.multicast>1?`${payload.multicast}× MULTICAST`:'',
     ].filter(Boolean).join(' · ')||'TRIGGERED'}`;
@@ -634,13 +714,14 @@ export function createWardenTrialBazaarRuntime({
   function syncBoard(cards=getBoardCards?.()||[]){rebuildBoard(cards);refreshAmmo();return Object.freeze(board.map(entry=>entry.item.id));}
   function resetRun(){
     fight=newFightState();fightNumber=0;wins=0;acquiredCards=0;provisions=0;lastAction='BAZAAR RUN RESET';actionSerial=0;reactiveDepth=0;
-    ammo.clear();maxAmmo.clear();pendingTimers.clear();clearMaps(permanent);syncBoard(getBoardCards?.());notify({phase:'run-reset'});return snapshot();
+    ammo.clear();maxAmmo.clear();pendingTimers.clear();reactiveLinks.clear();nextCardPackets.length=0;clearMaps(permanent);syncBoard(getBoardCards?.());notify({phase:'run-reset'});return snapshot();
   }
   function describeCard(value){
     const entry=cardEntry(value);if(!entry)return null;
     const ammoRow=maxAmmo.has(entry.item.id)?ammoState(entry):null;
     return Object.freeze({itemId:entry.item.id,name:entry.item.name,family:entry.item.family,
       summary:wardenTrialBazaarBehaviorProfile(entry.item)?.summary||'',cooldownSeconds:cooldownDuration(entry),
+      preparation:preparationFor(entry),
       ammo:ammoRow,disabled:fight.disabled.has(entry.item.id),damageBonus:round(mapValue(fight.damage,entry.item.id)+mapValue(permanent.damage,entry.item.id)),
       multicastBonus:round(mapValue(fight.multicast,entry.item.id)),flying:fight.flying.has(entry.item.id)});
   }
@@ -672,7 +753,7 @@ export function createWardenTrialBazaarRuntime({
   }
 
   return Object.freeze({
-    canPlay,play,update,syncBoard,preparePending,takePendingEffects,startFight,endFight,
+    canPlay,play,update,syncBoard,onCardDrawn,preparePending,prepareRecovery,preparationFor,takePendingEffects,startFight,endFight,
     onCardAcquired,onRewardSkipped,describeCard,snapshot,resetRun,
     setEnabled(value){enabled=value!==false;notify({phase:'enabled',enabled});return enabled;},
     destroy(){enabled=false;fight.dots.length=0;releaseInterceptor();if(enemySystem?.damageEnemy===damageGate&&originalDamageMethod)enemySystem.damageEnemy=originalDamageMethod;return true;},

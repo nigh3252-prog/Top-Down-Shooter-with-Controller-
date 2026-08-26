@@ -140,6 +140,7 @@ export function installWardenTrialSwipeSurface({
   maxDrag = 52,
   exitDistance = 136,
   transitionDuration = 170,
+  exitOnResolve = true,
 } = {}){
   if(!target?.addEventListener){
     return {
@@ -233,6 +234,11 @@ export function installWardenTrialSwipeSurface({
     if(!direction){clearVisualState();return;}
     const detail={deltaY:finalDelta};
     if(canResolveDirection(direction,detail)===false){
+      clearVisualState();
+      onDirection(direction,detail);
+      return;
+    }
+    if(exitOnResolve===false){
       clearVisualState();
       onDirection(direction,detail);
       return;

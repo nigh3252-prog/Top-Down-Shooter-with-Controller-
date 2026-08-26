@@ -170,6 +170,11 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,handSize=2,cardD
     setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
     setCompatibilityAdapter(adapter){s.compatibilityAdapter=adapter||null;return api;},
     addCard(card){if(!card)return false;s.pool.push(card);if(!isNonStance(card))s.stancePool.push(card);s.discard.push(card);return true;},
+    discard(slot){
+      if(s.shuffleT>=0||s.manualSequence)return null;
+      const card=s.hand[slot];if(!card)return null;
+      consumeSlot(slot,card);scheduleDecoration();notifyDeckChange('card-discarded');return card;
+    },
     play(slot){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){

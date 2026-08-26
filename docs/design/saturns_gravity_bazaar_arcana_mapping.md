@@ -21,34 +21,38 @@ This document is the implementation source of truth for the Vanessa/The Bazaar c
 - **Active count:** 70 mapped Arcana + 43 non-direct Tactics = 113 active entries.
 - **Reference-only count:** 7 unmatched direct items remain excluded, so the full documented comparison universe is 120 items.
 
-## Agreed pending-cooldown model
+## Agreed held-card recovery model
 
 This is the implementation starting point for the stack above PR #137:
 
 1. Warden Trial keeps PR #137's **single authoritative current card** with one Up face and one Down face. This work does not introduce a three-card hand.
-2. Each time a card becomes current, it receives a fresh mutable pending instance with its own `remainingCooldown`.
-3. That instance starts from its printed Bazaar cooldown. If the source prints no cooldown, it uses the explicit **5-second Saturn pending fallback**, chosen from the documented starting-tier median below.
-4. Only the current card's timer advances. Upcoming cards remain ordered previews and do not run hidden timers; a preview gets a fresh timer when it becomes current.
-5. At zero, the current instance becomes **Ready** and stays Ready until played.
-6. The player may resolve the Ready card Up or Down. Either direction consumes that same instance, then its replacement becomes current with a fresh timer. Playing creates no universal post-play lock.
+2. The shuffled deck draws a card **Ready**. Drawing or acquiring it does not start a cooldown.
+3. Playing Up resolves the Arcana or Tactic immediately, then starts that card's mutable recovery from its printed Bazaar cooldown. If the source prints no cooldown, it uses the explicit **5-second Saturn recovery fallback**, chosen from the documented starting-tier median below.
+4. The played card remains visible as the authoritative current card and cannot be played in either direction while recovering. Only its recovery timer advances.
+5. At zero, that played card enters the existing discard flow and the shuffled draw pile supplies a new Ready card. The catalog has no authored placement order; the visible upcoming cards are previews of the current shuffle, not permanent board positions.
+6. Playing Down changes stance immediately, performs the existing stamina behavior, and holds the same card for a **1-second recovery** before cycling. Down does not consume that card's stored Up preparation.
 
-Bazaar-style timer effects act on the mutable pending instance, not the catalog value:
+Bazaar-style timer effects act on mutable recovery state, not the catalog value:
 
-- **[Haste](https://thebazaar.wiki.gg/wiki/Haste):** temporarily doubles that card's cooldown-drain rate. Additional Haste extends/queues duration; it does not permanently rewrite the source cooldown.
-- **[Charge](https://thebazaar.wiki.gg/wiki/Charge):** immediately subtracts the stated seconds from remaining cooldown, clamped at zero.
+- **[Haste](https://thebazaar.wiki.gg/wiki/Haste):** temporarily doubles that card's recovery-drain rate. Additional Haste extends/queues duration; it does not permanently rewrite the source cooldown.
+- **[Charge](https://thebazaar.wiki.gg/wiki/Charge):** immediately subtracts the stated seconds from remaining recovery, clamped at zero.
 - **[Slow](https://thebazaar.wiki.gg/wiki/Slow):** temporarily doubles the effective cooldown, modeled as half-speed cooldown drain.
 - **[Freeze](https://thebazaar.wiki.gg/wiki/Freeze):** pauses cooldown drain for the stated duration.
-- Effects on a Ready card do not make it “more ready.” Rejected gestures do not consume the card or mutate its timer.
+- If the target card is actively recovering, an effect changes that recovery immediately. Otherwise it is stored by item ID and applied the next time that card is played Up; playing it Down leaves the stored Up preparation intact.
+- Positive preparation stacks. Stored Charge is capped at the target's effective next Up recovery, and once that cap makes the next recovery zero the card accepts no additional Charge or Haste until the preparation is consumed.
+- Rejected gestures do not consume the card or mutate its recovery.
 
-Sixteen active source items are passive or purely reactive and therefore print no Bazaar cooldown: 3 direct and 13 non-direct. Their raw source cooldown remains **—**, never zero; their initial Saturn translation is the explicit **5-second pending fallback**. A later tuning pass may replace that fallback per item while keeping the raw source field unchanged.
+Bazaar placement words are temporal in this shuffled single-card system. “Adjacent,” “left,” and “right” target the next actually drawn card, or the next matching drawn card when the source specifies a tag. Effects that name two or four adjacent items apply to the next two or four qualifying draws. They never use `deck.pool` index as a hidden permanent board layout.
 
-PR #137 supplies a single directional post-play cooldown. The runtime follow-up replaces it with one mutable pending instance attached to the single current card; the immutable catalog values remain the source of truth.
+Sixteen active source items are passive or purely reactive and therefore print no Bazaar cooldown: 3 direct and 13 non-direct. Their raw source cooldown remains **—**, never zero; their initial Saturn translation is the explicit **5-second recovery fallback**. A later tuning pass may replace that fallback per item while keeping the raw source field unchanged.
+
+PR #137 supplies the single-card directional interaction and original shuffled deck progression. The runtime follow-up keeps that flow while attaching one mutable post-play recovery to the held current card; the immutable catalog values remain the source of truth.
 
 ---
 
 ## 1. Arcana ↔ Vanessa Damage-Item Mapping
 
-All numbers below are the unenchanted **starting-tier** values. A source cooldown of **—** means the Bazaar item is passive or reactive; the active Saturn card still receives the labeled 5-second pending fallback.
+All numbers below are the unenchanted **starting-tier** values. A source cooldown of **—** means the Bazaar item is passive or reactive; the active Saturn card still receives the labeled 5-second recovery fallback.
 
 | # | Saturn Arcana | Bazaar item / source | Starting profile | Timing / limits | Starting-tier output and base behavior | Match |
 |---:|---|---|---|---|---|---|
@@ -68,7 +72,7 @@ All numbers below are the unenchanted **starting-tier** values. A source cooldow
 | 14 | Rip Tide | [Scimitar of the Deep](https://bazaardb.gg/card/5szlp8k6d461vn0sqr32e4jqt/Scimitar-of-the-Deep)<br>card snapshot · patch 17.3 | Silver · Medium<br>Weapon, Relic, Aquatic, Damage, DamageReference, Poison, PoisonReference, Crit, CritReference, HasteReference | 5 sec | On use, deal 30 Damage.<br>When any board item Crits, Poison the opponent for 25% of this item's Damage.<br>When this is Hasted, board Poison items gain +3 Poison for the fight. | Aquatic cutting waves |
 | 15 | Aqua Arc | [Double Barrel](https://bazaardb.gg/card/3l7g4kiy6iv8007avjo2jzgzf/Double-Barrel)<br>card snapshot · patch 17.3 | Bronze · Medium<br>Weapon, Damage, Ammo | 4 sec<br>Ammo 2<br>Multicast 2 | On use, deal 20 Damage. | 1/1/2-style double finisher |
 | 16 | Chaos Crusher | [Slumbering Primordial](https://bazaardb.gg/card/tcljffx9206yfpg7vlt51ckcyc/Slumbering-Primordial)<br>card snapshot · patch 17.3 | Gold · Large<br>Friend, Aquatic, Weapon, Relic, PoisonReference, FreezeReference, BurnReference, Damage, DamageReference | 25 sec<br>Multicast 4 | On use, deal 15 Damage.<br>When Poison, Freeze, or Burn occurs, Charge this for 2 seconds and gain +15 Damage for the fight. | Large exotic multi-part attack |
-| 17 | Searing Rush | [Bladed Hoverboard](https://bazaardb.gg/card/n4z59z0q0y048z9svtd4y6zm2k/Bladed-Hoverboard)<br>card snapshot · patch 17.3 | Silver · Medium<br>Weapon, Tech, Aquatic, Vehicle, Damage, Flying | — source<br>5 sec Saturn pending fallback | When an adjacent item is used, deal 20 Damage and the used adjacent item starts Flying. | Movement-triggered damage |
+| 17 | Searing Rush | [Bladed Hoverboard](https://bazaardb.gg/card/n4z59z0q0y048z9svtd4y6zm2k/Bladed-Hoverboard)<br>card snapshot · patch 17.3 | Silver · Medium<br>Weapon, Tech, Aquatic, Vehicle, Damage, Flying | — source<br>5 sec Saturn recovery fallback | When an adjacent item is used, deal 20 Damage and the used adjacent item starts Flying. | Movement-triggered damage |
 | 18 | Flare Rush | [Jetbike](https://bazaardb.gg/card/3jyd1l07fb8qwvjxbn3yp89spm/Jetbike)<br>card snapshot · patch 17.3 | Silver · Large<br>Weapon, Vehicle, Damage, Flying, FlyingReference | 7 sec | On use, deal 200 Damage.<br>When an adjacent item is used, that item and this start Flying.<br>When another Flying item is used, Charge this for 1 second. | High-speed moving weapon |
 | 19 | Ignition Rush | [Burnacuda](https://bazaardb.gg/card/qfg1929872wkv794199zd6mz44/Burnacuda)<br>card snapshot · patch 17.3 | Bronze · Small<br>Aquatic, Friend, Burn, Ammo, Haste | 3 sec<br>Ammo 1 | On use, Burn the opponent for 3.<br>On use, Haste an adjacent item for 1 second. | Mobile Burn package |
 | 20 | Air Burst | [Shoe Blade](https://nrt.bazaardb.gg/card/nm6h6kl7pswvfqvx8qfnhvny35)<br>card snapshot · patch 17.3 | Bronze · Small<br>Weapon, Apparel, Damage, Crit | 6 sec | On use, deal 25 Damage.<br>On its first use each fight, this has +100% Crit Chance. | Movement/contact attack |
@@ -81,7 +85,7 @@ All numbers below are the unenchanted **starting-tier** values. A source cooldow
 | 27 | Circuit Line | [Cannonade](https://bazaardb.gg/card/10gwz40pnjk7clz1d63x917cfxn/Cannonade)<br>card snapshot · patch 17.3 | Gold · Large<br>Weapon, Damage, BurnReference | 12 sec<br>Multicast 3 | On use, deal 200 Damage.<br>When you use another Weapon or Burn item, Charge this for 2 seconds. | Chained / multiple damage output |
 | 28 | Shock Line | [Jitte](https://bazaardb.gg/card/155f5m272x60fhz5q3fd8924s1y/Jitte)<br>card snapshot · patch 17.3 | Silver · Small<br>Weapon, Damage, Slow | 5 sec | On use, deal 20 Damage.<br>On use, Slow 1 opposing item for 1 second.<br>When you Slow, this gains +10 Damage for the fight. | Damage + control |
 | 29 | Wave Front | [Tortuga](https://bazaardb.gg/card/1905vptydc5nxjpdb6jv7xvtyjs/Tortuga)<br>card snapshot · patch 17.2 | Gold · Large<br>Aquatic, Friend, Vehicle, Weapon, Damage, Haste | 12 sec | On use, deal 450 Damage.<br>On use, Haste other items for 1 second.<br>When another Friend is used, Charge this for 2 seconds. | Large Aquatic attack |
-| 30 | Frost Feint | [Bilge Worm](https://bazaardb.gg/card/14hqpzjc2gzvxy5t262l5vlx3hk/Aila)<br>Aila merchant pool · database patch 17.3 | Bronze · Small<br>Weapon, Aquatic, Damage, Lifesteal | — source<br>5 sec Saturn pending fallback | When the enemy uses their leftmost item, deal 10 Damage.<br>Lifesteal 100%. | Reactive enemy-triggered damage |
+| 30 | Frost Feint | [Bilge Worm](https://bazaardb.gg/card/14hqpzjc2gzvxy5t262l5vlx3hk/Aila)<br>Aila merchant pool · database patch 17.3 | Bronze · Small<br>Weapon, Aquatic, Damage, Lifesteal | — source<br>5 sec Saturn recovery fallback | When the enemy uses their leftmost item, deal 10 Damage.<br>Lifesteal 100%. | Reactive enemy-triggered damage |
 | 31 | Frost Wing | [Throwing Knives](https://bazaardb.gg/card/dc1sye961jgoffun2ze0xwzmf/Throwing-Knives)<br>card snapshot · patch 17.3 | Gold · Small<br>Weapon, Damage, CritReference, Ammo | 4 sec<br>Ammo 2 | On use, deal 33 Damage.<br>When another item Crits, use this. | Multi-projectile blade volley |
 | 32 | Chaotic Rift | [Oni Mask](https://bazaardb.gg/card/mdcph08lv65pq4cvpwwtnmpw3d/Oni-Mask)<br>card snapshot · patch 17.1 | Silver · Medium<br>Apparel, Tech, Burn, BurnReference, CritReference | 6 sec | On use, Burn the opponent for 6.<br>When any board item Crits, board Burn items gain +4 Burn for the fight. | Mobility / Flying-style trigger |
 | 33 | Flame Breath | [Lighter](https://bazaardb.gg/card/9kp0n6thgzgv90226qfbj92c2m/Lighter)<br>card snapshot · patch 17.3 | Bronze · Small<br>Tool, Burn | 3 sec | On use, Burn the opponent for 3. | Pure Burn delivery |
@@ -90,7 +94,7 @@ All numbers below are the unenchanted **starting-tier** values. A source cooldow
 | 36 | Explosive Charge | [Grenade](https://bazaardb.gg/card/7gzm05wdg3808j52q1c7cfq77p/Grenade)<br>card snapshot · patch 17.3 | Bronze · Small<br>Weapon, Damage, Ammo, Crit | 5 sec<br>Ammo 1 | On use, deal 50 Damage.<br>Base Crit Chance is 25%. | Delayed explosion |
 | 37 | Homing Flares | [Repeater](https://bazaardb.gg/card/5py9snduszllzogy6pken5sbk/Repeater)<br>card snapshot · patch 17.3 | Silver · Medium<br>Weapon, Damage, Ammo | 5 sec<br>Ammo 2 | On use, deal 30 Damage.<br>When another Ammo item is used, use this. | Repeated independent shots |
 | 38 | Dragon Arc | [Ballista](https://bazaardb.gg/card/1gcjtjpfqt7gdt4p3yvpxsqf5v/Ballista)<br>card snapshot · patch 17.3 | Gold · Large<br>Weapon, Damage, Ammo | 9 sec<br>Ammo 2 | On use, deal 200 Damage.<br>When another Ammo item is used, gain +1 Multicast for the fight. | Heavy / multicast projectile |
-| 39 | Flame Fusion | [Incendiary Rounds](https://bazaardb.gg/card/1841wy5x377mwfk1pomzc8wgv/Incendiary-Rounds)<br>card snapshot · patch 17.3 | Silver · Small<br>Burn | — source<br>5 sec Saturn pending fallback | When an adjacent item is used, Burn the opponent for 2. | Projectile + Burn package |
+| 39 | Flame Fusion | [Incendiary Rounds](https://bazaardb.gg/card/1841wy5x377mwfk1pomzc8wgv/Incendiary-Rounds)<br>card snapshot · patch 17.3 | Silver · Small<br>Burn | — source<br>5 sec Saturn recovery fallback | When an adjacent item is used, Burn the opponent for 2. | Projectile + Burn package |
 | 40 | Ignition Drive | [Powder Keg](https://bazaardb.gg/card/g9qk9n6x4f6l9mthnhp486gt6y/Powder-Keg)<br>card snapshot · patch 17.3 | Gold · Medium<br>Weapon, Damage, HealthReference, BurnReference | 24 sec | On use, deal Damage equal to 40% of an enemy's Max Health and destroy this.<br>When you Burn, Charge this for 2 seconds. | Chained explosions |
 | 41 | Engulfing Fissure | [Volcanic Vents](https://bazaardb.gg/card/124y339kxsdtjqg4w1yn27qvtq0/Volcanic-Vents)<br>card snapshot · patch 17.3 | Bronze · Medium<br>Aquatic, Burn | 7 sec<br>Multicast 3 | On use, Burn the opponent for 3. | Persistent ground fire |
 | 42 | Rapid Fire Agent | [Calico](https://bazaardb.gg/card/72v87csj8dxz24cgd8ts6tq5tj/Calico)<br>card snapshot · patch 17.3 | Bronze · Small<br>Friend, Weapon, Damage, CritReference | 6 sec | On use, deal 20 Damage.<br>When another Weapon is used, gain +5% Crit Chance for the fight. | Offensive Friend |
@@ -128,7 +132,7 @@ All numbers below are the unenchanted **starting-tier** values. A source cooldow
 - **The Boulder:** its starting Gold cooldown is **22 seconds**; 18 seconds is the next-tier value.
 - **Scimitar of the Deep:** its Crit trigger applies Poison equal to 25% of its Damage. At the starting 30 Damage, Bazaar rounding produces **8 Poison**.
 - **Bilge Worm and Vampire Squid:** BazaarDB did not expose stable standalone item URLs during retrieval. Their current patch-17.3 rows are pinned to the Aila and Aimbot merchant item pools, respectively; those URL identifiers belong to the merchants, not to the items.
-- **Reactive items:** Bladed Hoverboard, Bilge Worm, and Incendiary Rounds have no printed cooldown. Their trigger still resolves the listed output and their active Saturn card instances use the 5-second pending fallback.
+- **Reactive items:** Bladed Hoverboard, Bilge Worm, and Incendiary Rounds have no printed cooldown. Their trigger still resolves the listed output and their active Saturn card instances use the 5-second recovery fallback.
 
 ---
 
@@ -156,7 +160,7 @@ These do **not** meet the strict direct-damage definition above. Their base form
 | 2 | [Astrolabe](https://bazaardb.gg/card/nqnymypyxy5llhs5tn5zwpb25v/Astrolabe)<br>17.1 (Aug 6, 2026) | Silver · Medium<br>Tool, Haste | 5 sec | **On use:** Haste 2 items for 1 second.<br>**When you use another non weapon item:** Charge this 1 second. | Non-direct Tactic |
 | 3 | [Barrel](https://bazaardb.gg/card/8f4t435wh40lfy5gtc3ny2dmbp/Barrel)<br>17.3 (Aug 20, 2026) | Bronze · Medium<br>Shield | 5 sec | **On use:** Shield 30.<br>**When any adjacent item is used:** Gain +15 Shield for the fight. | Non-direct Tactic |
 | 4 | [Beach Ball](https://bazaardb.gg/card/7in711iu65y81f5xu5rteyaxe/Beach-Ball)<br>17.1 (Hotfix Aug 7, 2026) | Bronze · Medium<br>Aquatic, Toy, Haste | 4 sec | **On use:** Haste 2 Aquatic or Toy items for 2 seconds. | Non-direct Tactic |
-| 5 | [Cannonball](https://bazaardb.gg/card/fc1y26n2vlf7p25ykxyzq2l341/Cannonball)<br>17.3 (Aug 20, 2026) | Silver · Small<br>AmmoReference | — source<br>5 sec Saturn pending fallback | **While on board:** Your items have +1 Max Ammo. | Non-direct Tactic |
+| 5 | [Cannonball](https://bazaardb.gg/card/fc1y26n2vlf7p25ykxyzq2l341/Cannonball)<br>17.3 (Aug 20, 2026) | Silver · Small<br>AmmoReference | — source<br>5 sec Saturn recovery fallback | **While on board:** Your items have +1 Max Ammo. | Non-direct Tactic |
 | 6 | [Captain's Quarters](https://bazaardb.gg/card/8425ht00fb4p1r919mmwsa0tn/Captain%27s-Quarters)<br>17.2 (Aug 13, 2026) | Silver · Large<br>Aquatic, Property, Haste, DamageReference, AmmoReference | 4 sec | **On use:** Haste your Tools and Vehicles for 1 second.<br>**On use:** Reload your items 1 Ammo.<br>**On use:** Your Weapons gain +20 Damage for the fight. | Support; Haste/reload/DamageReference |
 | 7 | [Captain's Wheel](https://global.bazaardb.gg/card/jcj5923pvmhdh7yqbsl4hn84gb/Captain%27s-Wheel)<br>17.1 (Hotfix Aug 7, 2026) | Silver · Medium<br>Aquatic, Tool, Haste | 5 sec | **On use:** Haste up to 2 adjacent items for 1 second.<br>**While you have a vehicle or large item:** Reduce this item's Cooldown by 2.5 seconds. | Support; Haste |
 | 8 | [Card Table](https://bazaardb.gg/card/tbqmqy73gxxhx4nw9y64kstg3g/Card-Table)<br>17.3 (Aug 20, 2026) | Gold · Medium<br>No printed tags | 5 sec | **On use:** A Friend gains +1 Multicast for the fight. | Non-direct Tactic |
@@ -165,36 +169,36 @@ These do **not** meet the strict direct-damage definition above. Their base form
 | 11 | [Coral](https://bazaardb.gg/card/zqxjt2s8896s8nnqls2h06th8c/Coral)<br>17.2 (Aug 13, 2026) | Bronze · Small<br>Aquatic, Relic, Heal | 5 sec | **On use:** Heal 20.<br>**When you buy an aquatic item:** Gain +5 Heal permanently. | Heal/scaling; not direct damage in base form |
 | 12 | [Coral Armor](https://bazaardb.gg/card/3th8hsilrfklhavugeg050h5k/Coral-Armor)<br>17.2 (Aug 13, 2026) | Bronze · Medium<br>Aquatic, Apparel, Relic, Shield | 6 sec | **On use:** Shield 50.<br>**When you buy another aquatic item:** Gain +10 Shield permanently. | Non-direct Tactic |
 | 13 | [Cove](https://bazaardb.gg/card/n8840cj0bdwghtbl7h2zmgyzwf/Cove)<br>17.1 (Hotfix Aug 7, 2026) | Bronze · Large<br>Aquatic, Property, Shield, Value, EconomyReference | 3 sec | **On use:** Shield equal to 1× this item's Value.<br>**When you sell an item:** Gain +1 Value permanently. | Shield/value scaling |
-| 14 | [Crow's Nest](https://bazaardb.gg/card/4e4eo5afof8afl38nlhjtjw5z/Crow%27s-Nest)<br>17.0 (Aug 5, 2026) | Silver · Large<br>Property, Aquatic, Crit | — source<br>5 sec Saturn pending fallback | **While on board:** Your Weapons have +40% Crit Chance.<br>**While you have only one weapon:** That Weapon has Lifesteal and is affected by Slow for half as long. | Crit/lifesteal support |
+| 14 | [Crow's Nest](https://bazaardb.gg/card/4e4eo5afof8afl38nlhjtjw5z/Crow%27s-Nest)<br>17.0 (Aug 5, 2026) | Silver · Large<br>Property, Aquatic, Crit | — source<br>5 sec Saturn recovery fallback | **While on board:** Your Weapons have +40% Crit Chance.<br>**While you have only one weapon:** That Weapon has Lifesteal and is affected by Slow for half as long. | Crit/lifesteal support |
 | 15 | [Dam](https://bazaardb.gg/card/hfhplqbp7ykb1lvlw6254ll50b/Dam)<br>16.2 (Jul 17, 2026) | Gold · Large<br>Aquatic, Property | 25 sec | **On use:** Destroy this and all Smaller items for the fight.<br>**When you use another aquatic item:** Charge this 1 second. | Destroys items; not enemy health damage |
 | 16 | [Dive Weights](https://bazaardb.gg/card/12cdlp288b935dj9njzg224nqd3/Dive-Weights)<br>17.2 (Aug 13, 2026) | Silver · Small<br>Aquatic, Tool, Apparel, Haste, Ammo | 8 sec<br>Ammo 4 | **On use:** Haste 1 item for 1 second.<br>**For each adjacent aquatic item:** Reduce this item's Cooldown by 1 second.<br>**While on board:** Gain +Multicast equal to this item's Ammo (+4 at the starting tier). | Haste/multicast/ammo support |
-| 17 | [Diving Helmet](https://bazaardb.gg/card/19fb4133c27l2zd47zgjlnnvpph/Diving-Helmet)<br>17.3 (Aug 20, 2026) | Gold · Medium<br>Aquatic, Tool, Apparel, Shield | — source<br>5 sec Saturn pending fallback | **When any aquatic item is used:** Shield 50.<br>**While on board:** Adjacent items are Aquatic in combat. | Shield support |
+| 17 | [Diving Helmet](https://bazaardb.gg/card/19fb4133c27l2zd47zgjlnnvpph/Diving-Helmet)<br>17.3 (Aug 20, 2026) | Gold · Medium<br>Aquatic, Tool, Apparel, Shield | — source<br>5 sec Saturn recovery fallback | **When any aquatic item is used:** Shield 50.<br>**While on board:** Adjacent items are Aquatic in combat. | Shield support |
 | 18 | [Dock Lines](https://bazaardb.gg/card/9elav9z45mx80y0w8qv6kbmdk/Dock-Lines)<br>17.0 (Aug 5, 2026) | Silver · Medium<br>Tool, Aquatic, Slow | 4 sec | **On use:** Slow 2 items for 3 seconds. | Slow |
-| 19 | [Figurehead](https://bazaardb.gg/card/8tzt93kxo03bl50z5cubthjv8/Figurehead)<br>17.0 (Aug 5, 2026) | Silver · Medium<br>Aquatic, Relic, DamageReference, Cooldown | — source<br>5 sec Saturn pending fallback | **While on board:** The Cooldowns of Aquatic items to the left are reduced by 10%.<br>**While on board:** Items to the right gain +25 Damage. | DamageReference support |
+| 19 | [Figurehead](https://bazaardb.gg/card/8tzt93kxo03bl50z5cubthjv8/Figurehead)<br>17.0 (Aug 5, 2026) | Silver · Medium<br>Aquatic, Relic, DamageReference, Cooldown | — source<br>5 sec Saturn recovery fallback | **While on board:** The Cooldowns of Aquatic items to the left are reduced by 10%.<br>**While on board:** Items to the right gain +25 Damage. | DamageReference support |
 | 20 | [Fishing Net](https://bazaardb.gg/card/hn4n4qhc9t3hklm0zysh76jn90/Fishing-Net)<br>17.3 (Aug 20, 2026) | Bronze · Medium<br>Aquatic, Tool, Slow, EconomyReference | 6 sec | **On use:** Slow 1 item for 2 seconds.<br>**At start of each day:** Get a Small Aquatic or Loot item from any Hero. | Slow + item generation |
 | 21 | [Fishing Rod](https://bazaardb.gg/card/b2s1b6c5djpjeojurowx2in5i/Fishing-Rod)<br>17.2 (Aug 13, 2026) | Bronze · Medium<br>Aquatic, Tool, Haste | 5 sec | **On use:** Haste the Aquatic item to the right for 2 seconds.<br>**At start of each day:** Get a Small Aquatic item. | Haste + Aquatic generation |
-| 22 | [Holsters](https://bazaardb.gg/card/6ntpnj0fv39jpt3zlw8z0x6cwm/Holsters)<br>17.3 (Aug 20, 2026) | Diamond · Small<br>Apparel, Tool, Haste | — source<br>5 sec Saturn pending fallback | **At start of each fight:** Haste your Small items for 2 seconds. | Haste support |
-| 23 | [Iceberg](https://bazaardb.gg/card/l1yg7cpnjqz7cbnn99tq9mwjwf/Iceberg)<br>17.3 (Aug 20, 2026) | Diamond · Large<br>Aquatic, Property, Freeze | — source<br>5 sec Saturn pending fallback | **When an enemy uses an item:** Freeze it for 1 second. | Freeze |
+| 22 | [Holsters](https://bazaardb.gg/card/6ntpnj0fv39jpt3zlw8z0x6cwm/Holsters)<br>17.3 (Aug 20, 2026) | Diamond · Small<br>Apparel, Tool, Haste | — source<br>5 sec Saturn recovery fallback | **At start of each fight:** Haste your Small items for 2 seconds. | Haste support |
+| 23 | [Iceberg](https://bazaardb.gg/card/l1yg7cpnjqz7cbnn99tq9mwjwf/Iceberg)<br>17.3 (Aug 20, 2026) | Diamond · Large<br>Aquatic, Property, Freeze | — source<br>5 sec Saturn recovery fallback | **When an enemy uses an item:** Freeze it for 1 second. | Freeze |
 | 24 | [IllusoRay](https://bazaardb.gg/card/168xkq965ytnl3500lcd9p4bsps/IllusoRay)<br>17.3 (Aug 20, 2026) | Bronze · Small<br>Aquatic, Friend, Ray, Slow | 6 sec | **On use:** Slow 1 item for 1 second.<br>**For each adjacent friend or ray:** Gain +1 Multicast. | Non-direct Tactic |
-| 25 | [Integrated HUD](https://bazaardb.gg/card/c6cy0mpnfjzhbgzkw1v08f5jk8/Integrated-HUD)<br>16.2 (Jul 17, 2026) | Silver · Small<br>Apparel, Tech, Crit, Slow | — source<br>5 sec Saturn pending fallback | **While on board:** The item to the right gains +20% Crit Chance if it can Crit.<br>**When the item to the right crits:** Slow 1 enemy item for 1 second. | Crit/Slow support |
-| 26 | [Korxena Crest](https://bazaardb.gg/card/42a3a1x1vlgfowqs4ch0goy8z/Korxena-Crest)<br>16.1 (Hotfix Jul 8, 2026) | Silver · Small<br>Apparel, Relic, Crit | — source<br>5 sec Saturn pending fallback | **While on board:** Your items gain +15% Crit Chance if they can Crit. | Crit support |
+| 25 | [Integrated HUD](https://bazaardb.gg/card/c6cy0mpnfjzhbgzkw1v08f5jk8/Integrated-HUD)<br>16.2 (Jul 17, 2026) | Silver · Small<br>Apparel, Tech, Crit, Slow | — source<br>5 sec Saturn recovery fallback | **While on board:** The item to the right gains +20% Crit Chance if it can Crit.<br>**When the item to the right crits:** Slow 1 enemy item for 1 second. | Crit/Slow support |
+| 26 | [Korxena Crest](https://bazaardb.gg/card/42a3a1x1vlgfowqs4ch0goy8z/Korxena-Crest)<br>16.1 (Hotfix Jul 8, 2026) | Silver · Small<br>Apparel, Relic, Crit | — source<br>5 sec Saturn recovery fallback | **While on board:** Your items gain +15% Crit Chance if they can Crit. | Crit support |
 | 27 | [Life Preserver](https://bazaardb.gg/card/42lj1pbn9nby2smxylaqm6iyk/Life-Preserver)<br>16.2 (Jul 17, 2026) | Bronze · Medium<br>Aquatic, Shield, Heal | 7 sec | **On use:** Shield 10.<br>**The first time you would be defeated each fight:** Heal 200. | Non-direct Tactic |
-| 28 | [Lockbox](https://bazaardb.gg/card/x98jn3cwn1bs3d26fc1zld4g06/Lockbox)<br>17.3 (Aug 20, 2026) | Silver · Medium<br>Relic, EconomyReference, Value, DamageReference | — source<br>5 sec Saturn pending fallback | **When you win a fight:** Gain +3 Value permanently.<br>**While on board:** Your items gain Damage equal to this item's Value. | Non-direct Tactic |
+| 28 | [Lockbox](https://bazaardb.gg/card/x98jn3cwn1bs3d26fc1zld4g06/Lockbox)<br>17.3 (Aug 20, 2026) | Silver · Medium<br>Relic, EconomyReference, Value, DamageReference | — source<br>5 sec Saturn recovery fallback | **When you win a fight:** Gain +3 Value permanently.<br>**While on board:** Your items gain Damage equal to this item's Value. | Non-direct Tactic |
 | 29 | [Nesting Doll](https://bazaardb.gg/card/113kp5b01qpk3h12bmjyfcdnn1f/Nesting-Doll)<br>17.3 (Aug 20, 2026) | Silver · Small<br>Toy, Shield, Ammo | 2 sec<br>Ammo 8 | **On use:** Shield equal to 10× this item's Ammo.<br>**At start of each day:** Gain +1 Max Ammo permanently. | Non-direct Tactic |
 | 30 | [Pearl](https://bazaardb.gg/card/2zs0qmhclpv2j1789yd7ph6p6j/Pearl)<br>17.3 (Aug 20, 2026) | Bronze · Small<br>Aquatic, Shield | 5 sec | **On use:** Shield 10.<br>**When you use another aquatic item:** Charge this 1 second. | Non-direct Tactic |
 | 31 | [Port](https://bazaardb.gg/card/3pghk5dcjx67p4027tcyq0c8pv/Port)<br>17.3 (Aug 20, 2026) | Silver · Large<br>Property, Aquatic, AmmoReference, Charge | 6 sec | **On use:** Reload all your items 2 Ammo and Charge them 1 second.<br>**At start of each day:** Get a Small Ammo item from any hero. | Ammo reload + Charge |
 | 32 | [Rowboat](https://bazaardb.gg/card/3yx3sdulcm9rtcrdzrbhnrs47/Rowboat)<br>17.1 (Hotfix Aug 7, 2026) | Gold · Medium<br>Aquatic, Vehicle, Charge, CooldownReference | 5 sec | **On use:** Charge adjacent items 2 seconds.<br>**While you have at least 7 unique types:** Reduce this item's Cooldown by 5 seconds. | Charge adjacent items |
 | 33 | [Seadog's Saloon](https://bazaardb.gg/card/7dyt0xdq4ztvjb68mioiu1urf/Seadog%27s-Saloon)<br>17.1 (Aug 6, 2026) | Silver · Large<br>Aquatic, Property, Haste, Slow | 6 sec | **On use:** Haste an item for 2 seconds.<br>**On use:** Slow an item for 2 seconds.<br>**For each friend you have:** Gain +1 Multicast. | Haste/Slow |
 | 34 | [Seashadow](https://bazaardb.gg/card/10f8dm23mqdzy4j9pnxz8b1w45/Seashadow)<br>17.1 (Aug 6, 2026) | Silver · Medium<br>Friend, Vehicle, Cooldown | 2 sec | **On use:** Reduce the Cooldown of your other items by 8% for the fight.<br>**On use:** Increase this item's Cooldown by 4 seconds for the fight. | Cooldown reduction |
-| 35 | [Shipwreck](https://bazaardb.gg/card/16st79j809vv1j19s7zy1wqbbwq/Shipwreck)<br>17.3 (Aug 20, 2026) | Diamond · Large<br>Aquatic, Vehicle, Property, Relic, MulticastReference | — source<br>5 sec Saturn pending fallback | **While on board:** Your Aquatic items have +1 Multicast. | Aquatic multicast support |
+| 35 | [Shipwreck](https://bazaardb.gg/card/16st79j809vv1j19s7zy1wqbbwq/Shipwreck)<br>17.3 (Aug 20, 2026) | Diamond · Large<br>Aquatic, Vehicle, Property, Relic, MulticastReference | — source<br>5 sec Saturn recovery fallback | **While on board:** Your Aquatic items have +1 Multicast. | Aquatic multicast support |
 | 36 | [Shot Glasses](https://bazaardb.gg/card/7ewmaurzg1674a13fvurh2ljk/Shot-Glasses)<br>16.1 (Hotfix Jul 8, 2026) | Silver · Small<br>Ammo, Haste, Slow | 3 sec<br>Ammo 1 | **On use:** Haste 4 of your items for 1 second.<br>**On use:** Slow 4 of your items for 1 second. | Non-direct Tactic |
-| 37 | [Star Chart](https://bazaardb.gg/card/g72qhm78wwb9ml7lfgj1lhtj0s/Star-Chart)<br>17.3 (Aug 20, 2026) | Bronze · Medium<br>Tool, Relic, Cooldown, Crit | — source<br>5 sec Saturn pending fallback | **While on board:** Adjacent items have +10% Crit Chance.<br>**While on board:** Adjacent items' Cooldowns are reduced by 5%. | Non-direct Tactic |
+| 37 | [Star Chart](https://bazaardb.gg/card/g72qhm78wwb9ml7lfgj1lhtj0s/Star-Chart)<br>17.3 (Aug 20, 2026) | Bronze · Medium<br>Tool, Relic, Cooldown, Crit | — source<br>5 sec Saturn recovery fallback | **While on board:** Adjacent items have +10% Crit Chance.<br>**While on board:** Adjacent items' Cooldowns are reduced by 5%. | Non-direct Tactic |
 | 38 | [Stealth Glider](https://bazaardb.gg/card/64tx7zxyq1djm3zkty1z34gpqb/Knightshade)<br>Knightshade merchant pool · database patch 17.3 | Silver · Large<br>Vehicle, Tech, Flying, CooldownReference, DamageReduction | 4 sec | **On use:** An item starts Flying.<br>**While on board:** You take 25% less Damage.<br>**While on board:** Your Flying items have their Cooldowns reduced by 1 second. | Damage reduction/cooldown support |
 | 39 | [Submersible](https://bazaardb.gg/card/c47mkck7q7n1l37vcm4xskk7m9/Submersible)<br>17.3 (Aug 20, 2026) | Silver · Medium<br>Aquatic, Tool, Vehicle, Tech, DamageReference, ShieldReference | 5 sec | **On use:** The leftmost and rightmost Aquatic Weapons gain +10 Damage for the fight.<br>**On use:** The leftmost and rightmost Aquatic Shield items gain +10 Shield for the fight.<br>**While you have another vehicle or large item:** Reduce this item's Cooldown by 2 seconds. | Aquatic weapon/shield support |
-| 40 | [Tropical Island](https://bazaardb.gg/card/d5df9s35x0whc7czq66xqxn3yv/Tropical-Island)<br>17.2 (Aug 13, 2026) | Silver · Large<br>Property, Aquatic, Regen, SlowReference | — source<br>5 sec Saturn pending fallback | **When any item or skill on board or in stash applies slow:** Gain 5 Regen for the fight.<br>**At end of each fight:** Get a Coconut and a Citrus. | Regen + Food generation |
+| 40 | [Tropical Island](https://bazaardb.gg/card/d5df9s35x0whc7czq66xqxn3yv/Tropical-Island)<br>17.2 (Aug 13, 2026) | Silver · Large<br>Property, Aquatic, Regen, SlowReference | — source<br>5 sec Saturn recovery fallback | **When any item or skill on board or in stash applies slow:** Gain 5 Regen for the fight.<br>**At end of each fight:** Get a Coconut and a Citrus. | Regen + Food generation |
 | 41 | [Honing Steel](https://bazaardb.gg/card/ajvdim21upzc9vy723alj67id/Honing-Steel)<br>16.2 (Jul 17, 2026) | Bronze · Small<br>Tool, DamageReference | 3 sec | **On use:** The leftmost and rightmost Weapons gain +5 Damage for the fight. | **Closest miss:** DamageReference; buffs Weapons |
 | 42 | [Orange Julian](https://bazaardb.gg/card/1875s7wl0y2slvkqn6js9spv7f4/Orange-Julian)<br>17.2 (Aug 13, 2026) | Silver · Medium<br>Friend, DamageReference, EconomyReference | 8 sec | **On use:** Your items gain Damage equal to half the gold you have gained this run. | **Closest miss:** DamageReference; buffs items from gold gained |
-| 43 | [Suppressor](https://bazaardb.gg/card/g0cqnc4fzgb8y9c01d030skqq/Suppressor)<br>17.2 (Aug 13, 2026) | Silver · Small<br>Tech, DamageReference, Cooldown | — source<br>5 sec Saturn pending fallback | **While on board:** The item to the left gains +25 Damage if it is a Weapon.<br>**While you have exactly one weapon:** That Weapon's Cooldown is reduced by 5%. | **Closest miss:** DamageReference; buffs adjacent Weapon/item |
+| 43 | [Suppressor](https://bazaardb.gg/card/g0cqnc4fzgb8y9c01d030skqq/Suppressor)<br>17.2 (Aug 13, 2026) | Silver · Small<br>Tech, DamageReference, Cooldown | — source<br>5 sec Saturn recovery fallback | **While on board:** The item to the left gains +25 Damage if it is a Weapon.<br>**While you have exactly one weapon:** That Weapon's Cooldown is reduced by 5%. | **Closest miss:** DamageReference; buffs adjacent Weapon/item |
 
 ### Source-resolution notes
 
@@ -216,7 +220,7 @@ For each Bazaar item, the value used was its **starting/base tier** rather than 
 
 Printed/base values were used. Multicast, Ammo, Crit, and similar effects were **not** multiplied into Damage.
 
-Cooldown statistics in the conditional table use only printed Bazaar cooldowns. The whole-population implementation value below substitutes the 5-second pending fallback for the three no-cooldown direct items.
+Cooldown statistics in the conditional table use only printed Bazaar cooldowns. The whole-population implementation value below substitutes the 5-second recovery fallback for the three no-cooldown direct items.
 
 ### Conditional averages
 
@@ -235,7 +239,7 @@ These include zeroes for items that do not have the stat.
 
 | Stat | Population Average |
 |---|---:|
-| Effective pending cooldown | **6.54 sec** |
+| Effective Up recovery | **6.54 sec** |
 | Fixed Damage* | **35.2** |
 | Burn | **0.89** |
 | Printed Poison | **0.39** |
@@ -325,8 +329,8 @@ A simple first-pass normalized form is:
 bazaar_damage_units = bazaar_damage / 20
 bazaar_burn_units   = bazaar_burn / 4
 bazaar_poison_units = bazaar_poison / 4
-effective_pending_cd = bazaar_cooldown ?? 5
-bazaar_cd_units      = effective_pending_cd / 5
+effective_recovery = bazaar_cooldown ?? 5
+bazaar_cd_units    = effective_recovery / 5
 ```
 
 Then Saturn's Gravity can define its own target values for one normalized unit.
@@ -355,10 +359,10 @@ combat-arena.html?variant=warden-trial
 There is no selector-only demo mode. The existing run loop remains authoritative:
 
 1. Start with the weapon's two authored cards.
-2. Swipe Down on the first Ready card to begin the trial.
+2. Swipe Down on the first Ready card to begin the trial; it stays held for the 1-second Down recovery before cycling.
 3. Clear a wave and choose one of three rewards, or skip.
 4. A chosen card is added to the persistent run deck and enters through the existing discard/draw flow.
-5. Continue drawing and playing one authoritative current card Up or Down.
+5. Continue drawing Ready cards. Up fires immediately and holds the card through its Bazaar recovery; Down changes stance immediately and holds it for 1 second.
 
 The reward catalog contains all **70 Arcana + 43 Tactics = 113 cards**. Arcana keep their mapped Up action and authored Down stance. Tactics use their Bazaar item as the Up action and deterministically reuse the existing 30 Down stances; no new hand model or PR #138 three-card experiment is introduced.
 
@@ -366,10 +370,10 @@ The reward catalog contains all **70 Arcana + 43 Tactics = 113 cards**. Arcana k
 
 | Bazaar concept | Warden Trial implementation |
 |---|---|
-| Board | The persistent owned deck. `deck.pool` order is stable board order. |
-| Left / right / adjacent | Neighboring cards in owned-deck order; first and last are the board edges. |
-| Item cooldown | The current card's mutable pending timer, starting from the pinned source cooldown or labeled 5-second fallback. |
-| Haste / Charge / Slow / Freeze on an off-current item | Stored by item ID and applied when that card next becomes current. |
+| Board | The persistent owned deck as an ownership set. Its array order is not a placement mechanic. |
+| Left / right / adjacent | A temporal packet for the next actually drawn card, or next matching draw; plural targets persist for the stated number of qualifying draws. |
+| Item cooldown | Post-Up recovery on the played card, starting from the pinned source cooldown or labeled 5-second fallback. The card remains current until it finishes. |
+| Haste / Charge / Slow / Freeze on an off-current item | Stored by item ID and applied when that card is next played Up. Down preserves the preparation. Positive preparation stops accepting Charge or Haste once stored Charge covers the full effective cooldown. |
 | Start of fight / start of day | Start of a Warden wave. |
 | End of fight / win a fight | Wave clear. |
 | Buy / acquire an item | Add a reward or generated card to the run deck. |
@@ -381,7 +385,7 @@ The reward catalog contains all **70 Arcana + 43 Tactics = 113 cards**. Arcana k
 | Crit | Deterministic **Focus**. Crit chance fills a per-item meter; each 100 points produces the extra activation and Crit-triggered effects, with no random roll. |
 | Flying | Per-fight **Momentum** state, used by the mapped Flying triggers and cooldown reductions. |
 
-Ammo refills at fight start, is spent on use, and blocks an empty item's Up play. Multicast repeats translated outputs without spending extra Ammo. Shield intercepts incoming player damage; Regen, Heal, Lifesteal, permanent gains, per-fight gains, acquisition triggers, reactive uses, tag synergies, and edge/adjacency rules are owned-deck behaviors rather than special test controls.
+Ammo refills at fight start, is spent on use, and blocks an empty item's Up play. Multicast repeats translated outputs without spending extra Ammo. Shield intercepts incoming player damage; Regen, Heal, Lifesteal, permanent gains, per-fight gains, acquisition triggers, reactive uses, and tag synergies are owned-deck behaviors rather than special test controls. Placement-dependent rules use the temporal next-draw translation above.
 
 The reversible combat transform is pinned as:
 
@@ -405,7 +409,9 @@ Automated coverage verifies that:
 - every rule trigger used by all 43 Tactics has a runtime lifecycle seam;
 - reward construction produces 70 unique Arcana and 43 unique Tactics;
 - source cooldowns and the 5-second passive fallback remain intact;
-- off-current timer effects wait for the targeted card;
+- draws are immediately Ready, played cards remain held through recovery, and only completion cycles the deck;
+- off-current timer effects wait for the targeted card's next Up play, Down preserves them, and positive prep saturates at zero next recovery;
+- placement-dependent effects target actual subsequent shuffled draws rather than stable owned-deck indexes;
 - representative damage, DoT, Ammo, Multicast, Shield, Heal, acquisition, passive, fight-start, and fight-end behaviors resolve;
 - Warden Trial still uses one current card, three reward choices, and the original add/draw/discard progression.
 
