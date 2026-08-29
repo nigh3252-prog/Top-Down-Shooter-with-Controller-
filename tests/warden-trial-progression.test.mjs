@@ -20,6 +20,7 @@ import {
   resolveWardenTrialCardPlay,
   wardenTrialUpArcanaIdForCard,
 } from '../src/warden-trial-card-policy.js';
+import { wardenTrialCardCooldownSeconds } from '../src/warden-trial-card-cooldown.js';
 import { ARENA_SHELL_HTML } from '../src/arena-shell.js';
 
 assert.equal(WARDEN_TRIAL_STAMINA_MAX, 200);
@@ -86,6 +87,10 @@ const choices = drawWardenTrialRewardChoices(rewardPool, 3, () => 0);
 assert.equal(choices.length, 3);
 assert.equal(new Set(choices.map(card => card.__wardenTrialPairId)).size, 3);
 for (const card of [...starters, ...rewardPool]) {
+  assert.equal(wardenTrialCardCooldownSeconds('up'), 3, `${card.__wardenTrialArcanaId} uses the shared upward cooldown`);
+  assert.equal(wardenTrialCardCooldownSeconds('down'), 1, `${card.id} uses the shared downward cooldown`);
+  assert.equal(wardenTrialCardCooldownSeconds('up', { abilityCooldowns:false }), 0, `${card.__wardenTrialArcanaId} can skip its upward cooldown`);
+  assert.equal(wardenTrialCardCooldownSeconds('down', { abilityCooldowns:false }), 1, `${card.id} keeps its downward cooldown`);
   const upward = resolveWardenTrialCardPlay({
     direction: 'up',
     started: true,

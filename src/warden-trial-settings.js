@@ -1,5 +1,6 @@
 export const WARDEN_TRIAL_SETTINGS = Object.freeze({
   viewScale: 3,
+  abilityCooldowns: true,
   spawnRadiusMin: 18,
   spawnRadiusMax: 30,
   enemyHeight: 4.6,

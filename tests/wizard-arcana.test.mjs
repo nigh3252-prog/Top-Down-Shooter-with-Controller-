@@ -210,15 +210,15 @@ const storage={
 };
 const tweakEvents=[];
 const eventTarget={dispatchEvent:event=>{tweakEvents.push(event);return true;}};
-assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:1,damageMultiplier:1});
+assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:3,damageMultiplier:3});
 const savedSize=writeArcanaTweaks({sizeMultiplier:4.87},{storage,eventTarget});
-assert.deepEqual(savedSize,{sizeMultiplier:4.75,damageMultiplier:1});
-const savedDamage=writeArcanaTweaks({damageMultiplier:3.12},{storage,eventTarget});
-assert.deepEqual(savedDamage,{sizeMultiplier:4.75,damageMultiplier:3});
-assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:4.75,damageMultiplier:3});
+assert.deepEqual(savedSize,{sizeMultiplier:4.75,damageMultiplier:3});
+const savedDamage=writeArcanaTweaks({damageMultiplier:2},{storage,eventTarget});
+assert.deepEqual(savedDamage,{sizeMultiplier:4.75,damageMultiplier:2});
+assert.deepEqual(readArcanaTweaks(storage),{sizeMultiplier:4.75,damageMultiplier:2});
 assert.equal(tweakEvents.length,2);
 assert.equal(tweakEvents[1].type,ARCANA_TWEAKS_EVENT);
-assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:3});
+assert.deepEqual(tweakEvents[1].detail,{sizeMultiplier:4.75,damageMultiplier:2});
 
 // The previous freeze was a self-triggering MutationObserver loop. Reapplying
 // the same filter labels must therefore perform zero child-list text writes.
