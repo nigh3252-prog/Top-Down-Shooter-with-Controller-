@@ -1,5 +1,6 @@
 import { LUGARU_DUELIST_ID } from './lugaru-duelist.js';
 import { ORIGINAL_MULTI_GROUP_SPAWN_KIND } from './original-encounter-groups.js';
+import { WARDEN_TRIAL_INITIAL_WAVE_SIZE } from './warden-trial-progression.js';
 
 export const WARDEN_TRIAL_ENEMY_SET_IDS = Object.freeze({
   CYLINDERS:'cylinders',
@@ -13,7 +14,7 @@ export const WARDEN_TRIAL_ENEMY_SET_OPTIONS = Object.freeze([
   Object.freeze({id:WARDEN_TRIAL_ENEMY_SET_IDS.ACCORDION_2D,label:'2D ACCORDION + 3D'}),
 ]);
 
-export const WARDEN_TRIAL_WAVE_SIZE=7;
+export const WARDEN_TRIAL_WAVE_SIZE=WARDEN_TRIAL_INITIAL_WAVE_SIZE;
 
 export const WARDEN_TRIAL_GOBLIN_GROUPS = Object.freeze([
   Object.freeze({system:'original',spawnKind:'grunt',label:'Grunt',count:2}),

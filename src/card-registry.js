@@ -10,6 +10,8 @@ import { WIZARD_CURATED_DEMO_CARDS } from './wizard-curated-demo-cards.js';
 import { WIZARD_NEXT_SOURCE_CARDS } from './wizard-next-source-cards.js';
 import { WIZARD_NEXT_TWENTY_CARDS } from './wizard-next-twenty-cards.js';
 import { WIZARD_VFX_ARCANA_CARDS } from './wizard-vfx-arcana-cards.js';
+import { arcanaDownStanceId, arcanaElementStanceClass } from './arcana-stance-pairings.js';
+import { getStanceClass } from './stance-compatibility.js';
 
 const CONTRIBUTIONS = Object.freeze([
   Object.freeze({family:'stance',cards:STANCE_CARD_DEFINITIONS}),
@@ -33,6 +35,12 @@ for(const contribution of CONTRIBUTIONS){
     const card=freezeCard(sourceCard);
     const id=String(card?.id||'').trim();
     if(!id)throw new Error(`Card definition in ${contribution.family} is missing an id`);
+    if(contribution.family==='arcana'){
+      const stanceId=arcanaDownStanceId(card.arcanaId);
+      if(!stanceId)throw new Error(`Arcana ${id} is missing a down stance pairing`);
+      const expectedClass=arcanaElementStanceClass(card.element);
+      if(expectedClass&&getStanceClass(stanceId)!==expectedClass)throw new Error(`Arcana ${id} must pair ${card.element} with a ${expectedClass} stance`);
+    }
     if(entriesById.has(id))throw new Error(`Duplicate card definition: ${id}`);
     if((card.type==='ability'||card.type==='modifier')&&!card.effectId)throw new Error(`Non-stance card ${id} is missing an effectId`);
     if(card.effectId&&!getEffectDefinition(card.effectId))throw new Error(`Card ${id} references unknown effect: ${card.effectId}`);

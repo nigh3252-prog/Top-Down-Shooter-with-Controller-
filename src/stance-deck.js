@@ -1,11 +1,10 @@
 import { getArenaRuntime, getArenaRuntimeConfig } from './arena-runtime-context.js';
-// One Step From Eden-style stance-card deck: a shuffled draw pile feeds two
-// hand slots. Ability/modifier cards preserve the active stance while their
-// dedicated events resolve.
+// One Step From Eden-style stance-card deck: a shuffled draw pile feeds a
+// configurable hand (two slots by default). Ability/modifier cards preserve
+// the active stance while their dedicated events resolve.
 
 import { getCard } from './card-registry.js';
-import { getStanceClass, getStanceClassPresentation } from './stance-compatibility.js';
-import { stanceDefenseLetter } from './stance-defense-profiles.js';
+import { getStanceCardBadge } from './stance-card-presentation.js';
 import { isWizardArcanaCard } from './wizard-arcana-catalog.js';
 import { installEnemyLabDeckEditor } from './enemy-lab-deck-editor.js';
 import { installEnemyLabDeckEditorRefinements } from './enemy-lab-deck-editor-refinements.js';
@@ -72,12 +71,14 @@ export function createCardEffectCompatibilityAdapter({windowRef}={}){
   });
 }
 
-export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=null,effectDispatcher=null,compatibilityAdapter=undefined,canPlay=null,play=null}={}){
-  const s={draw:[],discard:[],hand:[null,null],pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
+export function createStanceDeck({rng=Math.random,shuffleTime=2,handSize=2,cardDispatcher=null,effectDispatcher=null,compatibilityAdapter=undefined,canPlay=null,play=null}={}){
+  const resolvedHandSize=Math.max(1,Math.min(8,Math.trunc(Number(handSize)||2)));
+  const emptyHand=()=>Array.from({length:resolvedHandSize},()=>null);
+  const s={draw:[],discard:[],hand:emptyHand(),pool:[],stancePool:[],shuffleT:-1,lastStance:null,stanceButtonBound:false,runLocked:false,manualSequence:null,cardDispatcher:normalizeCardDispatcher(cardDispatcher,canPlay,play),effectDispatcher,compatibilityAdapter:compatibilityAdapter===undefined?createCardEffectCompatibilityAdapter():compatibilityAdapter};
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
-  function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];refill(0);refill(1);scheduleDecoration();}
-  function consumeSlot(slot,card){s.discard.push(card);refill(slot);if(!s.hand[0]&&!s.hand[1]&&!s.draw.length&&s.discard.length)dealFresh(s.discard);}
+  function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];s.hand=emptyHand();for(let slot=0;slot<resolvedHandSize;slot++)refill(slot);scheduleDecoration();}
+  function consumeSlot(slot,card){s.discard.push(card);refill(slot);if(s.hand.every(value=>!value)&&!s.draw.length&&s.discard.length)dealFresh(s.discard);}
   function activeStanceFallback(){const found=s.lastStance&&s.stancePool.find(card=>card.id===s.lastStance.id);return found||s.stancePool[0]||null;}
   function proxyActiveStance(card,marker){const stance=activeStanceFallback();return stance?{...stance,name:card.name,__sourceCardType:card.type,__restoresStamina:false,[marker]:true}:null;}
   function applyPool(cards){
@@ -122,25 +123,23 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
       const card=s.hand[i],icon=el.querySelector('.cicon'),rows=el.querySelector('.crows'),sequence=s.manualSequence?.slot===i&&s.manualSequence.cardId===card?.id?s.manualSequence:null;
       const ability=card?.type==='ability',modifier=card?.type==='modifier',bing=card?.effectId==='bingBong',arcana=isWizardArcanaCard(card);
       const type=ability?'ability':(modifier?'modifier':'stance');el.dataset.cardType=card?type:'empty';
-      const stancePresentation=card&&type==='stance'?getStanceClassPresentation(getStanceClass(card)):null;
-      const defenseLetter=card&&type==='stance'?stanceDefenseLetter(card):'';
-      const stanceBadge=stancePresentation&&defenseLetter&&defenseLetter!=='?'?`${stancePresentation.short} / ${defenseLetter}`:'';
-      el.dataset.stanceType=stancePresentation?.label||'';
-      el.dataset.stanceTypeLetter=stancePresentation?.short||'';
-      el.dataset.stanceDefenseLetter=defenseLetter==='?'?'':defenseLetter;
+      const stanceBadge=card&&type==='stance'?getStanceCardBadge(card):null;
+      el.dataset.stanceType=stanceBadge?.stanceLabel||'';
+      el.dataset.stanceTypeLetter=stanceBadge?.stanceLetter||'';
+      el.dataset.stanceDefenseLetter=stanceBadge?.defenseLetter||'';
       el.dataset.manualSequence=sequence?`${sequence.press}/${sequence.total}`:'';
       el.setAttribute('aria-pressed',sequence?'true':'false');
       el.setAttribute('aria-label',card?(sequence?`Continue ${card.name.replace(/^S\d+\s*/,'')} combo, press ${Math.min(sequence.total,sequence.press+1)} of ${sequence.total}`:`Play ${card.name.replace(/^S\d+\s*/,'')} ${type} card`):'Empty card slot');
       if(rows)rows.style.display=modifier?'none':'flex';
       if(icon){
-        icon.textContent=sequence?`${sequence.label}\n${sequence.press}/${sequence.total}`:arcana?(card.icon||'ARC'):(ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':stanceBadge)));
+        icon.textContent=sequence?`${sequence.label}\n${sequence.press}/${sequence.total}`:arcana?(card.icon||'ARC'):(ability?'PB':(modifier?'BLOOD\nSLASH':(bing?'BING\nBONG':(stanceBadge?.text||''))));
         icon.style.display='grid';icon.style.placeItems='center';icon.style.textAlign='center';icon.style.whiteSpace='pre-line';
-        icon.style.lineHeight=modifier||bing?'1.02':(stancePresentation?'1':'');icon.style.fontWeight=ability||modifier||bing?'900':(stancePresentation?'900':'');
-        icon.style.fontSize=sequence?'10px':arcana?'13px':(ability?'16px':(modifier||bing?'10px':(stancePresentation?'12px':'')));
-        icon.style.letterSpacing=arcana?'.05em':(ability?'.08em':(modifier||bing?'.04em':(stancePresentation?'.04em':'')));
-        icon.style.color=arcana?(card.uiColor||'#ffd47b'):(ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':(stancePresentation?'#d9eee9':''))));
-        icon.style.borderColor=arcana?(card.uiBorder||'rgba(255,208,123,.72)'):(ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':(stancePresentation?'rgba(159,210,201,.55)':''))));
-        icon.style.background=arcana?(card.uiBackground||'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))'):(ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':(stancePresentation?'radial-gradient(circle,rgba(86,139,132,.22),rgba(18,36,38,.42))':''))));
+        icon.style.lineHeight=modifier||bing?'1.02':(stanceBadge?'1':'');icon.style.fontWeight=ability||modifier||bing?'900':(stanceBadge?'900':'');
+        icon.style.fontSize=sequence?'10px':arcana?'13px':(ability?'16px':(modifier||bing?'10px':(stanceBadge?'12px':'')));
+        icon.style.letterSpacing=arcana?'.05em':(ability?'.08em':(modifier||bing?'.04em':(stanceBadge?'.04em':'')));
+        icon.style.color=arcana?(card.uiColor||'#ffd47b'):(ability?'#ffb066':(modifier?'#ff9aa7':(bing?'#ffd07b':(stanceBadge?'#d9eee9':''))));
+        icon.style.borderColor=arcana?(card.uiBorder||'rgba(255,208,123,.72)'):(ability?'rgba(255,176,102,.72)':(modifier?'rgba(216,59,77,.78)':(bing?'rgba(255,208,123,.72)':(stanceBadge?'rgba(159,210,201,.55)':''))));
+        icon.style.background=arcana?(card.uiBackground||'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))'):(ability?'radial-gradient(circle,rgba(255,176,102,.22),rgba(18,36,38,.42))':(modifier?'radial-gradient(circle,rgba(216,59,77,.28),rgba(32,10,14,.58))':(bing?'radial-gradient(circle,rgba(255,208,123,.20),rgba(18,36,38,.42))':(stanceBadge?'radial-gradient(circle,rgba(86,139,132,.22),rgba(18,36,38,.42))':''))));
       }
       el.style.borderColor=arcana?(card.uiColor||'#b98639'):(ability?'#a95b35':(modifier?'#b62d43':(bing?'#b98639':'')));
       el.style.boxShadow=sequence?`0 0 0 2px ${card.uiColor||'#ffe56d'},0 0 18px ${card.uiColor||'#ffe56d'}`:'';
@@ -163,7 +162,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
   }
 
   const api={
-    get hand(){return s.hand;},get upcoming(){return s.draw.slice(0,4);},get drawCount(){return s.draw.length;},get discardCount(){return s.discard.length;},get shuffling(){return s.shuffleT>=0;},get shuffleT(){return s.shuffleT;},get shuffleTime(){return shuffleTime;},get pool(){return s.pool.slice();},get runLocked(){return s.runLocked;},get manualSequence(){return s.manualSequence?{...s.manualSequence}:null;},
+    get hand(){return s.hand;},get handSize(){return resolvedHandSize;},get upcoming(){return s.draw.slice(0,4);},get drawCount(){return s.draw.length;},get discardCount(){return s.discard.length;},get shuffling(){return s.shuffleT>=0;},get shuffleT(){return s.shuffleT;},get shuffleTime(){return shuffleTime;},get pool(){return s.pool.slice();},get runLocked(){return s.runLocked;},get manualSequence(){return s.manualSequence?{...s.manualSequence}:null;},
     rebuild(cards){applyPool(s.runLocked?s.pool:defaultPool(cards));},
     beginRun(cards,{openingStanceId=null}={}){s.runLocked=true;applyPool(cards);const opening=s.stancePool.find(card=>card.id===openingStanceId);if(opening)s.lastStance=opening;},
     unlockRun(){s.runLocked=false;},
@@ -197,7 +196,7 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,cardDispatcher=n
       }
       s.lastStance=card;consumeSlot(slot,card);scheduleDecoration();return card;
     },
-    startShuffle(){if(s.shuffleT>=0||s.manualSequence||!s.pool.length)return false;s.discard=[];s.hand=[null,null];s.draw=[];s.shuffleT=shuffleTime;scheduleDecoration();return true;},
+    startShuffle(){if(s.shuffleT>=0||s.manualSequence||!s.pool.length)return false;s.discard=[];s.hand=emptyHand();s.draw=[];s.shuffleT=shuffleTime;scheduleDecoration();return true;},
     update(dt){
       let changed=false;
       if(s.manualSequence){s.manualSequence.remaining-=Math.max(0,Number(dt)||0);if(s.manualSequence.remaining<=0)changed=finishManualSequence('manual-sequence-timeout')||changed;}

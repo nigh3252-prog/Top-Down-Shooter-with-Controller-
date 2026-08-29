@@ -21,6 +21,14 @@ export function clearArenaRuntime(runtime=null){
 export function provideArenaRuntimeConfig(config){activeConfig=config||null;return activeConfig;}
 export function getArenaRuntime(){return activeRuntime;}
 export function getArenaRuntimeConfig(){return activeRuntime?.config||activeConfig;}
+// Warden Trial uses its projected screen-space stage boundary instead of the
+// maze's hidden geometry. Arcana effects are allowed to cross that open stage;
+// normal Arena and Enemy Lab runtimes continue to use their authored segments.
+export function getArenaCollisionSegments(runtime=getArenaRuntime()){
+  const config=runtime?.config||activeConfig;
+  if(config?.wardenTrial===true||config?.variant==='warden-trial')return [];
+  return runtime?.mazeWorld?.getCollisionSegments?.()||[];
+}
 export function provideArenaCaptureController(controller){activeCapture=controller||null;emit({type:'capture',capture:activeCapture});return activeCapture;}
 export function getArenaCaptureController(){return activeCapture||activeRuntime?.capture||null;}
 export function getArenaCaptureSnapshot(){return getArenaCaptureController()?.snapshot?.()||null;}
