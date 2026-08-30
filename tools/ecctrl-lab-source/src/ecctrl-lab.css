@@ -1,0 +1,186 @@
+#ecctrlLabRoot,
+#ecctrlLabRoot .ecctrl-lab {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #071113;
+  color: #d9eee9;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#ecctrlLabRoot canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: 0;
+}
+
+#ecctrlLabRoot .ecctrl-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(14, 41, 42, 0.84), rgba(4, 13, 15, 0.97));
+}
+
+#ecctrlLabRoot .ecctrl-loading strong {
+  color: #e8a04c;
+  font-size: 15px;
+  letter-spacing: 0.22em;
+}
+
+#ecctrlLabRoot .ecctrl-loading span {
+  color: #7ea39d;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+#ecctrlLabRoot .ecctrl-mode-card {
+  position: absolute;
+  left: max(10px, env(safe-area-inset-left));
+  top: max(58px, calc(env(safe-area-inset-top) + 50px));
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid rgba(49, 80, 77, 0.82);
+  border-radius: 7px;
+  background: rgba(8, 20, 22, 0.82);
+  pointer-events: none;
+}
+
+#ecctrlLabRoot .ecctrl-mode-card strong {
+  color: #e8a04c;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+#ecctrlLabRoot .ecctrl-mode-card span {
+  color: #7bcabd;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+#ecctrlLabRoot .ecctrl-control-hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(11px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  padding: 7px 11px;
+  border: 1px solid rgba(49, 80, 77, 0.72);
+  border-radius: 7px;
+  color: #7ea39d;
+  background: rgba(8, 20, 22, 0.78);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#ecctrlLabRoot .ecctrl-touch-controls {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  #ecctrlLabRoot .ecctrl-control-hint {
+    display: none;
+  }
+
+  #ecctrlLabRoot .ecctrl-touch-controls {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+  }
+
+  #ecctrlLabRoot .ecctrl-touch-stick {
+    --stick-x: 0px;
+    --stick-y: 0px;
+    position: absolute;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    width: 118px;
+    height: 118px;
+    border: 2px solid rgba(80, 126, 120, 0.72);
+    border-radius: 50%;
+    background: rgba(16, 38, 40, 0.48);
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  #ecctrlLabRoot .ecctrl-touch-stick span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 48px;
+    height: 48px;
+    margin: -24px;
+    border: 2px solid #467a74;
+    border-radius: 50%;
+    background: rgba(123, 202, 189, 0.52);
+    transform: translate(var(--stick-x), var(--stick-y));
+    pointer-events: none;
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button {
+    position: absolute;
+    right: max(22px, env(safe-area-inset-right));
+    bottom: max(28px, env(safe-area-inset-bottom));
+    width: 76px;
+    height: 76px;
+    display: grid;
+    place-content: center;
+    gap: 1px;
+    border: 2px solid #6d4a32;
+    border-radius: 50%;
+    color: #f2bd78;
+    background: rgba(42, 35, 28, 0.78);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.38);
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button strong {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button small {
+    font: inherit;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  #ecctrlLabRoot .ecctrl-mode-card {
+    top: max(51px, calc(env(safe-area-inset-top) + 43px));
+    padding: 6px 8px;
+  }
+
+  #ecctrlLabRoot .ecctrl-touch-stick {
+    width: 102px;
+    height: 102px;
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button {
+    width: 66px;
+    height: 66px;
+  }
+}

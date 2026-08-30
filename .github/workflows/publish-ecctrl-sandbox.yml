@@ -1,0 +1,53 @@
+name: Publish Ecctrl sandbox artifacts
+
+on:
+  push:
+    branches:
+      - agent/enemy-lab-ecctrl-sandbox
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/ecctrl-lab-source/package-lock.json
+
+      - name: Fetch animation library
+        run: |
+          mkdir -p media/ecctrl
+          curl --fail --location --retry 3 \
+            --output media/ecctrl/AnimationLibrary.glb \
+            https://raw.githubusercontent.com/nigh3252-prog/ecctrl/55776ca343d8c59a4c27cdd80074e54c0cbcaae8/public/AnimationLibrary.glb
+
+      - name: Install sandbox dependencies
+        run: npm ci
+        working-directory: tools/ecctrl-lab-source
+
+      - name: Typecheck sandbox
+        run: npm run typecheck
+        working-directory: tools/ecctrl-lab-source
+
+      - name: Build sandbox
+        run: npm run build
+        working-directory: tools/ecctrl-lab-source
+
+      - name: Commit generated artifacts
+        run: |
+          test -s media/ecctrl/AnimationLibrary.glb
+          test -s tools/ecctrl-lab/assets/ecctrl-lab.js
+          test -s tools/ecctrl-lab/assets/ecctrl-lab.css
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add media/ecctrl tools/ecctrl-lab
+          git rm .github/workflows/publish-ecctrl-sandbox.yml
+          git commit -m "Generate Ecctrl sandbox artifacts"
+          git push

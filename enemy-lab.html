@@ -18,11 +18,19 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);f
 button,select,input{font:inherit}
 #labHud{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));z-index:80;display:flex;align-items:center;gap:7px;pointer-events:none;transition:opacity .15s}
 body.dockOpen #labHud{opacity:0}
-body.cleanCapture #labHud,body.cleanCapture #labDock,body.cleanCapture #veil,body.cleanCapture #result{display:none!important}
+body.cleanCapture #labHud,body.cleanCapture #labDock,body.cleanCapture #veil,body.cleanCapture #result,body.cleanCapture #ecctrlLabSurface{display:none!important}
 #testBadge{max-width:min(54vw,360px);padding:8px 10px;border:1px solid rgba(49,80,77,.85);border-radius:7px;background:rgba(8,20,22,.84);font-size:10px;line-height:1.2;letter-spacing:.06em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #testBadge strong{color:var(--gold)}
 .uiBtn,.choice,.miniBtn{color:var(--text);background:rgba(16,38,40,.95);border:1px solid var(--line);border-radius:8px;touch-action:manipulation}
 .uiBtn{min-height:38px;padding:0 13px;color:var(--gold);font-size:11px;letter-spacing:.12em;pointer-events:auto;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+#ecctrlBtn{border-color:#467a74;color:var(--teal)}
+#ecctrlBtn[aria-pressed="true"]{border-color:#e8a04c;color:#f2bd78;background:rgba(70,48,30,.95)}
+#ecctrlLabSurface{position:fixed;inset:0;z-index:100;display:block;overflow:hidden;background:#071113;touch-action:none}
+#ecctrlLabSurface[hidden]{display:none}
+#ecctrlLabRoot{position:absolute;inset:0}
+#ecctrlLabBoot{position:absolute;inset:0;display:grid;place-content:center;gap:8px;text-align:center;background:radial-gradient(circle,rgba(14,41,42,.84),rgba(4,13,15,.97));pointer-events:none}
+#ecctrlLabBoot strong{color:var(--gold);font-size:15px;letter-spacing:.22em}#ecctrlLabBoot span{color:var(--muted);font-size:9px;letter-spacing:.06em}
+body.ecctrlMode #labHud{z-index:103;opacity:1}body.ecctrlMode #topBar{z-index:102}body.ecctrlMode #labBtn{display:none}
 button:active{transform:translateY(1px);background:#264542}
 #veil{position:fixed;inset:0;z-index:87;background:rgba(0,0,0,.08);opacity:0;pointer-events:none;transition:opacity .16s}
 #veil.on{opacity:1;pointer-events:auto}
@@ -86,7 +94,8 @@ select,.textInput{width:100%;min-height:39px;border:1px solid var(--line);border
 </script>
 </head>
 <body>
-<div id="labHud"><div id="testBadge"><strong>ENEMY LAB</strong> · loading chamber</div><button class="uiBtn" id="labBtn">LAB</button></div>
+<div id="labHud"><div id="testBadge"><strong>ENEMY LAB</strong> · loading chamber</div><button class="uiBtn" id="ecctrlBtn" type="button" aria-pressed="false" aria-label="Switch to Ecctrl locomotion sandbox">ECCTRL</button><button class="uiBtn" id="labBtn">LAB</button></div>
+<section id="ecctrlLabSurface" aria-label="Ecctrl locomotion sandbox" aria-hidden="true" hidden><div id="ecctrlLabRoot"></div><div id="ecctrlLabBoot" role="status"><strong>ECCTRL</strong><span>Loading controller sandbox…</span></div></section>
 <div id="result"><b>TEST CLEAR</b><span></span></div><div id="veil"></div>
 <aside id="labDock" data-enemy-lab-inspector="vertical" aria-label="Enemy Lab controls">
   <div id="dockHead"><span id="categoryHint" class="srOnly" aria-live="polite">Configure and run an enemy test.</span><button class="uiBtn" id="closeBtn" aria-label="Close Enemy Lab">×</button></div>
@@ -121,6 +130,7 @@ const $=id=>document.getElementById(id);
 const dock=$('labDock'),veil=$('veil'),values=$('labValues'),categoriesEl=$('labCategories'),subcategoriesEl=$('labSubcategories');
 const valueScrollGutter=$('valueScrollGutter'),valueScrollThumb=$('valueScrollThumb');
 const testBadge=$('testBadge'),message=$('message'),result=$('result'),categoryHint=$('categoryHint');
+const ecctrlButton=$('ecctrlBtn'),ecctrlSurface=$('ecctrlLabSurface'),ecctrlRoot=$('ecctrlLabRoot'),ecctrlBoot=$('ecctrlLabBoot');
 let sectionUI=null;
 const scrollGutterController=createEnemyLabValueScrollGutter({
   values,gutter:valueScrollGutter,thumb:valueScrollThumb,
@@ -274,7 +284,28 @@ runtime.subscribe(event=>{
 });
 function ensureArenaStarted(){runtime.setStarted(true);}function buildPlan(){const focal=currentEnemy();if(state.mode==='solo')return {label:`${focal.label} Solo`,groups:[{spawnKind:focal.id,count:1}]};if(state.mode==='pack')return {label:`${focal.label} Pack ×${state.packCount}`,groups:[{spawnKind:focal.id,count:state.packCount}]};const {focalCount,partnerCount,partner}=countsForWave();if(!partner)return null;return {label:`${focal.label} + ${partner.label}`,groups:[{spawnKind:focal.id,count:focalCount},{spawnKind:partner.id,count:partnerCount}]};}function showResult(title,detail){result.querySelector('b').textContent=title;result.querySelector('span').textContent=detail;result.classList.add('on');clearTimeout(resultTimer);resultTimer=setTimeout(()=>result.classList.remove('on'),2600);}function startTest(plan=buildPlan()){setMessage('');if(!plan){setMessage('No compatible partner is available for this wave.');return;}ensureArenaStarted();setDockOpen(false);const response=runtime.startLabScenario(-777,plan);if(!response?.ok){setMessage(response?.error||'Enemy Lab could not spawn this composition.');setDockOpen(true);return;}lastPlan=JSON.parse(JSON.stringify(plan));running=true;sawEnemy=false;testStart=performance.now();startHp=runtime.getSnapshot().playerHp;testBadge.innerHTML=`<strong>${plan.label.toUpperCase()}</strong> · spawning`;save();}function clearTest(){runtime.clearRoomRuntime();running=false;sawEnemy=false;testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber clear';}
 function updateTestProgress(data=runtime.getSnapshot()){if(!running)return;const alive=data.aliveCount||0,pending=(data.queuedSpawnCount||0)+(data.telegraphCount||0);if(alive>0||pending>0)sawEnemy=true;const elapsed=(performance.now()-testStart)/1000;testBadge.innerHTML=`<strong>${lastPlan?.label?.toUpperCase()||'TEST'}</strong> · ${alive} LEFT · ${elapsed.toFixed(1)}s`;if(sawEnemy&&alive===0&&pending===0){running=false;const damage=Math.max(0,Math.round(startHp-data.playerHp));showResult('TEST CLEAR',`${elapsed.toFixed(1)} seconds · ${damage} damage taken`);testBadge.innerHTML=`<strong>TEST CLEAR</strong> · ${elapsed.toFixed(1)}s · ${damage} damage`;}else if(data.playerHp<=0){running=false;showResult('PLAYER DOWN',`${alive} enemies remained`);testBadge.innerHTML=`<strong>PLAYER DOWN</strong> · ${alive} LEFT`;}}function prepareRuntime(){const panel=$('panel'),menuButton=$('menuBtn');if(menuButton)menuButton.style.display='none';if(panel){panel.classList.add('hidden');panel.style.display='none';}runtime.setStarted(true);if(capturePage){captureFacade.reset(capturePayload());updateCaptureBadge();if(state.category==='capture')renderValues({preserveScroll:true});}else{runtime.clearRoomRuntime();testBadge.innerHTML='<strong>ENEMY LAB</strong> · chamber ready';}}
-runtime.subscribe(event=>{if(event.type==='state')updateTestProgress(event.snapshot);});prepareRuntime();$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));ensurePartner();renderAll();
+runtime.subscribe(event=>{if(event.type==='state')updateTestProgress(event.snapshot);});
+let ecctrlMode=false,ecctrlModule=null,ecctrlModulePromise=null,ecctrlPreviousBadge='';
+function ensureEcctrlStyles(){if(document.getElementById('ecctrlLabStyles'))return;const link=document.createElement('link');link.id='ecctrlLabStyles';link.rel='stylesheet';link.href=new URL('./tools/ecctrl-lab/assets/ecctrl-lab.css',document.baseURI).href;document.head.appendChild(link);}
+function showSaturnLab(){
+  if(!ecctrlMode)return;
+  ecctrlMode=false;ecctrlModule?.setEcctrlLabActive?.(false);ecctrlSurface.hidden=true;ecctrlSurface.setAttribute('aria-hidden','true');document.body.classList.remove('ecctrlMode');
+  ecctrlButton.disabled=false;ecctrlButton.textContent='ECCTRL';ecctrlButton.setAttribute('aria-pressed','false');ecctrlButton.setAttribute('aria-label','Switch to Ecctrl locomotion sandbox');
+  testBadge.innerHTML=ecctrlPreviousBadge||'<strong>ENEMY LAB</strong> · chamber ready';runtime.start();
+}
+async function showEcctrlLab(){
+  if(ecctrlMode)return;
+  ecctrlMode=true;ecctrlPreviousBadge=testBadge.innerHTML;setDockOpen(false);runtime.stop();document.body.classList.add('ecctrlMode');ecctrlSurface.hidden=false;ecctrlSurface.setAttribute('aria-hidden','false');
+  ecctrlButton.disabled=true;ecctrlButton.textContent='LOADING';ecctrlButton.setAttribute('aria-pressed','true');testBadge.innerHTML='<strong>ECCTRL</strong> · loading locomotion sandbox';if(!ecctrlModule){ecctrlBoot.hidden=false;ecctrlBoot.querySelector('span').textContent='Loading controller sandbox…';}ensureEcctrlStyles();
+  try{
+    ecctrlModulePromise??=import('./tools/ecctrl-lab/assets/ecctrl-lab.js');ecctrlModule=await ecctrlModulePromise;
+    ecctrlModule.mountEcctrlLab(ecctrlRoot,{onCharacterReady:()=>{if(ecctrlMode)testBadge.innerHTML='<strong>ECCTRL</strong> · locomotion only · no combat';}});
+    ecctrlModule.setEcctrlLabActive(true);ecctrlBoot.hidden=true;ecctrlButton.disabled=false;ecctrlButton.textContent='SATURN';ecctrlButton.setAttribute('aria-label','Return to the normal Saturn Enemy Lab');testBadge.innerHTML='<strong>ECCTRL</strong> · loading mannequin';
+  }catch(error){
+    console.error('Ecctrl Lab sandbox failed to load.',error);ecctrlModulePromise=null;ecctrlBoot.querySelector('span').textContent='Sandbox failed to load. Returning to Enemy Lab.';showSaturnLab();testBadge.innerHTML='<strong>ECCTRL ERROR</strong> · sandbox bundle unavailable';
+  }
+}
+prepareRuntime();ecctrlButton.hidden=capturePage;ecctrlButton.addEventListener('click',()=>ecctrlMode?showSaturnLab():showEcctrlLab());$('labBtn').addEventListener('click',()=>setDockOpen(!dockOpen));$('closeBtn').addEventListener('click',()=>setDockOpen(false));veil.addEventListener('click',()=>setDockOpen(false));ensurePartner();renderAll();
 const directStartTest=startTest;
 startTest=(plan=buildPlan())=>{
   if(state.encounterMode==='lab-direct')return directStartTest(plan);
