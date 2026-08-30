@@ -78,7 +78,26 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,handSize=2,cardD
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function refill(slot){s.hand[slot]=s.draw.shift()??null;}
   function dealFresh(cards){s.draw=shuffle(cards.slice());s.discard=[];s.hand=emptyHand();for(let slot=0;slot<resolvedHandSize;slot++)refill(slot);scheduleDecoration();}
-  function consumeSlot(slot,card){s.discard.push(card);refill(slot);if(s.hand.every(value=>!value)&&!s.draw.length&&s.discard.length)dealFresh(s.discard);}
+  function removeOwnedCard(card){
+    const poolIndex=s.pool.indexOf(card);if(poolIndex>=0)s.pool.splice(poolIndex,1);
+    const stanceIndex=s.stancePool.indexOf(card);if(stanceIndex>=0)s.stancePool.splice(stanceIndex,1);
+  }
+  function placeInZone(card,destination='discard'){
+    if(destination==='draw-top')s.draw.unshift(card);
+    else if(destination==='draw-bottom')s.draw.push(card);
+    else if(destination!=='exhaust'&&destination!=='keep')s.discard.push(card);
+  }
+  function refillAfterResolution(slot){
+    refill(slot);
+    if(s.hand.every(value=>!value)&&!s.draw.length&&s.discard.length)dealFresh(s.discard);
+  }
+  function consumeSlot(slot,card,destination='discard'){
+    if(destination==='keep')return card;
+    s.hand[slot]=null;
+    if(destination==='exhaust')removeOwnedCard(card);else placeInZone(card,destination);
+    refillAfterResolution(slot);
+    return card;
+  }
   function activeStanceFallback(){const found=s.lastStance&&s.stancePool.find(card=>card.id===s.lastStance.id);return found||s.stancePool[0]||null;}
   function proxyActiveStance(card,marker){const stance=activeStanceFallback();return stance?{...stance,name:card.name,__sourceCardType:card.type,__restoresStamina:false,[marker]:true}:null;}
   function applyPool(cards){
@@ -169,7 +188,32 @@ export function createStanceDeck({rng=Math.random,shuffleTime=2,handSize=2,cardD
     setCardDispatcher(dispatcher){s.cardDispatcher=normalizeCardDispatcher(dispatcher);return api;},
     setEffectDispatcher(dispatcher){s.effectDispatcher=dispatcher||null;return api;},
     setCompatibilityAdapter(adapter){s.compatibilityAdapter=adapter||null;return api;},
-    addCard(card){if(!card)return false;s.pool.push(card);if(!isNonStance(card))s.stancePool.push(card);s.discard.push(card);return true;},
+    addCard(card,{destination='discard'}={}){
+      if(!card)return false;
+      s.pool.push(card);if(!isNonStance(card))s.stancePool.push(card);placeInZone(card,destination);
+      scheduleDecoration();notifyDeckChange('card-added');return true;
+    },
+    resolveSlot(slot,{destination='discard'}={}){
+      if(s.shuffleT>=0)return null;
+      const card=s.hand[slot];if(!card)return null;
+      consumeSlot(slot,card,destination);
+      scheduleDecoration();notifyDeckChange(`card-${destination}`);return card;
+    },
+    removeFirst(predicate=()=>false){
+      const card=s.pool.find((candidate,index)=>predicate(candidate,index));if(!card)return null;
+      removeOwnedCard(card);
+      const drawIndex=s.draw.indexOf(card);if(drawIndex>=0)s.draw.splice(drawIndex,1);
+      const discardIndex=s.discard.indexOf(card);if(discardIndex>=0)s.discard.splice(discardIndex,1);
+      const handSlot=s.hand.indexOf(card);
+      if(handSlot>=0){s.hand[handSlot]=null;refillAfterResolution(handSlot);}
+      scheduleDecoration();notifyDeckChange('card-removed');return card;
+    },
+    cardsInZone(zone='pool'){
+      if(zone==='hand')return s.hand.filter(Boolean).slice();
+      if(zone==='draw')return s.draw.slice();
+      if(zone==='discard')return s.discard.slice();
+      return s.pool.slice();
+    },
     play(slot){
       if(s.shuffleT>=0)return null;const card=s.hand[slot];if(!card)return null;
       if(card.type==='ability'){

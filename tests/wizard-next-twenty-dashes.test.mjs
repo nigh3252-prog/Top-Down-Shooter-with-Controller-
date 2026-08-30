@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import {
   AIR_BURST_SPEC,CHAOTIC_RIFT_SPEC,CIRCUIT_LINE_SPEC,FLARE_RUSH_SPEC,FROST_FEINT_SPEC,FROST_WING_SPEC,
   GUST_BURST_SPEC,IGNITION_RUSH_SPEC,RAZOR_BURST_SPEC,SEARING_RUSH_SPEC,SHOCK_LINE_SPEC,SNARE_TRACK_SPEC,
-  SPIKE_TRACK_SPEC,THUNDER_LINE_SPEC,TOXIC_TRAP_SPEC,WAVE_FRONT_SPEC,WIZARD_CONTINUOUS_DASH_IDS,
+  SPIKE_TRACK_ERUPTION_TIME_MULTIPLIER,SPIKE_TRACK_SOURCE_ERUPTION_INTERVAL,SPIKE_TRACK_SPEC,THUNDER_LINE_SPEC,
+  TOXIC_TRAP_DURATION_MULTIPLIER,TOXIC_TRAP_SOURCE_DURATION,TOXIC_TRAP_SPEC,WAVE_FRONT_SPEC,WIZARD_CONTINUOUS_DASH_IDS,
   WIZARD_NEXT_TWENTY_DASH_IDS,WIZARD_NEXT_TWENTY_DASH_SEMANTIC_EVENT,WIZARD_NEXT_TWENTY_DASH_SPECS,
+  SNARE_TRACK_ENTANGLE_DURATION_MULTIPLIER,SNARE_TRACK_SOURCE_ENTANGLE_DURATION,
   installWizardNextTwentyDashRuntime,resolveChaoticRiftEndpoint,sampleCircuitConnections,sampleDashTrack,sampleRearVolley,
 } from '../src/wizard-next-twenty-dash-runtime.js';
 import {
@@ -59,6 +61,9 @@ assert.deepEqual({count:FLARE_RUSH_SPEC.count,damage:FLARE_RUSH_SPEC.damage},{co
 assert.deepEqual({duration:IGNITION_RUSH_SPEC.duration,ticks:IGNITION_RUSH_SPEC.burnTicks},{duration:3,ticks:2});
 assert.equal(AIR_BURST_SPEC.damage,15);assert.deepEqual({charges:GUST_BURST_SPEC.charges,recharge:GUST_BURST_SPEC.recharge,damage:GUST_BURST_SPEC.draughtDamage},{charges:2,recharge:3.5,damage:10});
 assert.deepEqual(RAZOR_BURST_SPEC.tickTimes,[.12,.30,.48,.66]);assert.equal(SPIKE_TRACK_SPEC.damage,30);assert.deepEqual({damage:TOXIC_TRAP_SPEC.poisonDamage,ticks:TOXIC_TRAP_SPEC.poisonTicks},{damage:5,ticks:5});assert.deepEqual({count:SNARE_TRACK_SPEC.count,damage:SNARE_TRACK_SPEC.damage},{count:3,damage:20});
+assert.equal(SPIKE_TRACK_SPEC.eruptionInterval,SPIKE_TRACK_SOURCE_ERUPTION_INTERVAL*SPIKE_TRACK_ERUPTION_TIME_MULTIPLIER);
+assert.equal(TOXIC_TRAP_SPEC.duration,TOXIC_TRAP_SOURCE_DURATION*TOXIC_TRAP_DURATION_MULTIPLIER);
+assert.equal(SNARE_TRACK_SPEC.entangleDuration,SNARE_TRACK_SOURCE_ENTANGLE_DURATION*SNARE_TRACK_ENTANGLE_DURATION_MULTIPLIER);
 assert.deepEqual({charges:THUNDER_LINE_SPEC.charges,broad:THUNDER_LINE_SPEC.broadDamage,core:THUNDER_LINE_SPEC.coreDamage},{charges:2,broad:10,core:10});assert.deepEqual({charges:CIRCUIT_LINE_SPEC.charges,recharge:CIRCUIT_LINE_SPEC.recharge,damage:CIRCUIT_LINE_SPEC.tickDamage},{charges:3,recharge:4,damage:2});
 assert.deepEqual({damage:SHOCK_LINE_SPEC.shockDamage,ticks:SHOCK_LINE_SPEC.shockTicks},{damage:8,ticks:2});assert.deepEqual({damage:WAVE_FRONT_SPEC.tickDamage,ticks:WAVE_FRONT_SPEC.tickTimes.length,shield:WAVE_FRONT_SPEC.shield},{damage:9,ticks:3,shield:25});assert.deepEqual({charges:FROST_FEINT_SPEC.charges,damage:FROST_FEINT_SPEC.shatterDamage},{charges:2,damage:12});assert.deepEqual({count:FROST_WING_SPEC.count,damage:FROST_WING_SPEC.damage,knockback:FROST_WING_SPEC.knockback},{count:4,damage:20,knockback:20});assert.deepEqual({duration:CHAOTIC_RIFT_SPEC.transitDuration,damage:CHAOTIC_RIFT_SPEC.damage},{duration:.5,damage:0});
 
@@ -117,7 +122,7 @@ reset();const gustTarget=freshEnemy('gust',0,1.2);system.enemies=[gustTarget];ca
 
 // Razor Burst owns exactly four ticks; Spike Track owns one logical hit across every segment.
 reset();const razor=freshEnemy('razor',0,.5);system.enemies=[razor];cast('RAZOR-BURST');finishMotion();step(.8,.01);assert.deepEqual(hits.map(hit=>hit.amount),[5,5,5,5]);
-reset();const spike=freshEnemy('spike',0,4);system.enemies=[spike];cast('SPIKE-TRACK');finishMotion();step(1,.01);assert.deepEqual(hits.map(hit=>hit.amount),[30]);
+reset();const spike=freshEnemy('spike',0,4);system.enemies=[spike];cast('SPIKE-TRACK');finishMotion();step(1,.01);assert.deepEqual(hits.map(hit=>hit.amount),[],'Spike Track eruptions use the five-times-slower sequence timing');step(2.5,.01);assert.deepEqual(hits.map(hit=>hit.amount),[30]);
 
 // Toxic Trap has no direct hit and its poison persists for five ticks after contact.
 reset();const toxic=freshEnemy('toxic',0,.5);system.enemies=[toxic];cast('TOXIC-TRAP');assert.equal(hits.length,0);step(.22,.01);toxic.x=20;toxic.z=20;step(4,.02);assert.deepEqual(hits.map(hit=>hit.amount),[5,5,5,5,5]);

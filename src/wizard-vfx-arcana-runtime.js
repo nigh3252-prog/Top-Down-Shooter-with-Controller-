@@ -255,9 +255,9 @@ export function installWizardVfxArcanaRuntime({
       onProjectileCleanup(){},onPopup(){},onAudio(){},onCameraShake(){},onCast(){},onWallSlam(){},
     };
   }
-  function curatedContext(){
+  function curatedContext(card=null){
     const player=getPlayer?.()||{},frame=playerFrame(getPlayer),targets=curatedTargets(),callbacks=curatedCallbacks();
-    return{player,targets,forward:frame.forward,direction:frame.forward,origin:{x:frame.x,z:frame.z},cameraQuaternion:camera?.quaternion,callbacks};
+    return{player,targets,forward:frame.forward,direction:frame.forward,origin:{x:frame.x,z:frame.z},cameraQuaternion:camera?.quaternion,callbacks,card};
   }
   function ensureCuratedPort(family){
     if(curatedPorts.has(family))return curatedPorts.get(family);
@@ -287,9 +287,9 @@ export function installWizardVfxArcanaRuntime({
     root.position.z=pivot.z;
     root.userData={...(root.userData||{}),saturnPlayerCenteredScalePivot:{playerX:frame.x,playerZ:frame.z,scale:port.saturnSourceScale}};
   }
-  function castCurated(id){
+  function castCurated(id,card){
     const family=CURATED_SOURCE_FAMILY.get(id),port=ensureCuratedPort(family);if(!port)return false;
-    const context=curatedContext();
+    const context=curatedContext(card);
     alignCuratedPortToPlayer(port,{x:context.origin.x,z:context.origin.z});
     const played=port.cast(id,context);
     if(played&&CURATED_DASH_IDS.has(id))state.curatedDashTime=Math.max(state.curatedDashTime,(id==='GUST-BURST'||id==='RAZOR-BURST') ? .22 : .17);
@@ -644,8 +644,7 @@ export function installWizardVfxArcanaRuntime({
   }
   function updateTectonicDrill(effect,dt,system){
     advance(effect,dt);updateSourceVisual(effect,system);const targetDistance=Math.min(7.8*effect.size,Math.max(0,effect.age-.32)*9.4*effect.size),position=positionAlong(effect.start,effect.frame.forward,targetDistance);
-    const delta=Math.max(0,targetDistance-effect.distance);effect.distance=targetDistance;
-    if(delta>0&&effect.playerDistance<2.6){const move=Math.min(delta*.36,2.6-effect.playerDistance);effect.playerDistance+=move;translatePlayer(effect.frame.forward.x*move,effect.frame.forward.z*move);}
+    effect.distance=targetDistance;
     for(const enemy of aliveEnemies(system)){
       const distance=distance2D(enemy,position),last=effect.hitAt.get(enemy)||-Infinity;
       if(distance>1.35*effect.size+enemyRadius(enemy,system)||effect.age-last<.18)continue;
@@ -675,8 +674,8 @@ export function installWizardVfxArcanaRuntime({
     updateImpacts(effect,dt);if(effect.age>=effect.life)remove(effect);
   }
 
-  function startAquaVortex(){
-    const frame=playerFrame(getPlayer),size=currentSize(),visual=createSourceVisual('AQUA-VORTEX',frame,size);
+  function startAquaVortex(card){
+    const frame=playerFrame(getPlayer),engineSizeMultiplier=Math.max(.001,Number(card?.__wardenEngineSizeMultiplier)||1),size=currentSize()*engineSizeMultiplier,visual=createSourceVisual('AQUA-VORTEX',frame,size);
     return add({type:'aquaVortex',arcanaId:'AQUA-VORTEX',age:0,previousAge:0,life:.80,frame,size,mesh:visual.anchor,source:visual.source,impacts:[]});
   }
   function updateAquaVortex(effect,dt,system){
@@ -754,10 +753,10 @@ export function installWizardVfxArcanaRuntime({
     if(effect.age>=effect.life)remove(effect);
   }
 
-  function cast(card){
+  function cast(card,context={}){
     const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();if(!VFX_IDS.has(id))return false;
     state.castSerial++;state.lastCast={serial:state.castSerial,cardId:card?.id||`WOL-${id}`,arcanaId:id};
-    if(CURATED_SOURCE_FAMILY.has(id)&&!castCurated(id))return false;
+    if(CURATED_SOURCE_FAMILY.has(id)&&!castCurated(id,card))return false;
     else if(id==='FLAME-BREATH')startFlameBreath();
     else if(id==='SEARING-CROWN')startSearingCrown();
     else if(id==='IGNITION-DRIVE')startIgnitionDrive();
@@ -766,7 +765,7 @@ export function installWizardVfxArcanaRuntime({
     else if(id==='SHEARING-CHAIN'&&!startShearingChain())return false;
     else if(id==='TECTONIC-DRILL')startTectonicDrill();
     else if(id==='ROCK-SOLID-TOMAHAWK')startTomahawk();
-    else if(id==='AQUA-VORTEX')startAquaVortex();
+    else if(id==='AQUA-VORTEX')startAquaVortex(card);
     else if(id==='AQUA-BREAKER')startAquaBreaker();
     else if(id==='TERRA-RING'&&!startTerraRing())return false;
     else if(id==='GRASPING-EARTH'&&!startGraspingEarth())return false;
@@ -776,7 +775,7 @@ export function installWizardVfxArcanaRuntime({
     return true;
   }
   function canPlay(card){const id=String(card?.arcanaId||card?.id||'').replace(/^WOL-/,'').toUpperCase();return VFX_IDS.has(id);}
-  function play(card){return canPlay(card)?cast(card):false;}
+  function play(card,context={}){return canPlay(card)?cast(card,context):false;}
   function update(dt,now=0){
     const frameDt=Math.max(0,Number(dt)||0),system=getEnemySystem?.();
     updateCurated(frameDt);

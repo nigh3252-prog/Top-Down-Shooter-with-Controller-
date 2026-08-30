@@ -35,4 +35,14 @@ assert.deepEqual(curatedPlayerCenteredRootOffset({x:-3,z:7},1),{x:0,z:0},'native
 
 const sourceFiles=['wizard-curated-basic-source-port.js','wizard-curated-dash-source-port.js','wizard-curated-fire-source-port.js','wizard-curated-air-source-port.js','wizard-curated-bubble-falcon-source-port.js','wizard-curated-earth-agent-source-port.js','wizard-curated-earth-projectile-source-port.js'];
 for(const file of sourceFiles){const source=read(file);assert.match(source,/SHA-?256/i,`${file} must retain source lineage`);assert.match(source,/function (?:cast|update)\(/,`${file} must retain copied executable routines`);assert.match(source,/return \{[^}]*root[^}]*cast[^}]*update[^}]*reset[^}]*dispose[^}]*snapshot/s,`${file} must expose its source root and common port lifecycle`);}
+const bubbleSource=read('wizard-curated-bubble-falcon-source-port.js');
+assert.match(bubbleSource,/__wardenEngineBubbleCount/,'Bubble Barrage must read the Warden Flow bubble-count override');
+assert.match(bubbleSource,/override > 0 \? override : charges\.bubble/,'Bubble Barrage must use the explicit count instead of the copied charge count');
+assert.match(bubbleSource,/override <= 0 && n <= 0/,'only ordinary Bubble Barrage casts should fail when no source charges remain');
+assert.match(bubbleSource,/__wardenEngineGeneratedJet===true/,'the generated third Jet must launch Blurring Falconry without consuming its ordinary source charge');
+const earthAgentSource=read('wizard-curated-earth-agent-source-port.js');
+assert.match(earthAgentSource,/finalSaw: i === config\.count - 1/,'Rock N Roll must identify its final saw');
+assert.match(earthAgentSource,/finalHitTargets: new Set\(\)/,'Rock N Roll must keep a per-target final-hit ledger');
+assert.match(earthAgentSource,/finalHit: detail\.finalHit === true/,'Rock N Roll must preserve final-hit metadata in its callback event');
+assert.match(earthAgentSource,/charged: saw\.charged, finalHit \}/,'Rock N Roll must pass the final-hit marker through its damage event');
 console.log('Curated demo source constants, lineage, and port lifecycle passed');

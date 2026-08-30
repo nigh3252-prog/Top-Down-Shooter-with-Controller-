@@ -10,6 +10,14 @@ export const WARDEN_TRIAL_INITIAL_WAVE_SIZE = 7;
 export const WARDEN_TRIAL_MAX_WAVE_SIZE = 100;
 export const WARDEN_TRIAL_REWARD_CHOICE_COUNT = 3;
 
+// These Arcana remain in the canonical 70-card pairing catalog because they
+// can be generated during play, but they are not offered as ordinary Warden
+// Trial starters or reward choices.
+export const WARDEN_TRIAL_GENERATED_ONLY_ARCANA_IDS = Object.freeze([
+  'PERFORATING-JET',
+]);
+const generatedOnlyArcanaIds = new Set(WARDEN_TRIAL_GENERATED_ONLY_ARCANA_IDS);
+
 // The curve is intentionally discrete: each cleared wave gets a predictable,
 // inspectable count, then the trial settles at the requested 100-enemy ceiling.
 // Keeping it as data makes tuning the run feel straightforward without hiding
@@ -31,7 +39,8 @@ const starterWeaponByArcanaId = new Map(Object.entries(WEAPON_STARTER_ARCANA_IDS
 
 // Every canonical Arcana receives one authored down-side stance. Arcana IDs
 // are unique while stance IDs intentionally repeat, allowing all 70 Arcana to
-// live in the finite Warden Trial upgrade pool without duplicating an Arcana.
+// remain available through stable pairing lookups without duplicating an
+// Arcana. Generated-only Arcana are omitted from ordinary reward choices below.
 export const WARDEN_TRIAL_CARD_PAIRINGS = Object.freeze(
   WIZARD_ARCANA_CATALOG.map(arcana => freezePair({
     id: arcana.arcanaId,
@@ -83,6 +92,7 @@ export function starterWardenTrialCardsForWeapon(weaponId, stanceCards = []) {
   const normalizedWeapon = String(weaponId || '').trim().toLowerCase();
   const byId = stanceCardById(stanceCards);
   return (WEAPON_STARTER_ARCANA_IDS[normalizedWeapon] || WEAPON_STARTER_ARCANA_IDS.longsword)
+    .filter(arcanaId => !generatedOnlyArcanaIds.has(arcanaId))
     .map(arcanaId => pairById.get(arcanaId))
     .map(pair => createWardenTrialCard(byId.get(pair.stanceId), pair, { starter: true }))
     .filter(Boolean);
@@ -97,7 +107,7 @@ export function wardenTrialRewardCards({
     .filter(Boolean));
   const byId = stanceCardById(stanceCards);
   return WARDEN_TRIAL_CARD_PAIRINGS
-    .filter(pair => !selected.has(pair.id))
+    .filter(pair => !selected.has(pair.id) && !generatedOnlyArcanaIds.has(pair.arcanaId))
     .map(pair => createWardenTrialCard(byId.get(pair.stanceId), pair))
     .filter(Boolean);
 }

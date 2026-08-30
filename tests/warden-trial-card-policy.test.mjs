@@ -55,6 +55,8 @@ assert.deepEqual(Object.keys(WEAPON_STARTER_ARCANA_IDS),Object.keys(WEAPON_START
 const allStarterArcanaIds=Object.values(WEAPON_STARTER_ARCANA_IDS).flat();
 assert.equal(allStarterArcanaIds.length,22,'every weapon contributes two authored starter Arcana');
 assert.equal(new Set(allStarterArcanaIds).size,22,'starter Arcana remain unique even when stance IDs repeat');
+assert.deepEqual(starterArcanaIdsForWeapon('rapier'), ['ICE-DAGGER', 'STAR-BOLT'],
+  'Rapier starts with Ice Dagger after Perforating Jet becomes generated-only');
 for(const [weaponId,stanceIds] of Object.entries(WEAPON_STARTER_STANCE_IDS)){
   const arcanaIds=starterArcanaIdsForWeapon(weaponId);
   assert.equal(stanceIds.length,2,`${weaponId} has two starter stances`);
@@ -93,6 +95,11 @@ const longswordDeck = [
   { id:'S24', name:'S24 Rat Step', type:'stance' },
   { id:'S26', name:'S26 Long Blade Form', type:'stance' },
 ];
+
+const rapierStarters = starterCardsForWardenTrialWeapon('rapier', STANCE_CARDS);
+assert.deepEqual(rapierStarters.map(card => card.__wardenTrialArcanaId), ['ICE-DAGGER', 'STAR-BOLT']);
+assert.deepEqual(rapierStarters.map(card => card.id), ['S07', 'S19'],
+  'Warden starter cards use each replacement Arcana\'s authored down-side stance');
 
 assert.deepEqual(wardenTrialStarterIdsForWeapon('longsword'), ['S26','S29']);
 assert.deepEqual(

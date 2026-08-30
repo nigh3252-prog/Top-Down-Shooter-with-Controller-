@@ -46,8 +46,12 @@ export function wardenTrialStarterIdsForWeapon(weaponId) {
 }
 
 export function starterCardsForWardenTrialWeapon(weaponId, deckCards = []) {
-  const byId = new Map((Array.isArray(deckCards) ? deckCards : []).filter(Boolean).map(card => [card.id, card]));
-  return starterWardenTrialCardsForWeapon(weaponId, wardenTrialStarterIdsForWeapon(weaponId).map(id => byId.get(id)).filter(Boolean));
+  // Warden cards use the canonical down-side stance authored for each Arcana.
+  // Keep the supplied deck as the availability boundary, but do not force the
+  // Arcana starters through the ordinary weapon starter stance list: a
+  // generated-only Arcana can be replaced by an Arcana whose authored stance
+  // is different (for example, Rapier's Ice Dagger replacement).
+  return starterWardenTrialCardsForWeapon(weaponId, deckCards);
 }
 
 export function isWardenTrialStaminaCard(card, { weaponId, deckCards = [] } = {}) {
