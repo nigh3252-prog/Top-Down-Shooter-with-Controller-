@@ -5,6 +5,14 @@ It is deliberately a separate bundle because Saturn's Gravity currently runs
 vanilla Three.js 0.165, while Ecctrl runs React Three Fiber, Rapier, and Three.js
 0.184.
 
+The sandbox also layers the shared Warden attack interpreter over the Ecctrl
+mannequin. The visible Warden puppet is not mounted: one generic adapter applies
+the procedural hip/spine/head pose to the mannequin and drives every shared
+weapon through the existing weapon definitions and mesh builder. Press J,
+Square, R2, or the touch ATTACK button to cycle an overhead, crosscut, and
+thrust. The on-screen fit controls adjust the whole weapon attachment height
+and the shared weapon scale.
+
 The vendored controller source and `media/ecctrl/AnimationLibrary.glb` come from
 `pmndrs/ecctrl` commit `55776ca343d8c59a4c27cdd80074e54c0cbcaae8`
 (`agent/backbone-playtest`). Ecctrl is MIT licensed. See the copied LICENSE and
@@ -15,6 +23,7 @@ Build the browser artifact after changing this source:
 ```sh
 npm ci
 npm run typecheck
+npm run verify:combat
 npm run build
 ```
 

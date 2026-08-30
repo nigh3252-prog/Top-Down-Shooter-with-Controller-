@@ -30,10 +30,16 @@ export function readEcctrlGamepad(gamepad) {
     stick.x = dpadX / dpadMagnitude;
     stick.y = dpadY / dpadMagnitude;
   }
+  const aimStick = applyRadialDeadzone(
+    gamepad.axes?.[2] ?? 0,
+    -(gamepad.axes?.[3] ?? 0),
+  );
   return {
     gamepad,
     stick,
+    aimStick,
     jump: gamepadButtonPressed(gamepad, 0),
+    attack: gamepadButtonPressed(gamepad, 2) || gamepadButtonPressed(gamepad, 7),
     run: Math.hypot(stick.x, stick.y) >= RUN_ANIMATION_THRESHOLD,
     fullscreen: gamepadButtonPressed(gamepad, 9),
   };
