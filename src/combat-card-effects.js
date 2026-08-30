@@ -394,11 +394,13 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
   }
   function syncBingBongReadyPose(){const stance=currentStance();if(!stance||stance.id===state.lastStanceId)return;state.lastStanceId=stance.id;if(stance.id===BING_BONG_STANCE_ID||stance.effectId==='bingBong')PC.setReadyPose?.(guardPoseFor(stance));}
 
-  function playBloodSlash(){
-    state.charges=BLOOD_SLASH_MAX_CHARGES;syncBadge();styleCoreTrail();
+  function addBloodSlashCharges(count=BLOOD_SLASH_MAX_CHARGES){
+    const amount=Math.max(0,Math.trunc(Number(count)||0));
+    state.charges+=amount;syncBadge();styleCoreTrail();
     if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function'&&typeof CustomEvent==='function')window.dispatchEvent(new CustomEvent('bloodslash:charged',{detail:{charges:state.charges}}));
-    return true;
+    return state.charges;
   }
+  function playBloodSlash(){addBloodSlashCharges(BLOOD_SLASH_MAX_CHARGES);return true;}
 
   function clearStatuses(){for(const entry of state.bleeds.values())disposeBleed(entry);state.bleeds.clear();for(const wave of state.shockwaves){if(wave.mesh?.parent)wave.mesh.parent.remove(wave.mesh);wave.mesh?.geometry?.dispose?.();wave.mesh?.material?.dispose?.();}state.shockwaves.length=0;for(const entry of state.stunVisuals.values())clearStunVisual(entry);state.stunVisuals.clear();}
   function resetEffects(){endExecution();state.charges=0;clearStatuses();syncBadge();styleCoreTrail();}
@@ -413,7 +415,7 @@ export function installCombatCardEffects({THREE,scene,PC,hooks,getPlayer,getEnem
   findCoreTrail();makeExpandedTrail();syncBadge();styleCoreTrail();
 
   return{
-    state,reset:resetEffects,isBloodSlashEmpowered,playBloodSlash,
+    state,reset:resetEffects,isBloodSlashEmpowered,playBloodSlash,addBloodSlashCharges,
     update(dt,now=0){
       patchEnemySystem();syncBingBongReadyPose();
       if(state.execution&&!activeExecution())endExecution();

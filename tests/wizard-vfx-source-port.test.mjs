@@ -84,6 +84,13 @@ assert.match(runtime,/distanceMultiplier:\(SHEARING_CHAIN_SOURCE_ROUTE\/dashDist
 assert.doesNotMatch(runtime,/const travel=Math\.min\(3\.8/,'Shearing Chain must not use the former fixed manual translation');
 assert.match(runtime,/sourceLocalCameraQuaternion\.copy\(sourceWorldQuaternion\)\.invert\(\)\.multiply\(cameraQuaternion\)/,'source billboards must receive camera orientation in their local parent space');
 assert.match(source,/m\.quaternion\.copy\(camQuat\)/,'the copied source BlobPool must retain its camera-facing quad behavior');
+assert.match(runtime,/function curatedContext\(card=null\)/,'curated source ports must receive the authored Warden card context');
+assert.match(runtime,/cameraQuaternion:camera\?\.quaternion,callbacks,card/,'curated context must carry the Warden card through to Bubble Barrage');
+assert.match(runtime,/function startAquaVortex\(card\)/,'Aqua Vortex must receive its decorated Warden card');
+assert.match(runtime,/currentSize\(\)\*engineSizeMultiplier/,'Aqua Vortex size must multiply the current size by the Flow card override');
+assert.match(runtime,/function cast\(card,context=\{\}\)/,'VFX casts must preserve Warden context');
+assert.match(runtime,/startAquaVortex\(card\)/,'Aqua Vortex cast must propagate the card into its effect');
+assert.doesNotMatch(runtime,/effect\.playerDistance<2\.6\)\{const move=/,'Tectonic Drill must not translate the player while its carrier travels');
 assert.doesNotMatch(runtime,/function make(?:FlameBreath|Crown|FireBurst|FissureTrap|Dragon|Slash|Drill|Tomahawk|Breaker|Vortex)Visual/,'the old approximate VFX builders must stay removed');
 assert.match(cards,/one 12-damage contact tick/);
 assert.match(cards,/3\.2-second authored window/);

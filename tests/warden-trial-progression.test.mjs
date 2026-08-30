@@ -4,9 +4,10 @@ import { STANCE_CARDS } from '../src/stance-cards.js';
 import { arcanaDownStanceId, arcanaElementStanceClass } from '../src/arcana-stance-pairings.js';
 import { getStanceClass } from '../src/stance-compatibility.js';
 import { WIZARD_ARCANA_CATALOG } from '../src/wizard-arcana-catalog.js';
-import { WEAPON_STARTER_ARCANA_IDS, WEAPON_STARTER_STANCE_IDS } from '../src/weapon-stance-plan.js';
+import { WEAPON_STARTER_ARCANA_IDS } from '../src/weapon-stance-plan.js';
 import {
   WARDEN_TRIAL_CARD_PAIRINGS,
+  WARDEN_TRIAL_GENERATED_ONLY_ARCANA_IDS,
   WARDEN_TRIAL_MAX_WAVE_SIZE,
   WARDEN_TRIAL_STAMINA_MAX,
   WARDEN_TRIAL_WAVE_SIZES,
@@ -35,6 +36,12 @@ assert.equal(WARDEN_TRIAL_CARD_PAIRINGS.length, 70, 'the reward catalog contains
 assert.equal(WARDEN_TRIAL_CARD_PAIRINGS.length, WIZARD_ARCANA_CATALOG.length);
 assert.equal(new Set(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => pair.id)).size, 70, 'every combined reward has a stable unique ID');
 assert.equal(new Set(WARDEN_TRIAL_CARD_PAIRINGS.map(pair => pair.arcanaId)).size, 70, 'Arcana never repeat across combined rewards');
+assert.deepEqual(WARDEN_TRIAL_GENERATED_ONLY_ARCANA_IDS, ['PERFORATING-JET']);
+assert.equal(
+  WARDEN_TRIAL_CARD_PAIRINGS.find(pair => pair.arcanaId === 'PERFORATING-JET')?.weaponId,
+  null,
+  'Perforating Jet remains in the canonical pairings without becoming a weapon starter',
+);
 
 const arcanaById = new Map(WIZARD_ARCANA_CATALOG.map(card => [card.arcanaId, card]));
 const pairingCountsByStance = new Map(STANCE_CARDS.map(card => [card.id, 0]));
@@ -62,13 +69,18 @@ for (const stanceClass of ['Light', 'Medium', 'Heavy']) {
 }
 
 for (const [weaponId, arcanaIds] of Object.entries(WEAPON_STARTER_ARCANA_IDS)) {
-  const stanceIds = WEAPON_STARTER_STANCE_IDS[weaponId];
-  arcanaIds.forEach((arcanaId, index) => {
+  arcanaIds.forEach(arcanaId => {
     const pairing = WARDEN_TRIAL_CARD_PAIRINGS.find(candidate => candidate.arcanaId === arcanaId);
     assert.equal(pairing?.weaponId, weaponId, `${arcanaId} remains a ${weaponId} starter`);
-    assert.equal(pairing?.stanceId, stanceIds[index], `${arcanaId} retains its authored starter stance`);
+    assert.equal(pairing?.stanceId, arcanaDownStanceId(arcanaId), `${arcanaId} retains its authored down-side stance`);
   });
 }
+
+assert.deepEqual(WEAPON_STARTER_ARCANA_IDS.rapier, ['ICE-DAGGER', 'STAR-BOLT']);
+const rapierStarters = starterWardenTrialCardsForWeapon('rapier', STANCE_CARDS);
+assert.deepEqual(rapierStarters.map(card => card.__wardenTrialArcanaId), ['ICE-DAGGER', 'STAR-BOLT']);
+assert.deepEqual(rapierStarters.map(card => card.id), ['S07', 'S19']);
+assert.equal(rapierStarters.some(card => card.__wardenTrialArcanaId === 'PERFORATING-JET'), false);
 
 const starters = starterWardenTrialCardsForWeapon('longsword', STANCE_CARDS);
 assert.deepEqual(starters.map(card => card.id), ['S26', 'S29']);
@@ -77,10 +89,12 @@ assert.ok(starters.every(card => card.__wardenTrialCard === true));
 
 const starterPairIds = starters.map(card => card.__wardenTrialPairId);
 const rewardPool = wardenTrialRewardCards({ stanceCards: STANCE_CARDS, selectedPairIds: starterPairIds });
-assert.equal(rewardPool.length, 68, 'all remaining Arcana are available after the two weapon starters');
+assert.equal(rewardPool.length, 67, 'all non-generated Arcana remain available after the two weapon starters');
 assert.equal(new Set(rewardPool.map(card => card.__wardenTrialPairId)).size, rewardPool.length);
-assert.equal(new Set([...starters, ...rewardPool].map(card => card.__wardenTrialArcanaId)).size, 70,
-  'the opening cards plus upgrade pool cover every Arcana exactly once');
+assert.equal(rewardPool.some(card => card.__wardenTrialArcanaId === 'PERFORATING-JET'), false,
+  'generated-only Perforating Jet is excluded from ordinary reward choices');
+assert.equal(new Set([...starters, ...rewardPool].map(card => card.__wardenTrialArcanaId)).size, 69,
+  'the opening cards plus upgrade pool cover every non-generated Arcana exactly once');
 assert.ok(rewardPool.every(card => isWardenTrialStaminaCard(card, { weaponId: 'longsword', deckCards: [card] })));
 
 const choices = drawWardenTrialRewardChoices(rewardPool, 3, () => 0);

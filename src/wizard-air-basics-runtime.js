@@ -54,9 +54,12 @@ export function perforatingJetVolleyCounts({enhanced=false}={}){
   return enhanced?PERFORATING_JET_ENHANCED_VOLLEYS:PERFORATING_JET_VOLLEYS;
 }
 
-export function buildPerforatingJetSchedule({enhanced=false}={}){
+export function buildPerforatingJetSchedule({enhanced=false,jetBeat=0}={}){
   const counts=perforatingJetVolleyCounts({enhanced}),schedule=[];
+  const selectedBeat=Number.isInteger(Number(jetBeat))&&Number(jetBeat)>=1&&Number(jetBeat)<=2
+    ?Number(jetBeat):0;
   counts.forEach((count,beatIndex)=>{
+    if(selectedBeat&&beatIndex+1!==selectedBeat)return;
     for(let shotIndex=0;shotIndex<count;shotIndex++){
       schedule.push(Object.freeze({
         beat:beatIndex+1,
@@ -266,8 +269,11 @@ export function installWizardAirBasicsRuntime({THREE,scene,getPlayer,getEnemySys
     if(k>=1)remove(effect);
   }
 
-  function startPerforatingJet(){
-    add({type:'perforatingJetCombo',age:0,nextEmission:0,schedule:buildPerforatingJetSchedule(),beatFrames:new Map(),life:1.0});
+  function startPerforatingJet(card,context={}){
+    const contextBeat=Number(context?.jetBeat),cardBeat=Number(card?.__wardenEngineJetBeat);
+    const requestedBeat=Number.isInteger(contextBeat)&&contextBeat>=1&&contextBeat<=2?contextBeat:cardBeat;
+    const jetBeat=Number.isInteger(requestedBeat)&&requestedBeat>=1&&requestedBeat<=2?requestedBeat:0;
+    add({type:'perforatingJetCombo',age:0,nextEmission:0,jetBeat,schedule:buildPerforatingJetSchedule({jetBeat}),beatFrames:new Map(),life:1.0});
   }
 
   function emitPerforatingJetShot(effect,event){
@@ -321,7 +327,7 @@ export function installWizardAirBasicsRuntime({THREE,scene,getPlayer,getEnemySys
   function canPlay(card){return card?.arcanaId==='AIR-SPINNER'||card?.arcanaId==='PERFORATING-JET';}
   function play(card,context={}){
     if(!canPlay(card))return false;
-    if(card.arcanaId==='AIR-SPINNER')startAirSpinner();else startPerforatingJet();
+    if(card.arcanaId==='AIR-SPINNER')startAirSpinner();else startPerforatingJet(card,context);
     return true;
   }
 

@@ -24,9 +24,9 @@ const arenaRuntimeSource=await readFile(new URL('../src/arena-runtime.js',import
 const arenaShellCss=await readFile(new URL('../src/arena-shell.css',import.meta.url),'utf8');
 assert.match(arenaRuntimeSource,/enabled:\(\)=>isWardenTrialCardGestureEnabled\(\{/,'the runtime uses the pre-start-safe card input gate');
 assert.match(arenaRuntimeSource,/coolingDown:isWardenTrialCardCoolingDown\(\)/,'the active cooldown blocks a second full-screen swipe');
-assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('up'\)/,'an accepted upward play starts the three-second card lock');
-assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('down'\)/,'an accepted downward play starts the one-second card lock');
-assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.begin\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns\}\)/,'the existing card cooldown policy receives the live upward-ability setting');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('up',card\)/,'an accepted upward play starts its authored card lock');
+assert.match(arenaRuntimeSource,/beginWardenTrialCardCooldown\('down',card\)/,'an accepted downward play starts its authored card lock');
+assert.match(arenaRuntimeSource,/wardenTrialCardCooldown\.begin\(direction,\{abilityCooldowns:wardenTrialAbilityCooldowns,durationSeconds\}\)/,'the card cooldown policy receives both the live toggle and authored card duration');
 assert.doesNotMatch(arenaRuntimeSource,/enabled:\(\)=>!isPaused\(\)/,'the runtime must not treat the opening card wait as an input pause');
 assert.match(arenaRuntimeSource,/handSize:wardenTrialMode\?1:2/,'Warden Trial uses one authoritative current card without changing the normal two-card hand');
 

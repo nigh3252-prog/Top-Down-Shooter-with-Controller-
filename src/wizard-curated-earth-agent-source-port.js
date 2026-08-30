@@ -278,6 +278,7 @@ export function createWizardCuratedEarthAgentSourcePort(options = {}) {
       direction: detail.direction ? { x: detail.direction.x, z: detail.direction.z } : undefined,
       knockback: detail.knockback,
       charged: Boolean(detail.charged),
+      finalHit: detail.finalHit === true,
       stableId: target.id,
     };
     invokeCallback('onDamage', target.raw, event, [damageAmount]);
@@ -483,7 +484,8 @@ export function createWizardCuratedEarthAgentSourcePort(options = {}) {
         side: new THREE.Vector2(side.x, side.y),
         splay: Math.abs(t) > 0.001 ? Math.sign(t) * config.splay : 0,
         travelled: 0, birth: 0, life: config.range / config.speed,
-        trailT: 0, hits: new Map(), radius: config.radius, charged,
+        trailT: 0, hits: new Map(), finalHitTargets: new Set(), finalSaw: i === config.count - 1,
+        radius: config.radius, charged,
       });
     }
   }
@@ -526,7 +528,9 @@ export function createWizardCuratedEarthAgentSourcePort(options = {}) {
             const pushOrigin = { x: saw.pos.x - saw.dir.x, z: saw.pos.y - saw.dir.y };
             const pushLength = Math.hypot(target.pos.x - pushOrigin.x, target.pos.y - pushOrigin.z) || 1;
             const pushDirection = { x: (target.pos.x - pushOrigin.x) / pushLength, z: (target.pos.y - pushOrigin.z) / pushLength };
-            emitDamage(target, config.damage, { arcanaId: 'ROCK-N-ROLL', source: 'wizard-curated-earth-agent', kind: 'saw-tick', position: { x: saw.pos.x, z: saw.pos.y }, direction: pushDirection, knockback: config.knock, charged: saw.charged });
+            const finalHit = saw.finalSaw && !saw.finalHitTargets.has(target);
+            if (finalHit) saw.finalHitTargets.add(target);
+            emitDamage(target, config.damage, { arcanaId: 'ROCK-N-ROLL', source: 'wizard-curated-earth-agent', kind: 'saw-tick', position: { x: saw.pos.x, z: saw.pos.y }, direction: pushDirection, knockback: config.knock, charged: saw.charged, finalHit });
             emitMove(target, { x: pushDirection.x * config.knock, z: pushDirection.z * config.knock }, { arcanaId: 'ROCK-N-ROLL', source: 'wizard-curated-earth-agent', direction: pushDirection, force: config.knock, reason: 'saw-knockback' });
             addSpark(target.pos.x, 0.9, target.pos.y, 1.2, 0.18);
             cameraShake = Math.max(cameraShake, 0.12);

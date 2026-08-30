@@ -1,7 +1,9 @@
 export const WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS = 3;
 export const WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS = 1;
 
-export function wardenTrialCardCooldownSeconds(direction, { abilityCooldowns = true } = {}) {
+export function wardenTrialCardCooldownSeconds(direction, { abilityCooldowns = true, durationSeconds = null } = {}) {
+  const authored=Number(durationSeconds);
+  if(durationSeconds!==null&&Number.isFinite(authored))return Math.max(0,authored);
   if (direction === 'up') return abilityCooldowns === false ? 0 : WARDEN_TRIAL_CARD_UP_COOLDOWN_SECONDS;
   if (direction === 'down') return WARDEN_TRIAL_CARD_DOWN_COOLDOWN_SECONDS;
   return 0;

@@ -43,6 +43,7 @@ import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './
 import { installWardenTrialSwipeSurface, isWardenTrialCardGestureEnabled } from './warden-trial-card-ui.js';
 import { createWardenTrialCardCooldown } from './warden-trial-card-cooldown.js';
 import { dispatchWardenTrialUpArcana, isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon, wardenTrialUpArcanaIdForCard } from './warden-trial-card-policy.js';
+import { createWardenArcanaEngine, installWardenArcanaDamageRuntime, isWardenGeneratedCard, WARDEN_BURN_CARD_KIND, WARDEN_JET_CARD_KIND } from './warden-arcana-engine.js';
 import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
 import {
   WARDEN_TRIAL_REWARD_CHOICE_COUNT,
@@ -689,6 +690,23 @@ const enemySystem = createArenaEnemySystem({
     announce(progress?.cleared === progress?.total ? 'DUNGEON CLEAR' : `ROOM ${roomId + 1} CLEAR · STRIKE A DOOR`, 1.8);
   }
 });
+const wardenArcanaEngine=wardenTrialMode?createWardenArcanaEngine({
+  deck,
+  addBloodSlashCharges:count=>PC.combatEffectRuntime?.addBloodSlashCharges?.(count)||0,
+  enterBingBong:()=>{
+    const stance=STANCE_CARDS.find(card=>card.id==='S31-BING-BONG');
+    if(!stance)return false;applyStance(stance);return true;
+  },
+  damagePlayer:(amount,options)=>enemySystem.damagePlayer?.(amount,options),
+  onChange:(snapshot,reason)=>emitRuntime({type:'warden-arcana-engine',reason,...snapshot}),
+}):null;
+const wardenArcanaDamageRuntime=wardenArcanaEngine?installWardenArcanaDamageRuntime({
+  engine:wardenArcanaEngine,
+  getEnemySystem:()=>enemySystem,
+}):null;
+// Install before Player Combat composes its melee and global Arcana wrappers.
+// That keeps this Warden-only layer at the stable base of the wrapper chain.
+wardenArcanaDamageRuntime?.update?.();
 function configureWardenTrialWave(){
   const selected=configureWardenTrialEnemySet(enemySystem,wardenTrialEnemySet);
   const waveSize=wardenTrialWaveSize(wardenTrialWave);
@@ -1311,6 +1329,7 @@ function respawn(){
   // authored Arcana charge/cooldown banks to their default state.
   PC.resetArcanaRuntimeState?.({preserveResources:false});
   wardenTrialCardCooldown.reset();
+  wardenArcanaEngine?.reset?.();
   roomTransition?.reset();
   transitionOverlay.style.opacity = 0;
   transitionView.cameraPush = 0;
@@ -1721,8 +1740,9 @@ function renderWardenTrialCardCooldown(){
   trialCard.setAttribute('aria-label',`${direction.toLowerCase()} card cooldown, ${shownSeconds} seconds remaining. ${readyLabel}`);
   if(trialCardStatus)trialCardStatus.textContent=`${direction} COOLDOWN · ${shownSeconds}s`;
 }
-function beginWardenTrialCardCooldown(direction){
-  const cooldown=wardenTrialCardCooldown.begin(direction,{abilityCooldowns:wardenTrialAbilityCooldowns});
+function beginWardenTrialCardCooldown(direction,sourceCard=currentTrialCard()){
+  const durationSeconds=wardenArcanaEngine?.cooldownSeconds?.(sourceCard,direction,{abilityCooldowns:wardenTrialAbilityCooldowns});
+  const cooldown=wardenTrialCardCooldown.begin(direction,{abilityCooldowns:wardenTrialAbilityCooldowns,durationSeconds});
   trialCardDirection='neutral';
   trialCardCooldownDisplayedTenths=-1;
   renderWardenTrialCardCooldown();
@@ -1733,7 +1753,8 @@ function updateWardenTrialCardCooldown(deltaSeconds){
   if(!wardenTrialMode)return;
   const before=wardenTrialCardCooldown.snapshot();
   if(!before.active)return;
-  const cooldown=wardenTrialCardCooldown.update(deltaSeconds);
+  const elapsed=wardenArcanaEngine?.cooldownElapsed?.(currentTrialCard(),deltaSeconds)??deltaSeconds;
+  const cooldown=wardenTrialCardCooldown.update(elapsed);
   const displayedTenths=Math.ceil(cooldown.remaining*10);
   if(displayedTenths!==trialCardCooldownDisplayedTenths||before.active!==cooldown.active){
     trialCardCooldownDisplayedTenths=displayedTenths;
@@ -1751,6 +1772,34 @@ function trialCardStanceName(card){
   const id=String(card?.id||'').trim().toUpperCase();
   const name=trialCardName(card);
   return id&&name!=='NO CARD'?`${id} ${name}`:name;
+}
+function trialCooldownText(seconds){
+  const value=Math.max(0,Number(seconds)||0);
+  return value>0?`${Number.isInteger(value)?value:value.toFixed(1)}s COOLDOWN`:'READY';
+}
+function trialCardUpArcana(card){
+  if(isWardenGeneratedCard(card,WARDEN_BURN_CARD_KIND))return null;
+  if(isWardenGeneratedCard(card,WARDEN_JET_CARD_KIND)){
+    const id=wardenArcanaEngine?.snapshot?.().jetStep===3?'BLURRING-FALCONRY':'PERFORATING-JET';
+    return wizardArcanaCardById(id);
+  }
+  return wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
+}
+function trialCardUpName(card,arcana=trialCardUpArcana(card)){
+  if(isWardenGeneratedCard(card,WARDEN_BURN_CARD_KIND))return'BURN';
+  if(isWardenGeneratedCard(card,WARDEN_JET_CARD_KIND)){
+    const step=wardenArcanaEngine?.snapshot?.().jetStep||1;
+    return step===3?'JET 3 · BLURRING FALCONRY':`JET ${step} · ${String(arcana?.name||'PERFORATING JET').toUpperCase()}`;
+  }
+  return String(arcana?.name||'NO ARCANA').toUpperCase();
+}
+function trialCardDownName(card){
+  const plan=wardenArcanaEngine?.planDown?.(card);
+  if(plan?.kind==='self-burn')return'DESTROY · TAKE 10';
+  if(plan?.kind==='jet-return')return'RETURN TO DRAW';
+  if(plan?.kind==='blood-slash')return'BLOOD SLASH +3';
+  if(plan?.kind==='bing-bong')return'BING BONG';
+  return trialCardStanceName(card);
 }
 function renderStanceBadge(element,card){
   const badge=getStanceCardBadge(card);
@@ -1797,18 +1846,20 @@ function renderWardenTrialRewardChoices(){
     button.hidden=!card;
     button.disabled=!card||!wardenTrialRewardPending;
     if(!card)return;
-    const arcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
+    const arcana=trialCardUpArcana(card);
+    const upSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'up',{abilityCooldowns:wardenTrialAbilityCooldowns})??(wardenTrialAbilityCooldowns?3:0);
+    const downSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'down',{abilityCooldowns:wardenTrialAbilityCooldowns})??1;
     const badgeData=getStanceCardBadge(card);
     const badge=document.createElement('span');badge.className='wardenRewardClassBadge';badge.textContent=badgeData?.text||'';badge.title=badgeData?.title||'';badge.hidden=!badgeData;badge.setAttribute('aria-hidden','true');
     const elementLabel=document.createElement('span');elementLabel.className='wardenRewardWeapon';elementLabel.textContent=`${String(arcana?.element||card.__wardenTrialElement||'ARCANA').toUpperCase()} ARCANA`;
     const stance=document.createElement('strong');stance.className='wardenRewardStance';stance.textContent=trialCardStanceName(card);
-    const arcanaName=document.createElement('span');arcanaName.className='wardenRewardArcana';arcanaName.textContent=`↑ ${String(arcana?.name||card.__wardenTrialArcanaId||'NO ARCANA').toUpperCase()} · ${wardenTrialAbilityCooldowns?'3s COOLDOWN':'NO COOLDOWN'}`;
-    const meta=document.createElement('span');meta.className='wardenRewardMeta';meta.textContent='↓ CHANGE STANCE · REFILL 200 · 1s COOLDOWN';
+    const arcanaName=document.createElement('span');arcanaName.className='wardenRewardArcana';arcanaName.textContent=`↑ ${trialCardUpName(card,arcana)} · ${trialCooldownText(upSeconds)}`;
+    const meta=document.createElement('span');meta.className='wardenRewardMeta';meta.textContent=`↓ ${trialCardDownName(card)} · REFILL 200 · ${trialCooldownText(downSeconds)}`;
     button.append(badge,elementLabel,stance,arcanaName,meta);
     button.dataset.pairId=card.__wardenTrialPairId||'';
     button.dataset.stanceType=badgeData?.stanceLabel||'';
     button.dataset.stanceDefense=badgeData?.defenseLabel||'';
-    button.setAttribute('aria-label',`Add ${arcana?.name||card.__wardenTrialArcanaId||'Arcana'} with ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''}; upward play ${wardenTrialAbilityCooldowns?'has a 3 second cooldown':'has no cooldown'} and downward play has a 1 second cooldown`);
+    button.setAttribute('aria-label',`Add ${arcana?.name||card.__wardenTrialArcanaId||'Arcana'} with ${trialCardStanceName(card)}${badgeData?`, ${badgeData.title}`:''}; upward play ${trialCooldownText(upSeconds)} and downward play ${trialCardDownName(card)}, ${trialCooldownText(downSeconds)}`);
   });
 }
 function startNextWardenTrialWave(card=null){
@@ -1881,49 +1932,52 @@ function renderCurrentTrialStance(){
 }
 function renderTrialUpcomingCards(){
   const upcoming=deck.upcoming.slice(0,trialUpcomingCardEls.length);
-  const upCooldownDescription=wardenTrialAbilityCooldowns?'with a 3 second cooldown':'with no cooldown';
   trialUpcomingCardEls.forEach((element,index)=>{
     const card=upcoming[index]||null;
     element.hidden=!card;
     element.dataset.cardId=card?.id||'';
     element.dataset.arcanaId=card?.__wardenTrialArcanaId||'';
     if(!card){element.removeAttribute('aria-label');return;}
-    const arcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
-    const arcanaName=String(arcana?.name||card.__wardenTrialArcanaId||'NO ARCANA').toUpperCase();
-    const stanceName=trialCardStanceName(card);
+    const arcana=trialCardUpArcana(card);
+    const arcanaName=trialCardUpName(card,arcana);
+    const stanceName=trialCardDownName(card);
     const stanceId=String(card.id||'STANCE').toUpperCase();
+    const upSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'up',{abilityCooldowns:wardenTrialAbilityCooldowns})??(wardenTrialAbilityCooldowns?3:0);
+    const downSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'down',{abilityCooldowns:wardenTrialAbilityCooldowns})??1;
     const arcanaNameElement=element.querySelector('.trialUpcomingArcanaName');
     const stanceNameElement=element.querySelector('.trialUpcomingStanceName');
     if(arcanaNameElement)arcanaNameElement.textContent=arcanaName;
     if(stanceNameElement)stanceNameElement.textContent=stanceId;
     const badge=renderStanceBadge(element.querySelector('.trialUpcomingStanceBadge'),card);
-    element.setAttribute('aria-label',`Next card ${index+1}: ${arcanaName} up ${upCooldownDescription}; ${stanceName} down with a 1 second cooldown${badge?`; ${badge.title}`:''}`);
+    element.setAttribute('aria-label',`Next card ${index+1}: ${arcanaName} up, ${trialCooldownText(upSeconds)}; ${stanceName} down, ${trialCooldownText(downSeconds)}${badge?`; ${badge.title}`:''}`);
   });
 }
 function renderTrialCard(){
   if(!wardenTrialMode||!trialCard)return;
   const card=currentTrialCard();
-  const stanceName=trialCardStanceName(card);
+  const stanceName=trialCardDownName(card);
   const staminaCard=isWardenTrialStaminaCard(card,{weaponId:combatState.weapon,deckCards:deck.pool});
-  const upArcana=wizardArcanaCardById(wardenTrialUpArcanaIdForCard(card,combatState.weapon));
+  const upArcana=trialCardUpArcana(card);
   const art=trialCard.querySelector('.trialCardArt');
   const arcanaNameElement=trialCard.querySelector('.trialArcanaName');
   const stanceNameElement=trialCard.querySelector('.trialStanceName');
   const stanceBadge=renderStanceBadge(trialCard.querySelector('.trialCardStanceBadge'),card);
-  const arcanaName=String(upArcana?.name||'NO ARCANA').toUpperCase();
+  const arcanaName=trialCardUpName(card,upArcana);
+  const upSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'up',{abilityCooldowns:wardenTrialAbilityCooldowns})??(wardenTrialAbilityCooldowns?3:0);
+  const downSeconds=wardenArcanaEngine?.cooldownSeconds?.(card,'down',{abilityCooldowns:wardenTrialAbilityCooldowns})??1;
   trialCard.dataset.cardId=card?.id||'';
   trialCard.dataset.arcanaId=upArcana?.arcanaId||'';
   trialCard.dataset.stanceId=card?.id||'';
   trialCard.dataset.stanceType=stanceBadge?.stanceLabel||'';
   trialCard.dataset.stanceDefense=stanceBadge?.defenseLabel||'';
-  const upCooldownDescription=wardenTrialAbilityCooldowns?'followed by a 3 second cooldown':'with no card cooldown';
+  const upCooldownDescription=trialCooldownText(upSeconds);
   const readyAriaLabel=card
-    ? `${stanceName} card${stanceBadge?`, ${stanceBadge.title}`:''}; swipe upward to ${upArcana?`cast ${arcanaName}`:'register the card'}, ${upCooldownDescription}; or downward to enter ${stanceName}${!arena.started&&staminaCard?' and start the trial with 200 stamina':staminaCard?' and restore stamina to 200':''}, followed by a 1 second cooldown`
+    ? `${stanceName} card${stanceBadge?`, ${stanceBadge.title}`:''}; swipe upward to ${upArcana?`cast ${arcanaName}`:'play Burn'}, ${upCooldownDescription}; or downward to ${stanceName}${!arena.started&&staminaCard?' and start the trial with 200 stamina':staminaCard?' and restore stamina to 200':''}, ${trialCooldownText(downSeconds)}`
     : 'No trial card available';
   trialCard.dataset.readyAriaLabel=readyAriaLabel;
   trialCard.setAttribute('aria-label',readyAriaLabel);
-  if(trialCardUpLabel)trialCardUpLabel.textContent=wardenTrialAbilityCooldowns?'↑ ARCANA · 3s':'↑ ARCANA · READY';
-  if(art)art.dataset.element=String(upArcana?.element||'').toLowerCase();
+  if(trialCardUpLabel)trialCardUpLabel.textContent=`↑ ${isWardenGeneratedCard(card,WARDEN_BURN_CARD_KIND)?'BURN':'ARCANA'} · ${upSeconds>0?`${upSeconds}s`:'READY'}`;
+  if(art)art.dataset.element=String(upArcana?.element||card?.__wardenTrialElement||'').toLowerCase();
   if(arcanaNameElement){
     arcanaNameElement.textContent=arcanaName;
     arcanaNameElement.dataset.length=arcanaName.length>16?'long':'short';
@@ -1937,11 +1991,13 @@ function renderTrialCard(){
   renderTrialPileCounts();
   if(trialBadge){
     const weaponLabel=WEAPONS[combatState.weapon]?.label||combatState.weapon||'UNKNOWN WEAPON';
-    trialBadge.textContent=`${weaponLabel.toUpperCase()} · WAVE ${wardenTrialWave} · ${upArcana?arcanaName:'NO ARCANA'} / ${card?.id||'--'} · ${arena.started?'AUTONOMOUS':'READY'}`;
+    trialBadge.textContent=`${weaponLabel.toUpperCase()} · WAVE ${wardenTrialWave} · ${arcanaName} / ${card?.id||'--'} · ${arena.started?'AUTONOMOUS':'READY'}`;
   }
   if(trialCardStatus&&trialCardDirection==='neutral'){
+    const engine=wardenArcanaEngine?.snapshot?.()||{flow:0,burns:0,selfBurns:0,currentHaste:0,currentAquaBeamUses:0};
+    const resources=`FLOW ${engine.flow} · BURN ${engine.burns} · SELF ${engine.selfBurns}${engine.currentHaste>0?` · HASTE ${engine.currentHaste.toFixed(1)}s`:''}${engine.currentAquaBeamUses>0?` · USE ${engine.currentAquaBeamUses}/2`:''}`;
     trialCardStatus.textContent=card
-      ? (arena.started?`READY · ${wardenTrialAbilityCooldowns?'↑ 3s':'↑ NO COOLDOWN'} / ↓ 1s`:`SWIPE DOWN TO START · ${arcanaName} / ${card?.id||'--'} · REFILL 200 · 1s`)
+      ? (arena.started?`READY · ${resources} · ↑ ${upSeconds}s / ↓ ${downSeconds}s`:`SWIPE DOWN TO START · ${arcanaName} / ${card?.id||'--'} · REFILL 200 · ${downSeconds}s`)
       : 'NO TRIAL CARD';
   }
   renderWardenTrialCardCooldown();
@@ -1978,22 +2034,33 @@ function playWardenTrialCardDown(){
     return false;
   }
   const wasWaiting=!arena.started;
-  const played=deck.play(slot);
+  const enginePlan=wardenArcanaEngine?.planDown?.(card)||null;
+  const played=enginePlan
+    ?deck.resolveSlot?.(slot,{destination:enginePlan.destination})
+    :deck.play(slot);
   if(!played){setTrialCardFeedback('down','CARD NOT READY');return false;}
-  const pool=stancePoolForWeapon();
-  const index=pool.findIndex(stance=>stance.id===played.id);
-  if(index>=0)setStance(index);
-  else applyStance(played);
+  if(enginePlan)wardenArcanaEngine.commitDown(enginePlan);
+  if(!enginePlan||(wasWaiting&&enginePlan.kind!=='bing-bong')){
+    const pool=stancePoolForWeapon();
+    const index=pool.findIndex(stance=>stance.id===played.id);
+    if(index>=0)setStance(index);
+    else applyStance(played);
+  }
   if(decision.refill)fullRefillStamina();
   if(wasWaiting){
     arena.started=true;
     arena.paused=false;
     startGate?.classList.add('hidden');
   }
-  setTrialCardFeedback('down',wasWaiting?'DOWN REGISTERED · TRIAL STARTED':decision.refill?'DOWN REGISTERED · STAMINA RESTORED':`DOWN REGISTERED · ${trialCardName(played)}`);
-  beginWardenTrialCardCooldown('down');
+  const downResult=enginePlan?.kind==='self-burn'?'BURN DESTROYED · 10 DAMAGE'
+    :enginePlan?.kind==='jet-return'?'JET RETURNED TO DRAW'
+    :enginePlan?.kind==='blood-slash'?'BLOOD SLASH +3'
+    :enginePlan?.kind==='bing-bong'?'BING BONG'
+    :decision.refill?'STAMINA RESTORED':trialCardName(played);
+  setTrialCardFeedback('down',wasWaiting?`DOWN REGISTERED · TRIAL STARTED · ${downResult}`:`DOWN REGISTERED · ${downResult}`);
+  beginWardenTrialCardCooldown('down',card);
   renderCards();
-  announce(trialCardName(played),.9);
+  announce(enginePlan?downResult:trialCardName(played),.9);
   return true;
 }
 function playWardenTrialCardUp(){
@@ -2005,6 +2072,13 @@ function playWardenTrialCardUp(){
   }
   const slot=currentTrialCardSlot(), card=slot>=0?deck.hand[slot]:null;
   if(!card){setTrialCardFeedback('up','NO TRIAL CARD');return false;}
+  if(isWardenGeneratedCard(card,WARDEN_BURN_CARD_KIND)){
+    const played=deck.resolveSlot?.(slot,{destination:'discard'});
+    if(!played){setTrialCardFeedback('up','CARD NOT READY');return false;}
+    setTrialCardFeedback('up','BURN WAITED · RETURNED TO DISCARD');
+    beginWardenTrialCardCooldown('up',card);
+    renderCards();announce('BURN',.7);return true;
+  }
   const decision=resolveWardenTrialCardPlay({
     direction:'up',
     started:arena.started,
@@ -2020,27 +2094,37 @@ function playWardenTrialCardUp(){
     announce(message,.8);
     return false;
   }
-  const arcanaContext={source:'warden-trial-card',direction:'up',slot,weaponId:combatState.weapon,stanceCardId:card.id};
+  const transaction=wardenArcanaEngine?.beginCast?.({card,arcanaId:decision.arcanaId});
+  if(!transaction){
+    setTrialCardFeedback('up','ARCANA NOT READY');announce('ARCANA NOT READY',.8);return false;
+  }
+  const arcanaContext={
+    source:'warden-trial-card',direction:'up',slot,weaponId:combatState.weapon,stanceCardId:card.id,
+    ...transaction.context,
+  };
   const arcanaResult=dispatchWardenTrialUpArcana({
-    arcanaId:decision.arcanaId,
-    resolveArcanaCard:wizardArcanaCardById,
+    arcanaId:transaction.arcanaId,
+    resolveArcanaCard:id=>wardenArcanaEngine.decorateArcanaCard(wizardArcanaCardById(id),transaction),
     dispatcher:PC.cardEffectDispatcher,
     context:arcanaContext,
   });
   if(!arcanaResult.accepted){
+    wardenArcanaEngine.abortCast(transaction);
     setTrialCardFeedback('up','ARCANA NOT READY');
     announce('ARCANA NOT READY',.8);
     return false;
   }
   const arcanaCard=arcanaResult.arcanaCard;
-  const played=deck.play(slot);
+  const outcome=wardenArcanaEngine.commitCast(transaction);
+  const played=deck.resolveSlot?.(slot,{destination:outcome?.destination||'discard'});
   if(!played){
     setTrialCardFeedback('up','CARD NOT READY');
     announce('CARD NOT READY',.8);
     return false;
   }
-  setTrialCardFeedback('up',`UP FIRED · ${arcanaCard.name.toUpperCase()}`);
-  beginWardenTrialCardCooldown('up');
+  const flowNote=`FLOW ${wardenArcanaEngine.snapshot().flow}`;
+  setTrialCardFeedback('up',`UP FIRED · ${arcanaCard.name.toUpperCase()} · ${flowNote}`);
+  beginWardenTrialCardCooldown('up',card);
   renderCards();
   announce(arcanaCard.name,.9);
   return true;
@@ -2420,6 +2504,7 @@ function updatePlayer(dt, rawDt = dt, simulationNow = performance.now()/1000){
 
   updateCharge(dt);
   PC.updateCombat(dt, simulationNow, sway, rawDt);
+  wardenArcanaDamageRuntime?.update?.();
   stanceGate5Runtime?.update?.(dt);
 }
 
@@ -2438,6 +2523,7 @@ function advanceArenaSimulation(rawDt,{capture=false,simulationNow=performance.n
     } else {
       const wasShuffling = deck.shuffling;
       deck.update(dt);
+      wardenArcanaEngine?.update?.(dt);
       if(wasShuffling && !deck.shuffling){
         for(let slot=0;slot<Math.min(deck.handSize,cardEls.length);slot++)cardAnim.drawn.add(slot);
         renderCards();
@@ -2867,6 +2953,7 @@ function destroyRuntime(){
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
   trialCardGesture?.destroy?.();trialCardGesture=null;
   accordionEnemyOverlay?.destroy?.();
+  wardenArcanaDamageRuntime?.dispose?.();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
   emitRuntime({type:'lifecycle',destroyed:true});
@@ -2874,11 +2961,11 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCurrentCardId:wardenTrialMode?currentTrialCard()?.id||null:null,wardenTrialDrawCount:wardenTrialMode?deck.drawCount:null,wardenTrialDiscardCount:wardenTrialMode?deck.discardCount:null,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenArcanaEngine:wardenTrialMode?wardenArcanaEngine?.snapshot?.()||null:null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
-  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
+  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,wardenArcanaEngine,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},get defenseController(){return stanceGate5Runtime;},
   get trialCardDirection(){return trialCardDirection;},
   get playerFacing(){return actorFacing;},getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},
@@ -2890,7 +2977,7 @@ const runtimeHandle={
   snapshotProfileSettings:options=>controlRegistry.snapshotProfileSettings(options),validateProfileSettings:(values,options)=>controlRegistry.validateProfileSettings(values,options),applyProfileSettings:(values,options)=>controlRegistry.applyProfileSettings(values,options),auditProfileCoverage:options=>controlRegistry.auditProfileCoverage(options),registerProfileAdapter:definition=>controlRegistry.registerProfileAdapter(definition),
   subscribe(listener){if(typeof listener!=='function')return()=>{};runtimeListeners.add(listener);return()=>runtimeListeners.delete(listener);},
   startLabScenario:(roomId,plan)=>enemySystem.startLabScenario(roomId,plan),clearRoomRuntime:()=>enemySystem.clearRoomRuntime(),
-  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityCooldowns,chooseWardenTrialReward,skipWardenTrialReward,
+  selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityCooldowns,chooseWardenTrialReward,skipWardenTrialReward,playWardenTrialCardUp,playWardenTrialCardDown,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
 };
