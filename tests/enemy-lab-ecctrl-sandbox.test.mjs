@@ -19,6 +19,7 @@ const modelPath=join(root,'media/ecctrl/AnimationLibrary.glb');
 
 assert.match(lab,/id="ecctrlBtn"[^>]*aria-pressed="false"/,'Enemy Lab exposes an explicit controller switch');
 assert.match(lab,/id="ecctrlLabSurface"[^>]*hidden/,'the sandbox starts out of the normal Lab surface');
+assert.match(lab,/#ecctrlLabBoot\[hidden\]\{display:none\}/,'the loading veil stays hidden after the sandbox mounts');
 assert.match(lab,/runtime\.stop\(\)[\s\S]*setEcctrlLabActive\(true\)/,'Ecctrl takes authority only after the Saturn loop stops');
 assert.match(lab,/setEcctrlLabActive\?\.\(false\)[\s\S]*runtime\.start\(\)/,'switching back suspends Ecctrl and resumes Saturn');
 assert.match(lab,/import\('\.\/tools\/ecctrl-lab\/assets\/ecctrl-lab\.js'\)/,'the heavy controller bundle is lazy loaded');
