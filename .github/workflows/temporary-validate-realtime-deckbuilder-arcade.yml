@@ -97,3 +97,10 @@ jobs:
           console.log('Validated all 20 game launch paths at 390x844.');
           NODE
           node arcade-qa.mjs
+
+      - name: Package downloadable HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: realtime-deckbuilder-microgame-arcade
+          path: tools/realtime-deckbuilder-microgame-arcade.html
+          if-no-files-found: error
