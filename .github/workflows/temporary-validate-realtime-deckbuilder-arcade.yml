@@ -1,0 +1,94 @@
+name: Temporary validate real-time deckbuilder arcade
+
+on:
+  push:
+    branches:
+      - agent/realtime-deckbuilder-arcade
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Extract and syntax-check the embedded script
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('tools/realtime-deckbuilder-microgame-arcade.html', 'utf8');
+          const match = html.match(/<script>([\s\S]*?)<\/script>/i);
+          if (!match) throw new Error('Embedded script was not found');
+          fs.writeFileSync('/tmp/realtime-deckbuilder-arcade.js', match[1]);
+          const gameCount = (match[1].match(/title:\"/g) || []).length;
+          if (gameCount < 20) throw new Error(`Expected at least 20 game definitions; found ${gameCount}`);
+          NODE
+          node --check /tmp/realtime-deckbuilder-arcade.js
+
+      - name: Install headless browser
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Launch every phone-sized prototype
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/arcade-server.log 2>&1 &
+          cat >/tmp/arcade-qa.mjs <<'NODE'
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({
+            viewport: { width: 390, height: 844 },
+            isMobile: true,
+            hasTouch: true,
+          });
+
+          const errors = [];
+          page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
+          page.on('console', message => {
+            if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+          });
+
+          const url = 'http://127.0.0.1:8765/tools/realtime-deckbuilder-microgame-arcade.html';
+          await page.goto(url, { waitUntil: 'load' });
+          await page.locator('.game-tile').first().waitFor({ state: 'visible' });
+          const gameCount = await page.locator('.game-tile').count();
+          if (gameCount !== 20) throw new Error(`Expected 20 menu games; found ${gameCount}`);
+
+          for (let index = 0; index < gameCount; index += 1) {
+            await page.goto(url, { waitUntil: 'load' });
+            await page.locator('.game-tile').nth(index).click();
+            await page.locator('#modalOverlay.show').waitFor({ state: 'visible' });
+            await page.locator('[data-modal-action="start"]').click();
+            await page.locator('#gameScreen:not(.hidden)').waitFor({ state: 'visible' });
+            await page.waitForTimeout(450);
+
+            const box = await page.locator('#arena').boundingBox();
+            if (!box || box.width < 300 || box.height < 200) {
+              throw new Error(`Game ${index + 1} has an invalid arena: ${JSON.stringify(box)}`);
+            }
+
+            const enabledCard = page.locator('.play-card:not([disabled])').first();
+            if (await enabledCard.count()) {
+              await enabledCard.click();
+            } else {
+              const enabledAction = page.locator('.action-btn:not([disabled])').first();
+              if (await enabledAction.count()) await enabledAction.click();
+            }
+            await page.waitForTimeout(220);
+
+            if (errors.length) {
+              throw new Error(`Game ${index + 1} emitted errors:\n${errors.join('\n')}`);
+            }
+          }
+
+          await page.screenshot({ path: '/tmp/realtime-deckbuilder-arcade-phone.png', fullPage: true });
+          await browser.close();
+          console.log('Validated all 20 game launch paths at 390x844.');
+          NODE
+          node /tmp/arcade-qa.mjs
