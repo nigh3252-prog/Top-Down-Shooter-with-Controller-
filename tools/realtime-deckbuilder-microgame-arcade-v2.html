@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0d1018">
+<title>Real-Time Deckbuilder Microgame Arcade v2</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#090b11;
+  --panel:#141925;
+  --panel2:#1b2232;
+  --line:#303a50;
+  --ink:#f5f7ff;
+  --muted:#aab3c8;
+  --gold:#ffd47a;
+  --good:#79f2b0;
+  --danger:#ff7485;
+  --shadow:0 18px 60px rgba(0,0,0,.42);
+  font-family:Inter,ui-rounded,"SF Pro Rounded",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;background:radial-gradient(circle at 50% -10%,#20283a 0,#0a0d14 46%,#05070b 100%);overflow:hidden;overscroll-behavior:none}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#app{position:relative;width:min(100%,540px);height:100dvh;margin:0 auto;background:var(--bg);overflow:hidden;box-shadow:var(--shadow)}
+.screen{position:absolute;inset:0}
+.hidden{display:none!important}
+#menuScreen{overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:calc(18px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom));background:
+ linear-gradient(180deg,rgba(34,42,61,.86),rgba(9,11,17,.97) 260px),
+ repeating-linear-gradient(135deg,transparent 0 18px,rgba(255,255,255,.018) 18px 19px)}
+.hero{padding:12px 4px 18px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:900}
+h1{margin:7px 0 9px;font-size:clamp(28px,8vw,44px);line-height:.98;letter-spacing:-.045em}
+.hero p{margin:0;max-width:48ch;color:var(--muted);font-size:14px;line-height:1.45}
+.legend{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+.pill{border:1px solid var(--line);background:rgba(13,17,27,.72);border-radius:999px;padding:6px 9px;font-size:11px;color:#d8deec;font-weight:800}
+#gameGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;touch-action:pan-y}
+.game-tile{position:relative;text-align:left;border:1px solid #30384c;background:linear-gradient(145deg,#1b2231,#111620);border-radius:17px;padding:13px 12px 12px;min-height:158px;box-shadow:0 8px 24px rgba(0,0,0,.22);touch-action:pan-y}
+.game-tile:active{transform:scale(.975);background:#20283a}
+.game-tile .num{display:grid;place-items:center;width:26px;height:26px;border-radius:9px;background:#2b3449;color:var(--gold);font-size:12px;font-weight:1000;margin-bottom:9px}
+.game-tile h2{font-size:16px;line-height:1.05;margin:0 0 7px;letter-spacing:-.02em}
+.game-tile p{font-size:11px;line-height:1.35;color:var(--muted);margin:0 0 12px}
+.game-tile .focus{position:absolute;left:12px;right:12px;bottom:11px;color:#dce3f4;font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:900}
+.menu-note{margin:14px 3px 0;color:#7f899e;font-size:11px;line-height:1.4}
+#gameScreen{display:grid;grid-template-rows:auto 4px minmax(260px,1fr) auto auto;background:#0a0d14;padding-bottom:env(safe-area-inset-bottom)}
+.game-header{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 8px 7px;background:#111622;border-bottom:1px solid #252d3d}
+.icon-btn{width:40px;height:40px;border-radius:13px;border:1px solid #333d52;background:#1c2332;font-weight:1000;font-size:18px;touch-action:manipulation}
+.icon-btn:active{transform:scale(.95);background:#2a3348}
+.title-block{min-width:0}
+#gameTitle{font-size:15px;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hudLine{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.header-actions{display:flex;gap:5px}
+.header-actions .icon-btn{width:36px;height:36px;font-size:15px}
+.time-track{height:4px;background:#202738;overflow:hidden}
+#timeFill{height:100%;width:100%;background:linear-gradient(90deg,#6de6ff,#ffe08a);transform-origin:left center}
+#arenaShell{position:relative;min-height:0;overflow:hidden;background:#0b1019;touch-action:none}
+#arena{display:block;width:100%;height:100%;touch-action:none}
+#joystick{position:absolute;left:50%;top:70%;width:112px;height:112px;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(20,26,39,.58);box-shadow:inset 0 0 0 10px rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.25);touch-action:none;pointer-events:none;z-index:4;opacity:0;transform:translate(-50%,-50%) scale(.84);transition:opacity .08s ease,transform .08s ease}
+#joystick.active{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#joystick::after{content:"MOVE";position:absolute;left:0;right:0;bottom:-1px;text-align:center;font-size:9px;font-weight:1000;letter-spacing:.14em;color:rgba(255,255,255,.5)}
+#stickKnob{position:absolute;left:34px;top:34px;width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#f6f8ff,#9da8be);box-shadow:0 5px 18px rgba(0,0,0,.42);transform:translate(0,0)}
+#moveHint{position:absolute;left:14px;bottom:14px;z-index:3;pointer-events:none;border:1px solid rgba(255,255,255,.13);background:rgba(9,13,21,.48);border-radius:999px;padding:7px 9px;color:rgba(255,255,255,.56);font-size:9px;font-weight:1000;letter-spacing:.08em;transition:opacity .2s}
+#moveHint.used{opacity:0}
+#toast{position:absolute;top:12px;left:50%;transform:translate(-50%,-8px);padding:8px 11px;border-radius:999px;background:rgba(7,10,16,.9);border:1px solid #3e4960;font-size:11px;font-weight:900;opacity:0;pointer-events:none;transition:opacity .14s,transform .14s;z-index:8;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#modePanel{min-height:53px;padding:7px 9px;background:#111622;border-top:1px solid #272f41;color:#d8deec;font-size:11px}
+.panel-row{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.panel-copy{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel-copy strong{color:#fff}
+.meter{height:8px;border-radius:99px;background:#2a3141;overflow:hidden;margin-top:5px}
+.meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#63dcff,#ffe078)}
+.slot-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.slot{border:1px solid #343e53;border-radius:10px;background:#191f2c;padding:6px 8px;min-width:0}
+.slot b{font-size:9px;letter-spacing:.1em;color:#9facbf}
+.slot span{display:block;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+#cardTray{display:flex;gap:7px;overflow-x:auto;overflow-y:hidden;padding:7px 8px 8px;min-height:119px;background:#0d111a;scrollbar-width:none;touch-action:pan-x}
+#cardTray::-webkit-scrollbar{display:none}
+.play-card{--accent:#7de0ff;position:relative;isolation:isolate;flex:0 0 105px;min-height:104px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent),#273047 58%);background:linear-gradient(155deg,color-mix(in srgb,var(--accent),#1a2030 82%),#151a25 58%);padding:8px 8px 7px;text-align:left;overflow:hidden;box-shadow:0 5px 12px rgba(0,0,0,.25);touch-action:manipulation}
+.play-card:active:not(:disabled){transform:translateY(2px) scale(.98)}
+.play-card:disabled{filter:saturate(.55);opacity:.55}
+.play-card.selected{box-shadow:0 0 0 2px #fff,0 0 18px color-mix(in srgb,var(--accent),transparent 35%)}
+.card-fill{position:absolute;z-index:-1;left:0;right:0;bottom:0;background:rgba(3,5,9,.66);pointer-events:none}
+.card-top{display:flex;justify-content:space-between;align-items:center;gap:5px}
+.card-glyph{display:grid;place-items:center;width:29px;height:29px;border-radius:10px;background:color-mix(in srgb,var(--accent),#fff 14%);color:#0a1018;font-weight:1000;font-size:18px}
+.card-role{font-size:8px;font-weight:1000;letter-spacing:.09em;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:3px 5px;color:#e7ebf5}
+.card-name{font-size:12px;font-weight:1000;line-height:1.03;margin-top:8px}
+.card-note{font-size:9px;line-height:1.2;color:#c0c8d8;margin-top:5px;min-height:22px}
+.card-empty{display:grid;place-items:center;width:100%;color:#80899b;font-size:12px;font-weight:800;text-align:center;padding:12px}
+#actionTray{display:flex;gap:7px;padding:0 8px 8px;background:#0d111a;min-height:48px;overflow-x:auto;scrollbar-width:none}
+#actionTray::-webkit-scrollbar{display:none}
+.action-btn{flex:1 0 92px;min-height:43px;border-radius:13px;border:1px solid #3a455c;background:linear-gradient(180deg,#263047,#1b2231);font-size:11px;font-weight:1000;letter-spacing:.035em;touch-action:manipulation;padding:5px 8px}
+.action-btn.primary{background:linear-gradient(180deg,#f6d77b,#c89942);border-color:#ffe9a6;color:#201708}
+.action-btn.danger{background:linear-gradient(180deg,#7e3443,#52232d);border-color:#a94d60}
+.action-btn:disabled{opacity:.38;filter:saturate(.5)}
+.action-btn:active:not(:disabled){transform:translateY(2px)}
+#modalOverlay{position:fixed;z-index:30;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(2,4,8,.76);backdrop-filter:blur(7px);padding:14px}
+#modalOverlay.show{display:flex}
+.modal-sheet{width:min(100%,500px);max-height:min(84dvh,760px);overflow:auto;border:1px solid #3b465e;background:linear-gradient(160deg,#20283a,#111622 62%);border-radius:23px;padding:18px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 24px 80px rgba(0,0,0,.62)}
+.modal-sheet h2{margin:5px 0 9px;font-size:25px;line-height:1;letter-spacing:-.035em}
+.modal-sheet p{color:#c1c9da;font-size:13px;line-height:1.45;margin:8px 0}
+.question-box{border:1px solid #3d485e;background:#151b28;border-radius:14px;padding:10px 11px;margin:12px 0;color:#edf1fb;font-size:12px;line-height:1.4}
+.question-box b{color:var(--gold)}
+.modal-actions{display:flex;gap:8px;margin-top:15px}
+.modal-actions button{flex:1;min-height:48px;border-radius:14px;border:1px solid #404b63;background:#20283a;font-weight:1000;touch-action:manipulation}
+.modal-actions button.primary{background:linear-gradient(180deg,#ffe18d,#d0a445);color:#211808;border-color:#fff0b8}
+.reward-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px}
+.reward-card{--accent:#7de0ff;min-height:150px;border-radius:15px;border:1px solid color-mix(in srgb,var(--accent),#3a4254 52%);background:linear-gradient(155deg,color-mix(in srgb,var(--accent),#1a2030 78%),#141925 65%);padding:9px;text-align:left;touch-action:manipulation}
+.reward-card:active{transform:scale(.975)}
+.reward-card .card-glyph{margin-bottom:9px}
+.reward-card b{display:block;font-size:12px;line-height:1.05}
+.reward-card small{display:block;color:#c1c8d8;font-size:9px;line-height:1.3;margin-top:7px}
+.result-score{font-size:38px;font-weight:1000;letter-spacing:-.05em;margin:10px 0 0;color:#fff}
+@media (max-width:370px){
+  #gameGrid{grid-template-columns:1fr}.game-tile{min-height:132px}.game-tile p{padding-right:5px}
+  .play-card{flex-basis:98px}.reward-card{min-height:135px;padding:7px}
+}
+@media (min-width:700px){body{padding:12px}#app{height:calc(100dvh - 24px);border-radius:24px;border:1px solid #30384c}}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="menuScreen" class="screen">
+    <div class="hero">
+      <div class="eyebrow">Twenty playable design questions</div>
+      <h1>Real-Time Deckbuilder Arcade</h1>
+      <p>Short, phone-first experiments for finding out what makes a deck meaningful during action. Each run lasts about a minute and includes two live card drafts.</p>
+      <div class="legend"><span class="pill">Floating thumb-stick</span><span class="pill">Auto-aim</span><span class="pill">Offline</span><span class="pill">No assets</span></div>
+    </div>
+    <div id="gameGrid"></div>
+    <p class="menu-note">These are deliberately compressed prototypes. Their job is to expose the interesting decision, not to prove a final combat system.</p>
+  </section>
+
+  <section id="gameScreen" class="screen hidden">
+    <header class="game-header">
+      <button id="backBtn" class="icon-btn" aria-label="Back to game menu">‹</button>
+      <div class="title-block"><div id="gameTitle"></div><div id="hudLine"></div></div>
+      <div class="header-actions">
+        <button id="soundBtn" class="icon-btn" aria-label="Toggle sound">♪</button>
+        <button id="helpBtn" class="icon-btn" aria-label="Instructions">?</button>
+        <button id="fullBtn" class="icon-btn" aria-label="Fullscreen">⛶</button>
+      </div>
+    </header>
+    <div class="time-track"><div id="timeFill"></div></div>
+    <div id="arenaShell">
+      <canvas id="arena"></canvas>
+      <div id="joystick" aria-label="Floating movement joystick"><div id="stickKnob"></div></div>
+      <div id="moveHint">TOUCH + DRAG ANYWHERE TO MOVE</div>
+      <div id="toast"></div>
+    </div>
+    <div id="modePanel"></div>
+    <div>
+      <div id="cardTray"></div>
+      <div id="actionTray"></div>
+    </div>
+  </section>
+</div>
+
+<div id="modalOverlay">
+  <div class="modal-sheet">
+    <div id="modalBody"></div>
+    <div id="modalActions" class="modal-actions"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const GAME_META=[
+  {id:"magazine",title:"Magazine Mage",group:"Access cost",blurb:"Fire the deck in order. Reloading early dumps everything you skipped.",focus:"Does another card feel greedy when it delays every card already owned?",instructions:"Move with the thumb stick and tap the current card to cast it. RELOAD EARLY replaces the rest of the magazine, but leaves you exposed for a moment."},
+  {id:"threeHand",title:"Three-Card Duel",group:"Hand tactics",blurb:"Use any card in a tiny hand, then deliberately cycle for another three.",focus:"Do plain, immediately useful cards become valuable beside narrow build pieces?",instructions:"Tap any card in your three-card hand. CYCLE discards whatever remains and draws three, but briefly slows you."},
+  {id:"conveyor",title:"Conveyor-Belt Brawler",group:"Timing",blurb:"Cards pass through a cast gate whether you are ready for them or not.",focus:"Can timing pressure create interesting deck-order decisions without pausing action?",instructions:"The first visible card is nearest the activation gate. Tap it only while the gate says OPEN. BRAKE briefly slows the belt."},
+  {id:"heat",title:"Heat Hand",group:"Cooldown access",blurb:"Cards stay in hand after use, but individually overheat.",focus:"Is waiting for a known tool more fun than drawing through a conventional discard pile?",instructions:"Tap a cool card to use it. Its dark heat fill must drain before it can fire again. VENT HOTTEST swaps one hot card with a reserve card."},
+  {id:"timeline",title:"Timeline Survivor",group:"Sequence control",blurb:"The deck plays itself in a repeating timeline while you steer.",focus:"How much sequence manipulation is enough to make an automatic deck feel authored?",instructions:"Your deck auto-casts from left to right. Use HOLD, SKIP, and REPEAT to manipulate the next trigger while you concentrate on movement."},
+  {id:"orbit",title:"Orbiting Arsenal",group:"Physical deck",blurb:"Cards orbit your body and can cast only as they cross a gate.",focus:"Does making deck access spatial produce readable action decisions?",instructions:"Watch the orbiting cards. CAST GATE fires the card passing through the gold gate above you. REVERSE changes the orbit direction."},
+  {id:"snake",title:"Snake Deck",group:"Physical deck",blurb:"Every new card becomes another body segment and another automatic trigger.",focus:"Can deck growth be powerful, visible, and inconvenient at the same time?",instructions:"Move to evade enemies while your segments auto-cast head-to-tail. SURGE speeds the sequence for a short burst."},
+  {id:"dropped",title:"Dropped Hand",group:"Recovery",blurb:"Played cards land in the arena and must be physically collected.",focus:"Can retrieving cards replace abstract shuffling with interesting movement?",instructions:"Tap cards to cast them. Each card flies onto the field, locks briefly, then can be collected by walking over it."},
+  {id:"capture",title:"Capture to Shuffle",group:"Recovery",blurb:"An empty deck can only reshuffle while you hold a dangerous zone.",focus:"Can reshuffling become a tactical objective rather than bookkeeping?",instructions:"Play the current card until the deck empties. Then stand in either glowing capture circle long enough to recover the whole discard pile."},
+  {id:"thieves",title:"Deck Thieves",group:"Disruption",blurb:"Special enemies steal real cards from your rotation until killed.",focus:"Does deck disruption create a clearer target-priority problem than ordinary debuffs?",instructions:"Cast the current card normally. Card thieves periodically remove one card from your loop; kill the marked thief to get it back."},
+  {id:"duelist",title:"One-Button Duelist",group:"Commitment",blurb:"Only the current card can be used; holding it is a real combat choice.",focus:"Is refusing to attack interesting when it preserves the right card for the right moment?",instructions:"Tap the single current card to act. You have only three DISCARD charges, so sometimes the correct move is to reposition and hold."},
+  {id:"breakout",title:"Breakout Spellbook",group:"Action mapping",blurb:"Every paddle return triggers the next card in the deck.",focus:"Can a deck create expressive rallies without asking the player to press more buttons?",instructions:"Use the thumb stick left and right to move the paddle. Every paddle hit automatically triggers the next card, changing the rally."},
+  {id:"deckball",title:"Deckball",group:"Action mapping",blurb:"Striking an air-hockey puck consumes the next card and changes the hit.",focus:"Can physical timing plus a card sequence make a simple sport strategically rich?",instructions:"Move into the puck to strike toward the top goal. Each contact consumes the current card and modifies power, defense, or control."},
+  {id:"rhythm",title:"Rhythm Guard",group:"Timing",blurb:"Cards can be played anytime, but become much stronger on the pulse.",focus:"Does a loose beat make card timing legible without turning combat into a rhythm game?",instructions:"Watch the contracting ring. Tap any card near the gold pulse for a perfect cast; off-beat casts still work, but are weaker."},
+  {id:"dashDraw",title:"Dash to Draw",group:"Skill earns access",blurb:"Cards never draw naturally; close dodges are the only refill.",focus:"Can action mastery directly power deck access without a separate resource bar?",instructions:"Spend cards from your hand. Use DODGE near enemy shots to draw replacements. Empty-handed play is survivable, but forces risky dodges."},
+  {id:"twoSlot",title:"Two-Slot Warden",group:"Commitment",blurb:"Commit one Up ability and one Down defense from a three-card hand.",focus:"Do separate offensive and defensive cards create meaningful commitment with a tiny hand?",instructions:"Tap one UP card and one DOWN card to fill the slots. Trigger them with the UP and DOWN buttons. Stay near enemies to earn a new hand."},
+  {id:"queue",title:"Combo Queue",group:"Sequencing",blurb:"Bank up to three cards, then execute the sequence in a burst.",focus:"Is planning a short combo worth the danger of delaying immediate effects?",instructions:"Tap up to three cards to queue them, then EXECUTE. DODGE cancels and discards the queued sequence to escape immediately."},
+  {id:"lanes",title:"Three-Lane Holdout",group:"Flexibility",blurb:"Choose a card, then choose which lane must receive it.",focus:"Do flexible ordinary cards become attractive beside spectacular narrow answers?",instructions:"Tap a card to select it, then tap LANE 1, 2, or 3. Stop enemies before they cross the bottom line. Movement is not used here."},
+  {id:"alchemy",title:"Adjacent Alchemy",group:"Adjacency",blurb:"Use either of two visible cards, or fuse the pair into a hybrid cast.",focus:"Can moment-to-moment adjacency produce emergent builds without a fixed board?",instructions:"Tap either visible card to use it normally. FUSE BOTH consumes the adjacent pair and adds a bonus based on their two roles."},
+  {id:"boss",title:"Boss Telegraph Trial",group:"Full test",blurb:"One readable boss asks for offense, guard, movement, and setup cards.",focus:"At what point does a growing deck become stronger, greedier, or less dependable?",instructions:"Move out of red telegraphs and use the three-card hand to damage the boss, guard, freeze, or dash. Cards replace immediately after use."}
+];
+
+const CARD_DEFS={
+  slash:{name:"Arc Slash",glyph:"╱",role:"UP",kind:"attack",color:"#ffb36b",desc:"A hard close-range sweep."},
+  bolt:{name:"Aqua Bolt",glyph:"➤",role:"UP",kind:"attack",color:"#6fdcff",desc:"A fast auto-aimed projectile."},
+  nova:{name:"Pulse Nova",glyph:"✦",role:"UP",kind:"attack",color:"#f58dff",desc:"Damage everything nearby."},
+  guard:{name:"Guard",glyph:"⬡",role:"DOWN",kind:"defense",color:"#8fb5ff",desc:"Gain a layer of mistake protection."},
+  dash:{name:"Vault",glyph:"»",role:"DOWN",kind:"defense",color:"#7cf0c5",desc:"Burst in your movement direction."},
+  freeze:{name:"Cold Snap",glyph:"✣",role:"DOWN",kind:"defense",color:"#a5e8ff",desc:"Slow threats for several seconds."},
+  turret:{name:"Clockwork Friend",glyph:"♟",role:"UP",kind:"attack",color:"#f0ce72",desc:"Drop a temporary auto-firing ally."},
+  bomb:{name:"Meteor Seed",glyph:"●",role:"UP",kind:"attack",color:"#ff7d75",desc:"Launch a delayed area explosion."},
+  pierce:{name:"Rail Lance",glyph:"⇢",role:"UP",kind:"attack",color:"#e8f0ff",desc:"A long projectile that passes through targets."},
+  heal:{name:"Second Wind",glyph:"+",role:"DOWN",kind:"defense",color:"#8df09d",desc:"Recover one health, up to the cap."},
+  echo:{name:"Echo",glyph:"↻",role:"UP",kind:"attack",color:"#c6a0ff",desc:"Repeat your previous card at reduced power."},
+  vortex:{name:"Aqua Vortex",glyph:"◎",role:"UP",kind:"attack",color:"#72a7ff",desc:"Create a pulling damage field."}
+};
+const START_KEYS=["slash","bolt","nova","guard","dash","freeze"];
+const REWARD_KEYS=Object.keys(CARD_DEFS);
+let cardUid=0;
+function makeCard(key){return {key,uid:++cardUid,...CARD_DEFS[key]};}
+function starterDeck(){return START_KEYS.map(makeCard);}
+function fauxCard(key){return {key,uid:-1,...CARD_DEFS[key]};}
+
+const $=s=>document.querySelector(s);
+const menuScreen=$("#menuScreen"),gameScreen=$("#gameScreen"),gameGrid=$("#gameGrid");
+const canvas=$("#arena"),ctx=canvas.getContext("2d"),arenaShell=$("#arenaShell");
+const gameTitle=$("#gameTitle"),hudLine=$("#hudLine"),timeFill=$("#timeFill");
+const cardTray=$("#cardTray"),actionTray=$("#actionTray"),modePanel=$("#modePanel");
+const joystick=$("#joystick"),stickKnob=$("#stickKnob"),moveHint=$("#moveHint"),toastEl=$("#toast");
+const modalOverlay=$("#modalOverlay"),modalBody=$("#modalBody"),modalActions=$("#modalActions");
+const soundBtn=$("#soundBtn");
+
+let W=360,H=500,DPR=1,S=null,currentMode=null,currentIndex=0,lastFrame=performance.now(),uiClock=0;
+let modalHandlers={};
+const input={x:0,y:0,pointer:null,baseClientX:0,baseClientY:0};
+const keys=new Set();
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a=1,b=0)=>b+Math.random()*(a-b);
+const mod=(n,m)=>((n%m)+m)%m;
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function choice(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function angleDiff(a,b){return Math.atan2(Math.sin(a-b),Math.cos(a-b));}
+function normalized(x,y){const d=Math.hypot(x,y)||1;return {x:x/d,y:y/d};}
+function moveVector(){let x=input.x+(keys.has("ArrowRight")||keys.has("d")?1:0)-(keys.has("ArrowLeft")||keys.has("a")?1:0);let y=input.y+(keys.has("ArrowDown")||keys.has("s")?1:0)-(keys.has("ArrowUp")||keys.has("w")?1:0);const d=Math.hypot(x,y);if(d>1){x/=d;y/=d;}return {x,y};}
+
+function renderMenu(){
+  gameGrid.innerHTML=GAME_META.map((g,i)=>`<button class="game-tile" data-game="${i}"><span class="num">${String(i+1).padStart(2,"0")}</span><h2>${g.title}</h2><p>${g.blurb}</p><span class="focus">${g.group}</span></button>`).join("");
+}
+
+// Treat a tile as a tap only after the finger comes up without turning into a scroll.
+let menuTap=null;
+gameGrid.addEventListener("pointerdown",e=>{
+  const b=e.target.closest("[data-game]");
+  if(!b)return;
+  menuTap={pointerId:e.pointerId,button:b,x:e.clientX,y:e.clientY,moved:false,time:performance.now()};
+});
+gameGrid.addEventListener("pointermove",e=>{
+  if(!menuTap||menuTap.pointerId!==e.pointerId)return;
+  if(Math.hypot(e.clientX-menuTap.x,e.clientY-menuTap.y)>12)menuTap.moved=true;
+});
+gameGrid.addEventListener("pointerup",e=>{
+  if(!menuTap||menuTap.pointerId!==e.pointerId)return;
+  const tap=menuTap;menuTap=null;
+  const sameButton=e.target.closest("[data-game]")===tap.button;
+  if(!tap.moved&&sameButton&&performance.now()-tap.time<700)showIntro(+tap.button.dataset.game);
+});
+gameGrid.addEventListener("pointercancel",e=>{if(menuTap&&menuTap.pointerId===e.pointerId)menuTap=null;});
+gameGrid.addEventListener("lostpointercapture",e=>{if(menuTap&&menuTap.pointerId===e.pointerId)menuTap=null;});
+
+function presentModal({eyebrow="",title="",html="",actions=[],handlers={}}){
+  if(input.pointer!==null)resetStick();
+  modalHandlers=handlers;
+  modalBody.innerHTML=`${eyebrow?`<div class="eyebrow">${eyebrow}</div>`:""}${title?`<h2>${title}</h2>`:""}${html}`;
+  modalActions.innerHTML=actions.map(a=>`<button data-modal-action="${a.id}" class="${a.primary?"primary":""}">${a.label}</button>`).join("");
+  modalOverlay.classList.add("show");
+}
+function hideModal(){modalOverlay.classList.remove("show");modalHandlers={};}
+modalActions.addEventListener("pointerdown",e=>{const b=e.target.closest("[data-modal-action]");if(!b)return;e.preventDefault();const fn=modalHandlers[b.dataset.modalAction];if(fn)fn();});
+modalBody.addEventListener("pointerdown",e=>{const b=e.target.closest("[data-reward]");if(!b)return;e.preventDefault();chooseReward(b.dataset.reward);});
+
+function showIntro(index){
+  const g=GAME_META[index];
+  presentModal({eyebrow:`Experiment ${index+1} · ${g.group}`,title:g.title,html:`<p>${g.instructions}</p><div class="question-box"><b>Design question</b><br>${g.focus}</div><p>Touch and drag anywhere in the arena to place the floating movement stick. Keep that thumb down while tapping cards with your other hand. Attacks auto-aim.</p>`,actions:[{id:"cancel",label:"Back"},{id:"start",label:"Play",primary:true}],handlers:{cancel:hideModal,start:()=>beginGame(index)}});
+}
+
+function resizeCanvas(){
+  const r=canvas.getBoundingClientRect();if(!r.width||!r.height)return;
+  const d=Math.min(2,window.devicePixelRatio||1),cw=Math.round(r.width*d),ch=Math.round(r.height*d);
+  if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch;DPR=d;W=r.width;H=r.height;ctx.setTransform(DPR,0,0,DPR,0,0);if(S&&S.player){S.player.x=clamp(S.player.x,15,W-15);S.player.y=clamp(S.player.y,15,H-15);}}
+}
+window.addEventListener("resize",resizeCanvas);
+
+function baseState(){
+  return {elapsed:0,duration:52,score:0,cardsPlayed:0,paused:false,over:false,won:false,rewardIndex:0,rewardTimes:[18,36],player:{x:W/2,y:H*.72,r:12,hp:5,maxHp:5,shield:0,invuln:0,stun:0,speed:150,facing:{x:0,y:-1}},enemies:[],projectiles:[],enemyProjectiles:[],particles:[],zones:[],turrets:[],delayed:[],spawnTimer:.7,mode:{},nextEntity:0,flash:0};
+}
+function beginGame(index){
+  currentIndex=index;currentMode=MODES[GAME_META[index].id];
+  menuScreen.classList.add("hidden");gameScreen.classList.remove("hidden");gameTitle.textContent=GAME_META[index].title;
+  hideModal();resetStick();moveHint.classList.remove("used");resizeCanvas();S=baseState();S.duration=currentMode.duration||52;S.rewardTimes=[S.duration*.34,S.duration*.68];currentMode.setup();lastFrame=performance.now();uiClock=0;ensureAudio();renderUI(true);sfx("start");
+}
+function goMenu(){S=null;currentMode=null;gameScreen.classList.add("hidden");menuScreen.classList.remove("hidden");hideModal();resetStick();renderMenu();}
+function restart(){beginGame(currentIndex);}
+
+function finish(won=false,message="Run complete"){
+  if(!S||S.over)return;S.over=true;S.paused=true;S.won=won;
+  const key=`rtdeck-best-${GAME_META[currentIndex].id}`;let best=0;try{best=+(localStorage.getItem(key)||0);if(S.score>best){best=Math.round(S.score);localStorage.setItem(key,String(best));}}catch(_){best=Math.round(S.score);}
+  presentModal({eyebrow:won?"Trial complete":"Run ended",title:message,html:`<div class="result-score">${Math.round(S.score)}</div><p>Score · best ${best} · ${S.cardsPlayed} card${S.cardsPlayed===1?"":"s"} triggered</p><div class="question-box"><b>What to notice</b><br>${GAME_META[currentIndex].focus}</div>`,actions:[{id:"menu",label:"All games"},{id:"retry",label:"Retry"},{id:"next",label:"Next",primary:true}],handlers:{menu:goMenu,retry:restart,next:()=>beginGame((currentIndex+1)%GAME_META.length)}});
+}
+
+function showHelp(){if(!S)return;const was=S.paused;S.paused=true;const g=GAME_META[currentIndex];presentModal({eyebrow:g.group,title:g.title,html:`<p>${g.instructions}</p><div class="question-box"><b>Design question</b><br>${g.focus}</div>`,actions:[{id:"close",label:"Resume",primary:true}],handlers:{close:()=>{hideModal();S.paused=was;}}});}
+
+function pickRewardKeys(){return shuffle(REWARD_KEYS).slice(0,3);}
+function showReward(){if(!S||S.over)return;S.paused=true;const picks=pickRewardKeys();presentModal({eyebrow:"Live draft",title:"Add one card",html:`<p>The chosen card enters this game’s real circulation rule immediately.</p><div class="reward-grid">${picks.map(k=>{const c=CARD_DEFS[k];return `<button class="reward-card" data-reward="${k}" style="--accent:${c.color}"><span class="card-glyph">${c.glyph}</span><b>${c.name}</b><small>${c.desc}</small></button>`;}).join("")}</div>`,handlers:{}});}
+function chooseReward(key){if(!S||!currentMode)return;currentMode.addReward(makeCard(key));hideModal();S.paused=false;toast(`${CARD_DEFS[key].name} added`);sfx("reward");renderUI(true);}
+function maybeReward(){if(S.rewardIndex<S.rewardTimes.length&&S.elapsed>=S.rewardTimes[S.rewardIndex]){S.rewardIndex++;showReward();}}
+
+let toastTimer=0;
+function toast(text){toastEl.textContent=text;toastEl.classList.add("show");toastTimer=1.2;}
+
+let soundEnabled=true,audioCtx=null;
+function ensureAudio(){if(!soundEnabled)return;try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();}catch(_){soundEnabled=false;}}
+function sfx(type){if(!soundEnabled)return;ensureAudio();if(!audioCtx)return;const map={start:[300,.08],play:[520,.045],hit:[150,.04],hurt:[95,.12],reward:[760,.13],good:[660,.06],bad:[180,.07],goal:[840,.16]};const [freq,dur]=map[type]||map.play;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type==="hurt"?"sawtooth":"sine";o.frequency.setValueAtTime(freq,audioCtx.currentTime);g.gain.setValueAtTime(.035,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);}
+function vibrate(ms=12){try{navigator.vibrate&&navigator.vibrate(ms);}catch(_){}}
+
+soundBtn.addEventListener("click",()=>{soundEnabled=!soundEnabled;soundBtn.textContent=soundEnabled?"♪":"×";if(soundEnabled){ensureAudio();sfx("good");}});
+$("#backBtn").addEventListener("click",()=>{if(!S)return;S.paused=true;presentModal({eyebrow:"Leave trial?",title:GAME_META[currentIndex].title,html:"<p>The current one-minute run will be discarded.</p>",actions:[{id:"stay",label:"Keep playing"},{id:"leave",label:"All games",primary:true}],handlers:{stay:()=>{hideModal();S.paused=false;},leave:goMenu}});});
+$("#helpBtn").addEventListener("click",showHelp);
+$("#fullBtn").addEventListener("click",()=>{const el=document.documentElement;if(!document.fullscreenElement&&el.requestFullscreen)el.requestFullscreen().catch(()=>{});else if(document.exitFullscreen)document.exitFullscreen().catch(()=>{});});
+
+function placeFloatingStick(e){
+  const r=arenaShell.getBoundingClientRect();
+  const localX=clamp(e.clientX-r.left,0,r.width);
+  const localY=clamp(e.clientY-r.top,0,r.height);
+  input.baseClientX=r.left+localX;
+  input.baseClientY=r.top+localY;
+  joystick.style.left=`${localX}px`;
+  joystick.style.top=`${localY}px`;
+  joystick.classList.add("active");
+  moveHint.classList.add("used");
+}
+function setStickFromEvent(e){
+  let dx=e.clientX-input.baseClientX,dy=e.clientY-input.baseClientY;
+  const max=40,d=Math.hypot(dx,dy);
+  if(d>max){dx=dx/d*max;dy=dy/d*max;}
+  input.x=dx/max;input.y=dy/max;
+  stickKnob.style.transform=`translate(${dx}px,${dy}px)`;
+}
+function resetStick(){input.x=0;input.y=0;input.pointer=null;stickKnob.style.transform="translate(0,0)";joystick.classList.remove("active");}
+function beginFloatingStick(e){
+  if(!S||S.paused||S.over||currentMode&&currentMode.hideJoystick||input.pointer!==null)return;
+  e.preventDefault();
+  input.pointer=e.pointerId;
+  placeFloatingStick(e);
+  arenaShell.setPointerCapture&&arenaShell.setPointerCapture(e.pointerId);
+  setStickFromEvent(e);
+}
+arenaShell.addEventListener("pointerdown",beginFloatingStick);
+arenaShell.addEventListener("pointermove",e=>{if(input.pointer===e.pointerId){e.preventDefault();setStickFromEvent(e);}});
+arenaShell.addEventListener("pointerup",e=>{if(input.pointer===e.pointerId)resetStick();});
+arenaShell.addEventListener("pointercancel",e=>{if(input.pointer===e.pointerId)resetStick();});
+arenaShell.addEventListener("lostpointercapture",e=>{if(input.pointer===e.pointerId)resetStick();});
+arenaShell.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("visibilitychange",()=>{if(document.hidden)resetStick();});
+window.addEventListener("keydown",e=>{keys.add(e.key);if(!S||S.paused||S.over)return;if(/^[1-5]$/.test(e.key)){currentMode.cardTap&&currentMode.cardTap(+e.key-1);renderUI(true);}else if(e.key===" "){e.preventDefault();const a=currentMode.actions?currentMode.actions()[0]:null;if(a&&!a.disabled)currentMode.action(a.id);}});
+window.addEventListener("keyup",e=>keys.delete(e.key));
+
+function cardView(card,opts={}){return {card,disabled:false,selected:false,note:"",progress:0,...opts};}
+function renderCards(){
+  const views=currentMode&&currentMode.getCards?currentMode.getCards():[];
+  if(!views.length){cardTray.innerHTML='<div class="card-empty">No cards available — use the arena rule to recover them.</div>';return;}
+  cardTray.innerHTML=views.map((v,i)=>{const c=v.card,p=clamp(v.progress||0,0,1);return `<button class="play-card ${v.selected?"selected":""}" data-card-index="${i}" style="--accent:${c.color}" ${v.disabled?"disabled":""}><span class="card-fill" style="height:${p*100}%"></span><span class="card-top"><span class="card-glyph">${c.glyph}</span><span class="card-role">${v.badge||c.role}</span></span><span class="card-name">${escapeHtml(c.name)}</span><span class="card-note">${escapeHtml(v.note||c.desc)}</span></button>`;}).join("");
+}
+function renderActions(){const actions=currentMode&&currentMode.actions?currentMode.actions():[];actionTray.innerHTML=actions.map(a=>`<button class="action-btn ${a.primary?"primary":""} ${a.danger?"danger":""}" data-action="${a.id}" ${a.disabled?"disabled":""}>${a.label}</button>`).join("");actionTray.classList.toggle("hidden",!actions.length);}
+cardTray.addEventListener("pointerdown",e=>{const b=e.target.closest("[data-card-index]");if(!b||b.disabled||!S||S.paused||S.over)return;e.preventDefault();currentMode.cardTap&&currentMode.cardTap(+b.dataset.cardIndex);renderUI(true);});
+actionTray.addEventListener("pointerdown",e=>{const b=e.target.closest("[data-action]");if(!b||b.disabled||!S||S.paused||S.over)return;e.preventDefault();currentMode.action&&currentMode.action(b.dataset.action);renderUI(true);});
+function meterHTML(label,value,text=""){return `<div class="panel-copy"><strong>${label}</strong>${text?` · ${text}`:""}<div class="meter"><span style="width:${clamp(value,0,1)*100}%"></span></div></div>`;}
+function renderUI(force=false){if(!S||!currentMode)return;gameTitle.textContent=GAME_META[currentIndex].title;const sec=Math.max(0,Math.ceil(S.duration-S.elapsed)),shield=S.player.shield>0?` +${S.player.shield.toFixed(1).replace(/\.0$/,"")} guard`:"";hudLine.textContent=`${sec}s · score ${Math.round(S.score)} · ${Math.max(0,Math.ceil(S.player.hp))}/${S.player.maxHp} HP${shield}${currentMode.status?` · ${currentMode.status()}`:""}`;timeFill.style.transform=`scaleX(${clamp(1-S.elapsed/S.duration,0,1)})`;modePanel.innerHTML=currentMode.panel?currentMode.panel():`<div class="panel-row"><div class="panel-copy"><strong>${GAME_META[currentIndex].group}</strong> · ${GAME_META[currentIndex].focus}</div></div>`;renderCards();renderActions();const noStick=!!currentMode.hideJoystick;joystick.classList.toggle("hidden",noStick);moveHint.classList.toggle("hidden",noStick);if(noStick&&input.pointer!==null)resetStick();}
+
+function updateGlobal(dt){
+  if(toastTimer>0){toastTimer-=dt;if(toastTimer<=0)toastEl.classList.remove("show");}
+  if(S.player){S.player.invuln=Math.max(0,S.player.invuln-dt);S.player.stun=Math.max(0,S.player.stun-dt);}
+  for(let i=S.delayed.length-1;i>=0;i--){const d=S.delayed[i];d.t-=dt;if(d.t<=0){S.delayed.splice(i,1);d.fn();}}
+  for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.96;p.vy*=.96;if(p.life<=0)S.particles.splice(i,1);}
+}
+function particleBurst(x,y,color="#fff",count=8,speed=90){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,v=Math.random()*speed;S.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:rand(.55,.22),max:.55,color,r:rand(3,1)});}}
+function movePlayer(dt,speed=S.player.speed){const v=moveVector(),p=S.player,mul=p.stun>0?.28:1;p.x=clamp(p.x+v.x*speed*mul*dt,p.r,W-p.r);p.y=clamp(p.y+v.y*speed*mul*dt,p.r,H-p.r);if(Math.hypot(v.x,v.y)>.12)p.facing=normalized(v.x,v.y);}
+function nearestEnemy(x=S.player.x,y=S.player.y){let best=null,bd=Infinity;for(const e of S.enemies){if(e.dead)continue;const d=(e.x-x)**2+(e.y-y)**2;if(d<bd){bd=d;best=e;}}return best;}
+function aimDir(){const e=nearestEnemy();if(e)return normalized(e.x-S.player.x,e.y-S.player.y);return S.player.facing||{x:0,y:-1};}
+function dashPlayer(amount=90){const v=moveVector(),d=Math.hypot(v.x,v.y)>.12?normalized(v.x,v.y):aimDir(),p=S.player;p.x=clamp(p.x+d.x*amount,p.r,W-p.r);p.y=clamp(p.y+d.y*amount,p.r,H-p.r);p.facing=d;p.invuln=Math.max(p.invuln,.42);particleBurst(p.x,p.y,"#82ffd6",12,120);}
+function spawnEnemy(opts={}){let x,y,side=Math.floor(Math.random()*4),m=18;if(side===0){x=rand(W-m,m);y=-m;}else if(side===1){x=W+m;y=rand(H-m,m);}else if(side===2){x=rand(W-m,m);y=H+m;}else{x=-m;y=rand(H-m,m);}const shooter=!!opts.shooter;const e={id:++S.nextEntity,x,y,r:opts.r||12,hp:opts.hp||Math.ceil(1.6+S.elapsed/30),maxHp:opts.hp||Math.ceil(1.6+S.elapsed/30),speed:opts.speed||rand(68,42),dead:false,frozen:0,contact:0,type:opts.type||"chaser",shooter,shootCd:rand(1.7,.6),stationary:!!opts.stationary,stolen:opts.stolen||null,boss:!!opts.boss,color:opts.color||null};S.enemies.push(e);return e;}
+function hurtPlayer(amount=1){const p=S.player;if(p.invuln>0||S.over)return;let left=amount;if(p.shield>0){const used=Math.min(p.shield,left);p.shield-=used;left-=used;}if(left>0)p.hp-=left;p.invuln=.62;particleBurst(p.x,p.y,"#ff7082",14,135);sfx("hurt");vibrate(35);if(p.hp<=0)finish(false,"Defeated");}
+function damageEnemy(e,amount){if(!e||e.dead)return;e.hp-=amount;particleBurst(e.x,e.y,e.boss?"#ffd46f":"#ff9b76",4,55);sfx("hit");if(e.hp<=0){e.dead=true;S.score+=e.boss?250:10;particleBurst(e.x,e.y,e.boss?"#ffe38b":"#ff7e76",14,e.boss?170:100);if(currentMode.onEnemyDeath)currentMode.onEnemyDeath(e);}}
+function firePlayerProjectile(speed=340,damage=2,kind="bolt",dir=aimDir()){S.projectiles.push({x:S.player.x+dir.x*15,y:S.player.y+dir.y*15,vx:dir.x*speed,vy:dir.y*speed,r:kind==="bomb"?7:5,life:kind==="bomb"?.55:1.8,damage,kind,hitIds:[]});}
+function fireEnemyProjectile(e,speed=135){const d=normalized(S.player.x-e.x,S.player.y-e.y);S.enemyProjectiles.push({x:e.x,y:e.y,vx:d.x*speed,vy:d.y*speed,r:5,life:4,grazed:false});}
+function explodeAt(x,y,damage=3,radius=82){particleBurst(x,y,"#ff9075",22,170);for(const e of S.enemies)if(!e.dead&&Math.hypot(e.x-x,e.y-y)<radius+e.r)damageEnemy(e,damage);}
+function updateTopdown(dt,opts={}){
+  movePlayer(dt,opts.playerSpeed||S.player.speed);
+  const spawnInterval=(opts.spawnInterval||1.22)*Math.max(.58,1-S.elapsed/140);
+  if(opts.spawn!==false){S.spawnTimer-=dt;if(S.spawnTimer<=0){const shooter=Math.random()<(opts.shooterChance||0);spawnEnemy({shooter,hp:opts.enemyHp||undefined,speed:shooter?rand(52,34):undefined});S.spawnTimer=spawnInterval;}}
+  const p=S.player;
+  for(const e of S.enemies){if(e.dead)continue;e.frozen=Math.max(0,e.frozen-dt);e.contact=Math.max(0,e.contact-dt);const slow=e.frozen>0?.35:1;if(!e.stationary){const dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||1;if(e.shooter){const desired=d>210?1:d<135?-1:0;e.x+=dx/d*e.speed*slow*desired*dt;e.y+=dy/d*e.speed*slow*desired*dt;e.shootCd-=dt;if(e.shootCd<=0&&d<330){fireEnemyProjectile(e,opts.enemyProjectileSpeed||135);e.shootCd=rand(2.1,1.15);}}else{e.x+=dx/d*e.speed*slow*dt;e.y+=dy/d*e.speed*slow*dt;}}if(Math.hypot(e.x-p.x,e.y-p.y)<e.r+p.r&&e.contact<=0){hurtPlayer(e.boss?1.5:1);e.contact=.8;}}
+  for(let i=S.projectiles.length-1;i>=0;i--){const q=S.projectiles[i];q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;if(q.kind==="bomb"&&q.life<=0){explodeAt(q.x,q.y,q.damage,90);S.projectiles.splice(i,1);continue;}for(const e of S.enemies){if(e.dead||q.hitIds.includes(e.id))continue;if(Math.hypot(e.x-q.x,e.y-q.y)<e.r+q.r){damageEnemy(e,q.damage);q.hitIds.push(e.id);if(q.kind!=="pierce"){q.life=0;break;}}}if(q.life<=0||q.x<-30||q.x>W+30||q.y<-30||q.y>H+30)S.projectiles.splice(i,1);}
+  for(let i=S.enemyProjectiles.length-1;i>=0;i--){const q=S.enemyProjectiles[i];const slow=opts.slowEnemyShots&&S.mode.freezeShots>0?.4:1;q.x+=q.vx*dt*slow;q.y+=q.vy*dt*slow;q.life-=dt;if(Math.hypot(q.x-p.x,q.y-p.y)<q.r+p.r){hurtPlayer(1);q.life=0;}if(q.life<=0||q.x<-25||q.x>W+25||q.y<-25||q.y>H+25)S.enemyProjectiles.splice(i,1);}
+  for(let i=S.turrets.length-1;i>=0;i--){const t=S.turrets[i];t.life-=dt;t.cd-=dt;if(t.cd<=0){const e=nearestEnemy(t.x,t.y);if(e){const d=normalized(e.x-t.x,e.y-t.y);S.projectiles.push({x:t.x,y:t.y,vx:d.x*300,vy:d.y*300,r:4,life:1.7,damage:1.2,kind:"bolt",hitIds:[]});t.cd=.48;}}if(t.life<=0)S.turrets.splice(i,1);}
+  for(let i=S.zones.length-1;i>=0;i--){const z=S.zones[i];z.life-=dt;z.tick-=dt;if(z.type==="vortex"){for(const e of S.enemies){if(e.dead)continue;const d=Math.hypot(z.x-e.x,z.y-e.y);if(d<z.r){const n=normalized(z.x-e.x,z.y-e.y);e.x+=n.x*55*dt;e.y+=n.y*55*dt;if(z.tick<=0)damageEnemy(e,.55);}}}if(z.tick<=0)z.tick=.32;if(z.life<=0)S.zones.splice(i,1);}
+  S.enemies=S.enemies.filter(e=>!e.dead);
+}
+function playCardEffect(card,mult=1,opts={}){
+  if(!card||S.over)return;const previous=S.lastPlayed;S.cardsPlayed++;sfx("play");vibrate(10);
+  const p=S.player,dir=aimDir();
+  switch(card.key){
+    case "slash":for(const e of S.enemies){const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy);if(d<96+e.r){const n=normalized(dx,dy);if(n.x*dir.x+n.y*dir.y>-.2)damageEnemy(e,3*mult);}}particleBurst(p.x+dir.x*35,p.y+dir.y*35,card.color,12,115);break;
+    case "bolt":firePlayerProjectile(370,2.4*mult,"bolt",dir);break;
+    case "nova":particleBurst(p.x,p.y,card.color,20,145);for(const e of S.enemies)if(Math.hypot(e.x-p.x,e.y-p.y)<122+e.r)damageEnemy(e,1.8*mult);break;
+    case "guard":p.shield=clamp(p.shield+2*mult,0,5);particleBurst(p.x,p.y,card.color,10,75);break;
+    case "dash":dashPlayer(92*mult);for(const e of S.enemies)if(Math.hypot(e.x-p.x,e.y-p.y)<50+e.r)damageEnemy(e,1.2*mult);break;
+    case "freeze":for(const e of S.enemies)e.frozen=Math.max(e.frozen,3.2*mult);S.mode.freezeShots=Math.max(S.mode.freezeShots||0,2.5);toast("Threats slowed");break;
+    case "turret":S.turrets.push({x:p.x,y:p.y,life:7*mult,cd:.1});break;
+    case "bomb":firePlayerProjectile(230,3.6*mult,"bomb",dir);break;
+    case "pierce":firePlayerProjectile(470,2.7*mult,"pierce",dir);break;
+    case "heal":p.hp=Math.min(p.maxHp,p.hp+1*mult);particleBurst(p.x,p.y,card.color,14,90);break;
+    case "echo":if(previous)S.delayed.push({t:.24,fn:()=>playCardEffect(previous,.78,{echo:true})});else toast("Nothing to echo yet");break;
+    case "vortex":S.zones.push({x:clamp(p.x+dir.x*82,35,W-35),y:clamp(p.y+dir.y*82,35,H-35),r:92,life:3.4,tick:.05,type:"vortex",color:card.color});break;
+  }
+  if(card.key!=="echo"&&!opts.echo)S.lastPlayed=card;
+}
+
+function drawBackdrop(){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"#151c2a");g.addColorStop(1,"#080c13");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.strokeStyle="rgba(255,255,255,.035)";ctx.lineWidth=1;for(let x=18;x<W;x+=34){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=18;y<H;y+=34){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
+function drawCircle(x,y,r,fill,stroke=null,line=1){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=line;ctx.stroke();}}
+function drawTopdown(){drawBackdrop();if(currentMode.drawUnder)currentMode.drawUnder();for(const z of S.zones){drawCircle(z.x,z.y,z.r,`${z.color||"#76aaff"}18`,z.color||"#76aaff",2);drawCircle(z.x,z.y,Math.max(6,z.r*(z.life%1)),null,"rgba(255,255,255,.25)",1);}for(const t of S.turrets){ctx.save();ctx.translate(t.x,t.y);ctx.rotate(S.elapsed*3);ctx.fillStyle="#f1d277";ctx.fillRect(-8,-8,16,16);ctx.fillStyle="#1a1e28";ctx.fillRect(-3,-11,6,9);ctx.restore();}for(const e of S.enemies)drawEnemy(e);for(const q of S.projectiles){drawCircle(q.x,q.y,q.r,q.kind==="bomb"?"#ff826f":"#dff7ff");if(q.kind==="pierce"){ctx.strokeStyle="#eef6ff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(q.x-q.vx*.035,q.y-q.vy*.035);ctx.lineTo(q.x,q.y);ctx.stroke();}}for(const q of S.enemyProjectiles)drawCircle(q.x,q.y,q.r,"#ff6e83","#ffd0d6",1);drawPlayer();if(currentMode.drawOver)currentMode.drawOver();drawParticles();}
+function drawEnemy(e){const color=e.boss?"#e7b45b":e.type==="thief"?"#d291ff":e.shooter?"#ff9b72":"#ff687b";ctx.save();ctx.translate(e.x,e.y);if(e.boss){ctx.rotate(S.elapsed*.35);ctx.fillStyle=color;for(let i=0;i<8;i++){ctx.rotate(Math.PI/4);ctx.fillRect(e.r*.55,-3,e.r*.7,6);}drawCircle(0,0,e.r,"#432d25","#ffd783",3);}else if(e.type==="thief"){ctx.rotate(Math.PI/4);ctx.fillStyle=color;ctx.fillRect(-e.r*.75,-e.r*.75,e.r*1.5,e.r*1.5);ctx.rotate(-Math.PI/4);ctx.fillStyle="#fff";ctx.font="900 10px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(e.stolen?e.stolen.glyph:"?",0,0);}else{drawCircle(0,0,e.r,color,"rgba(255,255,255,.5)",1);if(e.shooter){ctx.fillStyle="#2a1520";ctx.fillRect(-3,-e.r-4,6,e.r);}}ctx.restore();if(e.hp<e.maxHp||e.boss){const w=e.boss?72:24;ctx.fillStyle="rgba(0,0,0,.55)";ctx.fillRect(e.x-w/2,e.y-e.r-10,w,4);ctx.fillStyle=e.boss?"#ffd46e":"#ff99a5";ctx.fillRect(e.x-w/2,e.y-e.r-10,w*clamp(e.hp/e.maxHp,0,1),4);}}
+function drawPlayer(){const p=S.player;ctx.save();ctx.translate(p.x,p.y);if(p.invuln>0&&Math.floor(S.elapsed*18)%2===0)ctx.globalAlpha=.45;if(p.shield>0)drawCircle(0,0,p.r+7,"rgba(113,174,255,.12)","#8ebaff",2);drawCircle(0,0,p.r,"#ecf3ff","#7791b8",2);ctx.rotate(Math.atan2(p.facing.y,p.facing.x));ctx.fillStyle="#162033";ctx.beginPath();ctx.moveTo(p.r+7,0);ctx.lineTo(2,-5);ctx.lineTo(2,5);ctx.closePath();ctx.fill();ctx.restore();}
+function drawParticles(){for(const p of S.particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);drawCircle(p.x,p.y,p.r,p.color);ctx.globalAlpha=1;}}
+
+function reshufflePile(m){if(!m.draw.length&&m.discard.length)m.draw=shuffle(m.discard.splice(0));}
+function drawOne(m){reshufflePile(m);return m.draw.pop()||null;}
+function fillHand(m,n){while(m.hand.length<n){const c=drawOne(m);if(!c)break;m.hand.push(c);}}
+function rotateDeckCard(m,index=0){const c=m.deck.splice(index,1)[0];if(c)m.deck.push(c);return c;}
+
+const magazineMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),index:0,reload:0};},
+  update(dt){const m=S.mode;m.reload=Math.max(0,m.reload-dt);if(m.reload>0)S.player.stun=Math.max(S.player.stun,.08);updateTopdown(dt,{spawnInterval:1.16});},
+  getCards(){const m=S.mode,c=m.deck[m.index];return c?[cardView(c,{disabled:m.reload>0,note:m.reload>0?"Reloading…":`chamber ${m.index+1} of ${m.deck.length}`})]:[];},
+  cardTap(){const m=S.mode;if(m.reload>0)return;const c=m.deck[m.index];if(!c)return;playCardEffect(c);m.index++;if(m.index>=m.deck.length){m.deck=shuffle(m.deck);m.index=0;m.reload=.72;toast("Magazine empty");}},
+  actions(){const m=S.mode;return [{id:"reload",label:m.reload>0?"RELOADING":"RELOAD EARLY",disabled:m.reload>0,danger:true}];},
+  action(){const m=S.mode;if(m.reload>0)return;const dumped=m.deck.length-m.index;m.deck=shuffle(m.deck);m.index=0;m.reload=.9;S.player.stun=.9;toast(`${dumped} card${dumped===1?"":"s"} dumped`);},
+  panel(){const m=S.mode,next=m.deck[(m.index+1)%m.deck.length];return `<div class="panel-row"><div class="panel-copy"><strong>Magazine ${m.index+1}/${m.deck.length}</strong> · next ${next.name}</div><span>${m.reload>0?"EXPOSED":"READY"}</span></div>`;},
+  status(){return `deck ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const threeHandMode={
+  kind:"topdown",setup(){S.mode={draw:shuffle(starterDeck()),discard:[],hand:[],cycling:0};fillHand(S.mode,3);},
+  update(dt){const m=S.mode;m.cycling=Math.max(0,m.cycling-dt);if(m.cycling>0)S.player.stun=Math.max(S.player.stun,.08);updateTopdown(dt,{spawnInterval:1.13});},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{disabled:S.mode.cycling>0,note:S.mode.cycling>0?"Cycling…":c.desc}));},
+  cardTap(i){const m=S.mode;if(m.cycling>0||!m.hand[i])return;const c=m.hand.splice(i,1)[0];playCardEffect(c);m.discard.push(c);},
+  actions(){const m=S.mode;return [{id:"cycle",label:m.hand.length?`CYCLE ${m.hand.length} LEFT`:"DRAW 3",disabled:m.cycling>0,primary:!m.hand.length}];},
+  action(){const m=S.mode;if(m.cycling>0)return;m.discard.push(...m.hand.splice(0));fillHand(m,3);m.cycling=.72;S.player.stun=.72;toast("New hand — briefly exposed");},
+  panel(){const m=S.mode;return `<div class="panel-row"><div class="panel-copy"><strong>${m.hand.length} in hand</strong> · ${m.draw.length} draw · ${m.discard.length} discard</div><span>${m.cycling>0?"CYCLING":"CHOOSE"}</span></div>`;},
+  status(){return `hand ${S.mode.hand.length}`;},addReward(c){S.mode.draw.push(c);}
+};
+
+const conveyorMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),cursor:0,brake:0,brakeCd:0};},
+  update(dt){const m=S.mode;m.brake=Math.max(0,m.brake-dt);m.brakeCd=Math.max(0,m.brakeCd-dt);m.cursor+=dt*(m.brake>0?.23:1)/.92;updateTopdown(dt,{spawnInterval:1.2});},
+  gate(){const m=S.mode,n=Math.round(m.cursor),distance=Math.abs(m.cursor-n);return {index:mod(n,m.deck.length),open:distance<.18,distance};},
+  getCards(){const m=S.mode,g=this.gate(),views=[];for(let k=0;k<Math.min(5,m.deck.length);k++){const c=m.deck[mod(g.index+k,m.deck.length)];views.push(cardView(c,{disabled:k!==0||!g.open,note:k===0?(g.open?"CAST WINDOW OPEN":`gate in ${Math.round(g.distance*100)} ticks`):`up next +${k}`}));}return views;},
+  cardTap(i){const m=S.mode,g=this.gate();if(i!==0||!g.open)return;playCardEffect(m.deck[g.index]);m.cursor=Math.round(m.cursor)+.25;},
+  actions(){const m=S.mode;return [{id:"brake",label:m.brake>0?"BELT SLOWED":"BRAKE 1.4s",disabled:m.brakeCd>0}];},
+  action(){const m=S.mode;m.brake=1.4;m.brakeCd=5.5;toast("Conveyor slowed");},
+  panel(){const g=this.gate();return `<div class="panel-row"><div class="panel-copy"><strong>Cast gate</strong> · ${g.open?"tap the first card now":"the belt will not wait"}</div><span style="color:${g.open?"#ffd878":"#9aa4b7"}">${g.open?"OPEN":"MOVING"}</span></div>`;},
+  status(){return `belt ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const heatMode={
+  kind:"topdown",setup(){const deck=shuffle(starterDeck());S.mode={hand:deck.slice(0,3),reserve:deck.slice(3)};for(const c of deck)c.heat=0;},
+  update(dt){for(const c of [...S.mode.hand,...S.mode.reserve])c.heat=Math.max(0,(c.heat||0)-dt/2.8);updateTopdown(dt,{spawnInterval:1.15});},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{disabled:c.heat>.02,progress:c.heat,note:c.heat>.02?`cooling ${Math.ceil(c.heat*100)}%`:"ready — remains in hand"}));},
+  cardTap(i){const c=S.mode.hand[i];if(!c||c.heat>.02)return;playCardEffect(c);c.heat=1;},
+  actions(){const m=S.mode,hot=m.hand.reduce((a,c)=>!a||c.heat>a.heat?c:a,null);return [{id:"vent",label:`VENT HOTTEST · ${m.reserve.length} RESERVE`,disabled:!m.reserve.length||!hot}];},
+  action(){const m=S.mode;if(!m.reserve.length)return;let idx=0;for(let i=1;i<m.hand.length;i++)if(m.hand[i].heat>m.hand[idx].heat)idx=i;const out=m.hand.splice(idx,1,m.reserve.shift())[0];m.reserve.push(out);S.player.stun=.45;toast(`${out.name} vented`);},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>Persistent hand</strong> · dark fill is heat</div><span>${S.mode.reserve.length} reserve</span></div>`;},
+  status(){return `reserve ${S.mode.reserve.length}`;},addReward(c){c.heat=0;S.mode.reserve.push(c);}
+};
+
+const timelineMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),index:0,timer:.7,interval:1.05,hold:false,holdPower:1,repeat:false};},
+  update(dt){const m=S.mode;m.holdPower=clamp(m.holdPower+(m.hold?-.55:.28)*dt,0,1);if(m.hold&&m.holdPower<=0)m.hold=false;if(!m.hold){m.timer-=dt;if(m.timer<=0){playCardEffect(m.deck[m.index]);if(!m.repeat)m.index=(m.index+1)%m.deck.length;else m.repeat=false;m.timer=m.interval;}}updateTopdown(dt,{spawnInterval:1.13});},
+  getCards(){const m=S.mode,views=[];for(let k=0;k<Math.min(5,m.deck.length);k++){const c=m.deck[(m.index+k)%m.deck.length];views.push(cardView(c,{disabled:true,note:k===0?`fires in ${m.timer.toFixed(1)}s`:`timeline +${k}`}));}return views;},
+  cardTap(){},actions(){const m=S.mode;return [{id:"hold",label:m.hold?"RELEASE":"HOLD",disabled:m.holdPower<=0},{id:"skip",label:"SKIP"},{id:"repeat",label:m.repeat?"REPEAT ARMED":"REPEAT"}];},
+  action(id){const m=S.mode;if(id==="hold")m.hold=!m.hold;else if(id==="skip"){m.index=(m.index+1)%m.deck.length;m.timer=.25;}else if(id==="repeat")m.repeat=true;},
+  panel(){const m=S.mode;return meterHTML("Timeline control",m.holdPower,m.hold?"holding next trigger":m.repeat?"next card repeats":"automatic sequence");},
+  status(){return `step ${S.mode.index+1}/${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const orbitMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),theta:0,direction:1,usedUntil:{}};},
+  active(){const m=S.mode,target=-Math.PI/2;let best=0,bd=99;for(let i=0;i<m.deck.length;i++){const a=m.theta+i*Math.PI*2/m.deck.length,d=Math.abs(angleDiff(a,target));if(d<bd){bd=d;best=i;}}return {index:best,open:bd<.34,diff:bd};},
+  update(dt){const m=S.mode;m.theta+=m.direction*dt*(Math.PI*2/(m.deck.length*1.08));updateTopdown(dt,{spawnInterval:1.18});},
+  getCards(){const a=this.active(),c=S.mode.deck[a.index],used=(S.mode.usedUntil[c.uid]||0)>S.elapsed;return [cardView(c,{disabled:!a.open||used,note:a.open?(used?"already cast this pass":"inside gate — use CAST"):`${Math.round(a.diff*100)}° from gate`})];},
+  cardTap(){},actions(){const a=this.active(),c=S.mode.deck[a.index],used=(S.mode.usedUntil[c.uid]||0)>S.elapsed;return [{id:"cast",label:a.open?`CAST ${c.name.toUpperCase()}`:"WAIT FOR GATE",disabled:!a.open||used,primary:a.open&&!used},{id:"reverse",label:"REVERSE"}];},
+  action(id){const m=S.mode;if(id==="reverse"){m.direction*=-1;return;}const a=this.active(),c=m.deck[a.index];if(a.open&&(m.usedUntil[c.uid]||0)<=S.elapsed){playCardEffect(c);m.usedUntil[c.uid]=S.elapsed+.85;}},
+  drawOver(){const m=S.mode,p=S.player,r=58,target=-Math.PI/2;ctx.save();ctx.translate(p.x,p.y);ctx.strokeStyle="#ffd878";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,r,target-.32,target+.32);ctx.stroke();for(let i=0;i<m.deck.length;i++){const c=m.deck[i],a=m.theta+i*Math.PI*2/m.deck.length,x=Math.cos(a)*r,y=Math.sin(a)*r;drawCircle(x,y,9,c.color,"#fff",1);ctx.fillStyle="#0b111a";ctx.font="900 10px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(c.glyph,x,y);}ctx.restore();},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>Gold orbit gate</strong> · recurrence grows with deck size</div><span>${S.mode.direction>0?"CLOCKWISE":"REVERSED"}</span></div>`;},
+  status(){return `orbit ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const snakeMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),index:0,timer:.65,trail:[],surge:0,surgeCd:0};for(let i=0;i<80;i++)S.mode.trail.push({x:S.player.x,y:S.player.y});},
+  update(dt){const m=S.mode;m.surge=Math.max(0,m.surge-dt);m.surgeCd=Math.max(0,m.surgeCd-dt);updateTopdown(dt,{spawnInterval:1.2,playerSpeed:158});const p=S.player,last=m.trail[0];if(!last||Math.hypot(last.x-p.x,last.y-p.y)>4)m.trail.unshift({x:p.x,y:p.y});m.trail.length=Math.min(m.trail.length,m.deck.length*13+30);m.timer-=dt*(m.surge>0?2.15:1);if(m.timer<=0){playCardEffect(m.deck[m.index],.82);m.index=(m.index+1)%m.deck.length;m.timer=.72;}},
+  getCards(){const m=S.mode,views=[];for(let k=0;k<Math.min(5,m.deck.length);k++)views.push(cardView(m.deck[(m.index+k)%m.deck.length],{disabled:true,note:k===0?"head triggers next":`segment +${k}`}));return views;},
+  cardTap(){},actions(){return [{id:"surge",label:S.mode.surge>0?"SEQUENCE SURGING":"SURGE 2.5s",disabled:S.mode.surgeCd>0}];},
+  action(){S.mode.surge=2.5;S.mode.surgeCd=7;toast("Segments triggering faster");},
+  drawUnder(){const m=S.mode;for(let i=m.deck.length-1;i>=0;i--){const pos=m.trail[Math.min(m.trail.length-1,(i+1)*10)]||S.player,c=m.deck[i];drawCircle(pos.x,pos.y,9,c.color,"rgba(255,255,255,.55)",1);ctx.fillStyle="#0c121b";ctx.font="900 8px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(c.glyph,pos.x,pos.y);}},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>${S.mode.deck.length} physical segments</strong> · auto-triggering head to tail</div><span>${S.mode.surge>0?"SURGE":"CRAWL"}</span></div>`;},
+  status(){return `segment ${S.mode.index+1}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const droppedMode={
+  kind:"topdown",setup(){S.mode={hand:shuffle(starterDeck()),dropped:[]};},
+  update(dt){const m=S.mode;updateTopdown(dt,{spawnInterval:1.15});for(let i=m.dropped.length-1;i>=0;i--){const d=m.dropped[i];d.lock=Math.max(0,d.lock-dt);if(d.lock<=0&&Math.hypot(d.x-S.player.x,d.y-S.player.y)<25){m.hand.push(d.card);m.dropped.splice(i,1);toast(`${d.card.name} recovered`);sfx("good");}}},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{note:"plays, then lands in arena"}));},
+  cardTap(i){const m=S.mode,c=m.hand.splice(i,1)[0];if(!c)return;playCardEffect(c);const d=aimDir();m.dropped.push({card:c,x:clamp(S.player.x+d.x*82+rand(28,-28),18,W-18),y:clamp(S.player.y+d.y*82+rand(28,-28),18,H-18),lock:1.15});},
+  actions(){return [];},
+  drawUnder(){for(const d of S.mode.dropped){ctx.save();ctx.translate(d.x,d.y);ctx.rotate(Math.PI/4);ctx.fillStyle=d.card.color;ctx.fillRect(-10,-10,20,20);ctx.rotate(-Math.PI/4);ctx.fillStyle="#101621";ctx.font="900 11px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(d.card.glyph,0,0);ctx.restore();if(d.lock>0)drawCircle(d.x,d.y,16,null,"rgba(255,255,255,.35)",2);}},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>${S.mode.hand.length} held</strong> · walk over field cards to recover them</div><span>${S.mode.dropped.length} dropped</span></div>`;},
+  status(){return `${S.mode.dropped.length} field cards`;},addReward(c){S.mode.dropped.push({card:c,x:rand(W-45,45),y:rand(H-90,45),lock:.3});}
+};
+
+const captureMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),index:0,discard:[],zones:[],progress:0};},
+  update(dt){const m=S.mode;updateTopdown(dt,{spawnInterval:1.12});if(m.index>=m.deck.length){if(!m.zones.length)m.zones=[{x:65,y:H*.28,r:38},{x:W-65,y:H*.68,r:38}];const inside=m.zones.some(z=>Math.hypot(z.x-S.player.x,z.y-S.player.y)<z.r);m.progress=clamp(m.progress+(inside?dt:-dt*.75),0,1.25);if(m.progress>=1.25){m.deck=shuffle(m.discard.splice(0));m.index=0;m.zones=[];m.progress=0;toast("Discard pile recovered");sfx("reward");}}},
+  getCards(){const m=S.mode,c=m.deck[m.index];return c?[cardView(c,{note:`${m.deck.length-m.index} before capture`})]:[];},
+  cardTap(){const m=S.mode,c=m.deck[m.index];if(!c)return;playCardEffect(c);m.discard.push(c);m.index++;},
+  actions(){return [];},
+  drawUnder(){for(const z of S.mode.zones){drawCircle(z.x,z.y,z.r,"rgba(255,216,111,.1)","#ffd86f",3);drawCircle(z.x,z.y,z.r*(S.mode.progress/1.25),null,"#fff0b0",2);}},
+  panel(){const m=S.mode;return m.index<m.deck.length?`<div class="panel-row"><div class="panel-copy"><strong>${m.deck.length-m.index} cards remain</strong> · emptying creates capture zones</div><span>PLAY</span></div>`:meterHTML("Hold a gold zone",m.progress/1.25,"reshuffle the discard pile");},
+  status(){return `${Math.max(0,S.mode.deck.length-S.mode.index)} live`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const thievesMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),thiefTimer:5.2,stolen:0};},
+  update(dt){const m=S.mode;m.thiefTimer-=dt;if(m.thiefTimer<=0&&m.deck.length>2){const idx=Math.floor(rand(m.deck.length,1)),c=m.deck.splice(idx,1)[0];spawnEnemy({type:"thief",stolen:c,hp:4,speed:78,r:13});m.stolen++;m.thiefTimer=rand(7,5.5);toast(`${c.name} stolen`);sfx("bad");}updateTopdown(dt,{spawnInterval:1.3});},
+  getCards(){const c=S.mode.deck[0];return c?[cardView(c,{note:`${S.mode.deck.length} cards still circulating`})]:[];},
+  cardTap(){const c=rotateDeckCard(S.mode,0);if(c)playCardEffect(c);},
+  actions(){return [];},
+  onEnemyDeath(e){if(e.stolen){S.mode.deck.push(e.stolen);S.mode.stolen=Math.max(0,S.mode.stolen-1);toast(`${e.stolen.name} recovered`);}},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>Protect the deck</strong> · purple diamonds carry stolen cards</div><span>${S.mode.stolen} stolen</span></div>`;},
+  status(){return `deck ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+const duelistMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck()),discards:3};},
+  update(dt){updateTopdown(dt,{spawnInterval:1.28,enemyHp:3});},
+  getCards(){const c=S.mode.deck[0];return c?[cardView(c,{note:"play now, or hold while repositioning"})]:[];},
+  cardTap(){const c=rotateDeckCard(S.mode,0);if(c)playCardEffect(c);},
+  actions(){return [{id:"discard",label:`DISCARD · ${S.mode.discards}`,disabled:S.mode.discards<=0,danger:true}];},
+  action(){if(S.mode.discards<=0)return;const c=rotateDeckCard(S.mode,0);S.mode.discards--;toast(`${c.name} passed`);},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>One live decision</strong> · acting spends the current answer</div><span>${S.mode.discards} skips</span></div>`;},
+  status(){return `deck ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+function buildBricks(){const m=S.mode,cols=7,rows=6,gap=4,bw=(W-24-gap*(cols-1))/cols;m.bricks=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)m.bricks.push({x:12+c*(bw+gap),y:34+r*23,w:bw,h:17,dead:false,row:r});}
+function resetBreakoutBall(){const m=S.mode;m.ball={x:m.paddle.x,y:H-55,vx:rand(125,-125),vy:-190,r:7};if(Math.abs(m.ball.vx)<55)m.ball.vx=80;}
+function destroyBrick(b){if(!b||b.dead)return;b.dead=true;S.score+=8;particleBurst(b.x+b.w/2,b.y+b.h/2,"#ffd27e",4,55);}
+function applyBreakoutCard(card,repeat=false){const m=S.mode;S.cardsPlayed++;sfx("play");switch(card.key){case"slash":m.paddleBuff=6;break;case"bolt":{const live=m.bricks.filter(b=>!b.dead).sort((a,b)=>Math.abs((a.x+a.w/2)-m.ball.x)-Math.abs((b.x+b.w/2)-m.ball.x));live.slice(0,2).forEach(destroyBrick);break;}case"nova":m.bricks.filter(b=>!b.dead&&Math.hypot(b.x+b.w/2-m.ball.x,b.y+b.h/2-m.ball.y)<105).forEach(destroyBrick);break;case"guard":m.floorShield++;break;case"dash":m.ball.vx*=1.18;m.ball.vy*=1.18;break;case"freeze":m.slow=4;break;case"turret":m.laser=5;break;case"bomb":shuffle(m.bricks.filter(b=>!b.dead)).slice(0,5).forEach(destroyBrick);break;case"pierce":m.pierce=5;break;case"heal":S.player.hp=Math.min(S.player.maxHp,S.player.hp+1);break;case"vortex":m.ball.vx+=(W/2-m.ball.x)*1.4;shuffle(m.bricks.filter(b=>!b.dead)).slice(0,3).forEach(destroyBrick);break;case"echo":if(m.lastKey)applyBreakoutCard(fauxCard(m.lastKey),true);break;}if(card.key!=="echo"&&!repeat)m.lastKey=card.key;}
+const breakoutMode={
+  kind:"breakout",duration:60,setup(){S.player.hp=4;S.player.maxHp=4;S.mode={deck:shuffle(starterDeck()),index:0,paddle:{x:W/2,w:80},ball:null,bricks:[],floorShield:0,paddleBuff:0,slow:0,laser:0,laserTick:0,pierce:0,nudge:0,level:1,lastKey:null};buildBricks();resetBreakoutBall();},
+  update(dt){const m=S.mode,v=moveVector();m.paddle.x=clamp(m.paddle.x+v.x*260*dt,45,W-45);m.paddleBuff=Math.max(0,m.paddleBuff-dt);m.slow=Math.max(0,m.slow-dt);m.laser=Math.max(0,m.laser-dt);m.pierce=Math.max(0,m.pierce-dt);m.nudge=Math.max(0,m.nudge-dt);if(m.laser>0){m.laserTick-=dt;if(m.laserTick<=0){destroyBrick(choice(m.bricks.filter(b=>!b.dead)));m.laserTick=.42;}}const b=m.ball,slow=m.slow>0?.68:1;b.x+=b.vx*dt*slow;b.y+=b.vy*dt*slow;if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx);}if(b.x>W-b.r){b.x=W-b.r;b.vx=-Math.abs(b.vx);}if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy);}const py=H-28,pw=m.paddle.w+(m.paddleBuff>0?42:0);if(b.vy>0&&b.y+b.r>py-8&&b.y-b.r<py+10&&Math.abs(b.x-m.paddle.x)<pw/2+b.r){b.y=py-9;b.vy=-Math.abs(b.vy);b.vx+=(b.x-m.paddle.x)*4;const c=m.deck[m.index];applyBreakoutCard(c);m.index=(m.index+1)%m.deck.length;particleBurst(b.x,b.y,"#e7f4ff",8,75);}for(const brick of m.bricks){if(brick.dead)continue;if(b.x+b.r>brick.x&&b.x-b.r<brick.x+brick.w&&b.y+b.r>brick.y&&b.y-b.r<brick.y+brick.h){destroyBrick(brick);if(m.pierce<=0)b.vy*=-1;break;}}if(b.y>H+15){if(m.floorShield>0){m.floorShield--;b.y=H-42;b.vy=-Math.abs(b.vy);toast("Floor guard saved the ball");}else{S.player.hp--;sfx("hurt");if(S.player.hp<=0){finish(false,"Out of balls");return;}resetBreakoutBall();}}if(m.bricks.every(x=>x.dead)){S.score+=100;m.level++;buildBricks();resetBreakoutBall();toast(`Wall ${m.level}`);}},
+  draw(){const m=S.mode;drawBackdrop();ctx.fillStyle="rgba(255,255,255,.05)";for(const b of m.bricks){if(b.dead)continue;const colors=["#ff8b7e","#ffba72","#ffe17a","#84e2bd","#79c9ff","#bd9cff"];ctx.fillStyle=colors[b.row%colors.length];ctx.fillRect(b.x,b.y,b.w,b.h);}const py=H-28,pw=m.paddle.w+(m.paddleBuff>0?42:0);ctx.fillStyle="#edf5ff";ctx.fillRect(m.paddle.x-pw/2,py-6,pw,12);drawCircle(m.ball.x,m.ball.y,m.ball.r,"#fff3b5","#fff",2);if(m.floorShield>0){ctx.strokeStyle="#85baff";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(22,H-8);ctx.lineTo(W-22,H-8);ctx.stroke();}if(m.pierce>0){drawCircle(m.ball.x,m.ball.y,m.ball.r+6,null,"#fff",2);}drawParticles();},
+  getCards(){const m=S.mode,views=[];for(let k=0;k<Math.min(3,m.deck.length);k++)views.push(cardView(m.deck[(m.index+k)%m.deck.length],{disabled:true,note:k===0?"triggers on next paddle hit":`rally +${k}`}));return views;},cardTap(){},
+  actions(){return [{id:"nudge",label:"NUDGE BALL",disabled:S.mode.nudge>0}];},action(){const m=S.mode;m.ball.vx+=rand(140,-140);m.ball.vy=-Math.abs(m.ball.vy);m.nudge=4;},
+  panel(){const m=S.mode;return `<div class="panel-row"><div class="panel-copy"><strong>Wall ${m.level}</strong> · paddle contacts advance the deck</div><span>${m.floorShield} floor guard</span></div>`;},status(){return `wall ${S.mode.level}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+function resetDeckball(goalText=""){const m=S.mode;m.puck={x:W/2,y:H/2,vx:rand(35,-35),vy:rand(35,-35),r:10};m.player.x=W/2;m.player.y=H*.78;m.ai.x=W/2;m.ai.y=H*.22;if(goalText)toast(goalText);}
+function applyDeckballCard(card){const m=S.mode,puck=m.puck;S.cardsPlayed++;sfx("play");let power=230,dir=normalized((W/2-puck.x)*.25+input.x*.65,-1);switch(card.key){case"slash":power=290;break;case"bolt":power=365;dir=normalized((W/2-puck.x)*.08,-1);break;case"nova":m.aiStun=1.4;power=250;break;case"guard":m.goalShield++;power=210;break;case"dash":m.player.y=Math.max(35,m.player.y-45);power=320;break;case"freeze":m.aiSlow=4;power=220;break;case"turret":m.homing=3.5;power=245;break;case"bomb":m.ai.x=clamp(m.ai.x+(m.ai.x-puck.x)*.8,20,W-20);m.ai.y=clamp(m.ai.y+(m.ai.y-puck.y)*.8,20,H-20);power=360;break;case"pierce":power=430;break;case"heal":m.goalShield++;power=205;break;case"vortex":puck.x=lerp(puck.x,W/2,.45);power=270;break;case"echo":if(m.lastKey){applyDeckballCard(fauxCard(m.lastKey));return;}break;}puck.vx=dir.x*power;puck.vy=dir.y*power;if(card.key!=="echo")m.lastKey=card.key;}
+const deckballMode={
+  kind:"deckball",duration:60,setup(){S.player.hp=5;S.player.maxHp=5;S.mode={deck:shuffle(starterDeck()),index:0,player:S.player,ai:{x:W/2,y:H*.22,r:18},puck:null,strikeCd:0,aiHit:0,aiSlow:0,aiStun:0,goalShield:0,homing:0,us:0,them:0,lastKey:null};S.player.r=18;S.player.speed=175;resetDeckball();},
+  update(dt){const m=S.mode,p=m.player,ai=m.ai,q=m.puck;movePlayer(dt,175);m.strikeCd=Math.max(0,m.strikeCd-dt);m.aiHit=Math.max(0,m.aiHit-dt);m.aiSlow=Math.max(0,m.aiSlow-dt);m.aiStun=Math.max(0,m.aiStun-dt);m.homing=Math.max(0,m.homing-dt);if(m.aiStun<=0){const d=normalized(q.x-ai.x,q.y-ai.y);ai.x=clamp(ai.x+d.x*115*(m.aiSlow>0?.45:1)*dt,ai.r,W-ai.r);ai.y=clamp(ai.y+d.y*115*(m.aiSlow>0?.45:1)*dt,ai.r,H*.58);}function collide(disk,isPlayer){const dx=q.x-disk.x,dy=q.y-disk.y,dist=Math.hypot(dx,dy)||1,min=q.r+disk.r;if(dist<min){const n={x:dx/dist,y:dy/dist};q.x=disk.x+n.x*min;q.y=disk.y+n.y*min;if(isPlayer&&m.strikeCd<=0){applyDeckballCard(m.deck[m.index]);m.index=(m.index+1)%m.deck.length;m.strikeCd=.34;}else if(!isPlayer&&m.aiHit<=0){q.vx=n.x*230;q.vy=Math.abs(n.y*230)+120;m.aiHit=.4;}}}collide(p,true);collide(ai,false);if(m.homing>0)q.vx+=(W/2-q.x)*.8*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=Math.pow(.992,dt*60);q.vy*=Math.pow(.992,dt*60);if(q.x<q.r){q.x=q.r;q.vx=Math.abs(q.vx);}if(q.x>W-q.r){q.x=W-q.r;q.vx=-Math.abs(q.vx);}const gw=Math.min(130,W*.35);if(q.y<-q.r){if(Math.abs(q.x-W/2)<gw/2){m.us++;S.score+=100;sfx("goal");resetDeckball("Goal!");}else{q.y=q.r;q.vy=Math.abs(q.vy);}}if(q.y>H+q.r){if(Math.abs(q.x-W/2)<gw/2){if(m.goalShield>0){m.goalShield--;q.y=H-q.r;q.vy=-Math.abs(q.vy);toast("Goal guard blocked it");}else{m.them++;S.score=Math.max(0,S.score-20);sfx("hurt");resetDeckball("Opponent scores");}}else{q.y=H-q.r;q.vy=-Math.abs(q.vy);}}},
+  draw(){const m=S.mode;ctx.fillStyle="#102237";ctx.fillRect(0,0,W,H);ctx.strokeStyle="rgba(255,255,255,.22)";ctx.lineWidth=2;ctx.strokeRect(10,10,W-20,H-20);ctx.beginPath();ctx.moveTo(10,H/2);ctx.lineTo(W-10,H/2);ctx.stroke();drawCircle(W/2,H/2,45,null,"rgba(255,255,255,.22)",2);const gw=Math.min(130,W*.35);ctx.strokeStyle="#8fe6ff";ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(W/2-gw/2,10);ctx.lineTo(W/2+gw/2,10);ctx.stroke();ctx.strokeStyle=m.goalShield>0?"#94beff":"#ff8da0";ctx.beginPath();ctx.moveTo(W/2-gw/2,H-10);ctx.lineTo(W/2+gw/2,H-10);ctx.stroke();drawCircle(m.ai.x,m.ai.y,m.ai.r,m.aiStun>0?"#b9eaff":"#ff9a76","#fff",2);drawCircle(m.player.x,m.player.y,m.player.r,"#eaf3ff","#83a8d8",2);drawCircle(m.puck.x,m.puck.y,m.puck.r,"#ffe58d","#fff",2);ctx.fillStyle="#fff";ctx.font="1000 20px system-ui";ctx.textAlign="center";ctx.fillText(`${m.us}  :  ${m.them}`,W/2,32);drawParticles();},
+  getCards(){const m=S.mode,views=[];for(let k=0;k<Math.min(3,m.deck.length);k++)views.push(cardView(m.deck[(m.index+k)%m.deck.length],{disabled:true,note:k===0?"next puck strike":`strike +${k}`}));return views;},cardTap(){},actions(){return [];},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>Hit the top goal</strong> · puck contacts consume the deck</div><span>${S.mode.goalShield} goal guard</span></div>`;},status(){return `${S.mode.us}-${S.mode.them}`;},addReward(c){S.mode.deck.push(c);},timeUp(){finish(S.mode.us>=S.mode.them,S.mode.us>S.mode.them?"Match won":S.mode.us===S.mode.them?"Draw":"Match lost");}
+};
+
+const rhythmMode={
+  kind:"topdown",setup(){const deck=shuffle(starterDeck());S.mode={queue:deck.slice(3),hand:deck.slice(0,3),phase:0,period:.86,combo:0,perfectFlash:0};},
+  update(dt){const m=S.mode;m.phase+=dt;m.perfectFlash=Math.max(0,m.perfectFlash-dt);if(m.phase>=m.period){m.phase-=m.period;for(const e of S.enemies){const d=normalized(S.player.x-e.x,S.player.y-e.y);e.x+=d.x*24;e.y+=d.y*24;if(Math.hypot(e.x-S.player.x,e.y-S.player.y)<52+e.r)hurtPlayer(1);}}updateTopdown(dt,{spawnInterval:1.32});},
+  getCards(){const m=S.mode,dist=Math.min(m.phase,m.period-m.phase),good=dist<.15;return m.hand.map(c=>cardView(c,{note:good?"PERFECT window":"works now · stronger on pulse"}));},
+  cardTap(i){const m=S.mode,c=m.hand.splice(i,1)[0];if(!c)return;const d=Math.min(m.phase,m.period-m.phase),good=d<.15;playCardEffect(c,good?1.85:.72);m.queue.push(c);m.hand.push(m.queue.shift());if(good){m.combo++;m.perfectFlash=.22;S.score+=3*m.combo;sfx("good");toast(`Perfect ×${m.combo}`);}else{m.combo=0;sfx("bad");}},actions(){return [];},
+  drawOver(){const m=S.mode,t=m.phase/m.period,r=84*(1-t)+18;drawCircle(S.player.x,S.player.y,r,null,t<.18?"#ffe27f":"rgba(255,255,255,.25)",t<.18?4:2);if(m.perfectFlash>0){ctx.fillStyle="#ffe27f";ctx.font="1000 22px system-ui";ctx.textAlign="center";ctx.fillText("PERFECT",W/2,52);}},
+  panel(){const m=S.mode,d=Math.min(m.phase,m.period-m.phase);return `<div class="panel-row"><div class="panel-copy"><strong>Loose pulse</strong> · cards always work; gold timing multiplies them</div><span>${d<.15?"PERFECT":"×"+m.combo}</span></div>`;},status(){return `combo ${S.mode.combo}`;},addReward(c){S.mode.queue.push(c);}
+};
+
+const dashDrawMode={
+  kind:"topdown",setup(){S.mode={draw:shuffle(starterDeck()),discard:[],hand:[],dodgeCd:0,dodgeWindow:0};fillHand(S.mode,3);},
+  update(dt){const m=S.mode;m.dodgeCd=Math.max(0,m.dodgeCd-dt);m.dodgeWindow=Math.max(0,m.dodgeWindow-dt);updateTopdown(dt,{spawnInterval:1.65,shooterChance:.78,enemyProjectileSpeed:145});if(m.dodgeWindow>0){for(const q of S.enemyProjectiles){if(!q.grazed&&Math.hypot(q.x-S.player.x,q.y-S.player.y)<65){q.grazed=true;const c=drawOne(m);if(c&&m.hand.length<6)m.hand.push(c);S.score+=7;sfx("good");toast(c?`${c.name} drawn`:"Perfect dodge");}}}},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{note:"spent permanently until a close dodge"}));},
+  cardTap(i){const m=S.mode,c=m.hand.splice(i,1)[0];if(!c)return;playCardEffect(c);m.discard.push(c);},
+  actions(){const m=S.mode;return [{id:"dodge",label:m.dodgeCd>0?`DODGE ${m.dodgeCd.toFixed(1)}`:"DODGE TO DRAW",disabled:m.dodgeCd>0,primary:!m.hand.length}];},
+  action(){const m=S.mode;dashPlayer(98);S.player.invuln=.48;m.dodgeWindow=.48;m.dodgeCd=1.15;},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>${S.mode.hand.length} cards left</strong> · graze a red shot during dodge to draw</div><span>${S.mode.discard.length} spent</span></div>`;},status(){return `hand ${S.mode.hand.length}`;},addReward(c){S.mode.draw.push(c);}
+};
+
+function guaranteedSlotHand(m){fillHand(m,3);const hasUp=m.hand.some(c=>c.role==="UP"),hasDown=m.hand.some(c=>c.role==="DOWN");if(!hasUp){const i=m.draw.findIndex(c=>c.role==="UP");if(i>=0){m.draw.push(m.hand.pop());m.hand.push(m.draw.splice(i,1)[0]);}}if(!hasDown){const i=m.draw.findIndex(c=>c.role==="DOWN");if(i>=0){m.draw.push(m.hand.pop());m.hand.push(m.draw.splice(i,1)[0]);}}}
+const twoSlotMode={
+  kind:"topdown",setup(){S.mode={draw:shuffle(starterDeck()),discard:[],hand:[],up:null,down:null,sharedCd:0,tempo:0};guaranteedSlotHand(S.mode);},
+  update(dt){const m=S.mode;m.sharedCd=Math.max(0,m.sharedCd-dt);updateTopdown(dt,{spawnInterval:1.2});const e=nearestEnemy();if(e&&Math.hypot(e.x-S.player.x,e.y-S.player.y)<145)m.tempo=clamp(m.tempo+dt*.42,0,1);},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{disabled:c.role==="UP"?!!S.mode.up:!!S.mode.down,note:`commit to ${c.role} slot`}));},
+  cardTap(i){const m=S.mode,c=m.hand[i];if(!c)return;if(c.role==="UP"){if(m.up)return;m.up=c;}else{if(m.down)return;m.down=c;}m.hand.splice(i,1);toast(`${c.name} committed ${c.role}`);},
+  actions(){const m=S.mode;return [{id:"up",label:m.up?`UP · ${m.up.name}`:"UP EMPTY",disabled:!m.up||m.sharedCd>0,primary:!!m.up&&m.sharedCd<=0},{id:"down",label:m.down?`DOWN · ${m.down.name}`:"DOWN EMPTY",disabled:!m.down||m.sharedCd>0},{id:"draw",label:m.tempo>=1?"EARNED DRAW 3":"STAY CLOSE TO DRAW",disabled:m.tempo<1}];},
+  action(id){const m=S.mode;if(id==="up"&&m.up&&m.sharedCd<=0){playCardEffect(m.up);m.sharedCd=1;}else if(id==="down"&&m.down&&m.sharedCd<=0){playCardEffect(m.down);m.sharedCd=1;}else if(id==="draw"&&m.tempo>=1){m.discard.push(...m.hand.splice(0));guaranteedSlotHand(m);m.tempo=0;toast("New three-card hand");}},
+  onEnemyDeath(){S.mode.tempo=clamp(S.mode.tempo+.18,0,1);},
+  panel(){const m=S.mode;return `<div class="slot-row"><div class="slot"><b>UP SLOT</b><span>${m.up?m.up.name:"empty"}</span></div><div class="slot"><b>DOWN SLOT</b><span>${m.down?m.down.name:"empty"}</span></div></div>${meterHTML("Draw earned by proximity",m.tempo)}`;},
+  status(){return `shared CD ${S.mode.sharedCd.toFixed(1)}`;},addReward(c){S.mode.draw.push(c);}
+};
+
+const queueMode={
+  kind:"topdown",setup(){S.mode={draw:shuffle(starterDeck()),discard:[],hand:[],queue:[],executing:[],execTimer:0};fillHand(S.mode,5);},
+  update(dt){const m=S.mode;updateTopdown(dt,{spawnInterval:1.15});if(m.executing.length){m.execTimer-=dt;if(m.execTimer<=0){const c=m.executing.shift();playCardEffect(c,1.1);m.discard.push(c);m.execTimer=.25;if(!m.executing.length)fillHand(m,5);}}},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{disabled:S.mode.queue.length>=3||S.mode.executing.length>0,note:"tap to add to combo queue"}));},
+  cardTap(i){const m=S.mode;if(m.queue.length>=3||m.executing.length)return;const c=m.hand.splice(i,1)[0];if(c)m.queue.push(c);},
+  actions(){const m=S.mode;return [{id:"execute",label:m.executing.length?"EXECUTING…":`EXECUTE ${m.queue.length}`,disabled:!m.queue.length||m.executing.length>0,primary:m.queue.length===3},{id:"dodge",label:"DODGE · CANCEL",danger:true}];},
+  action(id){const m=S.mode;if(id==="execute"&&m.queue.length&&!m.executing.length){m.executing=m.queue.splice(0);m.execTimer=.02;}else if(id==="dodge"){dashPlayer(100);S.player.invuln=.45;m.discard.push(...m.queue.splice(0),...m.executing.splice(0));fillHand(m,5);toast("Queued sequence discarded");}},
+  panel(){const names=S.mode.queue.map(c=>c.glyph).join(" → ")||"empty";return `<div class="panel-row"><div class="panel-copy"><strong>Queue</strong> · ${names}</div><span>${S.mode.queue.length}/3</span></div>`;},status(){return `queue ${S.mode.queue.length}`;},addReward(c){S.mode.draw.push(c);}
+};
+
+function laneX(i){return W*(i+.5)/3;}
+function laneDamage(e,d){if(!e||e.dead)return;e.hp-=d;particleBurst(e.x,e.y,"#ffd07a",5,55);if(e.hp<=0){e.dead=true;S.score+=10;}}
+function laneTargets(lane){return S.mode.enemies.filter(e=>!e.dead&&e.lane===lane).sort((a,b)=>b.y-a.y);}
+function applyLaneCard(card,lane,repeat=false){const m=S.mode;S.cardsPlayed++;sfx("play");const target=laneTargets(lane)[0];switch(card.key){case"slash":laneDamage(target,4);break;case"bolt":laneTargets(lane).forEach(e=>laneDamage(e,2));break;case"nova":m.enemies.filter(e=>!e.dead&&Math.abs(e.lane-lane)<=1).forEach(e=>laneDamage(e,1.7));break;case"guard":m.wall+=2;break;case"dash":laneDamage(target,6);break;case"freeze":m.freeze=4;break;case"turret":m.turrets.push({lane,life:8,tick:.1});break;case"bomb":m.enemies.filter(e=>!e.dead&&Math.abs(e.lane-lane)<=1).forEach(e=>laneDamage(e,e.lane===lane?4:2));break;case"pierce":laneTargets(lane).forEach(e=>laneDamage(e,3.5));break;case"heal":S.player.hp=Math.min(S.player.maxHp,S.player.hp+1);break;case"vortex":laneTargets(lane).forEach(e=>{e.y=Math.max(20,e.y-80);laneDamage(e,1);});break;case"echo":if(m.lastCard)applyLaneCard(m.lastCard,lane,true);break;}if(card.key!=="echo"&&!repeat)m.lastCard=card;}
+const lanesMode={
+  kind:"lanes",hideJoystick:true,duration:58,setup(){const deck=shuffle(starterDeck());S.player.hp=6;S.player.maxHp=6;S.mode={draw:deck.slice(3),discard:[],hand:deck.slice(0,3),selected:null,enemies:[],spawn:.5,wall:0,freeze:0,turrets:[],lastCard:null};},
+  update(dt){const m=S.mode;m.spawn-=dt;m.freeze=Math.max(0,m.freeze-dt);if(m.spawn<=0){m.enemies.push({lane:Math.floor(Math.random()*3),y:18,hp:Math.ceil(2+S.elapsed/22),maxHp:Math.ceil(2+S.elapsed/22),speed:rand(50,34),dead:false});m.spawn=Math.max(.42,1.05-S.elapsed/120);}for(const t of m.turrets){t.life-=dt;t.tick-=dt;if(t.tick<=0){laneDamage(laneTargets(t.lane)[0],1);t.tick=.65;}}m.turrets=m.turrets.filter(t=>t.life>0);for(const e of m.enemies){if(e.dead)continue;e.y+=e.speed*(m.freeze>0?.38:1)*dt;if(e.y>H-30){e.dead=true;if(m.wall>0){m.wall--;toast("Wall absorbed a breach");}else hurtPlayer(1);}}m.enemies=m.enemies.filter(e=>!e.dead);},
+  draw(){const m=S.mode;ctx.fillStyle="#101723";ctx.fillRect(0,0,W,H);for(let i=1;i<3;i++){ctx.strokeStyle="rgba(255,255,255,.12)";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W*i/3,0);ctx.lineTo(W*i/3,H);ctx.stroke();}ctx.strokeStyle=m.wall>0?"#8fb9ff":"#ff7185";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(8,H-24);ctx.lineTo(W-8,H-24);ctx.stroke();for(const e of m.enemies){const x=laneX(e.lane);drawCircle(x,e.y,13,"#ff7886","#ffd0d6",1);ctx.fillStyle="rgba(0,0,0,.5)";ctx.fillRect(x-14,e.y-21,28,4);ctx.fillStyle="#ffd782";ctx.fillRect(x-14,e.y-21,28*e.hp/e.maxHp,4);}for(const t of m.turrets){ctx.fillStyle="#f1d277";ctx.fillRect(laneX(t.lane)-8,H-52,16,16);}drawParticles();},
+  getCards(){return S.mode.hand.map((c,i)=>cardView(c,{selected:S.mode.selected===i,note:S.mode.selected===i?"now choose a lane":"select this answer"}));},
+  cardTap(i){S.mode.selected=S.mode.selected===i?null:i;},
+  actions(){return [0,1,2].map(i=>({id:`lane${i}`,label:`LANE ${i+1}`,disabled:S.mode.selected===null,primary:S.mode.selected!==null}));},
+  action(id){const m=S.mode,lane=+id.replace("lane","");if(m.selected===null)return;const c=m.hand.splice(m.selected,1)[0];applyLaneCard(c,lane);m.discard.push(c);m.selected=null;fillHand(m,3);},
+  panel(){return `<div class="panel-row"><div class="panel-copy"><strong>Select card → select lane</strong> · flexible cards answer more positions</div><span>${S.mode.wall} wall</span></div>`;},status(){return `${S.mode.enemies.length} incoming`;},addReward(c){S.mode.draw.push(c);}
+};
+
+const alchemyMode={
+  kind:"topdown",setup(){S.mode={deck:shuffle(starterDeck())};},update(dt){updateTopdown(dt,{spawnInterval:1.1});},
+  getCards(){return S.mode.deck.slice(0,2).map(c=>cardView(c,{note:"use alone, or fuse the adjacent pair"}));},
+  cardTap(i){const m=S.mode,c=rotateDeckCard(m,i);if(c)playCardEffect(c);},
+  actions(){return [{id:"fuse",label:"FUSE BOTH",disabled:S.mode.deck.length<2,primary:true}];},
+  action(){const m=S.mode,a=m.deck.shift(),b=m.deck.shift();if(!a||!b)return;playCardEffect(a,.78);S.delayed.push({t:.16,fn:()=>playCardEffect(b,.78)});if(a.kind==="attack"&&b.kind==="attack"){S.delayed.push({t:.28,fn:()=>playCardEffect(fauxCard("nova"),.65)});toast("Attack + attack: burst");}else if(a.kind==="defense"&&b.kind==="defense"){S.player.shield=clamp(S.player.shield+2,0,5);toast("Defense + defense: fortified");}else{S.player.invuln=Math.max(S.player.invuln,.65);toast("Mixed pair: tempo guard");}m.deck.push(a,b);},
+  panel(){const [a,b]=S.mode.deck;return `<div class="panel-row"><div class="panel-copy"><strong>Current adjacency</strong> · ${a.glyph} ${a.name} + ${b.glyph} ${b.name}</div><span>${a.kind===b.kind?"MATCH":"MIX"}</span></div>`;},
+  status(){return `deck ${S.mode.deck.length}`;},addReward(c){S.mode.deck.push(c);}
+};
+
+function bossAttack(){const m=S.mode,p=S.player,type=choice(["line","circle","burst"]);if(type==="line")m.telegraph={type,x:p.x,t:1,total:1};else if(type==="circle")m.telegraph={type,x:p.x,y:p.y,t:1.05,total:1.05};else m.telegraph={type,x:m.boss.x,y:m.boss.y,t:.9,total:.9};}
+function resolveBossAttack(t){if(t.type==="line"){if(Math.abs(S.player.x-t.x)<34)hurtPlayer(1);}else if(t.type==="circle"){if(Math.hypot(S.player.x-t.x,S.player.y-t.y)<72)hurtPlayer(1.5);}else{for(let i=0;i<14;i++){const a=i*Math.PI*2/14;S.enemyProjectiles.push({x:t.x,y:t.y,vx:Math.cos(a)*145,vy:Math.sin(a)*145,r:5,life:4,grazed:false});}}}
+const bossMode={
+  kind:"topdown",duration:65,setup(){const deck=shuffle(starterDeck()),boss=spawnEnemy({boss:true,stationary:true,hp:210,r:27});boss.x=W/2;boss.y=78;S.mode={draw:deck.slice(3),discard:[],hand:deck.slice(0,3),boss,attackTimer:1.4,telegraph:null};},
+  update(dt){const m=S.mode;updateTopdown(dt,{spawn:false});m.attackTimer-=dt;if(m.telegraph){m.telegraph.t-=dt;if(m.telegraph.t<=0){resolveBossAttack(m.telegraph);m.telegraph=null;m.attackTimer=Math.max(1.15,2.35-(1-m.boss.hp/m.boss.maxHp)*.8);}}else if(m.attackTimer<=0)bossAttack();},
+  getCards(){return S.mode.hand.map(c=>cardView(c,{note:"replaced immediately after use"}));},
+  cardTap(i){const m=S.mode,c=m.hand.splice(i,1)[0];if(!c)return;playCardEffect(c);m.discard.push(c);fillHand(m,3);},actions(){return [];},
+  onEnemyDeath(e){if(e.boss)finish(true,"Boss broken");},
+  drawUnder(){const t=S.mode.telegraph;if(!t)return;const alpha=.18+.2*(1-t.t/t.total);ctx.fillStyle=`rgba(255,74,91,${alpha})`;ctx.strokeStyle="#ff5367";ctx.lineWidth=3;if(t.type==="line"){ctx.fillRect(t.x-34,0,68,H);ctx.strokeRect(t.x-34,0,68,H);}else if(t.type==="circle"){drawCircle(t.x,t.y,72,`rgba(255,74,91,${alpha})`,"#ff5367",3);}else{drawCircle(t.x,t.y,55+35*(1-t.t/t.total),`rgba(255,74,91,${alpha})`,"#ff5367",3);}},
+  drawOver(){const b=S.mode.boss,w=Math.min(260,W-40);ctx.fillStyle="rgba(0,0,0,.58)";ctx.fillRect((W-w)/2,17,w,10);ctx.fillStyle="#ffd16f";ctx.fillRect((W-w)/2,17,w*clamp(b.hp/b.maxHp,0,1),10);},
+  panel(){const b=S.mode.boss;return `<div class="panel-row"><div class="panel-copy"><strong>Readable boss</strong> · red shapes resolve when their fill completes</div><span>${Math.ceil(Math.max(0,b.hp))}/${b.maxHp}</span></div>`;},
+  status(){return `boss ${Math.ceil(Math.max(0,S.mode.boss.hp))}`;},addReward(c){S.mode.draw.push(c);},timeUp(){const pct=Math.round((1-S.mode.boss.hp/S.mode.boss.maxHp)*100);S.score+=pct;finish(true,`${pct}% boss damage`);}
+};
+
+const MODES={magazine:magazineMode,threeHand:threeHandMode,conveyor:conveyorMode,heat:heatMode,timeline:timelineMode,orbit:orbitMode,snake:snakeMode,dropped:droppedMode,capture:captureMode,thieves:thievesMode,duelist:duelistMode,breakout:breakoutMode,deckball:deckballMode,rhythm:rhythmMode,dashDraw:dashDrawMode,twoSlot:twoSlotMode,queue:queueMode,lanes:lanesMode,alchemy:alchemyMode,boss:bossMode};
+
+function frame(now){
+  requestAnimationFrame(frame);if(!S||!currentMode)return;resizeCanvas();const dt=Math.min(.034,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
+  if(!S.paused&&!S.over){if(S.mode.freezeShots>0)S.mode.freezeShots=Math.max(0,S.mode.freezeShots-dt);S.elapsed+=dt;updateGlobal(dt);currentMode.update(dt);maybeReward();if(S.elapsed>=S.duration&&!S.over){if(currentMode.timeUp)currentMode.timeUp();else finish(true,"Time survived");}}
+  if(currentMode.draw)currentMode.draw();else drawTopdown();uiClock-=dt;if(uiClock<=0){renderUI();uiClock=.11;}
+}
+
+renderMenu();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
