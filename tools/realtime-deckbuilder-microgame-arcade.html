@@ -395,7 +395,7 @@ const threeHandMode={
   update(dt){const m=S.mode;m.cycling=Math.max(0,m.cycling-dt);if(m.cycling>0)S.player.stun=Math.max(S.player.stun,.08);updateTopdown(dt,{spawnInterval:1.13});},
   getCards(){return S.mode.hand.map(c=>cardView(c,{disabled:S.mode.cycling>0,note:S.mode.cycling>0?"Cycling…":c.desc}));},
   cardTap(i){const m=S.mode;if(m.cycling>0||!m.hand[i])return;const c=m.hand.splice(i,1)[0];playCardEffect(c);m.discard.push(c);},
-  actions(){const m=S.mode;return [{id:"cycle",label:m.hand.length?`CYCLE ${m.hand.length} LEFT":"DRAW 3",disabled:m.cycling>0,primary:!m.hand.length}];},
+  actions(){const m=S.mode;return [{id:"cycle",label:m.hand.length?`CYCLE ${m.hand.length} LEFT`:"DRAW 3",disabled:m.cycling>0,primary:!m.hand.length}];},
   action(){const m=S.mode;if(m.cycling>0)return;m.discard.push(...m.hand.splice(0));fillHand(m,3);m.cycling=.72;S.player.stun=.72;toast("New hand — briefly exposed");},
   panel(){const m=S.mode;return `<div class="panel-row"><div class="panel-copy"><strong>${m.hand.length} in hand</strong> · ${m.draw.length} draw · ${m.discard.length} discard</div><span>${m.cycling>0?"CYCLING":"CHOOSE"}</span></div>`;},
   status(){return `hand ${S.mode.hand.length}`;},addReward(c){S.mode.draw.push(c);}
@@ -535,7 +535,7 @@ const rhythmMode={
 
 const dashDrawMode={
   kind:"topdown",setup(){S.mode={draw:shuffle(starterDeck()),discard:[],hand:[],dodgeCd:0,dodgeWindow:0};fillHand(S.mode,3);},
-  update(dt){const m=S.mode;m.dodgeCd=Math.max(0,m.dodgeCd-dt);m.dodgeWindow=Math.max(0,m.dodgeWindow-dt);updateTopdown(dt,{spawnInterval:1.65,shooterChance:.78,enemyProjectileSpeed:145});if(m.dodgeWindow>0){for(const q of S.enemyProjectiles){if(!q.grazed&&Math.hypot(q.x-S.player.x,q.y-S.player.y)<65){q.grazed=true;const c=drawOne(m);if(c&&m.hand.length<6)m.hand.push(c);S.score+=7;sfx("good");toast(c?`${c.name} drawn":"Perfect dodge");}}}},
+  update(dt){const m=S.mode;m.dodgeCd=Math.max(0,m.dodgeCd-dt);m.dodgeWindow=Math.max(0,m.dodgeWindow-dt);updateTopdown(dt,{spawnInterval:1.65,shooterChance:.78,enemyProjectileSpeed:145});if(m.dodgeWindow>0){for(const q of S.enemyProjectiles){if(!q.grazed&&Math.hypot(q.x-S.player.x,q.y-S.player.y)<65){q.grazed=true;const c=drawOne(m);if(c&&m.hand.length<6)m.hand.push(c);S.score+=7;sfx("good");toast(c?`${c.name} drawn`:"Perfect dodge");}}}},
   getCards(){return S.mode.hand.map(c=>cardView(c,{note:"spent permanently until a close dodge"}));},
   cardTap(i){const m=S.mode,c=m.hand.splice(i,1)[0];if(!c)return;playCardEffect(c);m.discard.push(c);},
   actions(){const m=S.mode;return [{id:"dodge",label:m.dodgeCd>0?`DODGE ${m.dodgeCd.toFixed(1)}`:"DODGE TO DRAW",disabled:m.dodgeCd>0,primary:!m.hand.length}];},
