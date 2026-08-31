@@ -38,7 +38,11 @@ jobs:
       - name: Launch every phone-sized prototype
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/arcade-server.log 2>&1 &
-          cat >/tmp/arcade-qa.mjs <<'NODE'
+          for attempt in {1..20}; do
+            curl -fsS http://127.0.0.1:8765/tools/realtime-deckbuilder-microgame-arcade.html >/dev/null && break
+            sleep 0.25
+          done
+          cat >arcade-qa.mjs <<'NODE'
           import { chromium } from 'playwright';
 
           const browser = await chromium.launch({ headless: true });
@@ -61,6 +65,7 @@ jobs:
           if (gameCount !== 20) throw new Error(`Expected 20 menu games; found ${gameCount}`);
 
           for (let index = 0; index < gameCount; index += 1) {
+            errors.length = 0;
             await page.goto(url, { waitUntil: 'load' });
             await page.locator('.game-tile').nth(index).click();
             await page.locator('#modalOverlay.show').waitFor({ state: 'visible' });
@@ -91,4 +96,4 @@ jobs:
           await browser.close();
           console.log('Validated all 20 game launch paths at 390x844.');
           NODE
-          node /tmp/arcade-qa.mjs
+          node arcade-qa.mjs
