@@ -35,6 +35,6 @@ jobs:
           rm .github/scripts/build_realtime_deckbuilder_v2.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tools/realtime-deckbuilder-microgame-arcade-v2.html .github/workflows/temporary-build-realtime-deckbuilder-v2.yml .github/scripts/build_realtime-deckbuilder-v2.py .github/scripts/build_realtime_deckbuilder_v2.py
+          git add tools/realtime-deckbuilder-microgame-arcade-v2.html .github/workflows/temporary-build-realtime-deckbuilder-v2.yml .github/scripts/build_realtime_deckbuilder_v2.py
           git commit -m "Add floating controls and scroll-safe menu to deckbuilder arcade"
           git push origin HEAD:agent/realtime-deckbuilder-arcade
