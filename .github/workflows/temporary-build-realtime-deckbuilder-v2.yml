@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-v2:
+  build_v2:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -21,139 +21,20 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build v2 from the validated first prototype
+      - name: Build v2
+        run: python3 .github/scripts/build_realtime_deckbuilder_v2.py
+
+      - name: Syntax check embedded JavaScript
         run: |
-          python3 <<'PY'
-          from pathlib import Path
+          node -e "const fs=require('fs');const h=fs.readFileSync('tools/realtime-deckbuilder-microgame-arcade-v2.html','utf8');const m=h.match(/<script>([\\s\\S]*?)<\\/script>/i);if(!m)throw new Error('script missing');fs.writeFileSync('/tmp/arcade-v2.js',m[1]);"
+          node --check /tmp/arcade-v2.js
 
-          src = Path('tools/realtime-deckbuilder-microgame-arcade.html')
-          out = Path('tools/realtime-deckbuilder-microgame-arcade-v2.html')
-          text = src.read_text(encoding='utf-8')
-
-          def replace_once(old: str, new: str) -> None:
-              global text
-              if old not in text:
-                  raise SystemExit(f'Expected source fragment not found: {old[:100]!r}')
-              text = text.replace(old, new, 1)
-
-          replace_once('<title>Real-Time Deckbuilder Microgame Arcade</title>', '<title>Real-Time Deckbuilder Microgame Arcade v2</title>')
-          replace_once('#menuScreen{overflow-y:auto;padding:', '#menuScreen{overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:')
-          replace_once('#gameGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}', '#gameGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;touch-action:pan-y}')
-          replace_once('box-shadow:0 8px 24px rgba(0,0,0,.22);touch-action:manipulation}', 'box-shadow:0 8px 24px rgba(0,0,0,.22);touch-action:pan-y}')
-          replace_once('#arenaShell{position:relative;min-height:0;overflow:hidden;background:#0b1019}', '#arenaShell{position:relative;min-height:0;overflow:hidden;background:#0b1019;touch-action:none}')
-          replace_once(
-              '#joystick{position:absolute;left:13px;bottom:13px;width:112px;height:112px;border:1px solid rgba(255,255,255,.16);border-radius:50%;background:rgba(20,26,39,.5);box-shadow:inset 0 0 0 10px rgba(255,255,255,.025);touch-action:none;z-index:4}\n#joystick::after{content:"MOVE";position:absolute;left:0;right:0;bottom:-1px;text-align:center;font-size:9px;font-weight:1000;letter-spacing:.14em;color:rgba(255,255,255,.42)}\n#stickKnob{position:absolute;left:34px;top:34px;width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#f6f8ff,#9da8be);box-shadow:0 5px 18px rgba(0,0,0,.42);transform:translate(0,0)}',
-              '#joystick{position:absolute;left:50%;top:70%;width:112px;height:112px;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(20,26,39,.58);box-shadow:inset 0 0 0 10px rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.25);touch-action:none;pointer-events:none;z-index:4;opacity:0;transform:translate(-50%,-50%) scale(.84);transition:opacity .08s ease,transform .08s ease}\n#joystick.active{opacity:1;transform:translate(-50%,-50%) scale(1)}\n#joystick::after{content:"MOVE";position:absolute;left:0;right:0;bottom:-1px;text-align:center;font-size:9px;font-weight:1000;letter-spacing:.14em;color:rgba(255,255,255,.5)}\n#stickKnob{position:absolute;left:34px;top:34px;width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#f6f8ff,#9da8be);box-shadow:0 5px 18px rgba(0,0,0,.42);transform:translate(0,0)}\n#moveHint{position:absolute;left:14px;bottom:14px;z-index:3;pointer-events:none;border:1px solid rgba(255,255,255,.13);background:rgba(9,13,21,.48);border-radius:999px;padding:7px 9px;color:rgba(255,255,255,.56);font-size:9px;font-weight:1000;letter-spacing:.08em;transition:opacity .2s}\n#moveHint.used{opacity:0}'
-          )
-          replace_once('<span class="pill">Thumb-stick movement</span>', '<span class="pill">Floating thumb-stick</span>')
-          replace_once(
-              '<div id="joystick" aria-label="Movement joystick"><div id="stickKnob"></div></div>\n      <div id="toast"></div>',
-              '<div id="joystick" aria-label="Floating movement joystick"><div id="stickKnob"></div></div>\n      <div id="moveHint">TOUCH + DRAG ANYWHERE TO MOVE</div>\n      <div id="toast"></div>'
-          )
-          replace_once(
-              'const joystick=$("#joystick"),stickKnob=$("#stickKnob"),toastEl=$("#toast");',
-              'const joystick=$("#joystick"),stickKnob=$("#stickKnob"),moveHint=$("#moveHint"),toastEl=$("#toast");'
-          )
-          replace_once('const input={x:0,y:0,pointer:null};', 'const input={x:0,y:0,pointer:null,baseClientX:0,baseClientY:0};')
-          replace_once(
-              'gameGrid.addEventListener("pointerdown",e=>{const b=e.target.closest("[data-game]");if(b){e.preventDefault();showIntro(+b.dataset.game);}});',
-              '''// Treat a tile as a tap only after the finger comes up without turning into a scroll.
-let menuTap=null;
-gameGrid.addEventListener("pointerdown",e=>{
-  const b=e.target.closest("[data-game]");
-  if(!b)return;
-  menuTap={pointerId:e.pointerId,button:b,x:e.clientX,y:e.clientY,moved:false,time:performance.now()};
-});
-gameGrid.addEventListener("pointermove",e=>{
-  if(!menuTap||menuTap.pointerId!==e.pointerId)return;
-  if(Math.hypot(e.clientX-menuTap.x,e.clientY-menuTap.y)>12)menuTap.moved=true;
-});
-gameGrid.addEventListener("pointerup",e=>{
-  if(!menuTap||menuTap.pointerId!==e.pointerId)return;
-  const tap=menuTap;menuTap=null;
-  const sameButton=e.target.closest("[data-game]")===tap.button;
-  if(!tap.moved&&sameButton&&performance.now()-tap.time<700)showIntro(+tap.button.dataset.game);
-});
-gameGrid.addEventListener("pointercancel",e=>{if(menuTap&&menuTap.pointerId===e.pointerId)menuTap=null;});
-gameGrid.addEventListener("lostpointercapture",e=>{if(menuTap&&menuTap.pointerId===e.pointerId)menuTap=null;});'''
-          )
-          replace_once(
-              'function presentModal({eyebrow="",title="",html="",actions=[],handlers={}}){\n  modalHandlers=handlers;',
-              'function presentModal({eyebrow="",title="",html="",actions=[],handlers={}}){\n  if(input.pointer!==null)resetStick();\n  modalHandlers=handlers;'
-          )
-          replace_once(
-              '<p>Two draft choices appear during the run. Attacks auto-aim so your attention can stay on movement and the deck rule.</p>',
-              '<p>Touch and drag anywhere in the arena to place the floating movement stick. Keep that thumb down while tapping cards with your other hand. Attacks auto-aim.</p>'
-          )
-          replace_once(
-              'hideModal();resizeCanvas();S=baseState();',
-              'hideModal();resetStick();moveHint.classList.remove("used");resizeCanvas();S=baseState();'
-          )
-          replace_once(
-              '''function setStickFromEvent(e){const r=joystick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=40,d=Math.hypot(dx,dy);if(d>max){dx=dx/d*max;dy=dy/d*max;}input.x=dx/max;input.y=dy/max;stickKnob.style.transform=`translate(${dx}px,${dy}px)`;}
-function resetStick(){input.x=0;input.y=0;input.pointer=null;stickKnob.style.transform="translate(0,0)";}
-joystick.addEventListener("pointerdown",e=>{e.preventDefault();input.pointer=e.pointerId;joystick.setPointerCapture(e.pointerId);setStickFromEvent(e);});
-joystick.addEventListener("pointermove",e=>{if(input.pointer===e.pointerId){e.preventDefault();setStickFromEvent(e);}});
-joystick.addEventListener("pointerup",e=>{if(input.pointer===e.pointerId)resetStick();});
-joystick.addEventListener("pointercancel",resetStick);''',
-              '''function placeFloatingStick(e){
-  const r=arenaShell.getBoundingClientRect();
-  const localX=clamp(e.clientX-r.left,0,r.width);
-  const localY=clamp(e.clientY-r.top,0,r.height);
-  input.baseClientX=r.left+localX;
-  input.baseClientY=r.top+localY;
-  joystick.style.left=`${localX}px`;
-  joystick.style.top=`${localY}px`;
-  joystick.classList.add("active");
-  moveHint.classList.add("used");
-}
-function setStickFromEvent(e){
-  let dx=e.clientX-input.baseClientX,dy=e.clientY-input.baseClientY;
-  const max=40,d=Math.hypot(dx,dy);
-  if(d>max){dx=dx/d*max;dy=dy/d*max;}
-  input.x=dx/max;input.y=dy/max;
-  stickKnob.style.transform=`translate(${dx}px,${dy}px)`;
-}
-function resetStick(){input.x=0;input.y=0;input.pointer=null;stickKnob.style.transform="translate(0,0)";joystick.classList.remove("active");}
-function beginFloatingStick(e){
-  if(!S||S.paused||S.over||currentMode&&currentMode.hideJoystick||input.pointer!==null)return;
-  e.preventDefault();
-  input.pointer=e.pointerId;
-  placeFloatingStick(e);
-  arenaShell.setPointerCapture&&arenaShell.setPointerCapture(e.pointerId);
-  setStickFromEvent(e);
-}
-arenaShell.addEventListener("pointerdown",beginFloatingStick);
-arenaShell.addEventListener("pointermove",e=>{if(input.pointer===e.pointerId){e.preventDefault();setStickFromEvent(e);}});
-arenaShell.addEventListener("pointerup",e=>{if(input.pointer===e.pointerId)resetStick();});
-arenaShell.addEventListener("pointercancel",e=>{if(input.pointer===e.pointerId)resetStick();});
-arenaShell.addEventListener("lostpointercapture",e=>{if(input.pointer===e.pointerId)resetStick();});
-arenaShell.addEventListener("contextmenu",e=>e.preventDefault());
-document.addEventListener("visibilitychange",()=>{if(document.hidden)resetStick();});'''
-          )
-          replace_once(
-              'renderCards();renderActions();joystick.classList.toggle("hidden",!!currentMode.hideJoystick);}',
-              'renderCards();renderActions();const noStick=!!currentMode.hideJoystick;joystick.classList.toggle("hidden",noStick);moveHint.classList.toggle("hidden",noStick);if(noStick&&input.pointer!==null)resetStick();}'
-          )
-
-          out.write_text(text, encoding='utf-8')
-          print(f'Wrote {out} ({out.stat().st_size} bytes)')
-          PY
-
-          node <<'NODE'
-          const fs = require('node:fs');
-          const html = fs.readFileSync('tools/realtime-deckbuilder-microgame-arcade-v2.html', 'utf8');
-          const match = html.match(/<script>([\s\S]*?)<\/script>/i);
-          if (!match) throw new Error('Embedded script was not found');
-          fs.writeFileSync('/tmp/realtime-deckbuilder-arcade-v2.js', match[1]);
-          NODE
-          node --check /tmp/realtime-deckbuilder-arcade-v2.js
-
-      - name: Commit v2 and remove this temporary workflow
+      - name: Commit v2 and remove temporary builder
         run: |
           rm .github/workflows/temporary-build-realtime-deckbuilder-v2.yml
+          rm .github/scripts/build_realtime_deckbuilder_v2.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tools/realtime-deckbuilder-microgame-arcade-v2.html .github/workflows/temporary-build-realtime-deckbuilder-v2.yml
+          git add tools/realtime-deckbuilder-microgame-arcade-v2.html .github/workflows/temporary-build-realtime-deckbuilder-v2.yml .github/scripts/build_realtime-deckbuilder-v2.py .github/scripts/build_realtime_deckbuilder_v2.py
           git commit -m "Add floating controls and scroll-safe menu to deckbuilder arcade"
           git push origin HEAD:agent/realtime-deckbuilder-arcade
