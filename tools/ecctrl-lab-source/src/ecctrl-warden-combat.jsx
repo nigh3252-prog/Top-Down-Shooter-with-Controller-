@@ -153,8 +153,7 @@ export function EcctrlWardenCombat({
         commitFacing(angle) {
           const handle = character.current;
           direction.current.set(Math.sin(angle), 0, Math.cos(angle));
-          handle?.setForwardDir(direction.current);
-          handle?.setLockForward(true);
+          handle?.setFacingOverride(direction.current);
           yaw.current.setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
         },
         onAttackStart(info) {
@@ -164,7 +163,7 @@ export function EcctrlWardenCombat({
           statusCallback.current?.({ phase: 'RECOVERY', label: 'RECOVERY' });
         },
         onAttackChainIdle() {
-          character.current?.setLockForward(false);
+          character.current?.setFacingOverride(null);
           statusCallback.current?.({ phase: 'READY', label: 'READY' });
         },
         onPoseSample(payload) {
@@ -206,7 +205,7 @@ export function EcctrlWardenCombat({
     return () => {
       if (combatApi.current === api) combatApi.current = null;
       poseOverlay.current = null;
-      character.current?.setLockForward(false);
+      character.current?.setFacingOverride(null);
       PC.disposeCombat();
       Object.values(materials).forEach(material => material.dispose());
       controller.current = null;
@@ -227,7 +226,7 @@ export function EcctrlWardenCombat({
   }, [weaponId]);
 
   useEffect(() => {
-    if (!active) character.current?.setLockForward(false);
+    if (!active) character.current?.setFacingOverride(null);
   }, [active, character]);
 
   useFrame(({ clock }, delta) => {

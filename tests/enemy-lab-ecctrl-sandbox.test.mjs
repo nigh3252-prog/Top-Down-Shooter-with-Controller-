@@ -20,6 +20,7 @@ const read=path=>readFileSync(join(root,path),'utf8');
 const lab=read('enemy-lab.html');
 const sandbox=read('tools/ecctrl-lab-source/src/ecctrl-lab.jsx');
 const combatAdapter=read('tools/ecctrl-lab-source/src/ecctrl-warden-combat.jsx');
+const ecctrlController=read('tools/ecctrl-lab-source/vendor/ecctrl/character/Ecctrl.tsx');
 const entry=read('tools/ecctrl-lab-source/src/entry.jsx');
 const playerCombatCore=read('src/player-combat-core.js');
 const bundlePath=join(root,'tools/ecctrl-lab/assets/ecctrl-lab.js');
@@ -47,6 +48,9 @@ assert.match(combatAdapter,/cloneWeaponDefinitions/,'weapon selection flows thro
 assert.match(combatAdapter,/ECCTRL_WEAPON_IDS = Object\.freeze\(\[\.\.\.STONE_WEAPON_ORDER\]\)/,'every shared weapon uses the same adapter');
 assert.doesNotMatch(combatAdapter,/installStoneWanderer|makeStoneWanderer/,'the visible Warden puppet is not mounted in the Ecctrl scene');
 assert.doesNotMatch(combatAdapter,/case ['"](?:longsword|claymore|greatsword)['"]/,'the adapter has no weapon-specific pose branches');
+assert.match(combatAdapter,/setFacingOverride\(direction\.current\)/,'attacks commit their selected facing through the independent override');
+assert.doesNotMatch(combatAdapter,/setLockForward\(/,'attacks do not use Ecctrl camera-forward locking');
+assert.match(ecctrlController,/if \(hasFacingOverride\.current\)[\s\S]*turnCharacter\(characterBody, facingOverrideDirection\.current,[\s\S]*moveCharacter\(characterBody, run,/,'attack facing and camera-relative movement remain independent');
 assert.match(playerCombatCore,/onPoseSample\?\.\(\{pose:p,idle:IDLE/,'the shared combat core exposes one generic external-skeleton pose seam');
 assert.match(sandbox,/nodes\.Mannequin_1\.skeleton\.update\(\);[\s\S]*nodes\.Mannequin_2\.skeleton\.update\(\);/,'the additive pose is uploaded after the locomotion mixer and before rendering');
 
