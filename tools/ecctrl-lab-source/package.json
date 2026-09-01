@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "typecheck": "tsc --noEmit --pretty false"
+    "typecheck": "tsc --noEmit --pretty false",
+    "verify:combat": "node scripts/verify-combat-driver.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.2",

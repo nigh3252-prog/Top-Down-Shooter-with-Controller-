@@ -8,12 +8,21 @@ import {
   applyRadialDeadzone,
   readEcctrlGamepad,
 } from '../tools/ecctrl-lab-source/src/ecctrl-input.js';
+import {
+  ECCTRL_ATTACK_SEQUENCE,
+  attackSpecAt,
+  chooseCombatFacing,
+  wardenPoseDelta,
+} from '../tools/ecctrl-lab-source/src/ecctrl-warden-pose.js';
 
 const root=dirname(dirname(fileURLToPath(import.meta.url)));
 const read=path=>readFileSync(join(root,path),'utf8');
 const lab=read('enemy-lab.html');
 const sandbox=read('tools/ecctrl-lab-source/src/ecctrl-lab.jsx');
+const combatAdapter=read('tools/ecctrl-lab-source/src/ecctrl-warden-combat.jsx');
+const ecctrlController=read('tools/ecctrl-lab-source/vendor/ecctrl/character/Ecctrl.tsx');
 const entry=read('tools/ecctrl-lab-source/src/entry.jsx');
+const playerCombatCore=read('src/player-combat-core.js');
 const bundlePath=join(root,'tools/ecctrl-lab/assets/ecctrl-lab.js');
 const modelPath=join(root,'media/ecctrl/AnimationLibrary.glb');
 
@@ -30,8 +39,27 @@ assert.match(entry,/export function setEcctrlLabActive/);
 assert.match(sandbox,/from '\.\.\/vendor\/ecctrl\/index\.ts'/,'the sandbox uses the vendored Ecctrl public entry');
 assert.match(sandbox,/<Physics paused gravity=\{\[0, 0, 0\]\} timeStep="vary">/,'Rapier follows the Ecctrl example manual-step setup');
 assert.match(sandbox,/<TimeControl paused=\{!active\}/);
+assert.match(sandbox,/className="ecctrl-attack-button"/,'the phone sandbox exposes an attack control');
 assert.match(sandbox,/const CAMERA_OFFSET = new THREE\.Vector3\(0, 20, 17\.6\)/,'the experiment keeps the fixed Warden-style camera offset');
 for(const tuning of ['maxWalkVel={1.1}','maxRunVel={5.5}','jumpVel={6}','springK={6400}','dampingC={860}'])assert.ok(sandbox.includes(tuning),`${tuning} remains at the source playtest value`);
+
+assert.match(combatAdapter,/installPlayerCombat/,'the Ecctrl overlay reuses the shared Warden combat driver');
+assert.match(combatAdapter,/cloneWeaponDefinitions/,'weapon selection flows through the shared weapon definitions');
+assert.match(combatAdapter,/ECCTRL_WEAPON_IDS = Object\.freeze\(\[\.\.\.STONE_WEAPON_ORDER\]\)/,'every shared weapon uses the same adapter');
+assert.doesNotMatch(combatAdapter,/installStoneWanderer|makeStoneWanderer/,'the visible Warden puppet is not mounted in the Ecctrl scene');
+assert.doesNotMatch(combatAdapter,/case ['"](?:longsword|claymore|greatsword)['"]/,'the adapter has no weapon-specific pose branches');
+assert.match(combatAdapter,/setFacingOverride\(direction\.current\)/,'attacks commit their selected facing through the independent override');
+assert.doesNotMatch(combatAdapter,/setLockForward\(/,'attacks do not use Ecctrl camera-forward locking');
+assert.match(ecctrlController,/if \(hasFacingOverride\.current\)[\s\S]*turnCharacter\(characterBody, facingOverrideDirection\.current,[\s\S]*moveCharacter\(characterBody, run,/,'attack facing and camera-relative movement remain independent');
+assert.match(playerCombatCore,/onPoseSample\?\.\(\{pose:p,idle:IDLE/,'the shared combat core exposes one generic external-skeleton pose seam');
+assert.match(sandbox,/nodes\.Mannequin_1\.skeleton\.update\(\);[\s\S]*nodes\.Mannequin_2\.skeleton\.update\(\);/,'the additive pose is uploaded after the locomotion mixer and before rendering');
+
+assert.deepEqual(ECCTRL_ATTACK_SEQUENCE.map(attack=>attack.group),['vertical','horizontal','stab']);
+assert.equal(attackSpecAt(4).group,'horizontal','the three-family attack sampler wraps without weapon-specific logic');
+assert.deepEqual(chooseCombatFacing({aim:{x:0,z:-2},move:{x:1,z:0},forward:{x:0,z:1}}),{x:0,z:-1},'right-stick aim wins attack facing');
+assert.deepEqual(chooseCombatFacing({aim:{x:0,z:0},move:{x:3,z:4},forward:{x:0,z:1}}),{x:.6,z:.8},'movement supplies attack facing when there is no aim stick');
+const poseDelta=wardenPoseDelta({twist:.5,pitch:.25,lean:-.1,hipTwist:.2,lower:.3,lunge:.4,hip:{x:.2,z:.3},head:{x:.1,y:-.2}},{twist:.1,pitch:.05,lean:0,hipTwist:.05,lower:.1,lunge:0,hip:{x:.05,z:.1},head:{x:0,y:-.05}});
+assert.ok(Math.abs(poseDelta.twist-.4)<1e-9&&Math.abs(poseDelta.lunge-.4)<1e-9&&Math.abs(poseDelta.headY+.15)<1e-9,'Warden poses become additive Ecctrl bone offsets');
 
 assert.ok(existsSync(bundlePath)&&statSync(bundlePath).size>1_000_000,'the static Ecctrl/Rapier bundle is checked in');
 assert.ok(existsSync(modelPath)&&statSync(modelPath).size>6_000_000,'the mannequin animation library is checked in');
@@ -60,6 +88,11 @@ const analog=readEcctrlGamepad({axes:[0.8,-0.6],buttons});
 assert.equal(analog.jump,true,'Cross is jump in the sandbox');
 assert.ok(analog.stick.x>0&&analog.stick.y>0,'raw gamepad Y is inverted to Ecctrl camera-forward coordinates');
 assert.equal(analog.run,true,'large analog travel selects the run animation');
+
+buttons[2]={pressed:true,value:1};
+const attacking=readEcctrlGamepad({axes:[0,0,.6,-.8],buttons});
+assert.equal(attacking.attack,true,'Square triggers the generic weapon attack');
+assert.ok(attacking.aimStick.x>0&&attacking.aimStick.y>0,'the right stick supplies committed attack facing');
 
 buttons[12]={pressed:true,value:1};
 buttons[14]={pressed:true,value:1};

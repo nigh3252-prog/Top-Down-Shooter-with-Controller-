@@ -69,6 +69,63 @@
   letter-spacing: 0.05em;
 }
 
+#ecctrlLabRoot .ecctrl-weapon-tuner {
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right));
+  top: max(58px, calc(env(safe-area-inset-top) + 50px));
+  width: min(158px, 42vw);
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(49, 80, 77, 0.82);
+  border-radius: 7px;
+  background: rgba(8, 20, 22, 0.86);
+  pointer-events: auto;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 7px;
+  border: 1px solid #6d4a32;
+  border-radius: 5px;
+  color: #7ea39d;
+  background: rgba(42, 35, 28, 0.72);
+  font: inherit;
+  font-size: 7px;
+  letter-spacing: 0.07em;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner button strong {
+  color: #f2bd78;
+  font-size: 8px;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner label {
+  display: grid;
+  gap: 2px;
+  color: #7ea39d;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner label > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner output {
+  color: #7bcabd;
+}
+
+#ecctrlLabRoot .ecctrl-weapon-tuner input {
+  width: 100%;
+  accent-color: #e8a04c;
+  touch-action: pan-x;
+}
+
 #ecctrlLabRoot .ecctrl-control-hint {
   position: absolute;
   left: 50%;
@@ -133,10 +190,9 @@
     pointer-events: none;
   }
 
-  #ecctrlLabRoot .ecctrl-jump-button {
+  #ecctrlLabRoot .ecctrl-jump-button,
+  #ecctrlLabRoot .ecctrl-attack-button {
     position: absolute;
-    right: max(22px, env(safe-area-inset-right));
-    bottom: max(28px, env(safe-area-inset-bottom));
     width: 76px;
     height: 76px;
     display: grid;
@@ -151,17 +207,33 @@
     touch-action: none;
   }
 
-  #ecctrlLabRoot .ecctrl-jump-button:active {
+  #ecctrlLabRoot .ecctrl-jump-button {
+    right: max(22px, env(safe-area-inset-right));
+    bottom: max(28px, env(safe-area-inset-bottom));
+  }
+
+  #ecctrlLabRoot .ecctrl-attack-button {
+    right: max(105px, calc(env(safe-area-inset-right) + 96px));
+    bottom: max(52px, calc(env(safe-area-inset-bottom) + 45px));
+    border-color: #467a74;
+    color: #9ee0d3;
+    background: rgba(16, 38, 40, 0.82);
+  }
+
+  #ecctrlLabRoot .ecctrl-jump-button:active,
+  #ecctrlLabRoot .ecctrl-attack-button:active {
     transform: translateY(2px);
     box-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
   }
 
-  #ecctrlLabRoot .ecctrl-jump-button strong {
+  #ecctrlLabRoot .ecctrl-jump-button strong,
+  #ecctrlLabRoot .ecctrl-attack-button strong {
     font-size: 22px;
     line-height: 1;
   }
 
-  #ecctrlLabRoot .ecctrl-jump-button small {
+  #ecctrlLabRoot .ecctrl-jump-button small,
+  #ecctrlLabRoot .ecctrl-attack-button small {
     font: inherit;
     font-size: 8px;
     letter-spacing: 0.08em;
@@ -174,13 +246,23 @@
     padding: 6px 8px;
   }
 
+  #ecctrlLabRoot .ecctrl-weapon-tuner {
+    top: max(51px, calc(env(safe-area-inset-top) + 43px));
+    padding: 6px 8px;
+  }
+
   #ecctrlLabRoot .ecctrl-touch-stick {
     width: 102px;
     height: 102px;
   }
 
-  #ecctrlLabRoot .ecctrl-jump-button {
+  #ecctrlLabRoot .ecctrl-jump-button,
+  #ecctrlLabRoot .ecctrl-attack-button {
     width: 66px;
     height: 66px;
+  }
+
+  #ecctrlLabRoot .ecctrl-attack-button {
+    right: max(94px, calc(env(safe-area-inset-right) + 87px));
   }
 }

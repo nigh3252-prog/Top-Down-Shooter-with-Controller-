@@ -122,6 +122,8 @@ const Ecctrl: ForwardRefComponent<EcctrlProps, EcctrlHandle> = /* @__PURE__ */ f
   const characterXAxis = useRef<THREE.Vector3>(new THREE.Vector3(1, 0, 0));
   const characterZAxis = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
   const characterColliderRef = useRef<RapierCollider>(null);
+  const facingOverrideDirection = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
+  const hasFacingOverride = useRef<boolean>(false);
   const setMovement = useCallback((movement: MovementInput) => {
     if (movement.forward !== undefined) movementState.current.forward = movement.forward;
     if (movement.backward !== undefined) movementState.current.backward = movement.backward;
@@ -136,6 +138,14 @@ const Ecctrl: ForwardRefComponent<EcctrlProps, EcctrlHandle> = /* @__PURE__ */ f
   }, [])
   const setLockForward = useCallback((lock: boolean) => isLockForward.current = lock, []);
   const setForwardDir = useCallback((dir: THREE.Vector3) => forwardDirection.current.copy(dir), [])
+  const setFacingOverride = useCallback((dir: THREE.Vector3 | null) => {
+    if (!dir || dir.lengthSq() < 1e-8) {
+      hasFacingOverride.current = false;
+      return;
+    }
+    facingOverrideDirection.current.copy(dir).normalize();
+    hasFacingOverride.current = true;
+  }, [])
   useImperativeHandle(ref, () => ({
     get body() { return characterRef.current! },
     get collider() { return characterColliderRef.current! },
@@ -174,10 +184,12 @@ const Ecctrl: ForwardRefComponent<EcctrlProps, EcctrlHandle> = /* @__PURE__ */ f
     get runActive() { return runActive.current },
     get jumpActive() { return jumpActive.current },
     get lockForward() { return isLockForward.current },
+    get facingOverrideActive() { return hasFacingOverride.current },
     get turnOnYQuat() { return turnOnYQuat.current },
     setMovement,
     setLockForward,
     setForwardDir,
+    setFacingOverride,
   }), []);
 
   /**
@@ -1066,7 +1078,13 @@ const Ecctrl: ForwardRefComponent<EcctrlProps, EcctrlHandle> = /* @__PURE__ */ f
      * Move character model to correct direction and speed
      */
     // Determine if camera based movment or character based movement
-    if (isLockForward.current) {
+    if (hasFacingOverride.current) {
+      // Hold an authored facing (for example, during an attack) without
+      // replacing the camera-relative direction used to calculate movement.
+      if (!isZeroGravity.current) turnCharacter(characterBody, facingOverrideDirection.current, frameRateCorrection)
+      if (hasMoveInput) moveCharacter(characterBody, run, frameRateCorrection)
+      lastInputDir.current.copy(facingOverrideDirection.current)
+    } else if (isLockForward.current) {
       // Camera based movement always turn character to camera forward direction
       if (!isZeroGravity.current) turnCharacter(characterBody, forwardDirection.current, frameRateCorrection)
       if (hasMoveInput) moveCharacter(characterBody, run, frameRateCorrection)
@@ -1201,10 +1219,12 @@ export interface EcctrlHandle {
   readonly runActive: boolean
   readonly jumpActive: boolean
   readonly lockForward: boolean
+  readonly facingOverrideActive: boolean
   readonly turnOnYQuat: THREE.Quaternion
   setMovement: (state: MovementInput) => void
   setLockForward: (lock: boolean) => void
   setForwardDir: (dir: THREE.Vector3) => void
+  setFacingOverride: (dir: THREE.Vector3 | null) => void
 }
 
 export interface EcctrlProps extends RigidBodyProps {

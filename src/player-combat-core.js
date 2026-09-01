@@ -18,6 +18,7 @@
 //       onAttackReset(),            // clear page-side per-swing hit caches
 //       onAttackComplete(),         // a swing finished (before chaining)
 //       onAttackChainIdle(),        // combat returned to idle, combo window opens
+//       onPoseSample(info),         // {pose,idle,state,dt,now,sway}; optional external skeletal layer
 //       detectHits(dt, tipScene, baseScene, tipSpeed),  // page-owned hit routing
 //       onWeaponSelected(),         // after selectCombatWeapon switches defs
 //       onWeaponUISync(),           // page refreshes weapon-related UI
@@ -417,6 +418,7 @@ export function installPlayerCombat(api) {
       W.head.rotation.set(p.head.y*.28,p.head.x*.36,0);
       W.hat.rotation.set(p.pitch*.06,p.twist*.10,p.lean*.08);
     }
+    hooks.onPoseSample?.({pose:p,idle:IDLE,state:combatState,dt,now,sway});
     const shoulderDrop=getCombatShoulderDrop();
     const shR=new THREE.Vector3(.72,1.20-shoulderDrop,.36), shL=new THREE.Vector3(-.72,1.20-shoulderDrop,.36);
     const shoulderMid=shR.clone().lerp(shL,.5);
@@ -512,6 +514,21 @@ export function installPlayerCombat(api) {
   }
   function combatMovePenalty(){ if(!combatState.attack) return 1; return clamp(1 - combatState.tune.weight*.38, .52, .95); }
 
+  function disposeCombat(){
+    if(combatLayer){
+      combatLayer.traverse?.(object=>object.geometry?.dispose?.());
+      combatLayer.removeFromParent();
+    }
+    combatTrail.mesh.removeFromParent();
+    combatTrail.mesh.geometry.dispose();
+    combatTrail.mesh.material.dispose();
+    combatSparks.pts.removeFromParent();
+    combatSparks.pts.geometry.dispose();
+    combatSparks.pts.material.dispose();
+    combatLayer=null;weaponRoot=null;driverDebug=null;
+    rightArmA=null;rightArmB=null;leftArmA=null;leftArmB=null;rightHandProxy=null;leftHandProxy=null;
+  }
+
   return {
     // state + constants
     combatState, RIG, LUNGE, BASE_RIG, BASE_BLADE_LEN, TUNE_DEFAULTS,
@@ -529,6 +546,6 @@ export function installPlayerCombat(api) {
     selectCombatWeapon, applyCombatWeaponTuning, attackGroupFor, chooseAttack, setReadyPose,
     startCombatAttack, triggerCombatAttack, getAttackPhaseIndex, currentAttackTimeScale,
     clearWeaponRoot, updateWeaponDynamicVisual, attachCombatToActiveModel, updateCombatArmVisibility,
-    resetCombatTrail, updateCombat, combatMovePenalty
+    resetCombatTrail, updateCombat, combatMovePenalty, disposeCombat
   };
 }

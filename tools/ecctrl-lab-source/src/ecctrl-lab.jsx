@@ -13,6 +13,11 @@ import {
   RUN_ANIMATION_THRESHOLD,
   readEcctrlGamepad,
 } from './ecctrl-input.js';
+import {
+  EcctrlWardenCombat,
+  ECCTRL_WEAPON_IDS,
+  createEcctrlSkeletonPoseApplier,
+} from './ecctrl-warden-combat.jsx';
 
 const MODEL_URL = new URL('./media/ecctrl/AnimationLibrary.glb', document.baseURI).href;
 const CAMERA_OFFSET = new THREE.Vector3(0, 20, 17.6);
@@ -44,7 +49,7 @@ function useKeyboard(active) {
     const controlledCodes = new Set([
       'KeyW', 'KeyA', 'KeyS', 'KeyD',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-      'Space', 'ShiftLeft', 'ShiftRight', 'KeyR',
+      'Space', 'ShiftLeft', 'ShiftRight', 'KeyJ', 'KeyR',
     ]);
     const onKeyDown = event => {
       if (!active) return;
@@ -71,13 +76,34 @@ function useKeyboard(active) {
   return keys;
 }
 
-function AnimatedCharacterModel({ onReady }) {
+function AnimatedCharacterModel({
+  active,
+  character,
+  combatApi,
+  mountHeight,
+  weaponScale,
+  weaponId,
+  onReady,
+  onCombatStatus,
+}) {
   const previousActionName = useRef('Idle_Loop');
   const initialActionStarted = useRef(false);
   const [canPlayNext, setCanPlayNext] = useState(true);
   const { nodes, materials, animations } = useGLTF(MODEL_URL);
   const { ref, actions, mixer } = useAnimations(animations);
   const animationState = useEcctrlAnimationStore(state => state.animationState);
+  const combatPoseOverlay = useRef(null);
+  const lastCombatRenderFrame = useRef(-1);
+  const applyCombatPose = useMemo(() => createEcctrlSkeletonPoseApplier(nodes), [nodes]);
+  const applyCombatBeforeRender = useCallback(renderer => {
+    const renderFrame = renderer.info.render.frame;
+    if (lastCombatRenderFrame.current === renderFrame) return;
+    lastCombatRenderFrame.current = renderFrame;
+    applyCombatPose(combatPoseOverlay.current);
+    nodes.root.updateMatrixWorld(true);
+    nodes.Mannequin_1.skeleton.update();
+    nodes.Mannequin_2.skeleton.update();
+  }, [applyCombatPose, nodes]);
 
   useEffect(() => {
     materials.M_Joints.side = THREE.FrontSide;
@@ -152,6 +178,7 @@ function AnimatedCharacterModel({ onReady }) {
           skeleton={nodes.Mannequin_1.skeleton}
           castShadow
           receiveShadow
+          onBeforeRender={applyCombatBeforeRender}
         />
         <skinnedMesh
           name="Mannequin_2"
@@ -160,9 +187,20 @@ function AnimatedCharacterModel({ onReady }) {
           skeleton={nodes.Mannequin_2.skeleton}
           castShadow
           receiveShadow
+          onBeforeRender={applyCombatBeforeRender}
         />
       </group>
       <primitive object={nodes.root} />
+      <EcctrlWardenCombat
+        active={active}
+        character={character}
+        combatApi={combatApi}
+        poseOverlay={combatPoseOverlay}
+        mountHeight={mountHeight}
+        weaponScale={weaponScale}
+        weaponId={weaponId}
+        onCombatStatus={onCombatStatus}
+      />
     </group>
   );
 }
@@ -191,10 +229,22 @@ function TopDownCamera({ character }) {
   return null;
 }
 
-function EcctrlCharacter({ active, touchInput, onCharacterReady, onInputChange }) {
+function EcctrlCharacter({
+  active,
+  touchInput,
+  combatApi,
+  mountHeight,
+  weaponScale,
+  weaponId,
+  onCharacterReady,
+  onInputChange,
+  onCombatStatus,
+}) {
   const character = useRef(null);
   const keyboard = useKeyboard(active);
   const previousFullscreen = useRef(false);
+  const previousAttack = useRef(false);
+  const previousTouchAttackSerial = useRef(0);
   const previousInputKind = useRef('KEYBOARD');
   const respawnRequested = useRef(false);
 
@@ -209,8 +259,10 @@ function EcctrlCharacter({ active, touchInput, onCharacterReady, onInputChange }
         run: false,
         jump: false,
       });
+      previousAttack.current = false;
+      previousTouchAttackSerial.current = touchInput.current.attackSerial || 0;
     }
-  }, [active]);
+  }, [active, touchInput]);
 
   useFrame(() => {
     const handle = character.current;
@@ -219,8 +271,9 @@ function EcctrlCharacter({ active, touchInput, onCharacterReady, onInputChange }
     const keys = keyboard.current;
     const gamepadState = readGamepad();
     const touch = touchInput.current;
+    const touchAttack = touch.attackSerial !== previousTouchAttackSerial.current;
     const hasTouchMovement = Math.hypot(touch.x, touch.y) > 0.0001;
-    const inputKind = gamepadState ? 'GAMEPAD' : hasTouchMovement || touch.jump ? 'TOUCH' : 'KEYBOARD';
+    const inputKind = gamepadState ? 'GAMEPAD' : hasTouchMovement || touch.jump || touchAttack ? 'TOUCH' : 'KEYBOARD';
     if (inputKind !== previousInputKind.current) {
       previousInputKind.current = inputKind;
       onInputChange?.(inputKind);
@@ -238,6 +291,13 @@ function EcctrlCharacter({ active, touchInput, onCharacterReady, onInputChange }
         || keys.has('ShiftLeft') || keys.has('ShiftRight')),
       jump: Boolean(gamepadState?.jump || touch.jump || keys.has('Space')),
     });
+
+    const attackPressed = Boolean(gamepadState?.attack || keys.has('KeyJ'));
+    if (touchAttack || (attackPressed && !previousAttack.current)) {
+      combatApi.current?.triggerAttack({ aimStick: gamepadState?.aimStick });
+    }
+    previousAttack.current = attackPressed;
+    previousTouchAttackSerial.current = touch.attackSerial;
 
     const fullscreenPressed = Boolean(gamepadState?.fullscreen);
     if (fullscreenPressed && !previousFullscreen.current) {
@@ -300,7 +360,16 @@ function EcctrlCharacter({ active, touchInput, onCharacterReady, onInputChange }
         autoBalanceDampingOnY={0.76}
       >
         <EcctrlAnimationStateController ecctrl={character} enabled={active} />
-        <AnimatedCharacterModel onReady={onCharacterReady} />
+        <AnimatedCharacterModel
+          active={active}
+          character={character}
+          combatApi={combatApi}
+          mountHeight={mountHeight}
+          weaponScale={weaponScale}
+          weaponId={weaponId}
+          onReady={onCharacterReady}
+          onCombatStatus={onCombatStatus}
+        />
       </Ecctrl>
     </>
   );
@@ -347,7 +416,17 @@ function Chamber() {
   );
 }
 
-function LabScene({ active, touchInput, onCharacterReady, onInputChange }) {
+function LabScene({
+  active,
+  touchInput,
+  combatApi,
+  mountHeight,
+  weaponScale,
+  weaponId,
+  onCharacterReady,
+  onInputChange,
+  onCombatStatus,
+}) {
   return (
     <>
       <color attach="background" args={['#071113']} />
@@ -370,8 +449,13 @@ function LabScene({ active, touchInput, onCharacterReady, onInputChange }) {
         <EcctrlCharacter
           active={active}
           touchInput={touchInput}
+          combatApi={combatApi}
+          mountHeight={mountHeight}
+          weaponScale={weaponScale}
+          weaponId={weaponId}
           onCharacterReady={onCharacterReady}
           onInputChange={onInputChange}
+          onCombatStatus={onCombatStatus}
         />
       </Physics>
     </>
@@ -449,6 +533,51 @@ function TouchControls({ input, active }) {
         <strong>×</strong>
         <small>JUMP</small>
       </button>
+      <button
+        type="button"
+        className="ecctrl-attack-button"
+        aria-label="Attack"
+        onPointerDown={event => {
+          event.preventDefault();
+          input.current.attackSerial += 1;
+        }}
+      >
+        <strong>□</strong>
+        <small>ATTACK</small>
+      </button>
+    </div>
+  );
+}
+
+function WeaponTuner({ weaponId, mountHeight, weaponScale, onWeaponCycle, onHeightChange, onScaleChange }) {
+  return (
+    <div className="ecctrl-weapon-tuner">
+      <button type="button" onClick={onWeaponCycle}>
+        <span>WEAPON</span>
+        <strong>{weaponId.toUpperCase()}</strong>
+      </button>
+      <label>
+        <span>ATTACH Y <output>{mountHeight.toFixed(2)}</output></span>
+        <input
+          type="range"
+          min="-1.25"
+          max="1.25"
+          step="0.05"
+          value={mountHeight}
+          onChange={event => onHeightChange(Number(event.target.value))}
+        />
+      </label>
+      <label>
+        <span>WEAPON SCALE <output>{weaponScale.toFixed(2)}</output></span>
+        <input
+          type="range"
+          min="0.65"
+          max="1.75"
+          step="0.05"
+          value={weaponScale}
+          onChange={event => onScaleChange(Number(event.target.value))}
+        />
+      </label>
     </div>
   );
 }
@@ -463,9 +592,15 @@ function LoadingCharacter() {
 }
 
 export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
-  const touchInput = useRef({ x: 0, y: 0, jump: false });
+  const touchInput = useRef({ x: 0, y: 0, jump: false, attackSerial: 0 });
+  const combatApi = useRef(null);
   const [ready, setReady] = useState(false);
   const [inputKind, setInputKind] = useState('KEYBOARD');
+  const [combatStatus, setCombatStatus] = useState({ phase: 'READY', label: 'READY' });
+  const [mountHeight, setMountHeight] = useState(0);
+  const [weaponScale, setWeaponScale] = useState(1);
+  const [weaponIndex, setWeaponIndex] = useState(0);
+  const weaponId = ECCTRL_WEAPON_IDS[weaponIndex % ECCTRL_WEAPON_IDS.length];
   const reportReady = useCallback(() => {
     setReady(true);
     onCharacterReady?.();
@@ -474,6 +609,12 @@ export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
     setInputKind(kind);
     onInputChange?.(kind);
   }, [onInputChange]);
+  const reportCombat = useCallback(status => {
+    setCombatStatus(previous => ({ ...previous, ...status }));
+  }, []);
+  const cycleWeapon = useCallback(() => {
+    setWeaponIndex(index => (index + 1) % ECCTRL_WEAPON_IDS.length);
+  }, []);
 
   return (
     <div className="ecctrl-lab" data-active={active ? 'true' : 'false'}>
@@ -488,19 +629,34 @@ export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
           <LabScene
             active={active}
             touchInput={touchInput}
+            combatApi={combatApi}
+            mountHeight={mountHeight}
+            weaponScale={weaponScale}
+            weaponId={weaponId}
             onCharacterReady={reportReady}
             onInputChange={reportInput}
+            onCombatStatus={reportCombat}
           />
         </Suspense>
       </Canvas>
       {!ready && <LoadingCharacter />}
       <div className="ecctrl-mode-card" aria-live="polite">
-        <strong>ECCTRL LOCOMOTION</strong>
-        <span>{inputKind} · fixed Warden camera</span>
+        <strong>ECCTRL + WARDEN WEAPON</strong>
+        <span>{inputKind} · {weaponId.toUpperCase()} · {combatStatus.label}</span>
       </div>
+      <WeaponTuner
+        weaponId={weaponId}
+        mountHeight={mountHeight}
+        weaponScale={weaponScale}
+        onWeaponCycle={cycleWeapon}
+        onHeightChange={setMountHeight}
+        onScaleChange={setWeaponScale}
+      />
       <div className="ecctrl-control-hint">
         <span>WASD / LEFT STICK</span>
         <span>SPACE / CROSS · JUMP</span>
+        <span>J / SQUARE / R2 · ATTACK</span>
+        <span>RIGHT STICK · ATTACK FACING</span>
         <span>R · RESET</span>
       </div>
       <TouchControls input={touchInput} active={active} />
