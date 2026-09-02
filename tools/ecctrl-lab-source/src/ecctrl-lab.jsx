@@ -18,6 +18,8 @@ import {
   ECCTRL_WEAPON_IDS,
   createEcctrlSkeletonPoseApplier,
 } from './ecctrl-warden-combat.jsx';
+import { createWorldSpriteEnemyLayer } from '../../../src/world-sprite-enemy-layer.js';
+import { createWorldSpriteEnemyDefinitions } from '../../../src/world-sprite-enemy-registry.js';
 
 const MODEL_URL = new URL('./media/ecctrl/AnimationLibrary.glb', document.baseURI).href;
 const CAMERA_OFFSET = new THREE.Vector3(0, 20, 17.6);
@@ -25,6 +27,36 @@ const CAMERA_TARGET_HEIGHT = 0.45;
 const CHAMBER_APOTHEM = 9.5;
 const CHAMBER_SIDE = CHAMBER_APOTHEM * 2 * Math.tan(Math.PI / 6);
 const CHAMBER_RADIUS = CHAMBER_APOTHEM / Math.cos(Math.PI / 6);
+
+function WorldSpriteEnemyBridgeLayer({ active, enemyBridge, playerPosition }) {
+  const parent = useRef(null);
+  const layer = useRef(null);
+
+  useEffect(() => {
+    if (!parent.current) return undefined;
+    const nextLayer = createWorldSpriteEnemyLayer({
+      THREE,
+      parent: parent.current,
+      definitions: createWorldSpriteEnemyDefinitions(),
+    });
+    layer.current = nextLayer;
+    return () => {
+      nextLayer.destroy();
+      if (layer.current === nextLayer) layer.current = null;
+    };
+  }, []);
+
+  useFrame((state, delta) => {
+    if (!active || !layer.current || !enemyBridge) return;
+    const enemies = enemyBridge.step?.({
+      delta,
+      player: playerPosition.current,
+    }) ?? enemyBridge.snapshot?.() ?? [];
+    layer.current.update({ enemies, now: state.clock.elapsedTime * 1000 });
+  });
+
+  return <group ref={parent} name="Ecctrl authoritative world-sprite enemies" />;
+}
 
 const ANIMATION_FOR_STATE = Object.freeze({
   IDLE: 'Idle_Loop',
@@ -233,6 +265,7 @@ function EcctrlCharacter({
   active,
   touchInput,
   combatApi,
+  worldPosition,
   mountHeight,
   weaponScale,
   weaponId,
@@ -266,6 +299,10 @@ function EcctrlCharacter({
 
   useFrame(() => {
     const handle = character.current;
+    if (handle?.body) {
+      worldPosition.current.x = handle.currPos.x;
+      worldPosition.current.z = handle.currPos.z;
+    }
     if (!active || !handle?.body) return;
 
     const keys = keyboard.current;
@@ -420,6 +457,8 @@ function LabScene({
   active,
   touchInput,
   combatApi,
+  enemyBridge,
+  playerPosition,
   mountHeight,
   weaponScale,
   weaponId,
@@ -450,6 +489,7 @@ function LabScene({
           active={active}
           touchInput={touchInput}
           combatApi={combatApi}
+          worldPosition={playerPosition}
           mountHeight={mountHeight}
           weaponScale={weaponScale}
           weaponId={weaponId}
@@ -458,6 +498,11 @@ function LabScene({
           onCombatStatus={onCombatStatus}
         />
       </Physics>
+      <WorldSpriteEnemyBridgeLayer
+        active={active}
+        enemyBridge={enemyBridge}
+        playerPosition={playerPosition}
+      />
     </>
   );
 }
@@ -591,9 +636,10 @@ function LoadingCharacter() {
   );
 }
 
-export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
+export function EcctrlLab({ active, enemyBridge, onCharacterReady, onInputChange }) {
   const touchInput = useRef({ x: 0, y: 0, jump: false, attackSerial: 0 });
   const combatApi = useRef(null);
+  const playerPosition = useRef({ x: 0, z: 0 });
   const [ready, setReady] = useState(false);
   const [inputKind, setInputKind] = useState('KEYBOARD');
   const [combatStatus, setCombatStatus] = useState({ phase: 'READY', label: 'READY' });
@@ -630,6 +676,8 @@ export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
             active={active}
             touchInput={touchInput}
             combatApi={combatApi}
+            enemyBridge={enemyBridge}
+            playerPosition={playerPosition}
             mountHeight={mountHeight}
             weaponScale={weaponScale}
             weaponId={weaponId}
@@ -641,8 +689,8 @@ export function EcctrlLab({ active, onCharacterReady, onInputChange }) {
       </Canvas>
       {!ready && <LoadingCharacter />}
       <div className="ecctrl-mode-card" aria-live="polite">
-        <strong>ECCTRL + WARDEN WEAPON</strong>
-        <span>{inputKind} · {weaponId.toUpperCase()} · {combatStatus.label}</span>
+        <strong>ECCTRL + WORLD SPRITES</strong>
+        <span>{inputKind} · {weaponId.toUpperCase()} · LIVE WRINKELER DEPTH · {combatStatus.label}</span>
       </div>
       <WeaponTuner
         weaponId={weaponId}

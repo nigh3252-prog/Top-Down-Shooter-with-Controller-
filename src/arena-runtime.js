@@ -43,7 +43,9 @@ import { createWardenTrialCenterField, createWardenTrialStageBoundary } from './
 import { installWardenTrialSwipeSurface, isWardenTrialCardGestureEnabled } from './warden-trial-card-ui.js';
 import { createWardenTrialCardCooldown } from './warden-trial-card-cooldown.js';
 import { dispatchWardenTrialUpArcana, isWardenTrialStaminaCard, resolveWardenTrialCardPlay, starterCardsForWardenTrialWeapon, wardenTrialUpArcanaIdForCard } from './warden-trial-card-policy.js';
-import { createAccordionEnemyOverlay } from './accordion-enemy-overlay.js';
+import { createWorldSpriteEnemyLayer } from './world-sprite-enemy-layer.js';
+import { createWorldSpriteEnemyDefinitions } from './world-sprite-enemy-registry.js';
+import { createWorldSpriteEnemyRuntimeBridge } from './world-sprite-enemy-runtime-bridge.js';
 import {
   WARDEN_TRIAL_REWARD_CHOICE_COUNT,
   WARDEN_TRIAL_STAMINA_MAX,
@@ -220,6 +222,11 @@ key.target = keyTarget; scene.add(key);
 const rim = new THREE.PointLight(0x68bfff, 30, 120, 1.2); rim.position.set(16, 9, -14); scene.add(rim);
 
 const worldRoot = new THREE.Group(); scene.add(worldRoot);
+const worldSpriteEnemyLayer=createWorldSpriteEnemyLayer({
+  THREE,
+  parent:worldRoot,
+  definitions:createWorldSpriteEnemyDefinitions(),
+});
 
 const dungeon = createHexMaze({ seed:MAZE_SEED, layout:runtimeConfig.layout, radius:5, minRoomSize:4, maxRoomSize:7, minLoopLength:6 });
 if(!dungeon.validation.valid) throw new Error(`Invalid maze ${MAZE_SEED}: ${dungeon.validation.errors.join(' | ')}`);
@@ -259,29 +266,6 @@ const wardenTrialCenterField=wardenTrialMode?createWardenTrialCenterField({
   softEdge:WARDEN_TRIAL_SETTINGS.centerField.softEdge,
   fullEdge:WARDEN_TRIAL_SETTINGS.centerField.fullEdge,
 }):null;
-const accordionOverlayProjection=wardenTrialMode?new THREE.Vector3():null;
-const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
-  canvas:document.createElement('canvas'),
-  projectWorldToScreen(point){
-    accordionOverlayProjection.set(Number(point?.x)||0,Number(point?.y)||0,Number(point?.z)||0).project(camera);
-    return{
-      x:(accordionOverlayProjection.x*.5+.5)*arenaViewport.width,
-      y:(-accordionOverlayProjection.y*.5+.5)*arenaViewport.height,
-      depth:accordionOverlayProjection.z,
-    };
-  },
-  getViewport:()=>({width:arenaViewport.width,height:arenaViewport.height,dpr:devicePixelRatio||1}),
-}):null;
-if(accordionEnemyOverlay)document.body.appendChild(accordionEnemyOverlay.canvas);
-
-function syncAccordionEnemyOverlayCanvas(){
-  const canvas=accordionEnemyOverlay?.canvas;
-  if(!canvas)return;
-  Object.assign(canvas.style,{
-    inset:'auto',left:'0px',top:'0px',right:'auto',bottom:'auto',
-    width:`${arenaViewport.width}px`,height:`${arenaViewport.height}px`,
-  });
-}
 function syncArenaViewport(){
   arenaViewport=readArenaViewport();
   camera.aspect=arenaViewport.width/arenaViewport.height;
@@ -293,8 +277,6 @@ function syncArenaViewport(){
   }
   wardenTrialCenterField?.refresh?.();
   renderer.setSize(arenaViewport.width,arenaViewport.height);
-  syncAccordionEnemyOverlayCanvas();
-  accordionEnemyOverlay?.resize();
 }
 syncArenaViewport();
 
@@ -2474,9 +2456,9 @@ function renderArena(){
     if(!object?.isMesh||object.frustumCulled!==false||!object.geometry?.getAttribute?.('color')||object.material?.vertexColors!==true||!object.visible)return;
     hiddenCaptureTrails.push(object);object.visible=false;
   });
+  worldSpriteEnemyLayer.update({enemies:enemySystem.enemies,now:performance.now()});
   renderer.render(scene, camera);
   for(const object of hiddenCaptureTrails)object.visible=true;
-  accordionEnemyOverlay?.render({enemies:enemySystem.enemies,now:performance.now()});
 }
 function arenaMoveInput(){return{x:Number(input.mx)||0,z:Number(input.mz)||0};}
 function setArcanaMovementLock(locked=true){arena.arcanaMovementLocked=!!locked;return arena.arcanaMovementLocked;}
@@ -2539,6 +2521,11 @@ function teleportArcanaPlayer(desired={}){
   return validation;
 }
 let running=false,destroyed=false,frameRequest=0,lastStateEmit=0;
+const worldSpriteEnemies=createWorldSpriteEnemyRuntimeBridge({
+  enemySystem,
+  isRuntimeRunning:()=>running,
+  isRuntimeDestroyed:()=>destroyed,
+});
 let stanceGate2Runtime=null,stanceGate3Runtime=null,stanceGate4Runtime=null,stanceGate4RingSize=null,stanceGate5Runtime=null;
 function emitRuntimeState(now=performance.now()){
   if(now-lastStateEmit<200)return;
@@ -2866,7 +2853,7 @@ function destroyRuntime(){
   stanceGate3Runtime?.destroy?.();stanceGate3Runtime=null;
   stanceGate2Runtime?.destroy?.();stanceGate2Runtime=null;
   trialCardGesture?.destroy?.();trialCardGesture=null;
-  accordionEnemyOverlay?.destroy?.();
+  worldSpriteEnemyLayer.destroy();
   renderer.dispose?.();
   clearArenaRuntime(runtimeHandle);
   emitRuntime({type:'lifecycle',destroyed:true});
@@ -2878,7 +2865,7 @@ const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:are
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
-  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
+  config:runtimeConfig,ready:Promise.resolve(true),enemySystem,worldSpriteEnemies,PC,combatState,FEEL,arena,actorPos,deck,dungeon,encounterState,HitFeel,sectionRegistry,controlRegistry,
   get mazeWorld(){return captureMazeWorld();},get activeRoomId(){return activeRoomId;},get roomTransition(){return roomTransition;},get capture(){return captureController;},get defenseController(){return stanceGate5Runtime;},
   get trialCardDirection(){return trialCardDirection;},
   get playerFacing(){return actorFacing;},getPlayerForward(){return{x:Math.sin(actorFacing),z:Math.cos(actorFacing)};},

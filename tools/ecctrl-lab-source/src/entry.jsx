@@ -12,6 +12,7 @@ function render() {
   root.render(
     <EcctrlLab
       active={active}
+      enemyBridge={callbacks.enemyBridge}
       onCharacterReady={callbacks.onCharacterReady}
       onInputChange={callbacks.onInputChange}
     />,

@@ -411,9 +411,9 @@ export function createArenaEnemySystem({
       trialCore.position.y=a.height*.5;trialHalo.position.y=.07;trialHalo.rotation.x=-Math.PI/2;
       visual={trialDot:true,trialCore,trialHalo,torsoRoot,weaponRigRoot,weaponRoot};
     } else if(a.accordion2d){
-      // The canvas overlay owns this enemy's pixels. Keeping an empty root in
-      // the 3D group preserves the normal lifecycle, hit testing, and cleanup
-      // contracts without drawing a second body underneath the puppet.
+      // The shared world-sprite layer owns this enemy's body and health. Keep
+      // the normal root for telegraphs, tokens, hit-testing, and cleanup without
+      // drawing a duplicate 3D body.
       visual={accordion2d:true};
     } else if(a.fusion){
       const fusionVisual = fusionRig.create(kind);
@@ -429,7 +429,6 @@ export function createArenaEnemySystem({
     const tokenRing = new THREE.Mesh(new THREE.TorusGeometry(a.radius*1.6, .04, 6, 32), mats.windup); tokenRing.position.y = .08; tokenRing.visible = false; root.add(tokenRing);
     const rockProp = a.thrower ? visual.weaponRoot : null;
     root.position.set(x, 0, z); group.add(root);
-    if(a.accordion2d) root.visible=false;
     const weaponScale = visual.RIG?.scale || GOBLIN_WEAPON_SCALE;
     const realAttacks = (a.combatAttacks || []).map(key => materializeGoblinAttack(a, key, weaponScale, visual.RIG)).filter(Boolean);
     const useRealCombat = realAttacks.length > 0;
@@ -1075,10 +1074,15 @@ export function createArenaEnemySystem({
   }
   function updateEnemyVisual(e, dt){
     if(e.accordion2d){
-      // The 2D puppet is drawn by the fixed screen-space overlay. Keep its
-      // simulation root hidden and expose only timing/position fields there.
-      e.root.visible=false;
-      e.telegraph.visible=false;e.tokenRing.visible=false;
+      // Body pixels live in the shared scene sprite. Keep the ordinary root for
+      // ground telegraphs/tokens; health is painted into the same sprite frame.
+      e.root.visible=true;
+      e.root.position.set(e.x,e.yOff+e.rootLift+(Number(e.wizardAirborneOffset)||0),e.z);
+      e.root.rotation.set(0,0,0);e.root.scale.set(1,1,1);
+      e.bar.visible=false;e.barBg.visible=false;
+      e.telegraph.visible=e.state==='windup';
+      e.telegraph.scale.setScalar(Math.max(1,e.radius*2.2/.75));
+      e.tokenRing.visible=!!e.token;
       return;
     } else if(e.trialDot){
       e.root.rotation.y=Math.atan2(e.facing.x,e.facing.z);
@@ -1155,8 +1159,9 @@ export function createArenaEnemySystem({
       // gibs fly harder on the killing blow (shatterGoblin normalizes knock, so
       // magnitude goes in via the power/spread multiplier)
       if(e.accordion2d){
-        // The accordion is a screen-space puppet, so its death is handled by
-        // the same lifecycle removal without spawning a 3D shatter duplicate.
+        // The accordion is a world-space sprite, so normal lifecycle removal
+        // releases its sprite on the next presentation update. It intentionally
+        // does not spawn a mismatched 3D shatter duplicate.
       }else if(e.trialDot){
         if(e.trialCore)rig.addDeathPieceFromObject(worldRoot,deathPieces,e.trialCore,null,e.trialCore.material,knock,1.1+power*.25);
       }else if(e.fusion){
