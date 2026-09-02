@@ -19,15 +19,12 @@ import { applyWizardEnemyStatus, resolveArenaEnemyMove } from './arena-enemies-b
 import { ARENA_FACTIONS, createArenaFactionService } from './arena-faction-service.js';
 import { createPlayerDamageInterceptorStack } from './player-damage-interceptors.js';
 import { createPlayerDamageRoute } from './player-damage-route.js';
-import { getArenaEnemyBySpawnKind, listArenaEnemies } from './arena-enemy-content-registry.js';
+import { getArenaEnemyBySpawnKind } from './arena-enemy-content-registry.js';
+import { ENEMY_LAB_MAX_DIRECT_COUNT, clampEnemyLabDirectCount } from './enemy-lab-direct-encounter.js';
 
 export { ARENA_ENEMY_ARCHETYPES };
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const ORIGINAL_GOBLIN_IDS=new Set(
-  listArenaEnemies({family:'GOBLINS'}).filter(enemy=>enemy.id!==LUGARU_DUELIST_ID&&!enemy.stats?.trialOnly).map(enemy=>enemy.id),
-);
-
 export function routeArenaEnemyMove(systems,enemy,target,options={},fallback=null){
   const owner=(systems||[]).find(system=>system?.enemies?.includes?.(enemy));
   if(!owner)return false;
@@ -216,24 +213,10 @@ export function createArenaEnemySystem(options={}){
     }
   }
 
-  function removeEnemyImmediately(system,enemy){
-    const index=system.enemies.indexOf(enemy);
-    if(index>=0)system.enemies.splice(index,1);
-    if(enemy?.root?.parent)enemy.root.parent.remove(enemy.root);
-  }
-
-  function retainOriginalGoblinKind(system,kind,count){
-    let retained=0;
-    for(const enemy of [...system.enemies]){
-      if(enemy.kind===kind&&retained<count){retained++;continue;}
-      removeEnemyImmediately(system,enemy);
-    }
-    return retained;
-  }
-
   function normalizeLabGroups(groups=[]){
     const normalized=[];
     const claimedSystems=new Set();
+    let totalCount=0;
     for(const raw of groups){
       const spawnKind=String(raw?.spawnKind||raw?.kind||'').trim();
       if(!spawnKind)continue;
@@ -242,10 +225,15 @@ export function createArenaEnemySystem(options={}){
         return {ok:false,error:`Enemy Lab needs groups from different enemy systems; ${systemKey} was selected twice.`};
       }
       claimedSystems.add(systemKey);
+      const count=clampEnemyLabDirectCount(raw?.count);
+      totalCount+=count;
+      if(totalCount>ENEMY_LAB_MAX_DIRECT_COUNT){
+        return {ok:false,error:`Enemy Lab direct tests support up to ${ENEMY_LAB_MAX_DIRECT_COUNT} enemies total.`};
+      }
       normalized.push({
         system:systemKey,
         spawnKind,
-        count:clamp(Math.round(Number(raw?.count)||1),1,20),
+        count,
       });
     }
     if(!normalized.length)return {ok:false,error:'Enemy Lab scenario did not contain any valid enemy groups.'};
@@ -285,19 +273,10 @@ export function createArenaEnemySystem(options={}){
       system.setEncounterPlanningEnabled?.(false);
 
       const lugaruDuelist=groupPlan.system==='original'&&groupPlan.spawnKind===LUGARU_DUELIST_ID;
-      const originalGoblin=groupPlan.system==='original'&&ORIGINAL_GOBLIN_IDS.has(groupPlan.spawnKind);
-      const isolatedOriginal=originalGoblin||lugaruDuelist;
-      system.setSpawnKind(isolatedOriginal?'goblins':groupPlan.spawnKind);
-      const spawnCount=isolatedOriginal
-        ? clamp(groupPlan.count*ORIGINAL_GOBLIN_IDS.size,1,20)
-        : groupPlan.count;
-      system.setWaveSize(spawnCount);
+      system.setSpawnKind(lugaruDuelist?'grunt':groupPlan.spawnKind);
+      system.setWaveSize(groupPlan.count,{source:'enemy-lab',maximum:ENEMY_LAB_MAX_DIRECT_COUNT});
       system.startRoomEncounter(roomId);
-      if(originalGoblin)retainOriginalGoblinKind(system,groupPlan.spawnKind,groupPlan.count);
-      if(lugaruDuelist){
-        retainOriginalGoblinKind(system,'grunt',groupPlan.count);
-        system.configureLugaruDuelists?.(system.enemies);
-      }
+      if(lugaruDuelist)system.configureLugaruDuelists?.(system.enemies);
       notifyActivity('living',system.enemies.length,groupPlan.system);
       hpSnapshots.set(system,system.playerHp);
     }

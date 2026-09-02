@@ -8,6 +8,7 @@ import {
 } from './hades-enemies.js';
 import { createHadesEncounterPlan } from './hades-encounter-director.js';
 import { installHadesEnemyRig } from './hades-enemy-rig.js';
+import { ENEMY_LAB_MAX_DIRECT_COUNT } from './enemy-lab-direct-encounter.js';
 
 const PLAYER_R=1.05;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -40,6 +41,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     speedScale:.5,
     hpScale:2.5,
     waveSize:6,
+    waveSizeLimit:20,
     idleRangeScale:3,
     aggression:1,
     spawnKind:HADES_TARTARUS_POOL_ID,
@@ -409,7 +411,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
       ?createHadesEncounterPlan({depth,targetCount:tuning.waveSize,spawnKind:tuning.spawnKind})
       :{
         depth,typeIds:[],composition:'legacy-round-robin',
-        entries:oldStyleEntries(clamp(Math.round(tuning.waveSize),1,20)),
+        entries:oldStyleEntries(clamp(Math.round(tuning.waveSize),1,tuning.waveSizeLimit)),
         activeWeightCap:Math.max(2.5,tuning.waveSize*.65),
         pursuitWeightCap:3,simultaneousTelegraphs:2,spawnDelay:.72,
       };
@@ -506,7 +508,7 @@ export function createHadesArenaEnemySystem({THREE,worldRoot,arenaRadius=18,navi
     setPressureBudget:v=>{director.settings.pressureBudget=clamp(Number(v)||2.25,.5,4);},
     setAggression:v=>{tuning.aggression=clamp(Number(v)||1,.25,3);director.settings.aggression=tuning.aggression;},
     setCycleOnWaveClear:v=>{director.settings.cycleOnWaveClear=!!v;},
-    setWaveSize:v=>{tuning.waveSize=clamp(Math.round(Number(v)||6),1,20);},
+    setWaveSize:(v,options={})=>{tuning.waveSizeLimit=options?.source==='enemy-lab'?ENEMY_LAB_MAX_DIRECT_COUNT:20;tuning.waveSize=clamp(Math.round(Number(v)||6),1,tuning.waveSizeLimit);},
     setSpeedScale:v=>{tuning.speedScale=clamp(Number(v)||1,.25,1.5);},
     setHeightScale:v=>{tuning.heightScale=clamp(Number(v)||1,.5,3.5);},
     setHpScale:v=>{tuning.hpScale=clamp(Number(v)||1,.25,5);},

@@ -75,6 +75,19 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   #shuffleBtn{width:30px;height:30px;font-family:inherit;font-size:16px;line-height:1;color:#9fd2c9;
     background:rgba(18,36,38,.72);border:1px solid #2c4a47;border-radius:5px;padding:0;touch-action:none}
   #shuffleBtn:active{background:#2c4a47}
+  /* ---- Enemy Lab direct loadout ---- */
+  #directLoadoutHud{position:fixed;left:max(10px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));z-index:20;width:min(56vw,330px);display:none;flex-direction:column;gap:5px;pointer-events:none}
+  #directLoadoutIdentity{min-width:0;padding:6px 8px;border:1px solid #2c4a47;border-radius:6px;background:rgba(14,28,30,.9);display:flex;align-items:center;justify-content:space-between;gap:8px;overflow:hidden}
+  #directLoadoutIdentity span{color:#6f9d96;font-size:6px;letter-spacing:.12em;white-space:nowrap}
+  #directLoadoutIdentity strong{min-width:0;color:#e8a04c;font-size:7px;line-height:1.15;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #directArcanaBindings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;pointer-events:auto}
+  .directArcanaButton{min-width:0;min-height:38px;padding:4px 5px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;overflow:hidden;font-family:inherit;text-align:left;color:#9fd2c9;background:rgba(18,36,38,.84);border:1px solid #2c4a47;border-radius:6px;touch-action:none}
+  .directArcanaButton span{color:#6f9d96;font-size:6px;line-height:1;letter-spacing:.07em}
+  .directArcanaButton strong{max-width:100%;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .directArcanaButton.unbound{opacity:.5}.directArcanaButton:active,.directArcanaButton.held{transform:translateY(1px);background:#2c4a47}
+  :root[data-arena-mode="enemy-lab"][data-enemy-lab-loadout="direct"] #cardRow,
+  :root[data-arena-mode="enemy-lab"][data-enemy-lab-loadout="direct"] #stWrap{display:none!important}
+  :root[data-arena-mode="enemy-lab"][data-enemy-lab-loadout="direct"] #directLoadoutHud{display:flex}
   /* ---- Warden Trial card reservation ---- */
   #trialCardTray{--trial-tray-h:clamp(160px,25vh,198px);--trial-card-w:104px;--trial-card-h:126px;position:fixed;left:0;right:0;bottom:0;height:var(--trial-tray-h);
     z-index:20;box-sizing:border-box;padding:8px 12px max(10px,env(safe-area-inset-bottom));
@@ -202,7 +215,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   @keyframes hitFeelFlash{0%{opacity:var(--iop,.95)}100%{opacity:0}}
   body.abilityCaptureClean #topBar,body.abilityCaptureClean #hud,body.abilityCaptureClean #msg,body.abilityCaptureClean #vig,
   body.abilityCaptureClean #joyBase,body.abilityCaptureClean #joyKnob,body.abilityCaptureClean .btnrow,
-  body.abilityCaptureClean #cardRow,body.abilityCaptureClean #trialCardTray,body.abilityCaptureClean #wardenRewardGate,body.abilityCaptureClean #panel,body.abilityCaptureClean #startGate,
+  body.abilityCaptureClean #cardRow,body.abilityCaptureClean #directLoadoutHud,body.abilityCaptureClean #trialCardTray,body.abilityCaptureClean #wardenRewardGate,body.abilityCaptureClean #panel,body.abilityCaptureClean #startGate,
   body.abilityCaptureClean #hint{display:none!important}
   /* ---- start gate ---- */
   #startGate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
@@ -240,6 +253,9 @@ html,body{margin:0;padding:0;overflow:hidden;background:#0d191b;height:100%;touc
   .scard{background:var(--arena-card);border-color:var(--arena-line);color:var(--arena-text);box-shadow:0 3px 0 var(--arena-shadow)}
   .scard:active{background:var(--arena-card-active)}.scard .ckey{color:var(--arena-muted)}.scard .crows{color:var(--arena-gold)}.scard .crow b{color:var(--arena-text)}
   #shuffleBtn{color:var(--arena-text);background:var(--arena-control);border-color:var(--arena-line)}
+  #directLoadoutIdentity,.directArcanaButton{background:var(--arena-card);border-color:var(--arena-line);color:var(--arena-text)}
+  #directLoadoutIdentity span,.directArcanaButton span{color:var(--arena-subtle)}#directLoadoutIdentity strong{color:var(--arena-gold)}
+  .directArcanaButton:active,.directArcanaButton.held{background:var(--arena-control-active)}
   #trialCardTray{background:linear-gradient(180deg,color-mix(in srgb,var(--arena-panel) 84%,transparent),var(--arena-panel-solid));border-color:var(--arena-line-bright)}
   #trialCardStatus{color:var(--arena-subtle)}
   .trialPileCounter,#trialCurrentStance,.trialUpcomingCard{border-color:var(--arena-line-soft);background:var(--arena-card);color:var(--arena-text)}

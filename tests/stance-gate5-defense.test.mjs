@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createStanceGate5Runtime } from '../src/stance-gate5-defense.js';
-function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase='idle'}={}){
+function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase='idle',resolveStaminaCost}={}){
   let defenseResolver=hit=>hit;
   let phase=catchPhase;
   const catchEvents=[];
@@ -11,7 +11,7 @@ function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase
   const deck={pool:[{id:'S01'},{id:'S24'},{id:'S26'}]};
   const engine={snapshot(){return{phase};},trigger(event){catchEvents.push(event);phase='catch';return event;}};
   const windowRef={location:{search:''}};
-  const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck,enemySystem,getPlayerForward:()=>forward,roomTransition:null},gate4Runtime:{engine},windowRef,documentRef:null});
+  const runtime=createStanceGate5Runtime({arenaHandle:{PC,arena,deck,enemySystem,getPlayerForward:()=>forward,roomTransition:null},gate4Runtime:{engine},resolveStaminaCost,windowRef,documentRef:null});
   return{runtime,PC,arena,enemySystem,combatState,catchEvents};
 }
 {
@@ -108,6 +108,25 @@ function makeHarness({stance={id:'S24'},stamina=100,forward={x:0,z:1},catchPhase
   assert.equal(result.damage,0);
   assert.equal(result.outcome,'blocked');
   assert.equal(h.arena.stamina.v,85);
+  h.runtime.destroy();
+}
+{
+  const h=makeHarness({stance:{id:'S24'},stamina:100,resolveStaminaCost:()=>0});
+  const spend=h.runtime.spendDodge();
+  assert.equal(spend.allowed,true);
+  assert.equal(spend.requestedCost,0);
+  assert.equal(spend.actualSpent,0);
+  assert.equal(h.arena.stamina.v,100);
+  assert.equal(h.catchEvents.length,0);
+  h.runtime.destroy();
+}
+{
+  const h=makeHarness({stance:{id:'S14'},stamina:100,resolveStaminaCost:()=>0});
+  assert.equal(h.runtime.defenseDown('cross').guardRaised,true);
+  const result=h.enemySystem.hit({damage:10,dir:{x:0,z:-1}});
+  assert.equal(result.damage,0);
+  assert.equal(result.staminaSpent,0);
+  assert.equal(h.arena.stamina.v,100);
   h.runtime.destroy();
 }
 console.log('stance gate 5 authoritative defense tests passed');
