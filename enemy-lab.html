@@ -300,7 +300,8 @@ async function showEcctrlLab(){
   ecctrlButton.disabled=true;ecctrlButton.textContent='LOADING';ecctrlButton.setAttribute('aria-pressed','true');testBadge.innerHTML='<strong>ECCTRL</strong> · loading locomotion sandbox';if(!ecctrlModule){ecctrlBoot.hidden=false;ecctrlBoot.querySelector('span').textContent='Loading controller sandbox…';}ensureEcctrlStyles();
   try{
     ecctrlModulePromise??=import('./tools/ecctrl-lab/assets/ecctrl-lab.js');ecctrlModule=await ecctrlModulePromise;
-    ecctrlModule.mountEcctrlLab(ecctrlRoot,{onCharacterReady:()=>{if(ecctrlMode)testBadge.innerHTML='<strong>ECCTRL</strong> · locomotion only · no combat';}});
+    const spriteScenario=runtime.worldSpriteEnemies?.ensureScenario?.();if(!spriteScenario?.ok)throw new Error(spriteScenario?.error||'World-sprite enemy bridge unavailable.');
+    ecctrlModule.mountEcctrlLab(ecctrlRoot,{enemyBridge:runtime.worldSpriteEnemies,onCharacterReady:()=>{if(ecctrlMode)testBadge.innerHTML='<strong>ECCTRL</strong> · live Wrinkeler depth test';}});
     ecctrlModule.setEcctrlLabActive(true);ecctrlBoot.hidden=true;ecctrlButton.disabled=false;ecctrlButton.textContent='SATURN';ecctrlButton.setAttribute('aria-label','Return to the normal Saturn Enemy Lab');testBadge.innerHTML='<strong>ECCTRL</strong> · loading mannequin';
   }catch(error){
     console.error('Ecctrl Lab sandbox failed to load.',error);ecctrlModulePromise=null;ecctrlBoot.querySelector('span').textContent='Sandbox failed to load. Returning to Enemy Lab.';showSaturnLab();testBadge.innerHTML='<strong>ECCTRL ERROR</strong> · sandbox bundle unavailable';

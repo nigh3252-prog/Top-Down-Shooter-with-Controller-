@@ -13,6 +13,20 @@ Square, R2, or the touch ATTACK button to cycle an overhead, crosscut, and
 thrust. The on-screen fit controls adjust the whole weapon attachment height
 and the shared weapon scale.
 
+The sandbox mounts The Wrinkeler through the shared world-sprite enemy layer.
+`arena-runtime` injects a narrow bridge which snapshots the actual enemy-system
+instances into the R3F scene. While Saturn is paused, that bridge advances their
+existing AI against the Ecctrl Warden position with player damage disabled, so
+movement, attacks, health, and puppet animation stay authoritative. If no 2D
+enemy scenario is active, entering Ecctrl starts a two-Wrinkeler depth scenario
+and places those real instances on opposite sides of the Warden.
+
+The puppet remains one five-part canvas composition, but the canvas is a
+depth-tested Three.js texture inside the same scene—not a DOM overlay.
+Additional 2D enemies can add artwork definitions to that layer without
+creating another renderer or sorting path; both surfaces consume the same
+`world-sprite-enemy-registry.js` definition list.
+
 The vendored controller source and `media/ecctrl/AnimationLibrary.glb` come from
 `pmndrs/ecctrl` commit `55776ca343d8c59a4c27cdd80074e54c0cbcaae8`
 (`agent/backbone-playtest`). Ecctrl is MIT licensed. See the copied LICENSE and

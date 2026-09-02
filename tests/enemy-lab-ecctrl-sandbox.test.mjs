@@ -30,16 +30,25 @@ assert.match(lab,/id="ecctrlBtn"[^>]*aria-pressed="false"/,'Enemy Lab exposes an
 assert.match(lab,/id="ecctrlLabSurface"[^>]*hidden/,'the sandbox starts out of the normal Lab surface');
 assert.match(lab,/#ecctrlLabBoot\[hidden\]\{display:none\}/,'the loading veil stays hidden after the sandbox mounts');
 assert.match(lab,/runtime\.stop\(\)[\s\S]*setEcctrlLabActive\(true\)/,'Ecctrl takes authority only after the Saturn loop stops');
+assert.match(lab,/worldSpriteEnemies\?\.ensureScenario\?\.\(\)[\s\S]*enemyBridge:runtime\.worldSpriteEnemies/,'the Lab injects actual enemy state into the controller scene');
 assert.match(lab,/setEcctrlLabActive\?\.\(false\)[\s\S]*runtime\.start\(\)/,'switching back suspends Ecctrl and resumes Saturn');
 assert.match(lab,/import\('\.\/tools\/ecctrl-lab\/assets\/ecctrl-lab\.js'\)/,'the heavy controller bundle is lazy loaded');
 assert.doesNotMatch(lab,/<iframe|contentWindow|contentDocument/,'the experiment remains a same-document surface');
 
 assert.match(entry,/export function mountEcctrlLab/);
 assert.match(entry,/export function setEcctrlLabActive/);
+assert.match(entry,/enemyBridge=\{callbacks\.enemyBridge\}/,'the lazy entry keeps the runtime bridge explicit');
 assert.match(sandbox,/from '\.\.\/vendor\/ecctrl\/index\.ts'/,'the sandbox uses the vendored Ecctrl public entry');
 assert.match(sandbox,/<Physics paused gravity=\{\[0, 0, 0\]\} timeStep="vary">/,'Rapier follows the Ecctrl example manual-step setup');
 assert.match(sandbox,/<TimeControl paused=\{!active\}/);
 assert.match(sandbox,/className="ecctrl-attack-button"/,'the phone sandbox exposes an attack control');
+assert.match(sandbox,/from '\.\.\/\.\.\/\.\.\/src\/world-sprite-enemy-layer\.js'/,'the sandbox reuses the shared in-scene sprite renderer');
+assert.match(sandbox,/function WorldSpriteEnemyBridgeLayer/,'the Ecctrl scene includes the authoritative world-sprite layer');
+assert.match(sandbox,/enemyBridge\.step\?\.\(\{[\s\S]*player: playerPosition\.current/,'actual enemy AI follows the Ecctrl Warden position');
+assert.match(sandbox,/<WorldSpriteEnemyBridgeLayer[\s\S]*enemyBridge=\{enemyBridge\}/,'sprite enemies live inside the same Canvas as the Warden');
+assert.match(sandbox,/LIVE WRINKELER DEPTH/,'the experiment identifies the live visual test');
+assert.doesNotMatch(sandbox,/makeWrinkelerPreview|ecctrl-preview/,'the depth proof does not substitute synthetic enemies');
+assert.doesNotMatch(sandbox,/accordionEnemyOverlay|projectWorldToScreen/,'Ecctrl does not recreate the fixed DOM overlay');
 assert.match(sandbox,/const CAMERA_OFFSET = new THREE\.Vector3\(0, 20, 17\.6\)/,'the experiment keeps the fixed Warden-style camera offset');
 for(const tuning of ['maxWalkVel={1.1}','maxRunVel={5.5}','jumpVel={6}','springK={6400}','dampingC={860}'])assert.ok(sandbox.includes(tuning),`${tuning} remains at the source playtest value`);
 
