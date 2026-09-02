@@ -24,7 +24,15 @@ import { axialToWorld, findCellAtPoint, findPath, randomPointInRoom, raycastWall
 import { createRoomEncounterState } from './room-encounters.js';
 import { createRoomTransitionController } from './room-transition.js';
 import { captureCardById, captureTargetPlacements, createAbilityCaptureController, normalizeCaptureAim, normalizeCaptureDummy, normalizeCaptureFixtures } from './ability-capture.js';
-import { wizardArcanaCardById } from './wizard-arcana-catalog.js';
+import { WIZARD_ARCANA_CATALOG, wizardArcanaCardById } from './wizard-arcana-catalog.js';
+import { resolveStanceWeaponCompatibility } from './stance-compatibility.js';
+import {
+  ENEMY_LAB_DIRECT_ARCANA_BUTTONS,
+  ENEMY_LAB_LOADOUT_MODES,
+  enemyLabDirectArcanaButtonsForInput,
+  normalizeEnemyLabDirectArcanaBindings,
+  normalizeEnemyLabLoadoutMode,
+} from './enemy-lab-direct-loadout.js';
 import { getArenaMazeSettings, getMazeRuntimeSettings, MAZE_CELL_SIZE_OPTIONS, MAZE_ROOM_SIZE_OPTIONS, setArenaMazeCellSize, setMazeRuntimeCellSize, setMazeRuntimeRoomSize } from './maze-runtime-settings.js';
 import { installStanceGate2Runtime } from './stance-gate2-runtime.js';
 import { installStanceGate3Runtime } from './stance-gate3-payoffs.js';
@@ -65,6 +73,15 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   const arenaTheme=resolveArenaTheme({search:globalThis.location?.search||'',savedTheme:config.theme});
   const runtimeConfig = Object.freeze({ mode:'arena', ...config, theme:arenaTheme.id });
   const wardenTrialMode=runtimeConfig.wardenTrial===true||runtimeConfig.variant==='warden-trial';
+  const enemyLabArcanaIds=WIZARD_ARCANA_CATALOG.map(card=>card.arcanaId);
+  let enemyLabLoadoutMode=runtimeConfig.enemyLab
+    ?normalizeEnemyLabLoadoutMode(StoneSettings.get('enemyLab.loadoutMode',ENEMY_LAB_LOADOUT_MODES.CARDS))
+    :ENEMY_LAB_LOADOUT_MODES.CARDS;
+  let enemyLabDirectArcanaBindings=normalizeEnemyLabDirectArcanaBindings(
+    runtimeConfig.enemyLab?StoneSettings.get('enemyLab.directArcanaBindings',{}):{},
+    enemyLabArcanaIds,
+  );
+  const isEnemyLabDirectLoadout=()=>runtimeConfig.enemyLab&&enemyLabLoadoutMode===ENEMY_LAB_LOADOUT_MODES.DIRECT;
   let wardenTrialEnemySet=normalizeWardenTrialEnemySet(StoneSettings.get('wardenTrial.enemySet',WARDEN_TRIAL_ENEMY_SET_IDS.CYLINDERS));
   let wardenTrialTemperament=normalizeWardenTemperament(StoneSettings.get('wardenTrial.temperament',DEFAULT_WARDEN_TEMPERAMENT_ID));
   let wardenTrialAbilityCooldowns=StoneSettings.get('wardenTrial.abilityCooldowns',WARDEN_TRIAL_SETTINGS.abilityCooldowns)!==false;
@@ -113,6 +130,7 @@ export function createArenaRuntime({ config = {}, controlRegistry = createArenaC
   document.documentElement.dataset.arenaMode = runtimeConfig.mode;
   if(runtimeConfig.variant)document.documentElement.dataset.arenaVariant=runtimeConfig.variant;
   document.documentElement.dataset.arenaTheme = arenaTheme.id;
+  if(runtimeConfig.enemyLab)document.documentElement.dataset.enemyLabLoadout=enemyLabLoadoutMode;
   provideArenaRuntimeConfig(runtimeConfig);
   const runtimeListeners=new Set();
   const emitRuntime=event=>{for(const listener of [...runtimeListeners])listener(event);};
@@ -259,8 +277,9 @@ const wardenTrialCenterField=wardenTrialMode?createWardenTrialCenterField({
   softEdge:WARDEN_TRIAL_SETTINGS.centerField.softEdge,
   fullEdge:WARDEN_TRIAL_SETTINGS.centerField.fullEdge,
 }):null;
-const accordionOverlayProjection=wardenTrialMode?new THREE.Vector3():null;
-const accordionEnemyOverlay=wardenTrialMode?createAccordionEnemyOverlay({
+const accordionOverlayEnabled=wardenTrialMode||(runtimeConfig.enemyLab&&!ABILITY_CAPTURE_MODE);
+const accordionOverlayProjection=accordionOverlayEnabled?new THREE.Vector3():null;
+const accordionEnemyOverlay=accordionOverlayEnabled?createAccordionEnemyOverlay({
   canvas:document.createElement('canvas'),
   projectWorldToScreen(point){
     accordionOverlayProjection.set(Number(point?.x)||0,Number(point?.y)||0,Number(point?.z)||0).project(camera);
@@ -345,6 +364,7 @@ const wardenTrialBrain=wardenTrialMode?createWardenTrialBrain({temperament:warde
 const deck = createStanceDeck({ shuffleTime: STAMINA.shuffleTime, handSize:wardenTrialMode?1:2, compatibilityAdapter: null });
 const wardenTrialCardCooldown=createWardenTrialCardCooldown();
 function staminaCostForGroup(group){
+  if(isEnemyLabDirectLoadout())return 0;
   const base = STAMINA.costs[group] ?? STAMINA.costs.default;
   return staminaCostForWeapon(base, PC.currentWeapon());
 }
@@ -355,7 +375,7 @@ function spendStamina(cost){
   return spent;
 }
 function queueRecoverableRefund(amount){
-  if(wardenTrialMode)return 0;
+  if(wardenTrialMode||isEnemyLabDirectLoadout())return 0;
   const s = arena.stamina, refund = Math.max(0, amount);
   s.pending = Math.min(STAMINA.max - s.v, s.pending + refund);
   if(refund > 0) s.recoverDelayT = STAMINA.recoverDelay;
@@ -365,6 +385,10 @@ function fullRefillStamina(){ arena.stamina.v = staminaMaxForMode(); arena.stami
 function wipeRecoverableStamina(){ arena.stamina.pending = 0; arena.stamina.recoverDelayT = 0; }
 function updateStamina(dt){
   if(wardenTrialMode)return;
+  if(isEnemyLabDirectLoadout()){
+    if(arena.stamina.v!==STAMINA.max||arena.stamina.pending!==0)fullRefillStamina();
+    return;
+  }
   const s = arena.stamina;
   if(s.pending <= 0) return;
   if(s.recoverDelayT > 0){ s.recoverDelayT = Math.max(0, s.recoverDelayT - dt); return; }
@@ -446,7 +470,12 @@ const PC = installPlayerCombat({
       // Explicit light/heavy chain state opens windows from onAttackComplete only.
     },
     detectHits(dt, tipScene, baseScene, tipSpeed){ detectEnemyHits(dt, tipScene, baseScene, tipSpeed); },
-    onWeaponSelected(){ ensureStanceMatchesWeapon(); rebuildDeck(); },
+    onWeaponSelected(){
+      if(isEnemyLabDirectLoadout()){
+        if(arena.stance)applyStance(arena.stance);
+        else ensureStanceMatchesWeapon();
+      }else{ensureStanceMatchesWeapon();rebuildDeck();}
+    },
     onWeaponUISync(){},
     timeScaleModifier(att, t, phase){
       const s = arena.charge.active ? arena.charge.s : arena.swing.s;
@@ -476,6 +505,14 @@ function spawnCharacter(){
 function stancePoolForWeapon(weaponId = combatState.weapon){
   const matching = STANCE_CARDS.filter(st => Array.isArray(st.preferredWeapons) && st.preferredWeapons.includes(weaponId));
   return matching.length ? matching : STANCE_CARDS;
+}
+function stanceOptionsForLoadout(){
+  if(!isEnemyLabDirectLoadout())return stancePoolForWeapon().map(stance=>({value:stance.id,label:stance.name||stance.id}));
+  const weapon=WEAPONS[combatState.weapon];
+  return STANCE_CARDS.map(stance=>{
+    const compatibility=resolveStanceWeaponCompatibility({stance,weapon,weaponId:combatState.weapon});
+    return{value:stance.id,label:`${stance.name||stance.id} · ${compatibility.label}`};
+  });
 }
 function setStance(index){
   const pool = stancePoolForWeapon();
@@ -513,7 +550,7 @@ function rebuildDeck(){
   renderCards();
 }
 function playCard(slot){
-  if(wardenTrialMode)return false;
+  if(wardenTrialMode||isEnemyLabDirectLoadout())return false;
   if(arena.deadT >= 0 || roomTransition?.active) return;
   if(arena.arcanaAirborne){exhaustFlash();announce('AIRBORNE COMMITMENT',.55);return;}
   if(arena.arcanaMovementLocked){exhaustFlash();announce('ARCANA COMMITMENT',.55);return;}
@@ -539,6 +576,7 @@ function playCard(slot){
   renderCards();
 }
 function startDeckShuffle(){
+  if(isEnemyLabDirectLoadout())return false;
   if(arena.deadT >= 0 || roomTransition?.active) return;
   if(deck.startShuffle()) renderCards();
 }
@@ -556,18 +594,114 @@ function selectWeapon(id,{reset=true,persist=true}={}){
   if(!WEAPON_ORDER.includes(next))return false;
   PC.selectCombatWeapon(next);
   if(persist)StoneSettings.set('arena.weapon',next);
-  ensureStanceMatchesWeapon();
+  if(!isEnemyLabDirectLoadout())ensureStanceMatchesWeapon();
+  else if(arena.stance)applyStance(arena.stance);
+  renderEnemyLabDirectLoadoutHud();
   if(reset)respawn();
   return true;
 }
 function selectStance(id,{allowAdapted=false}={}){
   const requested=String(id||''),pool=stancePoolForWeapon(),index=pool.findIndex(stance=>stance.id===requested);
-  if(index>=0){setStance(index);return true;}
+  if(index>=0){setStance(index);renderEnemyLabDirectLoadoutHud();return true;}
   if(!allowAdapted)return false;
   const stance=STANCE_CARDS.find(candidate=>candidate.id===requested);
   if(!stance)return false;
-  arena.stanceIndex=-1;applyStance(stance);return true;
+  arena.stanceIndex=-1;applyStance(stance);renderEnemyLabDirectLoadoutHud();return true;
 }
+
+const enemyLabDirectButtonIndex=new Map(ENEMY_LAB_DIRECT_ARCANA_BUTTONS.map((button,index)=>[button.id,index]));
+function renderEnemyLabDirectLoadoutHud(){
+  if(!runtimeConfig.enemyLab)return;
+  document.documentElement.dataset.enemyLabLoadout=enemyLabLoadoutMode;
+  const identity=document.getElementById('directLoadoutName');
+  if(identity){
+    const weapon=WEAPONS[combatState.weapon]?.label||combatState.weapon||'WEAPON';
+    const stance=String(arena.stance?.name||arena.stance?.id||'STANCE').replace(/^S\d+\s*/, '');
+    identity.textContent=`${weapon} · ${stance}`;
+  }
+  document.querySelectorAll('[data-direct-arcana-button]').forEach(button=>{
+    const buttonId=button.dataset.directArcanaButton;
+    const card=wizardArcanaCardById(enemyLabDirectArcanaBindings[buttonId]);
+    const label=button.querySelector('strong');
+    if(label)label.textContent=card?.name||'UNBOUND';
+    button.classList.toggle('unbound',!card);
+    button.setAttribute('aria-label',card?`${buttonId}: ${card.name}`:`${buttonId}: unbound`);
+  });
+}
+function setEnemyLabLoadoutMode(value,{persist=true}={}){
+  if(!runtimeConfig.enemyLab)return false;
+  const next=normalizeEnemyLabLoadoutMode(value);
+  if(next===enemyLabLoadoutMode){renderEnemyLabDirectLoadoutHud();return true;}
+  PC.interruptArcanaInput?.('enemy-lab-loadout-change');
+  enemyLabLoadoutMode=next;
+  if(persist)StoneSettings.set('enemyLab.loadoutMode',next);
+  if(isEnemyLabDirectLoadout()){
+    if(!arena.stance)ensureStanceMatchesWeapon();
+    fullRefillStamina();
+    announce('DIRECT LOADOUT · NO STAMINA',.9);
+  }else{
+    ensureStanceMatchesWeapon();
+    rebuildDeck();
+    announce('CARD LOADOUT',.75);
+  }
+  renderCards();
+  renderEnemyLabDirectLoadoutHud();
+  return true;
+}
+function setEnemyLabDirectArcanaBinding(buttonId,value,{persist=true}={}){
+  if(!runtimeConfig.enemyLab||!enemyLabDirectButtonIndex.has(String(buttonId)))return false;
+  const normalized=normalizeEnemyLabDirectArcanaBindings(
+    {...enemyLabDirectArcanaBindings,[buttonId]:value},
+    enemyLabArcanaIds,
+  );
+  enemyLabDirectArcanaBindings=normalized;
+  if(persist)StoneSettings.set('enemyLab.directArcanaBindings',{...normalized});
+  renderEnemyLabDirectLoadoutHud();
+  return true;
+}
+function enemyLabDirectArcanaContext(buttonId,source='gamepad'){
+  return{
+    source:`enemy-lab-direct-${source}`,
+    button:buttonId,
+    slot:20+(enemyLabDirectButtonIndex.get(buttonId)||0),
+    phase:'press',
+    directLoadout:true,
+  };
+}
+function castEnemyLabDirectArcana(buttonId,source='gamepad'){
+  if(!isEnemyLabDirectLoadout())return false;
+  const arcanaId=enemyLabDirectArcanaBindings[buttonId];
+  const card=wizardArcanaCardById(arcanaId);
+  if(!card){announce(`${String(buttonId).toUpperCase()} UNBOUND`,.45);return false;}
+  if(arena.deadT>=0||roomTransition?.active)return false;
+  if(arena.arcanaAirborne){announce('AIRBORNE COMMITMENT',.55);return false;}
+  if(arena.arcanaMovementLocked){announce('ARCANA COMMITMENT',.55);return false;}
+  if(card.dashMotion&&combatState.attack){announce('FINISH ATTACK FIRST',.55);return false;}
+  const context=enemyLabDirectArcanaContext(buttonId,source);
+  const dispatcher=PC.cardEffectDispatcher;
+  if(typeof dispatcher?.canPlay!=='function'||typeof dispatcher?.play!=='function'||dispatcher.canPlay(card,context)===false||dispatcher.play(card,context)===false){
+    announce('ARCANA NOT READY',.45);return false;
+  }
+  announce(card.name,.65);
+  return true;
+}
+function releaseEnemyLabDirectArcana(buttonId,source='gamepad'){
+  if(!runtimeConfig.enemyLab||!enemyLabDirectButtonIndex.has(String(buttonId)))return false;
+  return PC.releaseArcanaInput?.({
+    ...enemyLabDirectArcanaContext(buttonId,source),
+    arcanaId:enemyLabDirectArcanaBindings[buttonId]||null,
+    phase:'release',
+  })||false;
+}
+document.querySelectorAll('[data-direct-arcana-button]').forEach(button=>{
+  const buttonId=button.dataset.directArcanaButton;
+  button.addEventListener('pointerdown',event=>{
+    event.preventDefault();button.setPointerCapture?.(event.pointerId);button.classList.add('held');castEnemyLabDirectArcana(buttonId,'pointer');
+  });
+  for(const eventName of['pointerup','pointercancel','pointerleave'])button.addEventListener(eventName,()=>{
+    button.classList.remove('held');releaseEnemyLabDirectArcana(buttonId,'pointer');
+  });
+});
 
 /* ---------- maze navigation + room encounters ---------- */
 const encounterRandom = createSeededRandom(`${MAZE_SEED}:encounters`);
@@ -1385,25 +1519,37 @@ const input = { mx:0, mz:0 };
 const keys = {};
 addEventListener('keydown', e=>{
   if(e.repeat) return;
-  keys[e.key.toLowerCase()] = true;
+  const key=e.key.toLowerCase();
+  keys[key] = true;
   if(wardenTrialMode){if(e.key==='p'||e.key==='m')toggleMenu();return;}
-  if(e.key==='j') lightDown();
-  if(e.key==='l') heavyDown();
-  if(e.key==='k') defenseDown('keyboard');
-  if(e.key==='q') playCard(0);
-  if(e.key==='e') playCard(1);
-  if(e.key==='r') startDeckShuffle();
-  if(e.key==='x') cycleWeapon();
-  if(e.key==='t') cycleStance();   // dev override: bypasses the card deck
-  if(e.key==='p') toggleMenu();
-  if(e.key==='m') toggleMenu();
+  if(key==='j') lightDown();
+  if(key==='l') heavyDown();
+  if(key==='k') defenseDown('keyboard');
+  if(isEnemyLabDirectLoadout()){
+    const directButton={q:'l1',e:'r1',r:'circle',x:'dpadUp',t:'dpadDown'}[key];
+    if(directButton)castEnemyLabDirectArcana(directButton,'keyboard');
+  }else{
+    if(key==='q')playCard(0);
+    if(key==='e')playCard(1);
+    if(key==='r')startDeckShuffle();
+    if(e.key==='x') cycleWeapon();
+    if(key==='t')cycleStance();   // dev override: bypasses the card deck
+  }
+  if(key==='p') toggleMenu();
+  if(key==='m') toggleMenu();
 });
 addEventListener('keyup', e=>{
-  keys[e.key.toLowerCase()] = false;
-  if(e.key==='l') heavyUp();
-  if(e.key==='k') defenseUp('keyboard');
-  if(e.key.toLowerCase()==='q') PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
-  if(e.key.toLowerCase()==='e') PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
+  const key=e.key.toLowerCase();
+  keys[key] = false;
+  if(key==='l') heavyUp();
+  if(key==='k') defenseUp('keyboard');
+  if(isEnemyLabDirectLoadout()){
+    const directButton={q:'l1',e:'r1',r:'circle',x:'dpadUp',t:'dpadDown'}[key];
+    if(directButton)releaseEnemyLabDirectArcana(directButton,'keyboard');
+  }else{
+    if(key==='q')PC.releaseArcanaInput?.({slot:0,source:'keyboard'});
+    if(key==='e')PC.releaseArcanaInput?.({slot:1,source:'keyboard'});
+  }
 });
 function keyMove(){
   let x=0,z=0;
@@ -1472,13 +1618,18 @@ function pollPad(){
   if(pad.pressed.triangle)heavyDown();
   if(pad.released.triangle)heavyUp();
   if(padActions.defenseReleased)defenseUp('gamepad');
-  if(pad.pressed.circle)startDeckShuffle();
-  if(pad.pressed.l1)playCard(0);
-  if(pad.pressed.r1)playCard(1);
-  if(pad.released.l1)PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
-  if(pad.released.r1)PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
-  if(pad.pressed.dpadUp)cycleWeapon(-1);
-  if(pad.pressed.dpadDown)cycleWeapon(1);
+  if(isEnemyLabDirectLoadout()){
+    for(const button of enemyLabDirectArcanaButtonsForInput(pad,'pressed'))castEnemyLabDirectArcana(button.id,'gamepad');
+    for(const button of enemyLabDirectArcanaButtonsForInput(pad,'released'))releaseEnemyLabDirectArcana(button.id,'gamepad');
+  }else{
+    if(pad.pressed.circle)startDeckShuffle();
+    if(pad.pressed.l1)playCard(0);
+    if(pad.pressed.r1)playCard(1);
+    if(pad.released.l1)PC.releaseArcanaInput?.({slot:0,source:'gamepad'});
+    if(pad.released.r1)PC.releaseArcanaInput?.({slot:1,source:'gamepad'});
+    if(pad.pressed.dpadUp)cycleWeapon(-1);
+    if(pad.pressed.dpadDown)cycleWeapon(1);
+  }
   if(pad.pressed.options||pad.pressed.create)toggleMenu();
   Object.assign(padPrev,pad.current,{__rawDown:[...pad.rawDown]});
 }
@@ -2801,14 +2952,31 @@ function registerRuntimeControls(){
     {id:'director.mode',kind:'select',label:'DIRECTOR MODE',get:()=>arena.cycleMode?CYCLE_MODE_ID:enemySystem.director.getMode(),options:()=>[...DIRECTOR_MODES,{id:CYCLE_MODE_ID,label:'Cycle All'}].map(mode=>({value:mode.id,label:mode.label})),set:value=>(setMode(value),true),
       profile:{path:'combat.directorMode',scope:'profile',migrationId:'director-mode-v3',adapter:{apply:value=>(setMode(value,{reset:false}),true)}},placement:{section:'combat',subsection:'Director',order:0,accessibleLabel:'Combat behavior / Director mode'}},
   );
+  if(runtimeConfig.enemyLab)controlRegistry.register(
+    {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
+    {id:'loadout.mode',kind:'select',label:'LOADOUT MODE',get:()=>enemyLabLoadoutMode,options:()=>[
+      {value:ENEMY_LAB_LOADOUT_MODES.CARDS,label:'CARDS · STAMINA'},
+      {value:ENEMY_LAB_LOADOUT_MODES.DIRECT,label:'DIRECT · NO STAMINA'},
+    ],set:setEnemyLabLoadoutMode,profile:{path:'player.loadoutMode',scope:'profile',target:'lab-only',migrationId:'enemy-lab-loadout-mode-v1'},placement:{section:'loadout',subsection:'Player',order:-10,accessibleLabel:'Player loadout / Loadout mode'}},
+  );
   controlRegistry.register(
     {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
     {id:'loadout.weapon',kind:'select',label:'WEAPON',get:()=>combatState.weapon,options:()=>WEAPON_ORDER.map(value=>({value,label:WEAPONS[value]?.label||value})),set:value=>selectWeapon(value),profile:{path:'player.weapon',scope:'profile',target:'lab-only',migrationId:'player-weapon-v1',adapter:{apply:value=>selectWeapon(value,{reset:false})}},placement:{section:'loadout',subsection:'Player',order:0,accessibleLabel:'Player loadout / Weapon'}},
   );
   controlRegistry.register(
     {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
-    {id:'loadout.stance',kind:'select',label:'STANCE',get:()=>arena.stance?.id||'',options:()=>stancePoolForWeapon().map(stance=>({value:stance.id,label:stance.name||stance.id})),set:selectStance,profile:{path:'player.stance',scope:'profile',target:'lab-only',migrationId:'player-stance-v1'},placement:{section:'loadout',subsection:'Player',order:10,accessibleLabel:'Player loadout / Stance'}},
+    {id:'loadout.stance',kind:'select',label:'STANCE',get:()=>arena.stance?.id||'',options:stanceOptionsForLoadout,set:value=>selectStance(value,{allowAdapted:isEnemyLabDirectLoadout()}),profile:{path:'player.stance',scope:'profile',target:'lab-only',migrationId:'player-stance-v1'},placement:{section:'loadout',subsection:'Player',order:10,accessibleLabel:'Player loadout / Stance'}},
   );
+  if(runtimeConfig.enemyLab){
+    const arcanaOptions=()=>[
+      {value:'',label:'UNBOUND'},
+      ...WIZARD_ARCANA_CATALOG.map(card=>({value:card.arcanaId,label:`${card.element} · ${card.name}`})),
+    ];
+    ENEMY_LAB_DIRECT_ARCANA_BUTTONS.forEach((button,index)=>controlRegistry.register(
+      {id:'loadout',label:'LOADOUT',source,placement:{section:'loadout'},profile:{scope:'profile'}},
+      {id:`loadout.arcana.${button.id}`,kind:'select',label:`${button.label} ARCANA`,get:()=>enemyLabDirectArcanaBindings[button.id]||'',options:arcanaOptions,disabled:()=>!isEnemyLabDirectLoadout(),set:value=>setEnemyLabDirectArcanaBinding(button.id,value),profile:{path:`player.directArcana.${button.id}`,scope:'profile',target:'lab-only',migrationId:`enemy-lab-direct-arcana-${button.id}-v1`},placement:{section:'loadout',subsection:'Arcana bindings',order:index,accessibleLabel:`Player loadout / Arcana bindings / ${button.label}`}},
+    ));
+  }
   controlRegistry.register(
     {id:'combat',label:'COMBO TIMING',source,placement:{section:'loadout'},profile:{scope:'profile'}},
     {id:'combat.input-mode',kind:'select',label:'COMBAT INPUT',get:()=>arena.combatInputMode,options:()=>COMBAT_INPUT_MODES.map(mode=>({value:mode.id,label:mode.label})),set:value=>(setCombatInputMode(value),true),profile:{path:'player.combatInputMode',scope:'profile',target:'shared',migrationId:'combat-input-v1',adapter:{apply:value=>(setCombatInputMode(value,{reset:false}),true)}},placement:{section:'loadout',subsection:'Player',order:20,accessibleLabel:'Player loadout / Combat input mode'}},
@@ -2874,7 +3042,7 @@ function destroyRuntime(){
 }
 
 let captureController=null;
-const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
+const getRuntimeSnapshot=()=>Object.freeze({ready:!destroyed,running,started:arena.started,paused:isPaused(),menuOpen:!panel.classList.contains('hidden'),weaponId:combatState.weapon||'',stanceName:arena.stance?.name||arena.stance?.id||'',loadoutMode:runtimeConfig.enemyLab?enemyLabLoadoutMode:null,directArcanaBindings:runtimeConfig.enemyLab?Object.freeze({...enemyLabDirectArcanaBindings}):null,playerHp:enemySystem.playerHp,stamina:Object.freeze({value:arena.stamina.v,max:staminaMaxForMode(),disabled:isEnemyLabDirectLoadout()}),wardenTrialWave:wardenTrialMode?wardenTrialWave:null,wardenTrialWaveSize:wardenTrialMode?wardenTrialWaveSize(wardenTrialWave):null,wardenTrialRewardPending:wardenTrialMode?wardenTrialRewardPending:false,wardenTrialRewardCount:wardenTrialMode?wardenTrialRewardChoices.length:0,wardenTrialCardCooldown:wardenTrialMode?wardenTrialCardCooldown.snapshot():null,wardenTrialAbilityCooldowns:wardenTrialMode?wardenTrialAbilityCooldowns:null,wardenTrialTemperament:wardenTrialMode?Object.freeze({id:wardenTrialTemperament.id,level:wardenTrialTemperament.level}):null,aliveCount:(enemySystem.enemies||[]).filter(enemy=>enemy.hp>0).length,queuedSpawnCount:enemySystem.queuedSpawnCount||0,telegraphCount:enemySystem.telegraphCount||0,encounterMode:selectedEncounterMode,encounterModeWarning:encounterModeWarning,encounterPlan:enemySystem.currentEncounterPlan||null});
 const getStartupTrace=()=>startupTrace.snapshot();
 const getLabSnapshot=()=>Object.freeze({...getRuntimeSnapshot(),roomOptions:Object.freeze(MAZE_CELL_SIZE_OPTIONS.map(option=>Object.freeze({...option,active:option.id===getMazeRuntimeSettings().cellSize.id}))),controlGroups:controlRegistry.getControlGroups(),sections:sectionRegistry?.sections?.({controlGroups:controlRegistry.getControlGroups()})||[]});
 const runtimeHandle={
@@ -2893,6 +3061,7 @@ const runtimeHandle={
   selectEncounterMode,startPlannedLabEncounter,getEncounterPlan:()=>enemySystem.currentEncounterPlan||null,setWardenTrialTemperament:selectWardenTrialTemperament,setWardenTrialAbilityCooldowns,chooseWardenTrialReward,skipWardenTrialReward,
   arenaMoveInput,setArcanaMovementLock,setArcanaFacingLock,setArcanaTargetable,setArcanaPlayerVisible,setArcanaPlayerInvulnerable,setArcanaPlayerAirborne,setArcanaPlayerHeight,setArcanaPlayerPosition,setArcanaEnemyCarried,translateArcanaPlayer,validateArcanaTeleportEndpoint,teleportArcanaPlayer,getArcanaCollisionSegments,
   lightDown,heavyDown,attackDown,attackUp,defenseDown,defenseUp,triggerDodge,cycleWeapon,selectWeapon,cycleStance,selectStance,beginTestSwing,setCombatInputMode,playCard,startDeckShuffle,
+  setEnemyLabLoadoutMode,setEnemyLabDirectArcanaBinding,castEnemyLabDirectArcana,releaseEnemyLabDirectArcana,
 };
 provideArenaRuntime(runtimeHandle);
 registerRuntimeControls();
@@ -2901,7 +3070,7 @@ if(!ABILITY_CAPTURE_MODE){
   stanceGate3Runtime=installStanceGate3Runtime({arenaHandle:runtimeHandle,gate2Runtime:stanceGate2Runtime});
   stanceGate4Runtime=createStanceGate4Runtime({arenaHandle:runtimeHandle,gate3Runtime:stanceGate3Runtime,windowRef:globalThis.window,documentRef:document});
   stanceGate4RingSize=installStanceGate4RingSize({arenaHandle:runtimeHandle,windowRef:globalThis.window,documentRef:document});
-  stanceGate5Runtime=createStanceGate5Runtime({arenaHandle:runtimeHandle,gate4Runtime:stanceGate4Runtime,windowRef:globalThis.window,documentRef:document});
+  stanceGate5Runtime=createStanceGate5Runtime({arenaHandle:runtimeHandle,gate4Runtime:stanceGate4Runtime,resolveStaminaCost:cost=>isEnemyLabDirectLoadout()?0:cost,windowRef:globalThis.window,documentRef:document});
 }
 
 /* ---------- boot ---------- */
@@ -2911,6 +3080,7 @@ StoneSettings.set('arena.weapon',savedArenaWeapon);
 PC.selectCombatWeapon(savedArenaWeapon);
 if(!arena.stance&&!wardenTrialMode)ensureStanceMatchesWeapon();
 if(deck.hand.every(card=>!card)) rebuildDeck();
+renderEnemyLabDirectLoadoutHud();
 setMode(StoneSettings.get('arena.directorMode', enemySystem.director.getMode()), { reset:false });
 if(!runtimeConfig.enemyLab){
   const standard=lockedStandard;

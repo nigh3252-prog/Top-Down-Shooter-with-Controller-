@@ -4,6 +4,7 @@ import {
   FLARE_LEVEL_1_POOL_ID, isFlareEnemy,
 } from './flare-enemies.js';
 import { installFlareEnemyRig } from './flare-enemy-rig.js';
+import { ENEMY_LAB_MAX_DIRECT_COUNT } from './enemy-lab-direct-encounter.js';
 
 const PLAYER_RADIUS = 1.05;
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
@@ -21,7 +22,7 @@ export function createFlareArenaEnemySystem({
   const group=new THREE.Group(); group.name='FLARE Level 1 Enemies'; worldRoot.add(group);
   const director=createCombatDirector({ ...DEFAULT_DIRECTOR_SETTINGS, pressureBudget:2.25, battleCircleRadius:6.9 });
   const enemies=[], deathPieces=[], bleeds=[];
-  const tuning={ playerHp:100,lastPlayerHit:'',lastPlayerHitDir:null,heightScale:1.5,speedScale:.5,hpScale:2.5,waveSize:6,idleRangeScale:3,aggression:1,spawnKind:FLARE_LEVEL_1_POOL_ID };
+  const tuning={ playerHp:100,lastPlayerHit:'',lastPlayerHitDir:null,heightScale:1.5,speedScale:.5,hpScale:2.5,waveSize:6,waveSizeLimit:20,idleRangeScale:3,aggression:1,spawnKind:FLARE_LEVEL_1_POOL_ID };
   let wave=1,kills=0,waveKills=0,waveClearT=0,nextId=1,time=0,activeEncounterRoomId=null;
   let lastPlayer={x:0,z:0,invulnerable:false};
 
@@ -275,7 +276,7 @@ export function createFlareArenaEnemySystem({
     return isFlareEnemy(tuning.spawnKind)?tuning.spawnKind:FLARE_LEVEL_1_IDS[(wave-1+i)%FLARE_LEVEL_1_IDS.length];
   }
   function startWave(){
-    waveKills=0;waveClearT=0;const count=clamp(Math.round(tuning.waveSize),1,20);
+    waveKills=0;waveClearT=0;const count=clamp(Math.round(tuning.waveSize),1,tuning.waveSizeLimit);
     for(let i=0;i<count;i++){const p=spawnPos();makeEnemy(chooseSpawnKind(i),p.x,p.z);}
   }
   function finishWave(){wave++;director.onWaveClear();startWave();}
@@ -310,7 +311,7 @@ export function createFlareArenaEnemySystem({
     setPressureBudget:v=>{director.settings.pressureBudget=clamp(Number(v)||2.25,.5,4);},
     setAggression:v=>{tuning.aggression=clamp(Number(v)||1,.25,3);director.settings.aggression=tuning.aggression;},
     setCycleOnWaveClear:v=>{director.settings.cycleOnWaveClear=!!v;},
-    setWaveSize:v=>{tuning.waveSize=clamp(Math.round(Number(v)||6),1,20);},
+    setWaveSize:(v,options={})=>{tuning.waveSizeLimit=options?.source==='enemy-lab'?ENEMY_LAB_MAX_DIRECT_COUNT:20;tuning.waveSize=clamp(Math.round(Number(v)||6),1,tuning.waveSizeLimit);},
     setSpeedScale:v=>{tuning.speedScale=clamp(Number(v)||1,.25,1.5);},
     setHeightScale:v=>{tuning.heightScale=clamp(Number(v)||1,.5,3.5);},
     setHpScale:v=>{tuning.hpScale=clamp(Number(v)||1,.25,5);},

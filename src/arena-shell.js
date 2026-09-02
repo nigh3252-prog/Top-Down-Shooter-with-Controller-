@@ -42,6 +42,16 @@ export const ARENA_SHELL_HTML = `<div id="topBar">
     </button>
   </div>
 </div>
+<div id="directLoadoutHud" aria-live="polite" aria-label="Enemy Lab direct loadout">
+  <div id="directLoadoutIdentity"><span>DIRECT LOADOUT</span><strong id="directLoadoutName">WEAPON · STANCE</strong></div>
+  <div id="directArcanaBindings" role="group" aria-label="Direct Arcana controls">
+    <button class="directArcanaButton" type="button" data-direct-arcana-button="l1"><span>L1 · Q</span><strong>UNBOUND</strong></button>
+    <button class="directArcanaButton" type="button" data-direct-arcana-button="r1"><span>R1 · E</span><strong>UNBOUND</strong></button>
+    <button class="directArcanaButton" type="button" data-direct-arcana-button="circle"><span>○ · R</span><strong>UNBOUND</strong></button>
+    <button class="directArcanaButton" type="button" data-direct-arcana-button="dpadUp"><span>D↑ · X</span><strong>UNBOUND</strong></button>
+    <button class="directArcanaButton" type="button" data-direct-arcana-button="dpadDown"><span>D↓ · T</span><strong>UNBOUND</strong></button>
+  </div>
+</div>
 <div id="trialCardTray" aria-label="Warden Trial card interface">
   <div id="trialCardStatus" aria-live="polite">SWIPE DOWN TO START</div>
   <div id="trialCardRail">
